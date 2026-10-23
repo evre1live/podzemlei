@@ -67,10 +67,13 @@ function boostSelf(s, p, gap) {
   const turnLeft = hasClass(p, 'cleric') && undead ? 3 - (c.turnCount[p.id] || 0) : 0;
   const rageLeft = hasClass(p, 'warrior') ? 3 - (c.rageCount[p.id] || 0) : 0;
   const songLeft = hasClass(p, 'bard') ? 2 - (c.lullaby[p.id] || 0) : 0;
+  const mutagen = hasClass(p, 'witcher') && !p.mutagenUsed && cheap.length >= 2;
   const potential = bonusCards.reduce((a, u) => a + val(u), 0)
     + Math.min(turnLeft, cheap.length) * 3 + Math.min(songLeft, cheap.length) * 3
-    + Math.min(rageLeft, Math.max(0, cheap.length - turnLeft));
+    + Math.min(rageLeft, Math.max(0, cheap.length - turnLeft)) + (mutagen ? 10 : 0);
   if (potential < gap) return null;
+  // мутаген — раз за партию: пьём, когда без него не хватает много
+  if (mutagen && gap > Math.max(3, potential - 10)) return { type: 'ability', name: 'mutagen', cards: cheap.slice(0, 2) };
   if (songLeft > 0 && cheap.length && gap <= 3 * songLeft) return { type: 'ability', name: 'lullaby', cards: [cheap[0]] };
   if (turnLeft > 0 && cheap.length) {
     const k = Math.min(turnLeft, cheap.length, Math.ceil(gap / 3));
@@ -202,7 +205,7 @@ function turnMove(s, p, rng) {
       const d = def(u);
       if (d.type !== 'location' || !ok({ type: 'playCard', uid: u })) continue;
       const mine = (d.heroMod || []).some(m => (m.cls && hasClass(p, m.cls)) || (m.race && hasRace(p, m.race)));
-      if (mine || d.treasureBonus || (!s.location && step === 'pre')) return { type: 'playCard', uid: u };
+      if (mine || d.treasureBonus || d.heroAll > 0 || d.levelBonus || d.handBonus || (!s.location && step === 'pre')) return { type: 'playCard', uid: u };
     }
     // событие: играем, если оно нас не бьёт
     for (const u of p.hand) {
@@ -216,7 +219,7 @@ function turnMove(s, p, rng) {
       if (good) return { type: 'playCard', uid: u };
     }
     // алхимик перегоняет лишнее
-    if (hasClass(p, 'alchemist') && !s.turn.distilled && p.hand.length >= handLimit(p)) {
+    if (hasClass(p, 'alchemist') && !s.turn.distilled && p.hand.length >= handLimit(p, s)) {
       const a = { type: 'ability', name: 'distill', cards: byWorth(p.hand).slice(0, 2) };
       if (ok(a)) return a;
     }
@@ -253,7 +256,7 @@ function turnMove(s, p, rng) {
     return { type: 'loot' };
   }
   if (step === 'charity') {
-    const excess = Math.max(0, p.hand.length - handLimit(p));
+    const excess = Math.max(0, p.hand.length - handLimit(p, s));
     return { type: 'endTurn', give: byWorth(p.hand).slice(0, excess) };
   }
   return null;

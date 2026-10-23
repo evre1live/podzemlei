@@ -3,6 +3,9 @@ import { def, RACE_NAMES, CLASS_NAMES } from '/shared/cards.js';
 import { esc, cardHTML, chipHTML, avatarSVG, iconSVG, cardBackSVG, locationSVG } from '/art.js';
 import { fx } from '/fx.js';
 import { sfx } from '/sfx.js';
+import { setWorld } from '/world.js';
+import { AVATAR_PARTS, avatarFromSeed, cleanAvatar } from '/shared/avatar.js';
+import { AV_LABELS, SKIN, HAIRC, CLOTH, BGC } from '/art-avatar.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const app = $('#app');
@@ -16,6 +19,12 @@ const LS = {
 
 const S = {
   name: LS.get('name', ''),
+  avatar: (() => {
+    const a = LS.get('avatar', null);
+    const v = a && typeof a === 'object' ? cleanAvatar(a) : avatarFromSeed(Math.floor(Math.random() * 100000));
+    LS.set('avatar', v);
+    return v;
+  })(),
   tokens: LS.get('tokens', {}),
   rooms: [],
   room: null, game: null,
@@ -108,6 +117,7 @@ socket.on('room:state', ({ room, game, serverTime }) => {
 function render() {
   const scr = !S.room ? 'home' : S.game ? 'game' : 'lobby';
   if (scr !== S.screen) { S.screen = scr; mount[scr](); soundIcons(); }
+  setWorld($('#world'), scr === 'home' ? null : scr === 'game' && S.game.location ? def(S.game.location).art : 'default');
   update[scr]();
 }
 const mount = {}, update = {};
@@ -129,6 +139,8 @@ mount.home = () => {
       <div class="panel">
         <h2>Новая комната</h2>
         <form class="form" id="createForm" autocomplete="off">
+          <div class="hero-row"><button type="button" class="hero-ava" id="homeAva" data-act="avatar" aria-label="Настроить внешность героя">${avatarSVG(S.avatar, '#f5b83d')}</button>
+            <div><div class="muted" style="font-size:14px;margin-bottom:6px">Ваш герой</div><button type="button" class="btn small" data-act="avatar">Настроить внешность</button></div></div>
           <label>Ваше имя<input type="text" id="nameInput" maxlength="20" placeholder="Например, Джамшид" required></label>
           <label>Название комнаты<input type="text" name="rname" maxlength="20" placeholder="Пятничный подвал"></label>
           <label>Пароль, чтобы зашли только свои<input type="password" name="password" maxlength="64" placeholder="Можно оставить пустым"></label>
@@ -160,7 +172,7 @@ mount.home = () => {
     e.preventDefault();
     if (!needName()) return;
     const f = new FormData(e.target);
-    const r = await call('room:create', { name: f.get('rname') || `Подвал ${S.name}`, password: f.get('password'), maxPlayers: seats, hidden: !!f.get('hidden'), playerName: S.name });
+    const r = await call('room:create', { name: f.get('rname') || `Подвал ${S.name}`, password: f.get('password'), maxPlayers: seats, hidden: !!f.get('hidden'), playerName: S.name, avatar: S.avatar });
     if (!r.ok) return toast(r.error);
     saveToken(r.roomId, r.token);
   });
@@ -207,7 +219,7 @@ async function tryJoin(code, password) {
   const row = S.rooms.find(r => r.id === code);
   if (password === undefined && (!row || row.locked || !S.name.trim())) return openJoinModal(code, row);
   if (!S.name.trim()) return openJoinModal(code, row);
-  const r = await call('room:join', { roomId: code, password: password || '', playerName: S.name });
+  const r = await call('room:join', { roomId: code, password: password || '', playerName: S.name, avatar: S.avatar });
   if (!r.ok) {
     if (r.needPassword && !$('#joinModal')) return openJoinModal(code, row);
     return toast(r.error);
@@ -277,7 +289,7 @@ update.lobby = () => {
   const seats = r.members.map(m => `
     <div class="seat ${m.id === r.me ? 'me' : ''}" style="--seat:${m.color}">
       ${isHost && m.id !== r.me ? `<button class="btn ghost small kick" data-kick="${m.id}" title="Убрать из-за стола" aria-label="Убрать ${esc(m.name)}">✕</button>` : ''}
-      <div class="ava">${avatarSVG(m.avatar, m.color)}</div>
+      ${m.id === r.me ? `<button class="ava ava-edit" data-act="avatar" aria-label="Настроить внешность" title="Настроить внешность">${avatarSVG(m.avatar, m.color)}<i>✎</i></button>` : `<div class="ava">${avatarSVG(m.avatar, m.color)}</div>`}
       <div class="sname">${esc(m.name)}</div>
       <div class="stag">${m.id === r.hostId ? 'хозяин' : m.isBot ? 'бот' : m.connected ? 'готов' : 'нет связи'}${m.id === r.me ? ', это вы' : ''}</div>
     </div>`);
@@ -289,7 +301,7 @@ update.lobby = () => {
     <div class="settings">
       <h3>Настройки</h3>
       <div><div class="muted" style="font-size:14px;margin-bottom:6px">Сколько секунд даётся, чтобы помешать добить монстра</div>
-        <div class="seg" role="group">${[3000, 5000, 8000].map(v => `<button type="button" data-delay="${v}" aria-pressed="${r.settings.winDelayMs === v}">${v / 1000} с</button>`).join('')}</div></div>
+        <div class="seg" role="group">${[10000, 20000, 30000].map(v => `<button type="button" data-delay="${v}" aria-pressed="${r.settings.winDelayMs === v}">${v / 1000} с</button>`).join('')}</div></div>
       <div><div class="muted" style="font-size:14px;margin-bottom:6px">Мест за столом</div>
         <div class="seg" role="group">${[2, 3, 4, 5, 6].map(v => `<button type="button" data-max="${v}" aria-pressed="${r.maxPlayers === v}">${v}</button>`).join('')}</div></div>
       <div class="row"><button class="btn small" data-act="setPassword">${r.locked ? 'Сменить пароль' : 'Поставить пароль'}</button>${r.locked ? '<button class="btn ghost small" data-act="clearPassword">Убрать пароль</button>' : ''}</div>
@@ -540,7 +552,9 @@ function fightHTML() {
     const canMeddle = Object.values(h.cards || {}).some(o => o.some(a => a.side || Number.isInteger(a.monster) || a.with));
     const who = c.helper === S.room.me ? 'Вы помогаете в этом бою.' : `${esc(pname(c.fighter))} в бою.`;
     b.push(`<span class="hint">${who} ${canMeddle ? 'Карты, которыми можно вмешаться, подсвечены в руке.' : ''}</span>`);
+    if (h.pass) b.push(`<button class="btn ghost" data-act="pass">Не мешаю</button>`);
   }
+  if (c.winAt && c.passed?.length) b.push(`<span class="hint passed">Не мешают: ${c.passed.map(id => esc(pname(id))).join(', ')}</span>`);
   return `
     <div class="fight">
       <div class="side-col hero"><div class="side-main"><div class="shield hero" id="shieldHero" title="Сила героев">${SHIELD('#3fa38c')}<b>${n.heroes}</b></div><div class="heroes-row">${heroes}</div></div><div class="mods">${mods('player')}</div></div>
@@ -577,6 +591,7 @@ const ABIL = {
   steal: { cls: 'rogue', label: 'Кража', tip: 'Сбросьте карту и бросьте кубик: 4+ — вещь ваша' },
   lullaby: { cls: 'bard', label: 'Колыбельная', tip: 'Сбросьте карту: монстры −3 в этом бою (до двух раз)', need: 1 },
   distill: { cls: 'alchemist', label: 'Перегонка', tip: 'Сбросьте 2 карты и возьмите карту клада (раз в ход)', need: 2 },
+  mutagen: { cls: 'witcher', label: 'Мутаген', tip: 'Один раз за партию: сбросьте 2 карты в бою — ещё +10 к силе', need: 2 },
 };
 const abilNeed = name => ABIL[name]?.need || (name === 'backstab' || name === 'steal' ? 1 : 0);
 
@@ -934,6 +949,8 @@ function soundFx(fresh) {
       case 'enhance': sfx.play(def(f.card)?.bonus < 0 ? 'modGood' : 'enhance'); break;
       case 'backstab': sfx.play('backstab'); break;
       case 'lullaby': sfx.play('lullaby'); break;
+      case 'mutagen': sfx.play('mutagen'); break;
+      case 'legendary': sfx.play('legendary', { always: true }); break;
     }
   }
 }
@@ -1003,6 +1020,20 @@ function runFx(fresh) {
         fx.float(el, '−2', 'bad'); fx.burst(el, { n: 14, colors: ['#ff8a66', '#d2502f'], speed: 260 }); fx.shake(el, 'bump');
         break;
       }
+      case 'mutagen': {
+        const el = $('#shieldHero');
+        fx.float(el, '+10', 'good'); fx.burst(el, { n: 30, colors: ['#a6f2b7', '#3fa38c', '#e6fbff'], speed: 300 }); fx.shake(el, 'bump');
+        fx.smoke(ava || el, { colors: ['rgba(120,255,170,.45)', 'rgba(60,200,140,.4)'], sparks: false });
+        fx.banner('Мутаген!', `${pname(f.pid)}: +10 к силе`, 'win');
+        break;
+      }
+      case 'legendary': {
+        const d = def(f.card);
+        fx.banner(d.name, `Легендарная вещь у ${pname(f.pid)}`, 'legend');
+        fx.sparkle(ava, { n: 26, colors: ['#fff3b0', '#ffd56a', '#ffffff', '#a6f2ff'] });
+        fx.burst(ava, { n: 34, colors: ['#ffe08a', '#f5b83d', '#fff'], speed: 320, g: 120 });
+        break;
+      }
       case 'lullaby': {
         const el = $('#shieldMon');
         fx.notes(ava || $('#shieldHero'), el);
@@ -1028,7 +1059,7 @@ function playDice() {
 document.addEventListener('click', async e => {
   const t = e.target;
   if (t.closest('[data-uid]')) sfx.play(S.ui.mode ? 'click' : 'flip');
-  else if (t.closest('.btn, .seg button, .tabs button, .opp, .pick, .room-row')) sfx.play('click');
+  else if (t.closest('.btn, .seg button, .tabs button, .opp, .pick, .room-row, .av-opt, .av-sw, .hero-ava')) sfx.play('click');
   if (t.matches('[data-backdrop]')) {
     if ($('#helpPrompt')) return; // на просьбу о помощи нужно ответить
     return closeOverlay();
@@ -1062,6 +1093,10 @@ document.addEventListener('click', async e => {
   if (max) { const r = await call('room:settings', { maxPlayers: Number(max.dataset.max) }); if (!r.ok) toast(r.error); return; }
   const tab = t.closest('[data-tab]');
   if (tab) return setTab(tab.dataset.tab);
+  const avk = t.closest('[data-av-k]');
+  if (avk) { S.ui.avEdit.cfg[avk.dataset.avK] = Number(avk.dataset.avV); return drawAvatarEditor(); }
+  const avt = t.closest('[data-av-tab]');
+  if (avt) { S.ui.avEdit.tab = avt.dataset.avTab; return drawAvatarEditor(); }
   const ab = t.closest('[data-ability]');
   if (ab) return startAbility(ab.dataset.ability);
   const opp = t.closest('[data-opp]');
@@ -1079,6 +1114,9 @@ document.addEventListener('click', async e => {
   switch (a) {
     case 'closeOverlay': return closeOverlay();
     case 'sound': return openSoundModal();
+    case 'avatar': return openAvatarEditor();
+    case 'avatarRandom': S.ui.avEdit.cfg = avatarFromSeed(Math.floor(Math.random() * 1e6)); return drawAvatarEditor();
+    case 'avatarSave': return saveAvatar();
     case 'soundTest': return sfx.play('victory', { gap: 0 });
     case 'rules': return showOverlay(RULES);
     case 'copy': {
@@ -1096,6 +1134,7 @@ document.addEventListener('click', async e => {
     case 'menu': {
       const isHost = S.room.hostId === S.room.me;
       return showOverlay(`<div class="modal" role="dialog" aria-label="Меню"><h2>Меню</h2>
+        <button class="btn" data-act="avatar">Внешность героя</button>
         <button class="btn" data-act="copy">Скопировать приглашение</button>
         ${isHost && S.game.phase === 'playing' ? '<button class="btn danger" data-act="abort">Завершить партию для всех</button>' : ''}
         ${isHost && S.game.phase === 'ended' ? '<button class="btn primary" data-act="toLobby">Новая партия</button>' : ''}
@@ -1114,7 +1153,7 @@ document.addEventListener('click', async e => {
       return;
     }
     case 'clearPassword': { const r = await call('room:settings', { password: '' }); if (!r.ok) toast(r.error); return; }
-    case 'kick': case 'loot': case 'fight': case 'runAway': case 'autoEquip': case 'cancelHelp':
+    case 'kick': case 'loot': case 'fight': case 'runAway': case 'autoEquip': case 'cancelHelp': case 'pass':
       return act({ type: a });
     case 'endTurn': {
       const h = hints();
@@ -1140,6 +1179,53 @@ document.addEventListener('click', async e => {
   }
 });
 
+// ───────────────────────── внешность героя ─────────────────────────
+const AV_TABS = [
+  { id: 'face', label: 'Лицо', rows: [['skin', 'Кожа', SKIN.map(c => c[1])], ['eyes', 'Глаза'], ['brows', 'Брови'], ['mouth', 'Рот']] },
+  { id: 'hair', label: 'Волосы', rows: [['hair', 'Причёска'], ['hairColor', 'Цвет волос', HAIRC], ['facial', 'Борода и усы']] },
+  { id: 'hat', label: 'Шапка', rows: [['hat', 'Головной убор'], ['hatColor', 'Цвет', CLOTH]] },
+  { id: 'acc', label: 'Аксессуары', rows: [['glasses', 'Очки'], ['extra', 'Приметы'], ['shirt', 'Одежда', CLOTH]] },
+  { id: 'bg', label: 'Фон', rows: [['bg', 'Цвет фона', BGC]] },
+];
+const seatColor = () => S.room?.members.find(m => m.id === S.room.me)?.color || '#f5b83d';
+function openAvatarEditor() {
+  S.ui.avEdit = { cfg: { ...S.avatar }, tab: S.ui.avEdit?.tab || 'face' };
+  drawAvatarEditor();
+}
+function drawAvatarEditor() {
+  const E = S.ui.avEdit, cfg = E.cfg, sc = seatColor();
+  const tab = AV_TABS.find(t => t.id === E.tab) || AV_TABS[0];
+  const row = ([k, title, colors]) => {
+    const n = AVATAR_PARTS[k];
+    const items = Array.from({ length: n }, (_, i) => colors
+      ? `<button class="av-sw${cfg[k] === i ? ' on' : ''}" data-av-k="${k}" data-av-v="${i}" style="--c:${colors[i] || sc}" aria-pressed="${cfg[k] === i}" aria-label="${title} ${i + 1}" title="${k === 'bg' && i === 0 ? 'Цвет вашего места' : ''}">${k === 'bg' && i === 0 ? '<i>место</i>' : ''}</button>`
+      : `<button class="av-opt${cfg[k] === i ? ' on' : ''}" data-av-k="${k}" data-av-v="${i}" aria-pressed="${cfg[k] === i}" title="${esc(AV_LABELS[k]?.[i] || '')}" aria-label="${esc(AV_LABELS[k]?.[i] || title)}">${avatarSVG({ ...cfg, [k]: i }, sc)}</button>`).join('');
+    return `<div class="av-row"><div class="av-title">${title}${!colors && AV_LABELS[k] ? `: <b>${esc(AV_LABELS[k][cfg[k]])}</b>` : ''}</div><div class="${colors ? 'av-swatches' : 'av-grid'}">${items}</div></div>`;
+  };
+  showOverlay(`<div class="modal av-modal" role="dialog" aria-label="Внешность героя" id="avModal">
+    <h2>Внешность героя</h2>
+    <div class="av-body">
+      <div class="av-side">
+        <div class="av-preview" style="--seat:${sc}">${avatarSVG(cfg, sc)}</div>
+        <button class="btn small" data-act="avatarRandom">Случайно</button>
+      </div>
+      <div class="av-main">
+        <div class="tabs av-tabs" role="tablist">${AV_TABS.map(t => `<button role="tab" data-av-tab="${t.id}" aria-selected="${t.id === tab.id}">${t.label}</button>`).join('')}</div>
+        <div class="av-rows">${tab.rows.map(row).join('')}</div>
+      </div>
+    </div>
+    <div class="row" style="justify-content:flex-end"><button class="btn ghost" data-act="closeOverlay">Отмена</button><button class="btn primary" data-act="avatarSave">Сохранить</button></div>
+  </div>`);
+}
+async function saveAvatar() {
+  S.avatar = cleanAvatar(S.ui.avEdit.cfg);
+  LS.set('avatar', S.avatar);
+  closeOverlay();
+  const home = $('#homeAva'); if (home) home.innerHTML = avatarSVG(S.avatar, '#f5b83d');
+  if (S.room) { const r = await call('me:avatar', { avatar: S.avatar }); if (!r.ok) toast(r.error); else toast('Внешность обновлена', true); }
+  else toast('Внешность сохранена', true);
+}
+
 // ───────────────────────── настройки звука ─────────────────────────
 const SPEAKER = on => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor"/>${on
   ? '<path d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>'
@@ -1148,13 +1234,18 @@ function soundIcons() {
   const on = sfx.state.on && sfx.state.vol > 0;
   document.querySelectorAll('.sound-btn').forEach(b => { b.innerHTML = SPEAKER(on); b.setAttribute('aria-label', on ? 'Звук включён' : 'Звук выключен'); });
 }
+// живой фон: на слабых устройствах и при «уменьшить движение» по умолчанию неподвижный
+const liveBg = () => LS.get('liveBg', !(matchMedia('(prefers-reduced-motion: reduce)').matches || (navigator.hardwareConcurrency || 4) <= 2));
+const applyBg = () => $('#world').classList.toggle('still', !liveBg());
+applyBg();
 function openSoundModal() {
   const s = sfx.state;
-  showOverlay(`<div class="modal" role="dialog" aria-label="Звук" id="soundModal">
-    <h2>Звук</h2>
+  showOverlay(`<div class="modal" role="dialog" aria-label="Звук и фон" id="soundModal">
+    <h2>Звук и фон</h2>
     <label class="check"><input type="checkbox" id="sndOn" ${s.on ? 'checked' : ''}> Звуки игры</label>
     <label>Громкость<input type="range" id="sndVol" min="0" max="1" step="0.05" value="${s.vol}"></label>
     <label class="check"><input type="checkbox" id="sndAmb" ${s.amb ? 'checked' : ''}> Атмосфера пещеры: гул, ветер и капли</label>
+    <label class="check"><input type="checkbox" id="liveBg" ${liveBg() ? 'checked' : ''}> Живой фон: вода, снег, светлячки (на слабом телефоне лучше выключить)</label>
     <p class="muted" style="margin:0;font-size:13.5px">Все звуки создаются прямо в браузере. Если на телефоне тишина, проверьте беззвучный режим.</p>
     <div class="row"><button class="btn" data-act="soundTest">Послушать</button><button class="btn primary" data-act="closeOverlay">Готово</button></div>
   </div>`);
@@ -1162,6 +1253,7 @@ function openSoundModal() {
   $('#sndVol').addEventListener('input', e => { sfx.set({ vol: Number(e.target.value) }); soundIcons(); });
   $('#sndVol').addEventListener('change', () => sfx.play('coins', { n: 2, gap: 0 }));
   $('#sndAmb').addEventListener('change', e => sfx.set({ amb: e.target.checked }));
+  $('#liveBg').addEventListener('change', e => { LS.set('liveBg', e.target.checked); applyBg(); });
 }
 
 // ───────────────────────── полёт сыгранной карты ─────────────────────────

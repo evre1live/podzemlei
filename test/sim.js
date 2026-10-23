@@ -11,6 +11,7 @@ function countCards(s) {
   for (const p of s.players) all.push(...p.hand, ...p.equipped, ...p.carried, ...p.races, ...p.classes, ...[p.halfbreed, p.supermunch].filter(Boolean));
   if (s.combat) { for (const m of s.combat.monsters) all.push(m.uid, ...m.enh); all.push(...s.combat.used); }
   if (s.location) all.push(s.location);
+  if (s.rig) all.push(...s.rig.queue);
   return all;
 }
 

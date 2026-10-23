@@ -57,6 +57,21 @@ ok('в списке комнат замок, хэш пароля не утека
   C.close();
   ok('ушёл последний человек — комната с одними ботами удалена');
 }
+{
+  const D = await client();
+  const rd = await D.call('room:create', { name: 'Внешность', playerName: 'Даша', avatar: { hair: 5, hat: 99, eyes: '3', evil: '<script>' } });
+  await until(() => D.lastState?.room.members.length === 1, 3000, 'avatar room');
+  let av = D.lastState.room.members[0].avatar;
+  assert.equal(av.hair, 5); assert.equal(av.hat, 0); assert.equal(av.eyes, 3); assert.equal(av.evil, undefined);
+  assert.ok((await D.call('me:avatar', { avatar: { ...av, hat: 4, bg: 2 } })).ok);
+  await until(() => D.lastState.room.members[0].avatar.hat === 4, 3000, 'avatar update');
+  assert.equal((await D.call('room:settings', { winDelayMs: 5000 })).ok, true);
+  assert.equal(D.lastState.room.settings.winDelayMs, 10000);
+  await D.call('room:settings', { winDelayMs: 30000 });
+  await until(() => D.lastState.room.settings.winDelayMs === 30000, 3000, 'delay 30');
+  await D.call('room:leave'); D.close();
+  ok('внешность героя сохраняется и чистится, таймер 10/20/30 с');
+}
 assert.equal((await B.call('room:start')).error, 'Это может только хозяин комнаты'); ok('стартовать может только хозяин');
 assert.ok((await A.call('room:addBot')).ok);
 await until(() => A.lastState?.room.members.length === 3, 3000, 'bot added');

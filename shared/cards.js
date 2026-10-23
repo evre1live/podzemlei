@@ -5,7 +5,8 @@
 //  type: monster | curse | race | class | halfbreed | supermunch | enhancer | wandering | location | event
 //        item | oneshot | buff | levelup | hoard
 //  copies: сколько экземпляров в колоде
-//  rarity: common | rare | epic — влияет только на рамку и блеск карты
+//  rarity: common | rare | epic | legendary — влияет на рамку и блеск карты
+//  noSteal — вещь нельзя украсть (плут, клептоман); petSave:false — питомец не жертвует собой
 //
 // Особенности монстров:
 //  tags: ['undead','rat','fungus','water','fire','insect','metro','rock']
@@ -40,6 +41,7 @@ export const CARD_DEFS = [
   CLS('c_bard', 'bard', 'Бард', 2, 'Колыбельная: в любом бою сбрось карту — монстры −3 (до двух раз за бой). Слава: побеждая сам, берёт ещё карту клада.'),
   CLS('c_alchemist', 'alchemist', 'Алхимик', 2, 'Мастер зелий: твои разовые карты дают на 2 больше. Перегонка: раз в ход вне боя сбрось 2 карты и возьми карту клада.'),
   CLS('c_engineer', 'engineer', 'Механик', 2, 'Третья рука: можешь держать вещи на три руки. Наладчик: +1 к силе за каждую надетую большую вещь.'),
+  { ...CLS('c_witcher', 'witcher', 'Ведьмак', 2, '+5 к силе всегда. Мутаген: один раз за всю партию сбрось в бою 2 карты — ещё +10 к силе.'), rarity: 'epic' },
 
   { id: 'x_halfbreed', deck: 'door', type: 'halfbreed', name: 'Смешанная кровь', copies: 2, art: 'mix', rarity: 'rare',
     text: 'Можешь иметь две расы сразу и пользоваться обеими.' },
@@ -312,6 +314,34 @@ export const CARD_DEFS = [
     monsterAll: -1, heroMod: [{ cls: 'bard', n: 3 }],
     text: 'Эхо пугает монстров: все −1. Барды +3 к силе.' },
 
+  { id: 'loc_lake', deck: 'door', type: 'location', name: 'Подземное озеро', copies: 1, art: 'loc_lake', rarity: 'rare',
+    escapeAll: 2, monsterTag: [{ tag: 'water', n: 2 }],
+    text: 'Удирать по воде легко: всем +2 к побегу. Водные монстры +2.' },
+  { id: 'loc_crystal', deck: 'door', type: 'location', name: 'Кристальный грот', copies: 1, art: 'loc_crystal', rarity: 'epic',
+    heroAll: 2, heroMod: [{ cls: 'mage', n: 2 }],
+    text: 'Кристаллы наполняют силой: всем героям +2, магам ещё +2.' },
+  { id: 'loc_lava', deck: 'door', type: 'location', name: 'Лавовая река', copies: 1, art: 'loc_lava', rarity: 'epic',
+    treasureBonus: 2, monsterTag: [{ tag: 'fire', n: 4 }],
+    text: 'Клад плавится в слитки: +2 карты клада за победу. Огненные монстры +4.' },
+  { id: 'loc_ice', deck: 'door', type: 'location', name: 'Ледяной грот', copies: 1, art: 'loc_ice', rarity: 'rare',
+    monsterTag: [{ tag: 'fire', n: -5 }, { tag: 'insect', n: -3 }], heroMod: [{ race: 'dwarf', n: 1 }, { race: 'molefolk', n: 1 }],
+    text: 'Огненные монстры −5, насекомые −3. Гномы и кротолюды привычны к холоду: +1.' },
+  { id: 'loc_storm', deck: 'door', type: 'location', name: 'Грозовой провал', copies: 1, art: 'loc_storm', rarity: 'epic',
+    levelBonus: 1, monsterAll: 2,
+    text: 'Молнии закаляют: каждая победа даёт ещё +1 уровень. Монстры в грозу злее: +2.' },
+  { id: 'loc_temple', deck: 'door', type: 'location', name: 'Храм древних', copies: 1, art: 'loc_temple', rarity: 'rare',
+    monsterTag: [{ tag: 'undead', n: -4 }], heroMod: [{ cls: 'cleric', n: 3 }, { cls: 'witcher', n: 2 }],
+    text: 'Святые стены: нежить −4. Жрецы +3, ведьмаки +2.' },
+  { id: 'loc_tavern', deck: 'door', type: 'location', name: 'Таверна «Сытый крот»', copies: 1, art: 'loc_tavern', rarity: 'rare',
+    handBonus: 2, helperBonus: 1,
+    text: 'Сытые герои держат в руке на 2 карты больше. Помощник в бою получает ещё +1 клад.' },
+  { id: 'loc_garden', deck: 'door', type: 'location', name: 'Сад светлячков', copies: 1, art: 'loc_garden', rarity: 'rare',
+    heroAll: 1, lightBonus: 3, monsterTag: [{ tag: 'insect', n: 2 }],
+    text: 'Всем героям +1, светильники ещё +3. Насекомые слетаются на свет: +2.' },
+  { id: 'loc_lair', deck: 'door', type: 'location', name: 'Логово дракона', copies: 1, art: 'loc_lair', rarity: 'epic',
+    treasureBonus: 3, monsterAll: 3,
+    text: 'Горы золота: +3 карты клада за победу. Но и монстры здесь злее: +3.' },
+
   // ───────────── СОБЫТИЯ ─────────────
   // Срабатывают сразу, если их вытащили, выбив дверь. Из руки играются в свой ход вне боя.
   { id: 'ev_quake', deck: 'door', type: 'event', event: 'quake', name: 'Подземный толчок', copies: 1, art: 'ev_quake',
@@ -341,6 +371,9 @@ export const CARD_DEFS = [
   { id: 'i_tokens', deck: 'treasure', type: 'item', name: 'Кольчуга из жетонов', slot: 'armor', bonus: 2, value: 400, art: 'mail' },
   { id: 'i_diver', deck: 'treasure', type: 'item', name: 'Скафандр водолаза', slot: 'armor', bonus: 3, value: 600, big: true, art: 'diver', tags: ['water'],
     runBonus: -1, text: '−1 к побегу: в нём не побегаешь.' },
+  { id: 'i_godarmor', deck: 'treasure', type: 'item', name: 'Доспехи Бога', slot: 'armor', bonus: 15, value: 0, art: 'godarmor',
+    rarity: 'legendary', noSteal: true, req: { race: 'human' },
+    text: 'Легендарная броня. Носит только человек — герой без расы. Плут не может её украсть.' },
   { id: 'i_robe', deck: 'treasure', type: 'item', name: 'Мантия архивариуса', slot: 'armor', bonus: 3, value: 600, art: 'robe', rarity: 'rare',
     req: { cls: 'mage' }, text: 'Только для магов.' },
   { id: 'i_boots', deck: 'treasure', type: 'item', name: 'Резиновые сапоги', slot: 'feet', bonus: 1, value: 200, art: 'boots' },
@@ -400,6 +433,9 @@ export const CARD_DEFS = [
     text: 'Питомец и источник света. Спасёт от одной расплаты.' },
   { id: 'p_hamster', deck: 'treasure', type: 'item', slot: 'pet', name: 'Бойцовый хомяк', bonus: 2, value: 300, art: 'pet_hamster',
     text: 'Питомец. Спасёт от одной расплаты.' },
+  { id: 'p_golddragon', deck: 'treasure', type: 'item', slot: 'pet', name: 'Золотой Дракон', bonus: 10, value: 0, art: 'pet_dragon',
+    rarity: 'legendary', noSteal: true, petSave: false,
+    text: 'Легендарный питомец. Плут его не украдёт. Драконы не жертвуют собой: от расплаты не спасает, зато и не улетает.' },
   { id: 'p_cat', deck: 'treasure', type: 'item', slot: 'pet', name: 'Кот-диггер', bonus: 2, value: 400, art: 'pet_cat', rarity: 'rare',
     vsTag: { tag: 'rat', n: 3 }, text: 'Питомец. Против крыс ещё +3. Спасёт от одной расплаты.' },
 
@@ -467,6 +503,6 @@ export function allUids(deck) {
 }
 
 export const RACE_NAMES = { elf: 'Эльф', dwarf: 'Гном', halfling: 'Полурослик', orc: 'Орк', goblin: 'Гоблин', molefolk: 'Кротолюд', human: 'Человек' };
-export const CLASS_NAMES = { warrior: 'Воин', mage: 'Маг', cleric: 'Жрец', rogue: 'Плут', bard: 'Бард', alchemist: 'Алхимик', engineer: 'Механик' };
+export const CLASS_NAMES = { warrior: 'Воин', mage: 'Маг', cleric: 'Жрец', rogue: 'Плут', bard: 'Бард', alchemist: 'Алхимик', engineer: 'Механик', witcher: 'Ведьмак' };
 export const SLOT_NAMES = { head: 'Головняк', armor: 'Броник', feet: 'Обувка', hand: 'В руки', none: 'Прочее', pet: 'Питомец' };
 export const TAG_NAMES = { undead: 'нежить', rat: 'крыса', fungus: 'гриб', water: 'водный', fire: 'огненный', insect: 'насекомое', metro: 'житель метро', rock: 'каменный' };

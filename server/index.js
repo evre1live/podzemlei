@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { Server } from 'socket.io';
 import { createGame, act, tick, view, P } from '../shared/engine.js';
 import { botDecide } from '../shared/bot.js';
+import { cleanAvatar } from '../shared/avatar.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
@@ -44,6 +45,8 @@ const newToken = () => crypto.randomBytes(24).toString('hex');
 const BOT_NAMES = ['Кротыч', 'Диггер Петя', 'Шахтёрка Зоя', 'Сталактитыч', 'Гоша из подвала', 'Тётя Вагонетка', 'Дед Фонарь', 'Крыса Лариса'];
 const COLORS = ['#e8604c', '#f2b134', '#58b368', '#4aa3df', '#a46ad6', '#e86fb1'];
 
+const DELAYS = [10000, 20000, 30000];
+const cleanDelay = v => (DELAYS.includes(Number(v)) ? Number(v) : DELAYS[0]);
 const cleanName = (n, fb = 'Игрок') => (String(n || '').replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, 20) || fb);
 
 function roomSummary(r) {
@@ -94,11 +97,11 @@ function sysChat(r, text) {
   if (r.chat.length > 120) r.chat.splice(0, r.chat.length - 120);
 }
 
-function addMember(r, { name, isBot = false }) {
+function addMember(r, { name, isBot = false, avatar: look = null }) {
   const used = new Set(r.members.filter(m => !m.left).map(m => m.color));
   const color = COLORS.find(c => !used.has(c)) || COLORS[r.members.length % COLORS.length];
-  const usedAv = new Set(r.members.filter(m => !m.left).map(m => m.avatar));
-  let avatar = crypto.randomInt(12); for (let i = 0; i < 12 && usedAv.has(avatar); i++) avatar = (avatar + 1) % 12;
+  // своя внешность, если игрок её собрал; иначе — случайная по номеру
+  const avatar = look && typeof look === 'object' ? cleanAvatar(look) : crypto.randomInt(100000);
   const m = { id: newId(), token: isBot ? null : newToken(), name, isBot, connected: false, socketId: null, ready: isBot, color, avatar, joinedAt: now(), lastSeen: now() };
   r.members.push(m);
   return m;
@@ -123,6 +126,7 @@ function load() {
     for (const r of data) {
       r.members.forEach(m => { m.socketId = null; m.connected = false; m.lastSeen = now(); });
       if (r.game?.combat) r.game.combat.winAt = null;
+      r.settings = { ...(r.settings || {}), winDelayMs: cleanDelay(r.settings?.winDelayMs) };
       rooms.set(r.id, r);
     }
     console.log(`Восстановлено комнат: ${rooms.size}`);
@@ -134,8 +138,17 @@ function runRoom(r) {
   const g = r.game;
   if (!g || g.phase !== 'playing') return;
   const t = now();
-  // если живых за столом нет, вмешиваться некому — не ждём полный отсчёт
-  if (g.combat?.winAt && !r.members.some(m => !m.isBot && m.connected)) g.combat.winAt = Math.min(g.combat.winAt, t + 800);
+  // Отсчёт «помешать» ждёт только живых соседей. Когда все они нажали «Не мешаю»
+  // (или живых за столом нет), бой заканчивается через пару секунд — ботам хватает, чтобы вмешаться.
+  const c = g.combat;
+  if (c?.winAt) {
+    const parts = [c.fighter, c.helper].filter(Boolean);
+    const watchers = r.members.filter(m => !m.isBot && !m.left && m.connected && !m.autopilot && !parts.includes(m.id) && P(g, m.id) && !P(g, m.id).dead);
+    if (watchers.every(m => (c.passed || []).includes(m.id))) {
+      const soon = Math.max(t + 400, (c.winStart || t) + Math.max(600, BOT_DELAY_MS * 2 + 300));
+      if (soon < c.winAt) c.winAt = soon;
+    }
+  }
   let changed = tick(g, { rng, now: t });
   if (!changed && t >= (r.nextBotAt || 0)) {
     // кто может ходить: боты, а также отключившиеся игроки (автопилот)
@@ -227,10 +240,10 @@ io.on('connection', socket => {
     const r = {
       id: newCode(), name, pass: pw ? hashPassword(pw) : null, hidden: !!p.hidden, hostId: null,
       maxPlayers: Math.min(6, Math.max(2, Number(p.maxPlayers) || 6)),
-      settings: { winDelayMs: [3000, 5000, 8000].includes(Number(p.winDelayMs)) ? Number(p.winDelayMs) : 5000 },
+      settings: { winDelayMs: cleanDelay(p.winDelayMs) },
       members: [], chat: [], game: null, createdAt: now(), lastActive: now(),
     };
-    const m = addMember(r, { name: cleanName(p.playerName) });
+    const m = addMember(r, { name: cleanName(p.playerName), avatar: p.avatar });
     r.hostId = m.id;
     rooms.set(r.id, r);
     sysChat(r, `${m.name} создаёт комнату.`);
@@ -267,7 +280,7 @@ io.on('connection', socket => {
       if (!bot) return cb({ ok: false, error: 'Комната заполнена' });
       bot.left = true; // освобождаем место живому игроку
     }
-    const m = addMember(r, { name: cleanName(p.playerName) });
+    const m = addMember(r, { name: cleanName(p.playerName), avatar: p.avatar });
     sysChat(r, `${m.name} заходит в комнату.`);
     attach(r, m);
     cb({ ok: true, roomId: r.id, memberId: m.id, token: m.token });
@@ -304,6 +317,20 @@ io.on('connection', socket => {
     broadcastRoom(r);
   };
 
+  // свою внешность можно поменять в любой момент — и в лобби, и посреди партии
+  socket.on('me:avatar', (p = {}, cb) => {
+    cb = cbOf(cb);
+    if (limited()) return cb({ ok: false, error: 'Слишком часто' });
+    const { r, m } = ctx();
+    if (!r || !m) return cb({ ok: false, error: 'Вы не в комнате' });
+    if (!p.avatar || typeof p.avatar !== 'object') return cb({ ok: false, error: 'Плохие данные' });
+    m.avatar = cleanAvatar(p.avatar);
+    const gp = r.game && P(r.game, m.id);
+    if (gp) gp.avatar = m.avatar;
+    cb({ ok: true });
+    broadcastRoom(r);
+  });
+
   socket.on('room:addBot', (_, cb) => hostOnly(cb, r => {
     if (r.game && r.game.phase === 'playing') return 'Игра уже идёт';
     if (activeMembers(r).length >= r.maxPlayers) return 'Мест нет';
@@ -325,7 +352,7 @@ io.on('connection', socket => {
   socket.on('room:settings', (p = {}, cb) => hostOnly(cb, r => {
     if (r.game && r.game.phase === 'playing') return 'Во время игры нельзя';
     if (p.maxPlayers) r.maxPlayers = Math.min(6, Math.max(Math.max(2, activeMembers(r).length), Number(p.maxPlayers) || 6));
-    if ([3000, 5000, 8000].includes(Number(p.winDelayMs))) r.settings.winDelayMs = Number(p.winDelayMs);
+    if (DELAYS.includes(Number(p.winDelayMs))) r.settings.winDelayMs = Number(p.winDelayMs);
     if (typeof p.password === 'string') {
       if (p.password.length > 64) return 'Пароль слишком длинный';
       r.pass = p.password ? hashPassword(p.password) : null;

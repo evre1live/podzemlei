@@ -274,4 +274,115 @@ t('алхимик перегоняет две карты в клад раз в �
   assert.equal(p.hand.length, 3);
   assert.match(A(s, 'p0', { type: 'ability', name: 'distill', cards: ['i_helmet#0', 'i_helmet#1'] }).error, /раз в ход/);
 });
+
+t('«Не мешаю»: отказ всех соседей не сбрасывает отсчёт, вмешательство обнуляет отказы', () => {
+  const s = fresh(); const p = P(s, 'p0'); p.level = 5;
+  fight(s, 'm_mosquito#0');
+  A(s, 'p0', { type: 'fight' });
+  const at = s.combat.winAt;
+  assert.equal(A(s, 'p1', { type: 'pass' }).ok, true);
+  assert.equal(s.combat.winAt, at);
+  assert.deepEqual(s.combat.passed, ['p1']);
+  assert.match(A(s, 'p0', { type: 'pass' }).error, /сами/);
+  P(s, 'p2').hand.push(take(s, 'e_baby#0'));
+  A(s, 'p2', { type: 'playCard', uid: 'e_baby#0', monster: 0 });
+  assert.deepEqual(s.combat.passed, []);
+});
+
+t('ведьмак: +5 всегда, мутаген +10 один раз за партию', () => {
+  const s = fresh(); const p = P(s, 'p0'); p.classes.push(take(s, 'c_witcher#0'));
+  fight(s, 'm_zhek#0'); // 10 ур
+  assert.equal(combatNumbers(s).heroes, 6);
+  p.hand.push(take(s, 'i_ladle#0'), take(s, 'i_boots#0'), take(s, 'i_helmet#0'), take(s, 'i_helmet#1'));
+  assert.equal(A(s, 'p0', { type: 'ability', name: 'mutagen', cards: ['i_ladle#0', 'i_boots#0'] }).ok, true);
+  assert.equal(combatNumbers(s).heroes, 16);
+  assert.match(A(s, 'p0', { type: 'ability', name: 'mutagen', cards: ['i_helmet#0', 'i_helmet#1'] }).error, /раз за партию/);
+});
+
+t('Доспехи Бога: +15 только человеку, плут не крадёт', () => {
+  const s = fresh(); const p = P(s, 'p0'); const r = P(s, 'p1');
+  p.hand.push(take(s, 'i_godarmor#0'));
+  A(s, 'p0', { type: 'playCard', uid: 'i_godarmor#0' });
+  assert.ok(p.equipped.includes('i_godarmor#0'));
+  assert.equal(combatNumbers(s), null);
+  assert.ok(s.fx.some(f => f.kind === 'legendary'));
+  p.races.push(take(s, 'r_elf#0'));
+  A(s, 'p0', { type: 'autoEquip' });
+  assert.ok(p.carried.includes('i_godarmor#0'), 'эльфу не надеть');
+  p.races = [];
+  A(s, 'p0', { type: 'autoEquip' });
+  assert.ok(p.equipped.includes('i_godarmor#0'));
+  r.classes.push(take(s, 'c_rogue#0')); r.hand.push(take(s, 'i_ladle#0'));
+  s.turn = { idx: 1, pid: 'p1', step: 'pre', n: 2 };
+  assert.match(A(s, 'p1', { type: 'ability', name: 'steal', target: 'p0', item: 'i_godarmor#0', cards: ['i_ladle#0'] }).error, /не украсть/);
+});
+
+t('Золотой Дракон: +10, не крадётся и не улетает при расплате', () => {
+  const s = fresh(); const p = P(s, 'p0'); p.level = 2;
+  p.hand.push(take(s, 'p_golddragon#0'));
+  A(s, 'p0', { type: 'playCard', uid: 'p_golddragon#0' });
+  fight(s, 'm_endless#0'); // 10 ур, убежать нельзя
+  assert.equal(combatNumbers(s).heroes, 12);
+  s.combat.monsters[0].enh.push(take(s, 'e_hungry#0')); // +10: проигрываем
+  A(s, 'p0', { type: 'runAway' });
+  assert.ok(p.equipped.includes('p_golddragon#0'));
+});
+
+t('новые локации: кристаллы, гроза, таверна', () => {
+  const s = fresh(); const p = P(s, 'p0'); const h = P(s, 'p1');
+  p.hand.push(take(s, 'loc_crystal#0'));
+  A(s, 'p0', { type: 'playCard', uid: 'loc_crystal#0' });
+  fight(s, 'm_mosquito#0');
+  assert.equal(combatNumbers(s).heroes, 3);
+  s.combat = null; s.turn.step = 'pre';
+  p.hand.push(take(s, 'loc_storm#0'));
+  A(s, 'p0', { type: 'playCard', uid: 'loc_storm#0' });
+  fight(s, 'm_slime#0');
+  assert.equal(combatNumbers(s).levels, 2);
+  assert.equal(combatNumbers(s).monsters, 3);
+  s.combat = null; s.turn.step = 'pre';
+  p.hand.push(take(s, 'loc_tavern#0'));
+  A(s, 'p0', { type: 'playCard', uid: 'loc_tavern#0' });
+  assert.equal(view(s, 'p0').players[0].handLimit, 7);
+  h.level = 9; p.level = 1;
+  fight(s, 'm_zhek#0');
+  A(s, 'p0', { type: 'askHelp', to: 'p1', offer: 1 });
+  A(s, 'p1', { type: 'answerHelp', accept: true });
+  assert.equal(combatNumbers(s).treasures, 4);
+});
+
+t('ник «Еврей»: обе легендарки приходят ему по ходу игры', () => {
+  for (const nick of ['Еврей', 'EVRE1', ' evre1 ']) {
+    const s = createGame([{ id: 'a', name: 'Аня' }, { id: 'b', name: nick }, { id: 'c', name: 'Вова' }], {}, rng);
+    assert.ok(s.rig && s.rig.pid === 'b');
+    assert.equal(s.decks.treasure.some(u => def(u).rarity === 'legendary'), false);
+    assert.equal(view(s, 'a').rig, undefined);
+    for (const p of s.players) { for (const u of p.hand) s.discard[def(u).deck].push(u); p.hand = []; }
+    const b = P(s, 'b');
+    const owned = () => [...b.hand, ...b.equipped, ...b.carried].filter(u => def(u).rarity === 'legendary');
+    for (let i = 0; i < 20 && owned().length < 2; i++) {
+      s.turn = { idx: 1, pid: 'b', step: 'pre', n: i + 1, hoardPlayed: false };
+      b.hand.push(take(s, 'h_hoard#' + (i % 2)));
+      A(s, 'b', { type: 'playCard', uid: 'h_hoard#' + (i % 2) });
+      s.discard.treasure.push(...b.hand.filter(u => def(u).rarity !== 'legendary'));
+      b.hand = b.hand.filter(u => def(u).rarity === 'legendary');
+    }
+    assert.deepEqual(owned().map(u => def(u).id).sort(), ['i_godarmor', 'p_golddragon']);
+  }
+  const s = createGame([{ id: 'a', name: 'Аня' }, { id: 'b', name: 'Боря' }], {}, rng);
+  assert.equal(s.rig, undefined);
+  const all = [...s.decks.treasure, ...s.players.flatMap(p => p.hand)];
+  assert.ok(all.includes('i_godarmor#0') && all.includes('p_golddragon#0'));
+});
+
+t('ник «Еврей»: если клада нет, легендарка находится сама в начале хода', () => {
+  const s = createGame([{ id: 'a', name: 'Аня' }, { id: 'b', name: 'Еврей' }], {}, rng);
+  const b = P(s, 'b');
+  for (let i = 0; i < 16; i++) {
+    s.turn.step = 'charity'; s.combat = null;
+    for (const p of s.players) { s.discard.door.push(...p.hand.filter(u => def(u).deck === 'door')); s.discard.treasure.push(...p.hand.filter(u => def(u).deck === 'treasure' && def(u).rarity !== 'legendary')); p.hand = p.hand.filter(u => def(u).rarity === 'legendary'); }
+    A(s, s.turn.pid, { type: 'endTurn', give: [] });
+  }
+  assert.equal(b.hand.filter(u => def(u).rarity === 'legendary').length, 2);
+});
 console.log(`Правила: ${n} проверок пройдено.`);

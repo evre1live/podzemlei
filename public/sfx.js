@@ -259,6 +259,20 @@ const SOUNDS = {
     tone(E, { t, f: 196, type: 'square', dur: 0.1, vol: 0.06, lp: 700, wet: 0.1 });
     tone(E, { t: t + 0.11, f: 165, type: 'square', dur: 0.14, vol: 0.06, lp: 700, wet: 0.1 });
   },
+  mutagen(E, t) {
+    // бульканье зелья, затем нарастающий гул силы
+    for (let i = 0; i < 5; i++) { const f = rnd(220, 380); tone(E, { t: t + i * 0.07, f, f2: f * 2.1, dur: 0.07, vol: 0.12, wet: 0.3 }); }
+    tone(E, { t: t + 0.35, f: 70, f2: 140, type: 'sawtooth', dur: 0.8, a: 0.3, vol: 0.09, lp: 900, wet: 0.4 });
+    tone(E, { t: t + 0.35, f: 140, f2: 280, type: 'triangle', dur: 0.8, a: 0.3, vol: 0.07, vib: 8, vibF: 9, wet: 0.5 });
+    noiseV(E, { t: t + 0.4, dur: 0.7, a: 0.3, vol: 0.08, type: 'bandpass', f: 400, f2: 2400, q: 1.5, wet: 0.4 });
+    bell(E, { t: t + 1.0, f: 880, dur: 0.8, vol: 0.08, wet: 0.6 });
+  },
+  legendary(E, t) {
+    // торжественный аккорд с перезвоном — найдена легендарка
+    [261.63, 329.63, 392, 523.25].forEach((f, i) => tone(E, { t: t + i * 0.05, f, type: 'triangle', dur: 2.2, a: 0.08, hold: 0.6, vol: 0.07, vib: 2.5, vibF: 5, wet: 0.7 }));
+    [1046.5, 1318.5, 1568, 2093, 2637].forEach((f, i) => bell(E, { t: t + 0.25 + i * 0.09, f, dur: 1.1, vol: 0.06, wet: 0.7 }));
+    noiseV(E, { t: t + 0.2, dur: 1.4, a: 0.4, vol: 0.05, type: 'highpass', f: 6000, wet: 0.9 });
+  },
   drip(E, t) {
     const f = rnd(900, 1700);
     tone(E, { t, f, f2: f * 1.7, dur: 0.07, vol: 0.12, wet: 0.95 });
