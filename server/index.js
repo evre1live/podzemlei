@@ -17,6 +17,16 @@ const DATA_DIR = process.env.DATA_DIR || path.join(ROOT, 'data');
 const SAVE_FILE = path.join(DATA_DIR, 'rooms.json');
 const MAX_ROOMS = Number(process.env.MAX_ROOMS || 300);
 const BOT_DELAY_MS = Number(process.env.BOT_DELAY_MS || 1100);
+// Боты ждут, пока у живых игроков доиграет сцена: появление монстра, удар, кубик.
+// В быстрых тестах (короткая задержка ботов) паузы не нужны.
+const CINE_PAD = Number(process.env.CINE_PAD ?? (BOT_DELAY_MS >= 300 ? 1 : 0));
+const CINE_MS = { combat: 1700, wandering: 1300, ambush: 500, victory: 1500, caught: 1100, escaped: 600, dice: 1700, legendary: 2100, curse: 900, death: 900, location: 1200, event: 1100, vanish: 800, helper: 600, pet: 600 };
+function cinePad(g, fromId) {
+  if (!CINE_PAD) return 0;
+  let ms = 0;
+  for (const f of g.fx || []) if (f.id > fromId) ms += CINE_MS[f.kind] || 0;
+  return Math.min(4200, ms) * CINE_PAD;
+}
 const AFK_MS = Number(process.env.AFK_MS || 45000);
 const IDLE_TURN_MS = Number(process.env.IDLE_TURN_MS || 180000);
 
@@ -149,6 +159,7 @@ function runRoom(r) {
       if (soon < c.winAt) c.winAt = soon;
     }
   }
+  const fx0 = g.fx?.at(-1)?.id || 0;
   let changed = tick(g, { rng, now: t });
   if (!changed && t >= (r.nextBotAt || 0)) {
     // кто может ходить: боты, а также отключившиеся игроки (автопилот)
@@ -174,7 +185,11 @@ function runRoom(r) {
       if (res.ok) { changed = true; r.nextBotAt = t + BOT_DELAY_MS; break; }
     }
   }
-  if (changed) { r.lastActive = t; broadcastRoom(r); }
+  if (changed) {
+    const pad = cinePad(g, fx0);
+    if (pad) r.nextBotAt = Math.max(r.nextBotAt || 0, t + BOT_DELAY_MS + pad);
+    r.lastActive = t; broadcastRoom(r);
+  }
 }
 
 // ───────────────────────── HTTP ─────────────────────────
@@ -406,9 +421,10 @@ io.on('connection', socket => {
     try { action = JSON.parse(JSON.stringify(a)); } catch { return cb({ ok: false, error: 'Плохие данные' }); }
     if (!action || typeof action.type !== 'string') return cb({ ok: false, error: 'Плохие данные' });
     try {
+      const fx0 = r.game.fx?.at(-1)?.id || 0;
       const res = act(r.game, m.id, action, { rng, now: now() });
       cb(res);
-      if (res.ok) { r.lastActive = now(); r.nextBotAt = Math.max(r.nextBotAt || 0, now() + 600); broadcastRoom(r); }
+      if (res.ok) { r.lastActive = now(); r.nextBotAt = Math.max(r.nextBotAt || 0, now() + 600 + cinePad(r.game, fx0)); broadcastRoom(r); }
     } catch (e) {
       console.error('act error', e);
       cb({ ok: false, error: 'Ошибка сервера' });

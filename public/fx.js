@@ -42,7 +42,7 @@ function loop(t) {
   for (let i = parts.length - 1; i >= 0; i--) {
     const p = parts[i];
     p.life -= dt;
-    if (p.life <= 0) { parts.splice(i, 1); continue; }
+    if (p.life <= 0) { parts.splice(i, 1); if (p.onDie) p.onDie(p); continue; }
     if (p.delay) { p.delay -= dt; if (p.delay > 0) { p.life += dt; continue; } p.delay = 0; }
     p.vx += (p.ax || 0) * dt; p.vy += (p.g || 0) * dt;
     if (p.drag) { const k = Math.pow(p.drag, dt * 60); p.vx *= k; p.vy *= k; }
@@ -146,12 +146,14 @@ function draw(p, a) {
 // ───────────── генераторы ─────────────
 function center(el) {
   if (!el) return { x: W / 2, y: H / 2, w: 0, h: 0 };
+  if (el.x !== undefined && !el.getBoundingClientRect) return { w: 0, h: 0, ...el };
   const r = el.getBoundingClientRect();
   return { x: r.left + r.width / 2, y: r.top + r.height / 2, w: r.width, h: r.height };
 }
 function emit(n, at, mk) {
   if (reduced()) return;
   ensure();
+  n = Math.max(1, Math.round(n * (fx.quality ?? 1)));
   for (let i = 0; i < n; i++) {
     const p = mk(i);
     add({ x: at.x, y: at.y, vx: 0, vy: 0, g: 0, rot: rnd(0, 6.28), vr: 0, size: 3, color: '#fff', life: 1, seed: Math.random() * 10, ...p, max: p.life ?? 1 });
@@ -166,7 +168,51 @@ const PAL = {
   dust: ['rgba(214,190,160,.55)', 'rgba(170,140,110,.5)', 'rgba(240,220,190,.45)'],
 };
 
+const R = (v, d) => Array.isArray(v) ? rnd(v[0], v[1]) : (v ?? d);
+function explode(x, y, pal) {
+  // вспышка салюта: кольцо искр, звёздочки и мягкое свечение
+  const n = 46;
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2 + rnd(-0.05, 0.05), v = rnd(170, 290);
+    add({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, g: 120, drag: 0.955, rot: 0, vr: 0, size: rnd(1.6, 2.6), color: pick(pal), shape: 'spark', add: true, life: rnd(0.9, 1.3), max: 1.3, seed: 0 });
+  }
+  for (let i = 0; i < 16; i++) {
+    const a = rnd(0, Math.PI * 2), v = rnd(30, 150);
+    add({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, g: 60, drag: 0.96, rot: rnd(0, 6), vr: rnd(-6, 6), size: rnd(2.5, 4.5), color: '#fff8e0', shape: 'star', add: true, life: rnd(0.8, 1.4), max: 1.4, fadeIn: true, seed: 0 });
+  }
+  add({ x, y, vx: 0, vy: 0, g: 0, rot: 0, vr: 0, size: 70, grow: 120, color: 'rgba(255,240,200,.5)', shape: 'glow', add: true, life: 0.45, max: 0.45, seed: 0 });
+}
+const FIRE_PALS = [['#ffe08a', '#f5b83d', '#fff3b0'], ['#ff8ab6', '#e86fa1', '#ffd0e4'], ['#8ff0d2', '#3fa38c', '#e6fff6'], ['#9cc4ff', '#4a7fc1', '#e6f0ff'], ['#d9b3ff', '#8f6bc9', '#f3e6ff'], ['#ffb08a', '#d2502f', '#ffe0c8']];
+
 export const fx = {
+  // универсальный «распылитель» частиц: форма, цвета, разброс скоростей и углов задаются снаружи
+  spray(el, o = {}) {
+    const c = center(el);
+    const [a0, a1] = o.angle || [0, Math.PI * 2];
+    emit(o.n || 20, c, () => {
+      const a = rnd(a0, a1), v = R(o.speed, 200);
+      return { x: c.x + rnd(-1, 1) * (o.spreadX ?? 0) * c.w / 2, y: c.y + rnd(-1, 1) * (o.spreadY ?? 0) * c.h / 2 + (o.dy || 0) * c.h,
+        vx: Math.cos(a) * v + (o.vx || 0), vy: Math.sin(a) * v + (o.vy || 0), ax: o.ax || 0, g: o.g ?? 0, drag: o.drag ?? 0.95,
+        size: R(o.size, 3), grow: o.grow ? R(o.grow) : 0, color: pick(o.colors || PAL.gold), shape: o.shape || 'dot',
+        add: o.add ?? true, life: R(o.life, 0.8), fadeIn: !!o.fadeIn, fade: o.fade, wob: o.wob ? R(o.wob) : 0, vr: rnd(-6, 6), delay: o.delay ? R(o.delay) : 0, alpha: o.alpha };
+    });
+  },
+  // салют: ракеты взлетают и рассыпаются; возвращает моменты взрывов (для звука)
+  fireworks(o = {}) {
+    if (reduced()) return [];
+    ensure();
+    const n = o.n || 8, span = o.span || 3.2, pops = [];
+    for (let i = 0; i < n; i++) {
+      const delay = (i / n) * span + rnd(0, 0.25);
+      const x = rnd(W * 0.12, W * 0.88), y = H + 10, top = rnd(H * 0.12, H * 0.42);
+      const life = rnd(0.75, 1.05), vy = -(H + 10 - top) / life * 1.45;
+      const pal = pick(FIRE_PALS);
+      pops.push(delay + life);
+      add({ x, y, vx: rnd(-40, 40), vy, g: -vy / life * 0.9, drag: 1, rot: 0, vr: 0, size: 2.4, color: '#fff3d6', shape: 'spark', add: true, life, max: life, delay, seed: 0,
+        onDie: p => explode(p.x, p.y, pal) });
+    }
+    return pops;
+  },
   burst(el, o = {}) {
     const c = el?.x !== undefined ? el : center(el);
     const n = o.n || 24, sp = o.speed || 260, pal = o.colors || PAL.gold;

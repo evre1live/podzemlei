@@ -28,23 +28,28 @@ const TOON = {
   orange: ['#ffc58a', '#f08a3a', '#a4501a'],
   leaf: ['#9ff0b5', '#4cbf73', '#21673b'],
 };
+// яркие сочные фоны под картинкой карты: светлый центр, насыщенный край
 const BG = {
-  item: ['#6b4a2a', '#1e140d', '#ffd479'],
-  oneshot: ['#2e5d58', '#0e201e', '#8ff0d8'],
-  buff: ['#7a2f4a', '#220e18', '#ffb0c8'],
-  gold: ['#8a5a14', '#261706', '#ffe08a'],
-  door: ['#34507a', '#121a2a', '#a9cdf5'],
-  curse: ['#5a2f7a', '#180d24', '#d9b3ff'],
-  enhancer: ['#7a2a1e', '#220c0a', '#ffb08a'],
-  event: ['#7a5a1e', '#221809', '#ffe08a'],
-  special: ['#2f6b5a', '#0e231d', '#a6f2d8'],
-  pet: ['#4f6b2a', '#151d0b', '#d6f59a'],
+  item: ['#ffc76e', '#d8621a', '#fff3c8'],
+  oneshot: ['#86f4de', '#128a78', '#e8fffa'],
+  buff: ['#ffa4ca', '#c22f6a', '#fff0f6'],
+  gold: ['#ffe680', '#d4840e', '#fffbe0'],
+  door: ['#a2d6ff', '#2c66c0', '#eef8ff'],
+  curse: ['#d2aaff', '#6428c0', '#f6eeff'],
+  enhancer: ['#ffa078', '#c02e16', '#fff0e8'],
+  event: ['#ffd47e', '#d06018', '#fff6e0'],
+  special: ['#a4f6d4', '#1a946c', '#effff8'],
+  pet: ['#d8f67e', '#549618', '#f8ffe6'],
+  dark: ['#25342c', '#040505', '#7dff9a'],
 };
 export function injectDefs() {
   if (typeof document === 'undefined' || document.getElementById('pz-defs')) return;
   let g = '';
   for (const [k, [a, b, c]] of Object.entries(TOON)) g += `<linearGradient id="t-${k}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${a}"/><stop offset=".55" stop-color="${b}"/><stop offset="1" stop-color="${c}"/></linearGradient>`;
   for (const [k, [a, b]] of Object.entries(BG)) g += `<radialGradient id="bg-${k}" cx="50%" cy="45%" r="75%"><stop offset="0" stop-color="${a}"/><stop offset="1" stop-color="${b}"/></radialGradient>`;
+  // комиксовый растр и мягкое затемнение краёв картинки
+  g += `<pattern id="ht" width="7" height="7" patternUnits="userSpaceOnUse"><circle cx="3.5" cy="3.5" r="1.15" fill="#fff" fill-opacity=".2"/></pattern>`;
+  g += `<radialGradient id="vig" cx="50%" cy="45%" r="70%"><stop offset=".55" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".38"/></radialGradient>`;
   g += `<radialGradient id="glow" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#fff" stop-opacity=".85"/><stop offset=".4" stop-color="#fff" stop-opacity=".25"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>`;
   g += `<linearGradient id="beam" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fff6c8" stop-opacity=".9"/><stop offset="1" stop-color="#fff6c8" stop-opacity="0"/></linearGradient>`;
   for (const [k, [a, b]] of Object.entries(LOC_BG)) g += `<radialGradient id="lb-${k}" cx="50%" cy="42%" r="78%"><stop offset="0" stop-color="${a}"/><stop offset="1" stop-color="${b}"/></radialGradient>`;
@@ -174,7 +179,7 @@ const ICONS = {
   bard: `<path d="M8 22 q24 -20 48 0 q-6 8 -24 8 q-18 0 -24 -8z" fill="${RD}" ${st}/><path d="M42 16 q12 -18 20 -12 q-8 2 -14 16" fill="${GD}" ${st2}/><g fill="${INK}"><path d="M20 58 v-20 l18 -5 v20" stroke="${INK}" stroke-width="3" fill="none"/><ellipse cx="17" cy="58" rx="5" ry="4"/><ellipse cx="35" cy="53" rx="5" ry="4"/></g><path d="M20 42 l18 -5" stroke="${INK}" stroke-width="3"/><circle cx="48" cy="44" r="3" fill="${fL}"/><circle cx="54" cy="36" r="2" fill="${fL}"/>`,
   alchemist: `<path d="M26 6 h12 v16 l14 26 q3 8 -6 8 h-28 q-9 0 -6 -8 l14 -26z" fill="${GL}" ${st}/><path d="M15 40 h34 l4 8 q3 8 -6 8 h-30 q-9 0 -6 -8z" fill="${LF}"/><path d="M26 6 h12 v16 l14 26 q3 8 -6 8 h-28 q-9 0 -6 -8 l14 -26z" fill="none" ${st}/><rect x="23" y="2" width="18" height="6" rx="2" fill="${Br}" ${st2}/><g fill="#fff"><circle cx="26" cy="48" r="2.4"/><circle cx="36" cy="44" r="1.6"/><circle cx="40" cy="51" r="1.2"/></g><path d="M44 14 q4 -4 2 -8 M50 20 q6 -4 4 -10" stroke="#a6f2b7" stroke-width="2.4" fill="none" stroke-linecap="round"/>`,
   engineer: `<path d="M32 8 l5 0 l2 6 l6 3 l6 -3 l4 4 l-3 6 l3 6 l6 2 v6 l-6 2 l-3 6 l3 6 l-4 4 l-6 -3 l-6 3 l-2 6 h-6 l-2 -6 l-6 -3 l-6 3 l-4 -4 l3 -6 l-3 -6 l-6 -2 v-6 l6 -2 l3 -6 l-3 -6 l4 -4 l6 3 l6 -3 l2 -6z" fill="${S}" ${st}/><circle cx="32" cy="35" r="9" fill="${DK}" ${st2}/><path d="M10 58 L40 28" stroke="${INK}" stroke-width="8" stroke-linecap="round"/><path d="M10 58 L40 28" stroke="${fL}" stroke-width="4" stroke-linecap="round"/>`,
-  witcher: `<circle cx="32" cy="40" r="20" fill="url(#glow)" opacity=".8"/><path d="M10 54 L44 12" stroke="${INK}" stroke-width="9" stroke-linecap="round"/><path d="M10 54 L44 12" stroke="#e6ecf3" stroke-width="5" stroke-linecap="round"/><path d="M6 44 l14 12" ${st}/><path d="M54 54 L20 12" stroke="${INK}" stroke-width="9" stroke-linecap="round"/><path d="M54 54 L20 12" stroke="#8a929d" stroke-width="5" stroke-linecap="round"/><path d="M58 44 l-14 12" ${st}/><path d="M28 30 h8 v6 l7 11 q2 7 -5 7 h-12 q-7 0 -5 -7 l7 -11z" fill="${GL}" ${st}/><path d="M23 47 h18 l1.5 2.5 q1 4.5 -4 4.5 h-13 q-5 0 -4 -4.5z" fill="${LF}"/><path d="M28 30 h8 v6 l7 11 q2 7 -5 7 h-12 q-7 0 -5 -7 l7 -11z" fill="none" ${st}/><rect x="27" y="26" width="10" height="5" rx="1.5" fill="${Br}" ${st2}/><g fill="#e6fbff"><circle cx="29" cy="49" r="1.6"/><circle cx="35" cy="46" r="1.1"/></g>`,
+  witcher: `<path d="M13 2 Q21 15 32 14 Q43 15 51 2" fill="none" stroke="${INK}" stroke-width="5.2" stroke-linecap="round"/><path d="M13 2 Q21 15 32 14 Q43 15 51 2" fill="none" stroke="#d4d9e0" stroke-width="2.6" stroke-dasharray="3.2 2.2" stroke-linecap="round"/><rect x="28" y="11" width="8" height="7" rx="2.2" fill="${S}" ${st2}/><circle cx="32" cy="39" r="23" fill="${S}" ${st}/><circle cx="32" cy="39" r="18.6" fill="#22262d" stroke="#eef1f5" stroke-width="1.6"/><path d="M18.5 28 L21.5 20.5 L27 26.5 Q32 25 37 26.5 L42.5 20.5 L45.5 28 Q48.5 34 47.5 41 Q45.5 53 32 56 Q18.5 53 16.5 41 Q15.5 34 18.5 28Z" fill="${S}" ${st2}/><circle cx="25.4" cy="38" r="9" fill="#62ff98" opacity=".22"/><circle cx="38.6" cy="38" r="9" fill="#62ff98" opacity=".22"/><circle cx="25.4" cy="38" r="6.2" fill="#e3e7ec" ${st2}/><circle cx="38.6" cy="38" r="6.2" fill="#e3e7ec" ${st2}/><circle cx="25.4" cy="38" r="3.9" fill="#6dff9e"/><circle cx="38.6" cy="38" r="3.9" fill="#6dff9e"/><circle cx="25.4" cy="38" r="1.7" fill="${INK}"/><circle cx="38.6" cy="38" r="1.7" fill="${INK}"/><circle cx="24.2" cy="36.6" r="1" fill="#fff"/><circle cx="37.4" cy="36.6" r="1" fill="#fff"/><path d="M18.5 31.5 L32 36.5 L45.5 31.5" fill="none" stroke="${INK}" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M29.6 43 H34.4 L32 48.5Z" fill="#e8c15a" ${st2}/><path d="M24.5 50.5 q3.7 2.4 7.5 0 q3.8 2.4 7.5 0" fill="none" stroke="#5b6470" stroke-width="1.7" stroke-linecap="round"/>${hl('M14 30 Q18 20 28 17', 2.4, 0.7)}`,
   mix: `<circle cx="23" cy="32" r="17" fill="${G}" ${st} opacity=".92"/><circle cx="41" cy="32" r="17" fill="${GD}" ${st} opacity=".92"/><path d="M32 18 q6 14 0 28 q-6 -14 0 -28z" fill="#fff" opacity=".45"/>`,
   badge: `<rect x="11" y="9" width="42" height="48" rx="6" fill="${W}" ${st}/><rect x="25" y="4" width="14" height="9" rx="2" fill="${S}" ${st2}/><path d="M19 32 h26 M19 40 h26 M19 48 h15" stroke="${INK}" stroke-width="2"/><text x="32" y="26" font-size="12" text-anchor="middle" font-family="sans-serif" font-weight="800" fill="${fR}">×2</text>`,
 };
@@ -301,18 +306,19 @@ function bgDeco(k) {
     case 'enhancer': return `<g fill="#ffb08a" opacity=".16"><path d="M0 120 L30 70 L50 120Z M110 120 L134 64 L160 120Z"/></g><g fill="#ffd27a"><circle cx="20" cy="30" r="1.8"/><circle cx="140" cy="22" r="1.6"/></g>`;
     case 'oneshot': return `<g fill="none" stroke="#8ff0d8" stroke-width="2" opacity=".35"><circle cx="24" cy="30" r="5"/><circle cx="136" cy="40" r="7"/><circle cx="128" cy="90" r="4"/><circle cx="30" cy="92" r="3"/></g>`;
     case 'buff': return `<g fill="#ffb0c8" opacity=".35"><path d="M24 30 q-6 -6 -10 0 q0 6 10 12 q10 -6 10 -12 q-4 -6 -10 0z"/><path d="M136 80 q-4 -4 -7 0 q0 4 7 8 q7 -4 7 -8 q-3 -4 -7 0z"/></g>`;
+    case 'dark': return `<ellipse cx="80" cy="64" rx="60" ry="44" fill="#7dff9a" opacity=".08"/><g fill="#7dff9a"><circle cx="22" cy="30" r="1.4" opacity=".6"/><circle cx="140" cy="24" r="1.1" opacity=".5"/><circle cx="132" cy="92" r="1.6" opacity=".45"/><circle cx="28" cy="96" r="1" opacity=".5"/></g>`;
     case 'door': return `<path d="M44 120 V52 Q44 18 80 18 Q116 18 116 52 V120" fill="#0b1220" opacity=".35"/>`;
     case 'pet': return `<g fill="#d6f59a" opacity=".3"><circle cx="24" cy="94" r="5"/><circle cx="16" cy="84" r="2.4"/><circle cx="28" cy="82" r="2.4"/><circle cx="136" cy="30" r="5"/><circle cx="128" cy="20" r="2.4"/><circle cx="140" cy="18" r="2.4"/></g>`;
     default: return `<g fill="#ffd479"><path d="M24 28 l2 4 l4 2 l-4 2 l-2 4 l-2 -4 l-4 -2 l4 -2z" opacity=".7"/><path d="M136 82 l1.6 3 l3 1.6 l-3 1.6 l-1.6 3 l-1.6 -3 l-3 -1.6 l3 -1.6z" opacity=".6"/><circle cx="130" cy="26" r="1.6" opacity=".6"/></g>`;
   }
 }
 export function iconScene(key, kind = 'item') {
-  return `<svg viewBox="0 0 160 120" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><rect width="160" height="120" fill="url(#bg-${kind})"/>${bgDeco(kind)}<ellipse cx="80" cy="56" rx="54" ry="40" fill="url(#glow)" opacity=".16"/><ellipse cx="80" cy="102" rx="32" ry="6" fill="rgba(0,0,0,.4)"/><g transform="translate(40 16) scale(1.25)">${ICONS[key] || ICONS.question}</g></svg>`;
+  return `<svg viewBox="0 0 160 120" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><rect width="160" height="120" fill="url(#bg-${kind})"/>${kind === 'dark' ? '' : '<rect width="160" height="120" fill="url(#ht)"/>'}${bgDeco(kind)}<ellipse cx="80" cy="56" rx="54" ry="40" fill="url(#glow)" opacity="${kind === 'dark' ? 0.1 : 0.3}"/><rect width="160" height="120" fill="url(#vig)"/><ellipse cx="80" cy="102" rx="32" ry="6" fill="rgba(0,0,0,.3)"/><g transform="translate(40 16) scale(1.25)">${ICONS[key] || ICONS.question}</g></svg>`;
 }
 export function cardArt(d, uid = null) {
   if (d.type === 'monster') return monsterSVG(uid || d.id + '#0');
   if (d.type === 'location') return locationSVG(d.art);
-  const kind = d.slot === 'pet' ? 'pet' : BG_OF[d.type] || 'item';
+  const kind = d.bg || (d.slot === 'pet' ? 'pet' : BG_OF[d.type] || 'item');
   return iconScene(typeof d.art === 'string' ? d.art : 'question', kind);
 }
 
@@ -368,6 +374,7 @@ export function cardHTML(uid, o = {}) {
   const d = def(uid);
   const cls = ['card', d.deck, 't-' + d.type, o.size || 'md'];
   if (d.rarity && d.rarity !== 'common') cls.push('r-' + d.rarity);
+  if (d.bg) cls.push('k-' + d.bg);
   if (o.selected) cls.push('selected');
   if (o.playable) cls.push('playable');
   if (o.dim) cls.push('dim');

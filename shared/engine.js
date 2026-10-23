@@ -306,26 +306,28 @@ function kill(s, p, rng) {
   log(s, `💀 ${p.name} погибает. Уровень, раса и класс остаются.${taken.length ? ' Труп обшарили: ' + taken.join(', ') + '.' : ''}`, 'bad');
 }
 
-function resolveCurse(s, target, uid, rng, byName) {
+function resolveCurse(s, target, uid, rng, byName, byId = null) {
   const d = def(uid);
   toDiscard(s, uid);
   const ward = target.hand.find(u => def(u).effect === 'ward');
   log(s, `${byName ? byName + ' насылает' : 'Сработало'} ${q(d.name)} на ${target.name}.`, 'curse');
-  fx(s, { kind: 'curse', pid: target.id, card: uid });
-  if (locationOf(s)?.noCurses) { log(s, 'В тёплой котельной проклятие растаяло.', 'good'); return; }
+  fx(s, { kind: 'curse', pid: target.id, card: uid, by: byId });
+  if (locationOf(s)?.noCurses) { fx(s, { kind: 'ward', pid: target.id }); log(s, 'В тёплой котельной проклятие растаяло.', 'good'); return; }
   if (hasRace(target, 'molefolk') && d.fx.every(f => f.k === 'slot' && ['head', 'armor', 'feet'].includes(f.slot))) {
+    fx(s, { kind: 'ward', pid: target.id });
     log(s, `Толстая шкура кротолюда ${target.name} не пропустила проклятие.`, 'good');
     return;
   }
   if (ward) {
     without(target.hand, ward); toDiscard(s, ward);
+    fx(s, { kind: 'ward', pid: target.id });
     log(s, `Куриный бог ${target.name} отвёл проклятие.`, 'good');
     return;
   }
   if (hasClass(target, 'cleric')) {
     const r = d6(rng);
     fx(s, { kind: 'dice', pid: target.id, value: r, ok: r >= 5, label: 'Жрец отмаливает проклятие' });
-    if (r >= 5) { log(s, `${target.name} отмолил проклятие (выпало ${r}).`, 'good'); return; }
+    if (r >= 5) { fx(s, { kind: 'ward', pid: target.id }); log(s, `${target.name} отмолил проклятие (выпало ${r}).`, 'good'); return; }
   }
   applyFx(s, target, d.fx, rng);
 }
@@ -539,7 +541,7 @@ function resolveVictory(s, rng) {
   setLevel(s, f, f.level + n.levels, { canWin: true });
   if (h && hasRace(h, 'elf')) setLevel(s, h, h.level + c.monsters.length, { canWin: true });
   const r = shareTreasure(s, n.treasures, rng);
-  fx(s, { kind: 'victory', pid: f.id });
+  fx(s, { kind: 'victory', pid: f.id, helper: c.helper || null, cards: c.monsters.map(m => m.uid), levels: n.levels, treasures: r.total });
   log(s, `⚔️ ${f.name}${h ? ' и ' + h.name : ''} побеждают ${names}! ${f.name} получает +${n.levels} ур. и ${r.total - r.share} клада${h && r.share ? `, ${h.name} — ${r.share}` : ''}.`, 'good');
   endCombat(s);
   const winners = [f, h].filter(x => x && x.level >= WIN_LEVEL);
@@ -558,6 +560,7 @@ function resolveEscape(s, rng) {
       if (p.dead) break;
       const d = def(m.uid);
       if (d.noPursue && p.level <= d.noPursue) {
+        fx(s, { kind: 'escaped', pid, card: m.uid, calm: true });
         log(s, `${q(d.name)} не стал гнаться за ${p.name}.`, 'good');
         continue;
       }
@@ -578,14 +581,15 @@ function resolveEscape(s, rng) {
         }
       }
       const sign = bonus ? (bonus > 0 ? '+' : '') + bonus : '';
-      if (ok) { log(s, `${p.name} удирает от ${q(d.name)} (${r}${sign}).`, 'good'); continue; }
+      if (ok) { fx(s, { kind: 'escaped', pid, card: m.uid }); log(s, `${p.name} удирает от ${q(d.name)} (${r}${sign}).`, 'good'); continue; }
       const pet = p.equipped.find(u => def(u).slot === 'pet' && def(u).petSave !== false);
       if (pet) {
         removeItem(p, pet); toDiscard(s, pet);
-        fx(s, { kind: 'pet', pid, card: pet });
+        fx(s, { kind: 'pet', pid, card: pet, mon: m.uid });
         log(s, `${q(def(pet).name)} бросается на ${q(d.name)} и спасает ${p.name} от расплаты!`, 'good');
         continue;
       }
+      fx(s, { kind: 'caught', pid, card: m.uid });
       log(s, `${p.name} не убежал от ${q(d.name)}${noEsc ? '' : ` (${r}${sign})`}. ${d.bad.text}`, 'bad');
       applyFx(s, p, d.bad.fx, rng);
     }
@@ -775,7 +779,7 @@ H.playCard = {
         setLevel(s, p, p.level + 1);
         log(s, `${p.name}: ${q(d.name)} — теперь ${p.level} ур.`, 'good');
         break;
-      case 'curse': resolveCurse(s, P(s, a.target), a.uid, rng, p.name); break;
+      case 'curse': resolveCurse(s, P(s, a.target), a.uid, rng, p.name, p.id); break;
       case 'enhancer': {
         const m = c.monsters[a.monster];
         m.enh.push(a.uid);
@@ -803,10 +807,12 @@ H.playCard = {
           c.escape[p.id] = (c.escape[p.id] || 0) + n;
           log(s, `${p.name} готовит ${q(d.name)}: +${n} к побегу.`, 'combat');
         } else if (d.effect === 'escape') {
+          fx(s, { kind: 'vanish', pid: p.id, how: 'smoke', cards: c.monsters.map(m => m.uid) });
           log(s, `${p.name} бросает ${q(d.name)} — герои растворяются в дыму без наград.`, 'combat');
           endCombat(s);
         } else if (d.effect === 'remove') {
           const m = removeMonster(s, a.monster);
+          fx(s, { kind: 'vanish', pid: p.id, how: 'stone', cards: [m.uid] });
           log(s, `${p.name} читает ${q(d.name)}: ${q(def(m.uid).name)} каменеет.`, 'combat');
           if (!c.monsters.length) afterMonstersGone(s, rng);
         }
@@ -928,6 +934,7 @@ H.answerHelp = {
     const c = s.combat;
     if (a.accept) {
       c.helper = p.id; c.helpOffer = c.helpReq.offer;
+      fx(s, { kind: 'helper', pid: p.id, to: c.fighter });
       log(s, `${p.name} вступает в бой на стороне ${P(s, c.fighter).name}!`, 'combat');
     } else { c.declined.push(p.id); log(s, `${p.name} отказывается помогать.`, 'combat'); }
     c.helpReq = null;
@@ -951,6 +958,7 @@ H.fight = {
     s.combat.winAt = s.now + s.opts.winDelayMs;
     s.combat.winStart = s.now;
     s.combat.passed = [];
+    fx(s, { kind: 'strike', pid: p.id });
     log(s, `${p.name} заносит оружие! Есть ${Math.round(s.opts.winDelayMs / 1000)} с, чтобы помешать.`, 'combat');
   },
 };
@@ -1074,16 +1082,19 @@ H.ability = {
       case 'rage':
         c.rageCount[p.id] = (c.rageCount[p.id] || 0) + cards.length;
         c.rage[p.id] = (c.rage[p.id] || 0) + cards.length;
+        fx(s, { kind: 'power', pid: p.id, ab: 'rage', n: cards.length });
         log(s, `${p.name} впадает в ярость: +${cards.length}.`, 'combat');
         break;
       case 'turn':
         c.turnCount[p.id] = (c.turnCount[p.id] || 0) + cards.length;
         c.turnUndead[p.id] = (c.turnUndead[p.id] || 0) + cards.length * 3;
+        fx(s, { kind: 'power', pid: p.id, ab: 'turn', n: cards.length * 3 });
         log(s, `${p.name} изгоняет нежить: +${cards.length * 3}.`, 'combat');
         break;
       case 'levitate':
         c.escapeCount[p.id] = (c.escapeCount[p.id] || 0) + cards.length;
         c.escape[p.id] = (c.escape[p.id] || 0) + cards.length;
+        fx(s, { kind: 'power', pid: p.id, ab: 'levitate', n: cards.length });
         log(s, `${p.name} готовит левитацию: +${cards.length} к побегу.`, 'combat');
         break;
       case 'charm': {
@@ -1091,6 +1102,7 @@ H.ability = {
         const m = c.monsters[a.monster];
         c.charmTreasure = (c.charmTreasure || 0) + monsterTreasure(s, m);
         removeMonster(s, a.monster);
+        fx(s, { kind: 'vanish', pid: p.id, how: 'sleep', cards: [m.uid] });
         log(s, `${p.name} сбрасывает руку (${all.length}) и усыпляет ${q(def(m.uid).name)}.`, 'combat');
         if (!c.monsters.length) afterMonstersGone(s, rng);
         break;

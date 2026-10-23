@@ -273,6 +273,109 @@ const SOUNDS = {
     [1046.5, 1318.5, 1568, 2093, 2637].forEach((f, i) => bell(E, { t: t + 0.25 + i * 0.09, f, dur: 1.1, vol: 0.06, wet: 0.7 }));
     noiseV(E, { t: t + 0.2, dur: 1.4, a: 0.4, vol: 0.05, type: 'highpass', f: 6000, wet: 0.9 });
   },
+  // ───── звуки зрелищных сцен ─────
+  doorOpen(E, t) {
+    // тяжёлая дверь медленно расходится: долгий скрип, поток воздуха и свет
+    const { ac } = E;
+    const o = ac.createOscillator(); o.type = 'sawtooth';
+    o.frequency.setValueAtTime(118, t);
+    o.frequency.linearRampToValueAtTime(205, t + 0.32);
+    o.frequency.linearRampToValueAtTime(140, t + 0.7);
+    const l = ac.createOscillator(); l.frequency.value = 17;
+    const lg = ac.createGain(); lg.gain.value = 18;
+    l.connect(lg); lg.connect(o.frequency);
+    const bp = ac.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 880; bp.Q.value = 7;
+    const g = ac.createGain(); env(g, t, 0.06, 0.17, 0.74, 0.4);
+    o.connect(bp); bp.connect(g); E.out(g, 0.4);
+    o.start(t); l.start(t); o.stop(t + 0.8); l.stop(t + 0.8);
+    noiseV(E, { t: t + 0.18, dur: 0.75, a: 0.25, vol: 0.14, type: 'bandpass', f: 260, f2: 1500, q: 0.9, wet: 0.5 });
+    noiseV(E, { t: t + 0.35, dur: 0.8, a: 0.2, vol: 0.035, type: 'highpass', f: 6500, wet: 0.9 });
+    bell(E, { t: t + 0.42, f: 1568, dur: 0.9, vol: 0.035, wet: 0.8 });
+  },
+  portal(E, t) {
+    noiseV(E, { t, dur: 0.9, a: 0.3, vol: 0.12, type: 'bandpass', f: 200, f2: 1700, q: 2.5, wet: 0.6 });
+    tone(E, { t, f: 110, f2: 220, type: 'triangle', dur: 0.9, a: 0.3, vol: 0.08, vib: 9, vibF: 7, wet: 0.6 });
+    tone(E, { t: t + 0.1, f: 660, f2: 330, dur: 0.7, a: 0.2, vol: 0.03, vib: 20, vibF: 11, wet: 0.8 });
+  },
+  boom(E, t, o = {}) {
+    const k = o.k || 1;
+    tone(E, { t, f: 92, f2: 31, dur: 0.75, vol: 0.5 * k, wet: 0.45 });
+    tone(E, { t, f: 46, f2: 28, type: 'triangle', dur: 0.9, vol: 0.28 * k, wet: 0.3 });
+    noiseV(E, { t, dur: 0.42, vol: 0.34 * k, type: 'lowpass', f: 520, f2: 120, wet: 0.45 });
+    noiseV(E, { t, dur: 0.05, vol: 0.2 * k, type: 'highpass', f: 2600, wet: 0.2 });
+  },
+  thunder(E, t) {
+    noiseV(E, { t, dur: 0.09, vol: 0.32, type: 'highpass', f: 1800, wet: 0.3 });
+    noiseV(E, { t: t + 0.04, dur: 0.12, vol: 0.26, type: 'bandpass', f: 1200, q: 0.8, wet: 0.4 });
+    noiseV(E, { t: t + 0.06, dur: 1.7, a: 0.05, hold: 0.3, vol: 0.34, type: 'lowpass', f: 210, f2: 70, wet: 0.6 });
+    tone(E, { t: t + 0.06, f: 52, f2: 33, dur: 1.4, vol: 0.18, vib: 5, vibF: 7, wet: 0.5 });
+  },
+  claw(E, t) {
+    for (let i = 0; i < 3; i++) noiseV(E, { t: t + i * 0.055, dur: 0.1, vol: 0.26, type: 'bandpass', f: 3400 - i * 300, f2: 700, q: 3.5, wet: 0.25 });
+    thud(E, t + 0.04, 0.55);
+  },
+  slam(E, t) {
+    thud(E, t, 1.15);
+    noiseV(E, { t, dur: 0.14, vol: 0.2, type: 'bandpass', f: 900, q: 0.7, wet: 0.3 });
+  },
+  clang(E, t) {
+    bell(E, { t, f: 1180, dur: 0.75, vol: 0.12, wet: 0.45, partials: [1, 2.41, 3.93, 5.6], gains: [1, 0.6, 0.35, 0.2] });
+    noiseV(E, { t, dur: 0.06, vol: 0.22, type: 'highpass', f: 3500, wet: 0.2 });
+    thud(E, t, 0.35);
+  },
+  shing(E, t) {
+    noiseV(E, { t, dur: 0.32, a: 0.03, vol: 0.14, type: 'bandpass', f: 3200, f2: 9000, q: 3, wet: 0.35 });
+    bell(E, { t: t + 0.05, f: 2480, dur: 0.75, vol: 0.05, wet: 0.6, partials: [1, 2.76, 5.4], gains: [1, 0.4, 0.15] });
+  },
+  slash(E, t) {
+    noiseV(E, { t, dur: 0.2, a: 0.02, vol: 0.34, type: 'bandpass', f: 500, f2: 6200, q: 1.3, wet: 0.25 });
+    bell(E, { t: t + 0.07, f: 1960, dur: 0.5, vol: 0.06, wet: 0.5, partials: [1, 2.76, 5.4], gains: [1, 0.35, 0.12] });
+    thud(E, t + 0.08, 0.6);
+  },
+  shatter(E, t) {
+    for (let i = 0; i < 16; i++) noiseV(E, { t: t + rnd(0, 0.38) * (i / 16 + 0.2), dur: 0.03, vol: rnd(0.08, 0.18), type: 'bandpass', f: rnd(2600, 7600), q: 6, wet: 0.35 });
+    tone(E, { t, f: 3400, f2: 2900, dur: 0.3, vol: 0.04, wet: 0.6 });
+    noiseV(E, { t, dur: 0.25, vol: 0.18, type: 'lowpass', f: 700, wet: 0.3 });
+  },
+  poof(E, t) {
+    noiseV(E, { t, dur: 0.55, a: 0.02, vol: 0.32, type: 'lowpass', f: 1500, f2: 260, wet: 0.45 });
+    noiseV(E, { t, dur: 0.4, a: 0.05, vol: 0.12, type: 'bandpass', f: 700, f2: 2500, q: 1, wet: 0.4 });
+  },
+  stone(E, t) {
+    noiseV(E, { t, dur: 0.7, a: 0.08, vol: 0.24, type: 'lowpass', f: 420, wet: 0.4 });
+    for (let i = 0; i < 9; i++) noiseV(E, { t: t + 0.05 + i * rnd(0.05, 0.09), dur: 0.04, vol: 0.14, type: 'bandpass', f: rnd(1000, 2600), q: 5, wet: 0.3 });
+    thud(E, t + 0.55, 0.8);
+  },
+  zap(E, t) {
+    tone(E, { t, f: 1400, f2: 160, type: 'sawtooth', dur: 0.28, vol: 0.07, lp: 3200, wet: 0.35 });
+    for (let i = 0; i < 6; i++) noiseV(E, { t: t + i * 0.035, dur: 0.025, vol: 0.16, type: 'highpass', f: 3000, wet: 0.2 });
+  },
+  dash(E, t) { noiseV(E, { t, dur: 0.24, a: 0.03, vol: 0.28, type: 'bandpass', f: 700, f2: 3600, q: 1.4, wet: 0.2 }); },
+  charge(E, t) {
+    [G4, C5, E5, G5].forEach((f, i) => tone(E, { t: t + i * 0.07, f, type: 'triangle', dur: 0.28, vol: 0.1, wet: 0.4 }));
+    tone(E, { t: t + 0.28, f: G5, type: 'square', dur: 0.4, vol: 0.025, lp: 2600, wet: 0.5 });
+    noiseV(E, { t, dur: 0.35, a: 0.1, vol: 0.09, type: 'bandpass', f: 400, f2: 2400, q: 1, wet: 0.3 });
+  },
+  heartbeat(E, t) {
+    tone(E, { t, f: 74, f2: 40, dur: 0.14, vol: 0.34, wet: 0.15 });
+    tone(E, { t: t + 0.17, f: 66, f2: 38, dur: 0.12, vol: 0.22, wet: 0.15 });
+  },
+  firework(E, t, o = {}) {
+    const fly = o.fly ?? 0.8;
+    tone(E, { t, f: 520, f2: 1900, dur: fly, a: 0.05, vol: 0.035, wet: 0.5, lin: true });
+    noiseV(E, { t: t + fly, dur: 0.3, vol: 0.3, type: 'lowpass', f: 1800, f2: 300, wet: 0.6 });
+    tone(E, { t: t + fly, f: 120, f2: 50, dur: 0.3, vol: 0.18, wet: 0.5 });
+    for (let i = 0; i < 10; i++) noiseV(E, { t: t + fly + 0.12 + rnd(0, 0.55), dur: 0.02, vol: rnd(0.04, 0.09), type: 'highpass', f: 4000, wet: 0.6 });
+  },
+  sleep(E, t) {
+    [E5, C5, G4].forEach((f, i) => bell(E, { t: t + i * 0.22, f, dur: 0.9, vol: 0.07, wet: 0.7, partials: [1, 3.01], gains: [1, 0.2] }));
+    noiseV(E, { t: t + 0.1, dur: 0.9, a: 0.4, vol: 0.05, type: 'bandpass', f: 500, q: 1, wet: 0.6 });
+  },
+  ward(E, t) {
+    bell(E, { t, f: 1318.5, dur: 0.8, vol: 0.09, wet: 0.6 });
+    bell(E, { t: t + 0.09, f: 1975.5, dur: 0.8, vol: 0.06, wet: 0.6 });
+    tone(E, { t, f: 400, f2: 900, dur: 0.3, vol: 0.06, wet: 0.4 });
+  },
   drip(E, t) {
     const f = rnd(900, 1700);
     tone(E, { t, f, f2: f * 1.7, dur: 0.07, vol: 0.12, wet: 0.95 });

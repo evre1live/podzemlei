@@ -4,6 +4,7 @@ import { esc, cardHTML, chipHTML, avatarSVG, iconSVG, cardBackSVG, locationSVG }
 import { fx } from '/fx.js';
 import { sfx } from '/sfx.js';
 import { setWorld } from '/world.js';
+import { cine } from '/cine.js';
 import { AVATAR_PARTS, avatarFromSeed, cleanAvatar } from '/shared/avatar.js';
 import { AV_LABELS, SKIN, HAIRC, CLOTH, BGC } from '/art-avatar.js';
 
@@ -98,19 +99,21 @@ socket.on('kicked', ({ reason }) => {
 });
 socket.on('room:state', ({ room, game, serverTime }) => {
   const first = !S.room || S.room.id !== room.id;
+  // копия панели боя до перерисовки: на ней доиграет развязка, если бой сейчас закончится
+  const snap = !first && S.game?.combat && cine.on ? cine.snapStage() : null;
   if (serverTime) S.skew = serverTime - Date.now();
   S.room = room; S.game = game;
   if (first) { setUrl(room.id); S.ui.lastFx = null; S.ui.mode = null; S.ui.prevHand = new Set(); }
   // звук: начало моего хода и чужие сообщения в чате
   const tk = game?.phase === 'playing' ? `${game.turn.n}:${game.turn.pid}` : '';
-  if (!first && tk && tk !== S.ui.turnKey && game.turn.pid === room.me) sfx.play('yourTurn', { always: true, delay: 0.25 });
+  if (!first && tk && tk !== S.ui.turnKey && game.turn.pid === room.me) { sfx.play('yourTurn', { always: true, delay: 0.25 }); cine.turn(); }
   S.ui.turnKey = tk;
   const lastMsg = room.chat.at(-1);
   if (!first && lastMsg && lastMsg.id !== S.ui.lastMsg && !lastMsg.sys && lastMsg.from !== room.me) sfx.play('pop', { always: true });
   S.ui.lastMsg = lastMsg?.id;
   const fresh = handleFx(first);
   render();
-  if (fresh.length) requestAnimationFrame(() => runFx(fresh));
+  if (fresh.length) requestAnimationFrame(() => runFx(fresh, snap));
 });
 
 // ───────────────────────── маршрутизация экранов ─────────────────────────
@@ -475,7 +478,7 @@ function renderStage() {
   if (rv && g.phase === 'playing') {
     const fresh = rv.seq !== S.ui.lastReveal;
     S.ui.lastReveal = rv.seq;
-    reveal = `<div class="${fresh ? 'reveal-in' : ''}">${cardHTML(rv.uid, { size: 'md', attrs: 'data-zone="view"' })}</div>`;
+    reveal = `<div class="reveal-slot ${fresh && !cine.on ? 'reveal-in' : ''}">${cardHTML(rv.uid, { size: 'md', attrs: 'data-zone="view"' })}</div>`;
   }
   el.innerHTML = decks + `<div class="stage-inner"><div class="stage-msg"><h2>${title}</h2><p class="muted" style="margin:0">${text}</p></div>${reveal}<div class="act-bar">${actionButtons()}</div></div>`;
   if (reveal.includes('reveal-in')) requestAnimationFrame(() => { const r = $('#stage .reveal-in'); if (r) { fx.dust(r, { n: 18 }); fx.burst(r, { n: 16, speed: 200, g: 200 }); } });
@@ -483,6 +486,8 @@ function renderStage() {
 }
 // эффекты, которые нужно запустить после перерисовки сцены
 function afterStage() {
+  liveFight();
+  if (cine.on) { S.ui.slam = null; cine.decorate(); return; }
   const slam = S.ui.slam;
   if (!slam) return;
   S.ui.slam = null;
@@ -493,6 +498,29 @@ function afterStage() {
     setTimeout(() => { fx.dust(c, { n: 30, rocks: 8 }); fx.shake($('#stage'), 'quake'); }, 260);
     if (slam.ambush) setTimeout(() => { fx.vignette(); fx.banner('Засада!', def(slam.uid).name, 'bad'); }, 420);
   });
+}
+
+// числа на щитах докручиваются, шкала перевеса плавно съезжает, при смене перевеса — вспышка
+function liveFight() {
+  const st = $('#stage');
+  if (!st) return;
+  st.querySelectorAll('.shield b[data-roll]').forEach(b => rollNum(b, Number(b.textContent), Number(b.dataset.roll)));
+  const t = st.querySelector('.tug[data-k]');
+  if (t && t.style.getPropertyValue('--k') !== t.dataset.k) requestAnimationFrame(() => requestAnimationFrame(() => t.style.setProperty('--k', t.dataset.k)));
+  const v = st.querySelector('.verdict.flip');
+  if (v) requestAnimationFrame(() => fx.burst(v, { n: 18, speed: 220, colors: v.classList.contains('win') ? ['#8ff0d2', '#3fa38c', '#fff'] : ['#ff8a66', '#d2502f', '#fff'] }));
+}
+function rollNum(el, from, to) {
+  if (!Number.isFinite(from) || from === to) { el.textContent = to; return; }
+  el.classList.add(to > from ? 'num-up' : 'num-down');
+  const t0 = performance.now(), D = 700;
+  const step = t => {
+    if (!el.isConnected) return;
+    const k = Math.min(1, (t - t0) / D), e = 1 - Math.pow(1 - k, 3);
+    el.textContent = Math.round(from + (to - from) * e);
+    if (k < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
 }
 
 function actionButtons() {
@@ -511,11 +539,22 @@ function actionButtons() {
   return b.join('');
 }
 
+const SWORDS = (() => {
+  const sw = `<path d="M32 3 L36 10 L36 40 L28 40 L28 10 Z" fill="#e9eef5"/><path d="M32 9 V38" stroke="#b9c3cf" stroke-width="1.6"/><rect x="21" y="39" width="22" height="5" rx="2" fill="#e8c15a"/><rect x="29.5" y="44" width="5" height="11" rx="2" fill="#7a4b2c"/><circle cx="32" cy="57.5" r="3.2" fill="#e8c15a"/>`;
+  return `<svg viewBox="0 0 64 64" aria-hidden="true"><g stroke="#231a26" stroke-width="2.6" stroke-linejoin="round"><g transform="rotate(42 32 32)">${sw}</g><g transform="rotate(-42 32 32)">${sw}</g></g></svg>`;
+})();
+const tierClass = str => (str >= 16 ? 'boss' : str >= 12 ? 'high' : str >= 6 ? 'mid' : 'low');
+
 function fightHTML() {
   const g = S.game, c = g.combat, n = c.numbers, h = hints();
+  // прошлые числа этого же боя: от них «докручиваются» щиты и шкала перевеса
+  const fk = `${g.turn.n}:${c.fighter}`;
+  const prev = S.ui.fightNums?.key === fk ? S.ui.fightNums : null;
+  const tk = n.heroes + n.monsters > 0 ? Math.max(0.04, Math.min(0.96, n.heroes / (n.heroes + n.monsters))) : 0.5;
+  S.ui.fightNums = { key: fk, heroes: n.heroes, monsters: n.monsters, k: tk, win: n.winning };
   const heroes = [c.fighter, c.helper].filter(Boolean).map(id => {
     const p = pl(id);
-    return `<div class="hero-pill" style="--seat:${p.color}"><span class="ava">${avatarSVG(p.avatar, p.color)}</span><span><b>${esc(p.name)}</b><br><small>сила ${c.heroStrengths[id]}</small></span></div>`;
+    return `<div class="hero-pill" data-pid="${p.id}" style="--seat:${p.color}"><span class="ava">${avatarSVG(p.avatar, p.color)}</span><span><b>${esc(p.name)}</b><br><small>сила ${c.heroStrengths[id]}</small></span></div>`;
   }).join('');
   const pm = [];
   for (const m of c.mods) pm.push({ side: m.side, t: `${esc(pname(m.by))}: ${esc(m.uid ? def(m.uid).name : m.label || 'эффект')} ${m.n > 0 ? '+' : '−'}${Math.abs(m.n)}` });
@@ -527,7 +566,7 @@ function fightHTML() {
   const mods = side => pm.filter(x => x.side === side).map(x => `<span class="mod ${side === 'player' ? 'p' : 'm'}">${x.t}</span>`).join('');
   const monsters = c.monsters.map((m, i) => `
     <div class="mon-wrap">
-      ${cardHTML(m.uid, { size: 'sm', attrs: `data-zone="view"` })}
+      <div class="mon-body ${tierClass(m.strength)}">${cardHTML(m.uid, { size: 'sm', attrs: `data-zone="view"` })}</div>
       <span class="mon-str">сила ${m.strength}${def(m.uid).mirror != null ? ` <small>(лидер ${m.level - def(m.uid).mirror} + ${def(m.uid).mirror})</small>` : ''}</span>
       ${m.noEscape || def(m.uid).noHelp ? `<div class="mon-flags">${m.noEscape ? '<span class="flag">не убежать</span>' : ''}${def(m.uid).noHelp ? '<span class="flag">без помощи</span>' : ''}</div>` : ''}
       ${m.enh.length ? `<div class="enh-list">${m.enh.map(u => `<span class="mod m" data-uid="${u}" data-zone="view">${esc(def(u).name)} ${def(u).double ? '×2' : (def(u).bonus > 0 ? '+' : '') + def(u).bonus}</span>`).join('')}</div>` : ''}
@@ -535,8 +574,9 @@ function fightHTML() {
   let center;
   if (c.winAt) {
     center = `<div class="countdown" data-until="${c.winAt}" data-total="${g.opts.winDelayMs}"><svg viewBox="0 0 74 74"><circle cx="37" cy="37" r="32" fill="none" stroke="rgba(255,255,255,.12)" stroke-width="6"/><circle class="ring" cx="37" cy="37" r="32" fill="none" stroke="#f5b83d" stroke-width="6" stroke-linecap="round" stroke-dasharray="201" stroke-dashoffset="0"/></svg><b>…</b></div>`;
-  } else center = `<span class="vs-word">против</span>`;
-  const verdict = n.winning ? `<span class="verdict win">Герои сильнее${n.warrior && n.heroes === n.monsters ? ' (ничья — за воином)' : ''}</span>` : `<span class="verdict lose">Монстры сильнее</span>`;
+  } else center = `<span class="vs-emblem">${SWORDS}<span class="vs-word">против</span></span>`;
+  const flip = prev && prev.win !== n.winning ? ' flip' : '';
+  const verdict = n.winning ? `<span class="verdict win${flip}">Герои сильнее${n.warrior && n.heroes === n.monsters ? ' (ничья — за воином)' : ''}</span>` : `<span class="verdict lose${flip}">Монстры сильнее</span>`;
 
   // кнопки
   const b = [];
@@ -557,10 +597,11 @@ function fightHTML() {
   if (c.winAt && c.passed?.length) b.push(`<span class="hint passed">Не мешают: ${c.passed.map(id => esc(pname(id))).join(', ')}</span>`);
   return `
     <div class="fight">
-      <div class="side-col hero"><div class="side-main"><div class="shield hero" id="shieldHero" title="Сила героев">${SHIELD('#3fa38c')}<b>${n.heroes}</b></div><div class="heroes-row">${heroes}</div></div><div class="mods">${mods('player')}</div></div>
+      <div class="side-col hero"><div class="side-main"><div class="shield hero${n.winning ? ' lead' : ''}" id="shieldHero" title="Сила героев">${SHIELD('#3fa38c')}<b data-roll="${n.heroes}">${prev ? prev.heroes : n.heroes}</b></div><div class="heroes-row">${heroes}</div></div><div class="mods">${mods('player')}</div></div>
       <div class="versus">${center}${verdict}</div>
-      <div class="side-col mon"><div class="side-main"><div class="shield mon" id="shieldMon" title="Сила монстров">${SHIELD('#d2502f')}<b>${n.monsters}</b></div><div class="monsters-row">${monsters}</div></div><div class="mods">${mods('monster')}</div></div>
+      <div class="side-col mon"><div class="side-main"><div class="shield mon${n.winning ? '' : ' lead'}" id="shieldMon" title="Сила монстров">${SHIELD('#d2502f')}<b data-roll="${n.monsters}">${prev ? prev.monsters : n.monsters}</b></div><div class="monsters-row">${monsters}</div></div><div class="mods">${mods('monster')}</div></div>
     </div>
+    <div class="tug" style="--k:${(prev ? prev.k : tk).toFixed(3)}" data-k="${tk.toFixed(3)}" title="Перевес сил: ${n.heroes} против ${n.monsters}"><i class="tug-fill"></i><i class="tug-mark"></i></div>
     <div class="reward">За победу: +${n.levels} ${plural(n.levels, 'уровень', 'уровня', 'уровней')} и ${n.treasures} ${plural(n.treasures, 'карта', 'карты', 'карт')} клада${c.helper ? `, помощнику обещано ${c.helpOffer}` : ''}</div>
     <div class="act-bar">${b.join('')}</div>`;
 }
@@ -573,9 +614,16 @@ function tickCountdowns() {
     const sec = left > 0 ? Math.ceil(left / 1000) : 0;
     el.querySelector('b').textContent = sec || '…';
     const key = `${el.dataset.until}:${sec}`;
-    if (sec > 0 && key !== S.ui.lastTick) { if (S.ui.lastTick?.startsWith(el.dataset.until + ':')) sfx.play('tick', { last: sec === 1, gap: 0 }); S.ui.lastTick = key; }
+    if (sec > 0 && key !== S.ui.lastTick) {
+      if (S.ui.lastTick?.startsWith(el.dataset.until + ':')) { sfx.play('tick', { last: sec === 1, gap: 0 }); if (sec <= 3) sfx.play('heartbeat', { gap: 0, delay: 0.05 }); }
+      S.ui.lastTick = key;
+    }
+    const urgent = sec > 0 && sec <= 3;
+    if (el.classList.contains('urgent') !== urgent) { el.classList.toggle('urgent', urgent); $('#cave')?.classList.toggle('urgent', urgent); }
     el.querySelector('.ring').setAttribute('stroke-dashoffset', String(201 * (1 - Math.max(0, left) / total)));
   });
+  const cave = $('#cave');
+  if (cave?.classList.contains('urgent') && !document.querySelector('#stage .countdown.urgent')) cave.classList.remove('urgent');
   requestAnimationFrame(tickCountdowns);
 }
 requestAnimationFrame(tickCountdowns);
@@ -650,10 +698,30 @@ function renderMine() {
   for (let i = 0; i < Math.min(k, 6); i++) sfx.play('deal', { delay: i * 0.09, gap: 0 });
   fitHand();
 }
+const FAN = matchMedia('(max-width: 900px)');
 function fitHand() {
   const el = $('#hand');
   if (!el) return;
-  const cards = el.querySelectorAll('.card');
+  const cards = [...el.querySelectorAll('.card')];
+  // на телефоне рука раскрывается веером внизу экрана: карты по дуге, внахлёст, с лёгким наклоном
+  const fan = FAN.matches && cards.length > 0;
+  el.classList.toggle('fan', fan);
+  document.querySelector('.game')?.classList.toggle('has-fan', fan);
+  if (fan) {
+    const n = cards.length, w = cards[0].offsetWidth, W = document.documentElement.clientWidth;
+    const mid = (n - 1) / 2;
+    const spacing = n > 1 ? Math.min(w * 0.8, (W - w - 20) / (n - 1)) : 0;
+    const step = n > 1 ? Math.min(6, 30 / (n - 1)) : 0;
+    const dropMax = Math.min(24, 6 + n * 2);
+    cards.forEach((c, i) => {
+      const t = i - mid;
+      c.style.setProperty('--fx', (t * spacing).toFixed(1) + 'px');
+      c.style.setProperty('--fy', (mid ? Math.pow(Math.abs(t) / mid, 2) * dropMax : 0).toFixed(1) + 'px');
+      c.style.setProperty('--fr', (t * step).toFixed(2) + 'deg');
+      c.style.setProperty('--z', String(i + 1));
+    });
+    return;
+  }
   if (cards.length < 2) return el.style.setProperty('--ov', '0px');
   const w = cards[0].offsetWidth;
   const avail = el.clientWidth - 12;
@@ -878,6 +946,7 @@ function maybeEndScreen() {
   const w = g.winners.map(pl).filter(Boolean);
   const isHost = S.room.hostId === S.room.me;
   setTimeout(() => { fx.confetti({ n: 180 }); fx.sparkle($('#endScreen .crownbig'), { n: 22 }); }, 80);
+  setTimeout(() => cine.gameOver(), 500);
   sfx.play(w.some(p => p.id === S.room.me) ? 'fanfare' : 'victory', { always: true });
   showOverlay(`<div class="modal endscreen" id="endScreen" role="dialog" aria-label="Итоги партии">
     ${iconSVG('crown', 'crownbig')}
@@ -917,6 +986,7 @@ function handleFx(first) {
   if (S.ui.lastFx === null || first) { S.ui.lastFx = maxId; S.ui.lastLoc = g.location; return []; }
   const fresh = list.filter(f => f.id > S.ui.lastFx);
   S.ui.lastFx = maxId;
+  if (cine.on) { cine.prehide(fresh); return fresh; }
   for (const f of fresh) {
     if (f.kind === 'dice') S.ui.dieQueue.push(f);
     if (f.kind === 'combat' || f.kind === 'wandering') S.ui.slam = { uid: f.card, ambush: false };
@@ -925,6 +995,15 @@ function handleFx(first) {
   return fresh;
 }
 const avaOf = pid => pid === S.room?.me ? $('#meava') : document.querySelector(`[data-opp="${pid}"] .ava`);
+cine.init({
+  meId: () => S.room?.me,
+  pname,
+  avaOf,
+  heroAva: pid => document.querySelector(`#stage .hero-pill[data-pid="${CSS.escape(pid)}"] .ava`),
+  lvlEl: pid => (pid === S.room?.me ? $('#mecard .lvl') : document.querySelector(`[data-opp="${pid}"] .lvl`)),
+  color: pid => pl(pid)?.color || '#f5b83d',
+  avatar: pid => pl(pid)?.avatar,
+});
 function soundFx(fresh) {
   const kinds = new Set(fresh.map(f => f.kind));
   for (const f of fresh) {
@@ -954,7 +1033,8 @@ function soundFx(fresh) {
     }
   }
 }
-function runFx(fresh) {
+function runFx(fresh, snap) {
+  if (cine.on) return cine.play(fresh, snap);
   soundFx(fresh);
   for (const f of fresh) {
     const ava = avaOf(f.pid);
@@ -1240,12 +1320,13 @@ const applyBg = () => $('#world').classList.toggle('still', !liveBg());
 applyBg();
 function openSoundModal() {
   const s = sfx.state;
-  showOverlay(`<div class="modal" role="dialog" aria-label="Звук и фон" id="soundModal">
-    <h2>Звук и фон</h2>
+  showOverlay(`<div class="modal" role="dialog" aria-label="Звук и эффекты" id="soundModal">
+    <h2>Звук и эффекты</h2>
     <label class="check"><input type="checkbox" id="sndOn" ${s.on ? 'checked' : ''}> Звуки игры</label>
     <label>Громкость<input type="range" id="sndVol" min="0" max="1" step="0.05" value="${s.vol}"></label>
     <label class="check"><input type="checkbox" id="sndAmb" ${s.amb ? 'checked' : ''}> Атмосфера пещеры: гул, ветер и капли</label>
     <label class="check"><input type="checkbox" id="liveBg" ${liveBg() ? 'checked' : ''}> Живой фон: вода, снег, светлячки (на слабом телефоне лучше выключить)</label>
+    <label class="check"><input type="checkbox" id="cineOn" ${cine.enabled ? 'checked' : ''}> Зрелищные сцены: двери, удары, разрубленные карты, салют</label>
     <p class="muted" style="margin:0;font-size:13.5px">Все звуки создаются прямо в браузере. Если на телефоне тишина, проверьте беззвучный режим.</p>
     <div class="row"><button class="btn" data-act="soundTest">Послушать</button><button class="btn primary" data-act="closeOverlay">Готово</button></div>
   </div>`);
@@ -1254,6 +1335,7 @@ function openSoundModal() {
   $('#sndVol').addEventListener('change', () => sfx.play('coins', { n: 2, gap: 0 }));
   $('#sndAmb').addEventListener('change', e => sfx.set({ amb: e.target.checked }));
   $('#liveBg').addEventListener('change', e => { LS.set('liveBg', e.target.checked); applyBg(); });
+  $('#cineOn').addEventListener('change', e => { cine.set(e.target.checked); render(); });
 }
 
 // ───────────────────────── полёт сыгранной карты ─────────────────────────

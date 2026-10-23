@@ -8,14 +8,15 @@ const OUT2 = `stroke="${INK}" stroke-width="2.4" stroke-linejoin="round" stroke-
 const col = (h, s, l) => `hsl(${h} ${s}% ${l}%)`;
 
 // ───────────── фон-сцена ─────────────
+// яркие фоны сцен: светлый центр, насыщенный край — монстр в обводке хорошо читается
 const SCENE_PAL = {
-  cave: ['#5a3f35', '#2b1f25', '#e8a85a'],
-  water: ['#2f6b78', '#132a35', '#8fe3ea'],
-  fire: ['#9c3a1c', '#2c1114', '#ffb347'],
-  fungus: ['#2f5a46', '#132620', '#a6f2b7'],
-  undead: ['#4b3a6e', '#1a1428', '#b9a6ff'],
-  metro: ['#4a4f63', '#1c1d28', '#ffd479'],
-  rock: ['#5d5552', '#221e22', '#e9d4b0'],
+  cave: ['#ffb47c', '#b04a26', '#fff0c8'],
+  water: ['#8eeaf6', '#1c72a6', '#e6fcff'],
+  fire: ['#ffc46c', '#cc3416', '#fff3b0'],
+  fungus: ['#b8f69e', '#268646', '#f2ffe4'],
+  undead: ['#d0b8ff', '#5634a6', '#f5eeff'],
+  metro: ['#b8c8f0', '#36488a', '#ffe9a6'],
+  rock: ['#e6d4b6', '#76604f', '#fff8e8'],
 };
 export const sceneKind = (tags = []) => tags.includes('water') ? 'water' : tags.includes('fire') ? 'fire' : tags.includes('fungus') ? 'fungus'
   : tags.includes('undead') ? 'undead' : tags.includes('metro') ? 'metro' : tags.includes('rock') ? 'rock' : 'cave';
@@ -43,8 +44,8 @@ function scene(t) {
     for (let y = 8; y < 80; y += 12) tiles += `<path d="M0 ${y} H160" stroke="rgba(255,255,255,.05)" stroke-width="1"/>`;
     deco = tiles + `<rect x="0" y="62" width="160" height="7" fill="rgba(210,80,47,.45)"/><rect x="0" y="80" width="160" height="40" fill="rgba(0,0,0,.25)"/>`;
   }
-  return `<rect width="160" height="120" fill="url(#sc-${t})"/>${deco}
-    <ellipse cx="80" cy="40" rx="70" ry="40" fill="${P[2]}" opacity=".10"/>`;
+  return `<rect width="160" height="120" fill="url(#sc-${t})"/><rect width="160" height="120" fill="url(#ht)"/>${deco}
+    <ellipse cx="80" cy="44" rx="70" ry="42" fill="${P[2]}" opacity=".22"/><rect width="160" height="120" fill="url(#vig)"/>`;
 }
 
 // ───────────── лицо ─────────────
