@@ -2,7 +2,7 @@
 import { def } from './cards.js';
 import {
   P, check, combatNumbers, playOptions, handLimit, hasClass, hasRace, cardWorth,
-  equipError, participants, heroStrength, WIN_LEVEL,
+  equipError, participants, heroStrength, WIN_LEVEL, saleValue, monsterBaseLevel, powerOf, locationOf,
 } from './engine.js';
 
 const byWorth = list => [...list].sort((a, b) => cardWorth(a) - cardWorth(b));
@@ -54,22 +54,31 @@ export function botDecide(s, pid, { rng = Math.random, now = Date.now() } = {}) 
 function boostSelf(s, p, gap) {
   const c = s.combat;
   const hand = p.hand;
-  const bonusCards = hand.filter(u => def(u).type === 'oneshot' && def(u).effect === 'bonus')
-    .sort((a, b) => def(b).bonus - def(a).bonus);
-  const cheap = byWorth(hand.filter(u => !(def(u).type === 'oneshot' && def(u).effect === 'bonus') && def(u).type !== 'levelup'));
-  const undead = c.monsters.some(m => def(m.uid).undead);
+  const alch = hasClass(p, 'alchemist') ? 2 : 0;
+  const undead = c.monsters.some(m => (def(m.uid).tags || []).includes('undead'));
+  const val = u => {
+    const d = def(u);
+    if (d.type === 'buff') return d.bonus;
+    return d.bonus + alch + (d.tagBonus && undead && d.tagBonus.tag === 'undead' ? d.tagBonus.n : 0);
+  };
+  const isBoost = u => (def(u).type === 'oneshot' && def(u).effect === 'bonus') || def(u).type === 'buff';
+  const bonusCards = hand.filter(isBoost).sort((a, b) => val(b) - val(a));
+  const cheap = byWorth(hand.filter(u => !isBoost(u) && def(u).type !== 'levelup'));
   const turnLeft = hasClass(p, 'cleric') && undead ? 3 - (c.turnCount[p.id] || 0) : 0;
   const rageLeft = hasClass(p, 'warrior') ? 3 - (c.rageCount[p.id] || 0) : 0;
-  const potential = bonusCards.reduce((a, u) => a + def(u).bonus, 0)
-    + Math.min(turnLeft, cheap.length) * 3 + Math.min(rageLeft, Math.max(0, cheap.length - turnLeft));
+  const songLeft = hasClass(p, 'bard') ? 2 - (c.lullaby[p.id] || 0) : 0;
+  const potential = bonusCards.reduce((a, u) => a + val(u), 0)
+    + Math.min(turnLeft, cheap.length) * 3 + Math.min(songLeft, cheap.length) * 3
+    + Math.min(rageLeft, Math.max(0, cheap.length - turnLeft));
   if (potential < gap) return null;
+  if (songLeft > 0 && cheap.length && gap <= 3 * songLeft) return { type: 'ability', name: 'lullaby', cards: [cheap[0]] };
   if (turnLeft > 0 && cheap.length) {
     const k = Math.min(turnLeft, cheap.length, Math.ceil(gap / 3));
     return { type: 'ability', name: 'turn', cards: cheap.slice(0, k) };
   }
   if (bonusCards.length) {
-    const fit = [...bonusCards].reverse().find(u => def(u).bonus >= gap) || bonusCards[0];
-    return { type: 'playCard', uid: fit, side: 'player' };
+    const fit = [...bonusCards].reverse().find(u => val(u) >= gap) || bonusCards[0];
+    return def(fit).type === 'buff' ? { type: 'playCard', uid: fit } : { type: 'playCard', uid: fit, side: 'player' };
   }
   if (rageLeft > 0 && cheap.length) {
     return { type: 'ability', name: 'rage', cards: cheap.slice(0, Math.min(rageLeft, gap, cheap.length)) };
@@ -99,9 +108,9 @@ function fighterMove(s, p, rng, now) {
     return { type: 'ability', name: 'charm', cards: [], monster: 0 };
   }
   // попросить помощи
-  if (!c.helper) {
+  if (!c.helper && !c.monsters.some(m => def(m.uid).noHelp)) {
     const cands = s.players.filter(x => x.id !== p.id && !x.dead && !c.declined.includes(x.id))
-      .map(x => ({ x, str: x.level + x.equipped.reduce((a, u) => a + (def(u).bonus || 0), 0) }))
+      .map(x => ({ x, str: powerOf(s, x) }))
       .filter(o => o.str >= gap)
       .sort((a, b) => a.str - b.str);
     if (cands.length && n.treasures >= 0) {
@@ -111,7 +120,11 @@ function fighterMove(s, p, rng, now) {
     }
   }
   const smoke = p.hand.find(u => def(u).effect === 'escape');
-  if (smoke && danger) return { type: 'playCard', uid: smoke };
+  const trapped = c.monsters.some(m => def(m.uid).escape === false || m.enh.some(u => def(u).noEscape));
+  const hasPet = p.equipped.some(u => def(u).slot === 'pet');
+  if (smoke && (danger || (trapped && !hasPet))) return { type: 'playCard', uid: smoke };
+  const rope = p.hand.find(u => def(u).effect === 'escapeBonus');
+  if (rope && danger && !trapped && !c.escape[p.id]) return { type: 'playCard', uid: rope };
   if (hasClass(p, 'mage') && danger) {
     const left = 3 - (c.escapeCount[p.id] || 0);
     const cheap = byWorth(p.hand).slice(0, Math.min(left, 2));
@@ -139,11 +152,14 @@ function interfere(s, p) {
   const opts = [];
   for (const u of p.hand) {
     const d = def(u);
-    if (d.type === 'enhancer' && d.bonus > 0) opts.push({ v: d.bonus, a: { type: 'playCard', uid: u, monster: 0 } });
+    if (d.type === 'enhancer' && (d.bonus > 0 || d.double)) {
+      const v = d.double ? monsterBaseLevel(s, def(c.monsters[0].uid)) : d.bonus;
+      opts.push({ v, a: { type: 'playCard', uid: u, monster: 0 } });
+    }
     if (d.type === 'oneshot' && d.effect === 'bonus') opts.push({ v: d.bonus, a: { type: 'playCard', uid: u, side: 'monster' } });
     if (d.type === 'wandering') {
-      const m = p.hand.filter(x => def(x).type === 'monster').sort((a, b) => def(b).level - def(a).level)[0];
-      if (m) opts.push({ v: def(m).level, a: { type: 'playCard', uid: u, with: m } });
+      const m = p.hand.filter(x => def(x).type === 'monster').sort((a, b) => monsterBaseLevel(s, def(b)) - monsterBaseLevel(s, def(a)))[0];
+      if (m) opts.push({ v: monsterBaseLevel(s, def(m)), a: { type: 'playCard', uid: u, with: m } });
     }
   }
   if (hasClass(p, 'rogue') && p.hand.length) {
@@ -181,6 +197,29 @@ function turnMove(s, p, rng) {
       if (d.type === 'levelup' && ok({ type: 'playCard', uid: u })) return { type: 'playCard', uid: u };
     }
     if (greedyBonus(p) > curBonus(p) && ok({ type: 'autoEquip' })) return { type: 'autoEquip' };
+    // локация: выкладываем, если она нам выгодна или стола пусто
+    for (const u of p.hand) {
+      const d = def(u);
+      if (d.type !== 'location' || !ok({ type: 'playCard', uid: u })) continue;
+      const mine = (d.heroMod || []).some(m => (m.cls && hasClass(p, m.cls)) || (m.race && hasRace(p, m.race)));
+      if (mine || d.treasureBonus || (!s.location && step === 'pre')) return { type: 'playCard', uid: u };
+    }
+    // событие: играем, если оно нас не бьёт
+    for (const u of p.hand) {
+      const d = def(u);
+      if (d.type !== 'event' || !ok({ type: 'playCard', uid: u })) continue;
+      const lowest = p.level <= Math.min(...s.players.map(x => x.level));
+      const good = d.event === 'fair' || d.event === 'quake' || d.event === 'draft'
+        || (d.event === 'rollcall' && lowest)
+        || (d.event === 'light' && (hasClass(p, 'cleric') || hasClass(p, 'bard')))
+        || (d.event === 'luxtax' && p.level < 7);
+      if (good) return { type: 'playCard', uid: u };
+    }
+    // алхимик перегоняет лишнее
+    if (hasClass(p, 'alchemist') && !s.turn.distilled && p.hand.length >= handLimit(p)) {
+      const a = { type: 'ability', name: 'distill', cards: byWorth(p.hand).slice(0, 2) };
+      if (ok(a)) return a;
+    }
     // проклясть лидера
     const curse = p.hand.find(u => def(u).type === 'curse');
     if (curse && step === 'pre') {
@@ -189,9 +228,9 @@ function turnMove(s, p, rng) {
     }
     // продать ненужное
     const sellable = byWorth([...p.carried, ...p.hand.filter(u => def(u).type === 'item')]).filter(u => def(u).value);
-    let sum = 0; const pickSell = [];
-    for (const u of sellable) { pickSell.push(u); sum += def(u).value; if (sum >= 1000) break; }
-    if (sum >= 1000 && ok({ type: 'sell', uids: pickSell })) return { type: 'sell', uids: pickSell };
+    const pickSell = [];
+    for (const u of sellable) { pickSell.push(u); if (saleValue(s, p, pickSell).levels >= 1) break; }
+    if (pickSell.length && saleValue(s, p, pickSell).levels >= 1 && ok({ type: 'sell', uids: pickSell })) return { type: 'sell', uids: pickSell };
     // плут ворует
     if (hasClass(p, 'rogue') && step === 'pre' && p.hand.length > 3 && rng() < 0.25) {
       const cheap = byWorth(p.hand)[0];
@@ -207,9 +246,9 @@ function turnMove(s, p, rng) {
   }
   if (step === 'pre') return { type: 'kick' };
   if (step === 'post') {
-    const power = p.level + p.equipped.reduce((a, u) => a + (def(u).bonus || 0), 0);
-    const easy = p.hand.filter(u => def(u).type === 'monster' && def(u).level + 1 < power)
-      .sort((a, b) => def(b).level - def(a).level)[0];
+    const power = powerOf(s, p) + (p.nextCombat || 0);
+    const easy = p.hand.filter(u => def(u).type === 'monster' && !def(u).ambush && monsterBaseLevel(s, def(u)) + 1 < power)
+      .sort((a, b) => monsterBaseLevel(s, def(b)) - monsterBaseLevel(s, def(a)))[0];
     if (easy) return { type: 'lookForTrouble', uid: easy };
     return { type: 'loot' };
   }

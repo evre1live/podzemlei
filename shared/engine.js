@@ -24,12 +24,12 @@ export function createGame(seats, opts = {}, rng = Math.random) {
     players: seats.map((x, i) => ({
       id: x.id, name: x.name, color: x.color || null, avatar: x.avatar ?? i, isBot: !!x.isBot, seat: i,
       level: 1, races: [], classes: [], halfbreed: null, supermunch: null,
-      equipped: [], carried: [], hand: [], nextCombat: 0, dead: false, needsRevive: false,
+      equipped: [], carried: [], hand: [], nextCombat: 0, nextEscape: 0, dead: false, needsRevive: false,
     })),
     decks: { door: shuffle(allUids('door'), rng), treasure: shuffle(allUids('treasure'), rng) },
     discard: { door: [], treasure: [] },
     turn: { idx: 0, pid: null, step: 'pre', n: 0, halflingSold: false },
-    combat: null, reveal: null, winners: [],
+    combat: null, reveal: null, winners: [], location: null,
   };
   for (const p of s.players) {
     for (let i = 0; i < 4; i++) { give(p, draw(s, 'door', rng)); give(p, draw(s, 'treasure', rng)); }
@@ -67,7 +67,11 @@ export const hasRace = (p, r) => (r === 'human' ? p.races.length === 0 : raceKey
 export const hasClass = (p, c) => classKeys(p).includes(c);
 export const handLimit = p => (hasRace(p, 'dwarf') ? 6 : 5);
 const bigLimit = p => (hasRace(p, 'dwarf') ? 99 : 1);
+const handsLimit = p => (hasClass(p, 'engineer') ? 3 : 2);
 const inPlayItems = p => [...p.equipped, ...p.carried];
+export const locationOf = s => (s.location ? def(s.location) : null);
+const hasItemTag = (p, tag) => p.equipped.some(u => (def(u).tags || []).includes(tag));
+const combatHasTag = (s, tag) => !!s.combat && s.combat.monsters.some(m => (def(m.uid).tags || []).includes(tag));
 
 function reqError(p, d) {
   const r = d.req;
@@ -78,7 +82,7 @@ function reqError(p, d) {
   return null;
 }
 function slotUse(p, except) {
-  const u = { head: 0, armor: 0, feet: 0, hands: 0, big: 0 };
+  const u = { head: 0, armor: 0, feet: 0, hands: 0, big: 0, pet: 0 };
   for (const x of p.equipped) {
     if (x === except) continue;
     const d = def(x);
@@ -86,6 +90,7 @@ function slotUse(p, except) {
     else if (d.slot === 'armor') u.armor++;
     else if (d.slot === 'feet') u.feet++;
     else if (d.slot === 'hand') u.hands += d.hands || 1;
+    else if (d.slot === 'pet') u.pet++;
     if (d.big) u.big++;
   }
   return u;
@@ -98,14 +103,40 @@ export function equipError(p, uid) {
   if (d.slot === 'head' && u.head) return 'Головняк уже надет';
   if (d.slot === 'armor' && u.armor) return 'Броник уже надет';
   if (d.slot === 'feet' && u.feet) return 'Обувка уже надета';
-  if (d.slot === 'hand' && u.hands + (d.hands || 1) > 2) return 'Руки заняты';
+  if (d.slot === 'hand' && u.hands + (d.hands || 1) > handsLimit(p)) return (d.hands || 1) > 2 ? 'Столько рук только у механика' : 'Руки заняты';
+  if (d.slot === 'pet' && u.pet) return 'Питомец может быть только один';
   if (d.big && u.big >= bigLimit(p)) return 'Большая вещь может быть только одна (гномам — сколько угодно)';
   return null;
 }
-export const itemBonus = p => p.equipped.reduce((a, u) => a + (def(u).bonus || 0), 0);
-export function runBonusOf(p) {
-  let b = hasRace(p, 'elf') ? 1 : 0;
+// бонус надетых вещей; в бою добавляются бонусы против тегов монстров
+export function itemBonus(p, s = null) {
+  let v = 0;
+  for (const u of p.equipped) {
+    const d = def(u);
+    v += d.bonus || 0;
+    if (d.clsBonus && hasClass(p, d.clsBonus.cls)) v += d.clsBonus.n;
+    if (s && d.vsTag && combatHasTag(s, d.vsTag.tag)) v += d.vsTag.n;
+  }
+  return v;
+}
+// постоянные бонусы расы, класса и локации (без боевых)
+export function passiveBonus(s, p) {
+  let v = 0;
+  if (hasRace(p, 'orc') && !p.equipped.some(u => def(u).slot === 'head')) v += 2;
+  if (hasClass(p, 'engineer')) v += p.equipped.filter(u => def(u).big).length;
+  const L = locationOf(s);
+  if (L) {
+    v += L.heroAll || 0;
+    for (const m of L.heroMod || []) if ((m.cls && hasClass(p, m.cls)) || (m.race && hasRace(p, m.race))) v += m.n;
+    if (L.lightBonus && hasItemTag(p, 'light')) v += L.lightBonus;
+  }
+  return v;
+}
+export const powerOf = (s, p) => p.level + itemBonus(p) + passiveBonus(s, p);
+export function runBonusOf(s, p) {
+  let b = (hasRace(p, 'elf') ? 1 : 0) + (hasRace(p, 'molefolk') ? 2 : 0) + (p.nextEscape || 0);
   for (const u of p.equipped) b += def(u).runBonus || 0;
+  b += locationOf(s)?.escapeAll || 0;
   return b;
 }
 function removeItem(p, uid) { return without(p.equipped, uid) || without(p.carried, uid); }
@@ -124,6 +155,13 @@ function normalize(s, p) {
     const u = bigs.shift();
     without(p.equipped, u); p.carried.push(u);
   }
+  const handItems = () => p.equipped.filter(u => def(u).slot === 'hand');
+  while (handItems().reduce((a, u) => a + (def(u).hands || 1), 0) > handsLimit(p)) {
+    const u = handItems().sort((a, b) => (def(a).bonus || 0) - (def(b).bonus || 0))[0];
+    without(p.equipped, u); p.carried.push(u);
+  }
+  const pets = p.equipped.filter(u => def(u).slot === 'pet');
+  while (pets.length > 1) { const u = pets.pop(); without(p.equipped, u); p.carried.push(u); }
 }
 
 function setLevel(s, p, lvl, { canWin = false } = {}) {
@@ -207,6 +245,18 @@ function applyFx(s, p, list, rng) {
         p.nextCombat += f.n;
         log(s, `${p.name}: ${f.n} в следующем бою.`, 'bad');
         break;
+      case 'nextEscape':
+        p.nextEscape = (p.nextEscape || 0) + f.n;
+        log(s, `${p.name}: ${f.n} к побегу в следующем бою.`, 'bad');
+        break;
+      case 'giveToTop': {
+        const top = s.players.filter(x => x !== p && !x.dead).sort((a, b) => b.level - a.level)[0];
+        const pool = inPlayItems(p).filter(u => !def(u).big);
+        if (!top || !pool.length) { log(s, `У ${p.name} нечего утащить.`, 'bad'); break; }
+        const u = pick(pool, rng); removeItem(p, u); top.carried.push(u);
+        log(s, `${top.name} прибирает к рукам ${q(def(u).name)} у ${p.name}.`, 'curse');
+        break;
+      }
       case 'death': kill(s, p, rng); break;
     }
   }
@@ -235,6 +285,11 @@ function resolveCurse(s, target, uid, rng, byName) {
   const ward = target.hand.find(u => def(u).effect === 'ward');
   log(s, `${byName ? byName + ' насылает' : 'Сработало'} ${q(d.name)} на ${target.name}.`, 'curse');
   fx(s, { kind: 'curse', pid: target.id, card: uid });
+  if (locationOf(s)?.noCurses) { log(s, 'В тёплой котельной проклятие растаяло.', 'good'); return; }
+  if (hasRace(target, 'molefolk') && d.fx.every(f => f.k === 'slot' && ['head', 'armor', 'feet'].includes(f.slot))) {
+    log(s, `Толстая шкура кротолюда ${target.name} не пропустила проклятие.`, 'good');
+    return;
+  }
   if (ward) {
     without(target.hand, ward); toDiscard(s, ward);
     log(s, `Куриный бог ${target.name} отвёл проклятие.`, 'good');
@@ -248,10 +303,53 @@ function resolveCurse(s, target, uid, rng, byName) {
   applyFx(s, target, d.fx, rng);
 }
 
+// ───────────────────────── локации и события ─────────────────────────
+function setLocation(s, p, uid) {
+  if (s.location) toDiscard(s, s.location);
+  s.location = uid;
+  const d = def(uid);
+  fx(s, { kind: 'location', pid: p.id, card: uid });
+  log(s, `${p.name} открывает локацию ${q(d.name)}: ${d.text}`, 'event');
+  for (const x of s.players) normalize(s, x);
+}
+
+function resolveEvent(s, p, uid, rng) {
+  const d = def(uid);
+  const alive = s.players.filter(x => !x.dead);
+  fx(s, { kind: 'event', pid: p.id, card: uid });
+  log(s, `Событие ${q(d.name)}: ${d.text}`, 'event');
+  switch (d.event) {
+    case 'quake':
+      for (const x of alive) if (x.hand.length) { const u = pick(x.hand, rng); without(x.hand, u); toDiscard(s, u); }
+      break;
+    case 'light':
+      for (const x of alive) if (hasClass(x, 'cleric') || hasClass(x, 'bard')) { setLevel(s, x, x.level + 1); log(s, `${x.name} получает уровень.`, 'good'); }
+      break;
+    case 'fair':
+      for (const x of alive) give(x, draw(s, 'treasure', rng));
+      break;
+    case 'draft': {
+      const picks = alive.map(x => (x.hand.length ? pick(x.hand, rng) : null));
+      picks.forEach((u, i) => { if (u) without(alive[i].hand, u); });
+      picks.forEach((u, i) => { if (u) alive[(i + 1) % alive.length].hand.push(u); });
+      break;
+    }
+    case 'rollcall': {
+      const min = Math.min(...alive.map(x => x.level));
+      for (const x of alive) if (x.level === min) { setLevel(s, x, x.level + 1); log(s, `${x.name} догоняет: +1 уровень.`, 'good'); }
+      break;
+    }
+    case 'luxtax':
+      for (const x of alive) if (x.level >= 7) { setLevel(s, x, x.level - 1); log(s, `${x.name} платит налог: −1 уровень.`, 'bad'); }
+      break;
+  }
+  toDiscard(s, uid);
+}
+
 // ───────────────────────── ход ─────────────────────────
 function beginTurn(s, idx, rng) {
   const p = s.players[idx];
-  s.turn = { idx, pid: p.id, step: 'pre', n: (s.turn?.n || 0) + 1, halflingSold: false };
+  s.turn = { idx, pid: p.id, step: 'pre', n: (s.turn?.n || 0) + 1, halflingSold: false, hoardPlayed: false, distilled: false };
   s.reveal = null;
   for (const x of s.players) x.dead = false;
   if (p.needsRevive) {
@@ -273,18 +371,30 @@ function matchVs(p, vs) { return (vs.cls && hasClass(p, vs.cls)) || (vs.race && 
 
 export function heroStrength(s, p) {
   const c = s.combat;
-  let v = p.level + itemBonus(p) + p.nextCombat;
+  let v = p.level + itemBonus(p, s) + passiveBonus(s, p) + p.nextCombat;
   if (c) {
     v += (c.rage[p.id] || 0) + (c.turnUndead[p.id] || 0);
     v -= c.backstabs.filter(b => b.on === p.id).length * 2;
   }
   return v;
 }
+export function monsterBaseLevel(s, d) {
+  return d.mirror != null ? Math.max(...s.players.map(x => x.level)) + d.mirror : d.level;
+}
 export function monsterStrength(s, m) {
   const d = def(m.uid);
-  let v = d.level + m.enh.reduce((a, u) => a + def(u).bonus, 0);
+  let base = monsterBaseLevel(s, d);
+  if (m.enh.some(u => def(u).double)) base *= 2;
+  let v = base + m.enh.reduce((a, u) => a + (def(u).bonus || 0), 0);
   const parts = participants(s).map(id => P(s, id));
   for (const vs of d.vs || []) if (parts.some(p => matchVs(p, vs))) v += vs.n;
+  for (const w of d.vsItem || []) if (parts.some(p => hasItemTag(p, w.tag))) v += w.n;
+  if (d.soloBonus && s.combat && !s.combat.helper) v += d.soloBonus;
+  const L = locationOf(s);
+  if (L) {
+    v += L.monsterAll || 0;
+    for (const t of L.monsterTag || []) if ((d.tags || []).includes(t.tag)) v += t.n;
+  }
   return v;
 }
 function monsterTreasure(s, m) {
@@ -305,29 +415,41 @@ export function combatNumbers(s) {
     + c.mods.filter(m => m.side === 'monster').reduce((a, m) => a + m.n, 0);
   const warrior = parts.some(p => hasClass(p, 'warrior'));
   const winning = c.monsters.length > 0 && (heroes > monsters || (warrior && heroes === monsters));
-  const treasures = c.monsters.reduce((a, m) => a + monsterTreasure(s, m), 0) + (c.charmTreasure || 0);
+  const f = P(s, c.fighter);
+  let bonusT = 0;
+  if (c.monsters.length) {
+    bonusT += locationOf(s)?.treasureBonus || 0;
+    if (hasClass(f, 'bard')) bonusT += 1;
+    if (hasRace(f, 'orc') && c.monsters.some(m => monsterBaseLevel(s, def(m.uid)) >= 10)) bonusT += 1;
+  }
+  const treasures = c.monsters.reduce((a, m) => a + monsterTreasure(s, m), 0) + (c.charmTreasure || 0) + bonusT;
   const levels = c.monsters.reduce((a, m) => a + (def(m.uid).levels || 1), 0);
   return { heroes, monsters, winning, warrior, perMonster, treasures, levels };
 }
 
-function startCombat(s, p, monsterUid) {
+function startCombat(s, p, monsterUid, rng = Math.random) {
   s.combat = {
     fighter: p.id, helper: null, helpOffer: 0, helpReq: null,
     monsters: [{ uid: monsterUid, enh: [] }],
     mods: [], used: [], rage: {}, rageCount: {}, turnUndead: {}, turnCount: {}, escape: {}, escapeCount: {},
-    backstabs: [], charmTreasure: 0, winAt: null, declined: [],
+    backstabs: [], charmTreasure: 0, winAt: null, declined: [], lullaby: {},
   };
   s.turn.step = 'combat';
   const d = def(monsterUid);
-  log(s, `${p.name} встречает ${q(d.name)} (ур. ${d.level}). Бой!`, 'combat');
+  log(s, `${p.name} встречает ${q(d.name)} (ур. ${monsterBaseLevel(s, d)}). Бой!`, 'combat');
   fx(s, { kind: 'combat', pid: p.id, card: monsterUid });
+  if (d.ambush) {
+    log(s, d.ambush.text, 'bad');
+    fx(s, { kind: 'ambush', pid: p.id, card: monsterUid });
+    applyFx(s, p, d.ambush.fx, rng);
+  }
 }
 
 function endCombat(s) {
   const c = s.combat;
   for (const m of c.monsters) { toDiscard(s, m.uid); m.enh.forEach(u => toDiscard(s, u)); }
   c.used.forEach(u => toDiscard(s, u));
-  for (const pid of participants(s)) { const p = P(s, pid); if (p) p.nextCombat = 0; }
+  for (const pid of participants(s)) { const p = P(s, pid); if (p) { p.nextCombat = 0; p.nextEscape = 0; } }
   s.combat = null;
   s.turn.step = 'charity';
 }
@@ -346,7 +468,7 @@ function shareTreasure(s, count, rng) {
   const drawn = [];
   for (let i = 0; i < count; i++) { const u = draw(s, 'treasure', rng); if (u) drawn.push(u); }
   shuffle(drawn, rng);
-  const share = h ? Math.min(c.helpOffer || 0, drawn.length) : 0;
+  const share = h ? Math.min((c.helpOffer || 0) + (hasRace(h, 'goblin') ? 1 : 0), drawn.length) : 0;
   if (h) h.hand.push(...drawn.slice(0, share));
   f.hand.push(...drawn.slice(share));
   return { total: drawn.length, share };
@@ -393,22 +515,33 @@ function resolveEscape(s, rng) {
         log(s, `${q(d.name)} не стал гнаться за ${p.name}.`, 'good');
         continue;
       }
-      const bonus = runBonusOf(p) + (c.escape[pid] || 0);
-      let r = d6(rng);
-      let ok = r + bonus >= 5;
-      fx(s, { kind: 'dice', pid, value: r, bonus, ok, label: `Побег от ${q(d.name)}` });
-      if (!ok && hasRace(p, 'halfling') && p.hand.length) {
-        const u = cheapest(p.hand);
-        without(p.hand, u); toDiscard(s, u);
-        r = d6(rng); ok = r + bonus >= 5;
-        fx(s, { kind: 'dice', pid, value: r, bonus, ok, label: 'Полурослик перебрасывает' });
-        log(s, `${p.name} сбрасывает карту и перебрасывает.`, 'info');
-      }
-      if (ok) log(s, `${p.name} удирает от ${q(d.name)} (${r}${bonus ? (bonus > 0 ? '+' : '') + bonus : ''}).`, 'good');
+      const noEsc = d.escape === false || m.enh.some(u => def(u).noEscape);
+      const bonus = runBonusOf(s, p) + (c.escape[pid] || 0) + (d.escapeMod || 0);
+      let r = 0, ok = false;
+      if (noEsc) log(s, `От ${q(d.name)} не убежать!`, 'bad');
       else {
-        log(s, `${p.name} не убежал от ${q(d.name)} (${r}${bonus ? (bonus > 0 ? '+' : '') + bonus : ''}). ${d.bad.text}`, 'bad');
-        applyFx(s, p, d.bad.fx, rng);
+        r = d6(rng);
+        ok = r + bonus >= 5;
+        fx(s, { kind: 'dice', pid, value: r, bonus, ok, label: `Побег от ${q(d.name)}` });
+        if (!ok && hasRace(p, 'halfling') && p.hand.length) {
+          const u = cheapest(p.hand);
+          without(p.hand, u); toDiscard(s, u);
+          r = d6(rng); ok = r + bonus >= 5;
+          fx(s, { kind: 'dice', pid, value: r, bonus, ok, label: 'Полурослик перебрасывает' });
+          log(s, `${p.name} сбрасывает карту и перебрасывает.`, 'info');
+        }
       }
+      const sign = bonus ? (bonus > 0 ? '+' : '') + bonus : '';
+      if (ok) { log(s, `${p.name} удирает от ${q(d.name)} (${r}${sign}).`, 'good'); continue; }
+      const pet = p.equipped.find(u => def(u).slot === 'pet');
+      if (pet) {
+        removeItem(p, pet); toDiscard(s, pet);
+        fx(s, { kind: 'pet', pid, card: pet });
+        log(s, `${q(def(pet).name)} бросается на ${q(d.name)} и спасает ${p.name} от расплаты!`, 'good');
+        continue;
+      }
+      log(s, `${p.name} не убежал от ${q(d.name)}${noEsc ? '' : ` (${r}${sign})`}. ${d.bad.text}`, 'bad');
+      applyFx(s, p, d.bad.fx, rng);
     }
   }
   endCombat(s);
@@ -417,7 +550,9 @@ function resolveEscape(s, rng) {
 export function cardWorth(uid) {
   const d = def(uid);
   if (d.type === 'levelup') return 900;
-  if (d.type === 'monster') return 50 + d.level * 10;
+  if (d.type === 'monster') return 50 + (d.level || 10) * 10;
+  if (d.type === 'buff') return 250 + d.bonus * 60;
+  if (d.type === 'location' || d.type === 'event') return 250;
   return (d.value || 0) + (d.bonus || 0) * 50 + 100;
 }
 function cheapest(list) { return [...list].sort((a, b) => cardWorth(a) - cardWorth(b))[0]; }
@@ -440,9 +575,11 @@ H.kick = {
     const d = def(uid);
     s.reveal = { uid, by: p.id, seq: ++s.revealSeq };
     fx(s, { kind: 'reveal', pid: p.id, card: uid });
-    if (d.type === 'monster') { startCombat(s, p, uid); return; }
+    if (d.type === 'monster') { startCombat(s, p, uid, rng); return; }
     s.turn.step = 'post';
     if (d.type === 'curse') { resolveCurse(s, p, uid, rng, null); return; }
+    if (d.type === 'location') { setLocation(s, p, uid); return; }
+    if (d.type === 'event') { resolveEvent(s, p, uid, rng); return; }
     p.hand.push(uid);
     log(s, `${p.name} выбивает дверь: ${q(d.name)} — в руку.`, 'info');
   },
@@ -453,7 +590,7 @@ H.lookForTrouble = {
     return manageErr(s, p) || (s.turn.step !== 'post' ? 'Искать неприятности можно после выбитой двери без монстра' : null)
       || (!p.hand.includes(a.uid) || def(a.uid).type !== 'monster' ? 'Нужен монстр из руки' : null);
   },
-  run(s, p, a) { without(p.hand, a.uid); s.reveal = { uid: a.uid, by: p.id, seq: ++s.revealSeq }; startCombat(s, p, a.uid); },
+  run(s, p, a, rng) { without(p.hand, a.uid); s.reveal = { uid: a.uid, by: p.id, seq: ++s.revealSeq }; startCombat(s, p, a.uid, rng); },
 };
 
 H.loot = {
@@ -513,6 +650,9 @@ function playCheck(s, p, a) {
     case 'halfbreed': return manageErr(s, p) || (p.halfbreed ? 'Уже есть' : null);
     case 'supermunch': return manageErr(s, p) || (p.supermunch ? 'Уже есть' : null);
     case 'item': return manageErr(s, p);
+    case 'location': return manageErr(s, p);
+    case 'event': return manageErr(s, p);
+    case 'buff': return null;
     case 'hoard': return manageErr(s, p) || (s.turn.hoardPlayed ? 'Схрон можно открыть только один раз за ход' : null);
     case 'levelup': return p.level >= WIN_LEVEL - 1 ? 'Последний уровень — только убийством монстра' : null;
     case 'curse': {
@@ -533,7 +673,7 @@ function playCheck(s, p, a) {
       if (d.effect === 'ward') return 'Срабатывает сам, когда на вас насылают проклятие';
       if (!c) return 'Только во время боя';
       if (d.effect === 'bonus') return a.side === 'player' || a.side === 'monster' ? null : 'Выберите сторону';
-      if (d.effect === 'escape') return isParticipant(s, p.id) ? null : 'Только участник боя';
+      if (d.effect === 'escape' || d.effect === 'escapeBonus') return isParticipant(s, p.id) ? null : 'Только участник боя';
       if (d.effect === 'remove') return Number.isInteger(a.monster) && c.monsters[a.monster] ? null : 'Выберите монстра';
       return 'Нельзя';
     case 'monster':
@@ -569,6 +709,14 @@ H.playCard = {
         if (!equipError(p, a.uid)) p.equipped.push(a.uid); else p.carried.push(a.uid);
         log(s, `${p.name} выкладывает ${q(d.name)}.`, 'info');
         break;
+      case 'location': setLocation(s, p, a.uid); break;
+      case 'event': resolveEvent(s, p, a.uid, rng); break;
+      case 'buff':
+        toDiscard(s, a.uid);
+        p.nextCombat += d.bonus;
+        fx(s, { kind: 'buff', pid: p.id, card: a.uid, n: d.bonus });
+        log(s, `${p.name}: ${q(d.name)} — +${d.bonus} к силе ${isParticipant(s, p.id) ? 'прямо сейчас' : 'в следующем бою'}.`, 'good');
+        break;
       case 'hoard':
         give(p, draw(s, 'treasure', rng)); give(p, draw(s, 'treasure', rng));
         toDiscard(s, a.uid);
@@ -584,7 +732,8 @@ H.playCard = {
       case 'enhancer': {
         const m = c.monsters[a.monster];
         m.enh.push(a.uid);
-        log(s, `${p.name} играет ${q(d.name)} на ${q(def(m.uid).name)} (${d.bonus > 0 ? '+' : ''}${d.bonus}).`, 'combat');
+        fx(s, { kind: 'enhance', pid: p.id, card: a.uid, n: d.bonus });
+        log(s, `${p.name} играет ${q(d.name)} на ${q(def(m.uid).name)}${d.double ? ' — уровень удваивается!' : ` (${d.bonus > 0 ? '+' : ''}${d.bonus})`}.`, 'combat');
         break;
       }
       case 'wandering':
@@ -597,8 +746,15 @@ H.playCard = {
       case 'oneshot':
         c.used.push(a.uid);
         if (d.effect === 'bonus') {
-          c.mods.push({ side: a.side, n: d.bonus, by: p.id, uid: a.uid });
-          log(s, `${p.name} использует ${q(d.name)}: +${d.bonus} ${a.side === 'player' ? 'героям' : 'монстрам'}.`, 'combat');
+          let n = d.bonus + (hasClass(p, 'alchemist') ? 2 : 0);
+          if (d.tagBonus && a.side === 'player' && combatHasTag(s, d.tagBonus.tag)) n += d.tagBonus.n;
+          c.mods.push({ side: a.side, n, by: p.id, uid: a.uid });
+          fx(s, { kind: 'mod', pid: p.id, card: a.uid, side: a.side, n });
+          log(s, `${p.name} использует ${q(d.name)}: +${n} ${a.side === 'player' ? 'героям' : 'монстрам'}.`, 'combat');
+        } else if (d.effect === 'escapeBonus') {
+          const n = d.bonus + (hasClass(p, 'alchemist') ? 2 : 0);
+          c.escape[p.id] = (c.escape[p.id] || 0) + n;
+          log(s, `${p.name} готовит ${q(d.name)}: +${n} к побегу.`, 'combat');
         } else if (d.effect === 'escape') {
           log(s, `${p.name} бросает ${q(d.name)} — герои растворяются в дыму без наград.`, 'combat');
           endCombat(s);
@@ -644,12 +800,13 @@ H.discardInPlay = {
   },
 };
 
-function saleValue(s, p, uids) {
-  const vals = uids.map(u => def(u).value || 0);
+export function saleValue(s, p, uids) {
+  const vals = uids.map(u => (def(u).value || 0) + (hasRace(p, 'goblin') ? 200 : 0));
   let total = vals.reduce((a, b) => a + b, 0);
   let doubled = false;
   if (hasRace(p, 'halfling') && !s.turn.halflingSold && vals.length) { total += Math.max(...vals); doubled = true; }
-  return { total, doubled };
+  const rate = locationOf(s)?.saleRate || 1000;
+  return { total, doubled, rate, levels: Math.floor(total / rate) };
 }
 H.sell = {
   check(s, p, a) {
@@ -660,15 +817,13 @@ H.sell = {
       if (!p.hand.includes(x) && !inPlayItems(p).includes(x)) return 'Можно продавать только свои вещи';
       if (!def(x).value) return `${q(def(x).name)} ничего не стоит`;
     }
-    const { total } = saleValue(s, p, u);
-    const lv = Math.floor(total / 1000);
-    if (lv < 1) return `Нужно минимум 1000 голдов, у вас ${total}`;
+    const { total, rate, levels: lv } = saleValue(s, p, u);
+    if (lv < 1) return `Нужно минимум ${rate} голдов, у вас ${total}`;
     if (p.level + lv >= WIN_LEVEL) return 'Продажей нельзя дойти до 10-го уровня';
     return null;
   },
   run(s, p, a) {
-    const { total, doubled } = saleValue(s, p, a.uids);
-    const lv = Math.floor(total / 1000);
+    const { total, doubled, levels: lv } = saleValue(s, p, a.uids);
     for (const x of a.uids) { if (!without(p.hand, x)) removeItem(p, x); toDiscard(s, x); }
     if (doubled) s.turn.halflingSold = true;
     setLevel(s, p, p.level + lv);
@@ -699,6 +854,8 @@ H.askHelp = {
     if (c.helper) return 'Помощник уже есть';
     if (c.helpReq) return 'Уже ждём ответа';
     if (combatNumbers(s).winning) return 'Вы и так побеждаете';
+    const nh = c.monsters.find(m => def(m.uid).noHelp);
+    if (nh) return `${def(nh.uid).name} не терпит помощников`;
     const t = P(s, a.to);
     if (!t || t === p || t.dead) return 'Выберите помощника';
     if (c.declined.includes(t.id)) return `${t.name} уже отказал в этом бою`;
@@ -773,7 +930,7 @@ H.ability = {
       case 'turn': {
         if (!hasClass(p, 'cleric')) return 'Только жрец';
         if (!c || !isParticipant(s, p.id)) return 'Только в своём бою';
-        if (!c.monsters.some(m => def(m.uid).undead)) return 'Здесь нет нежити';
+        if (!combatHasTag(s, 'undead')) return 'Здесь нет нежити';
         const left = 3 - (c.turnCount[p.id] || 0);
         if (left <= 0) return 'Изгнание уже на пределе';
         if (!allInHand(p, cards) || cards.length > left) return `Сбросьте от 1 до ${left} карт`;
@@ -810,6 +967,20 @@ H.ability = {
         if (isParticipant(s, p.id) || isParticipant(s, t.id)) return 'Во время боя красть нельзя';
         if (!inPlayItems(t).includes(a.item) || def(a.item).big) return 'Можно стащить только мелкую вещь со стола';
         if (cards.length !== 1 || !allInHand(p, cards)) return 'Сбросьте одну карту';
+        return null;
+      }
+      case 'lullaby': {
+        if (!hasClass(p, 'bard')) return 'Только бард';
+        if (!c) return 'Только во время боя';
+        if ((c.lullaby[p.id] || 0) >= 2) return 'Две колыбельные за бой — предел';
+        if (cards.length !== 1 || !allInHand(p, cards)) return 'Сбросьте одну карту';
+        return null;
+      }
+      case 'distill': {
+        if (!hasClass(p, 'alchemist')) return 'Только алхимик';
+        const e = manageErr(s, p); if (e) return e;
+        if (s.turn.distilled) return 'Перегонка — раз в ход';
+        if (cards.length !== 2 || !allInHand(p, cards)) return 'Сбросьте две карты';
         return null;
       }
       default: return 'Неизвестная способность';
@@ -851,6 +1022,17 @@ H.ability = {
         fx(s, { kind: 'backstab', pid: a.target, by: p.id });
         break;
       }
+      case 'lullaby':
+        c.lullaby[p.id] = (c.lullaby[p.id] || 0) + 1;
+        c.mods.push({ side: 'monster', n: -3, by: p.id, uid: null, label: 'Колыбельная' });
+        fx(s, { kind: 'lullaby', pid: p.id });
+        log(s, `${p.name} поёт колыбельную: монстры −3.`, 'combat');
+        break;
+      case 'distill':
+        s.turn.distilled = true;
+        give(p, draw(s, 'treasure', rng));
+        log(s, `${p.name} перегоняет две карты в карту клада.`, 'good');
+        break;
       case 'steal': {
         const t = P(s, a.target);
         const r = d6(rng);
@@ -954,7 +1136,9 @@ export function hints(s, pid) {
     giveToLowest: (() => { const o = s.players.filter(x => x !== p && !x.dead); return o.length && p.level > Math.min(...o.map(x => x.level)); })(),
     fight: ok({ type: 'fight' }),
     runAway: ok({ type: 'runAway' }),
-    askHelp: !!(s.combat && s.combat.fighter === pid && !s.combat.helper && !s.combat.helpReq && !combatNumbers(s).winning),
+    askHelp: !!(s.combat && s.combat.fighter === pid && !s.combat.helper && !s.combat.helpReq && !combatNumbers(s).winning
+      && !s.combat.monsters.some(m => def(m.uid).noHelp)),
+    noHelp: !!s.combat?.monsters.some(m => def(m.uid).noHelp),
     helpTargets: s.combat && s.combat.fighter === pid ? s.players.filter(x => ok({ type: 'askHelp', to: x.id, offer: 0 })).map(x => x.id) : [],
     cancelHelp: ok({ type: 'cancelHelp' }),
     answerHelp: s.combat?.helpReq?.to === pid,
@@ -972,6 +1156,8 @@ export function hints(s, pid) {
     h.abilities.levitate = ok({ type: 'ability', name: 'levitate', cards: one });
     h.abilities.charm = !!c && ok({ type: 'ability', name: 'charm', monster: 0 });
   }
+  if (hasClass(p, 'bard')) h.abilities.lullaby = ok({ type: 'ability', name: 'lullaby', cards: one });
+  if (hasClass(p, 'alchemist')) h.abilities.distill = ok({ type: 'ability', name: 'distill', cards: p.hand.slice(0, 2) });
   if (hasClass(p, 'rogue')) {
     h.abilities.backstab = s.players.filter(x => ok({ type: 'ability', name: 'backstab', target: x.id, cards: one })).map(x => x.id);
     const steal = [];
@@ -987,7 +1173,7 @@ export function view(s, pid) {
   const c = s.combat;
   return {
     phase: s.phase, version: s.version, turn: { ...s.turn }, winners: [...s.winners],
-    reveal: s.reveal, opts: { winDelayMs: s.opts.winDelayMs },
+    reveal: s.reveal, opts: { winDelayMs: s.opts.winDelayMs }, location: s.location,
     log: s.log.slice(-80), fx: s.fx.slice(-20),
     decks: { door: s.decks.door.length, treasure: s.decks.treasure.length },
     discard: {
@@ -997,19 +1183,21 @@ export function view(s, pid) {
     players: s.players.map(p => ({
       id: p.id, name: p.name, color: p.color, avatar: p.avatar, isBot: p.isBot, seat: p.seat,
       level: p.level, races: [...p.races], classes: [...p.classes], halfbreed: p.halfbreed, supermunch: p.supermunch,
-      equipped: [...p.equipped], carried: [...p.carried], nextCombat: p.nextCombat,
-      dead: p.dead, handCount: p.hand.length, handLimit: handLimit(p),
-      power: p.level + itemBonus(p), runBonus: runBonusOf(p),
+      equipped: [...p.equipped], carried: [...p.carried], nextCombat: p.nextCombat, nextEscape: p.nextEscape || 0,
+      dead: p.dead, handCount: p.hand.length, handLimit: handLimit(p), handsLimit: handsLimit(p),
+      power: powerOf(s, p), runBonus: runBonusOf(s, p),
       hand: p.id === pid ? [...p.hand] : undefined,
     })),
     combat: c ? {
       fighter: c.fighter, helper: c.helper, helpOffer: c.helpOffer, helpReq: c.helpReq,
-      monsters: c.monsters.map(m => ({ uid: m.uid, enh: [...m.enh], strength: monsterStrength(s, m), treasure: monsterTreasure(s, m) })),
+      monsters: c.monsters.map(m => ({ uid: m.uid, enh: [...m.enh], strength: monsterStrength(s, m), treasure: monsterTreasure(s, m),
+        level: monsterBaseLevel(s, def(m.uid)), noEscape: def(m.uid).escape === false || m.enh.some(u => def(u).noEscape) })),
       mods: c.mods, backstabs: c.backstabs, rage: c.rage, turnUndead: c.turnUndead, escape: c.escape,
       winAt: c.winAt, numbers: combatNumbers(s),
       heroStrengths: Object.fromEntries(participants(s).map(id => [id, heroStrength(s, P(s, id))])),
     } : null,
     me: me ? pid : null,
     hints: me ? hints(s, pid) : null,
+    sale: me && s.phase === 'playing' ? { rate: locationOf(s)?.saleRate || 1000, goblin: hasRace(me, 'goblin'), halfling: hasRace(me, 'halfling') && !s.turn.halflingSold } : null,
   };
 }

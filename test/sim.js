@@ -10,6 +10,7 @@ function countCards(s) {
   const all = [...s.decks.door, ...s.decks.treasure, ...s.discard.door, ...s.discard.treasure];
   for (const p of s.players) all.push(...p.hand, ...p.equipped, ...p.carried, ...p.races, ...p.classes, ...[p.halfbreed, p.supermunch].filter(Boolean));
   if (s.combat) { for (const m of s.combat.monsters) all.push(m.uid, ...m.enh); all.push(...s.combat.used); }
+  if (s.location) all.push(s.location);
   return all;
 }
 

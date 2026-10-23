@@ -5,7 +5,7 @@ import { allUids } from '../shared/cards.js';
 
 function mulberry32(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
 const TYPES = ['kick', 'loot', 'lookForTrouble', 'endTurn', 'playCard', 'equip', 'unequip', 'autoEquip', 'discardInPlay', 'sell', 'gift', 'askHelp', 'answerHelp', 'cancelHelp', 'fight', 'runAway', 'ability', '__proto__', 'toString', 'constructor', 'nope'];
-const ABIL = ['rage', 'turn', 'levitate', 'charm', 'backstab', 'steal', 'x'];
+const ABIL = ['rage', 'turn', 'levitate', 'charm', 'backstab', 'steal', 'lullaby', 'distill', 'x'];
 const ALL = [...allUids('door'), ...allUids('treasure')];
 const junk = rng => [null, 1, -1, 'x', {}, [], [1], ['a#0'], NaN, '__proto__', 99999][Math.floor(rng() * 11)];
 const TOTAL = ALL.length;
@@ -13,6 +13,7 @@ function count(s) {
   const all = [...s.decks.door, ...s.decks.treasure, ...s.discard.door, ...s.discard.treasure];
   for (const p of s.players) all.push(...p.hand, ...p.equipped, ...p.carried, ...p.races, ...p.classes, ...[p.halfbreed, p.supermunch].filter(Boolean));
   if (s.combat) { for (const m of s.combat.monsters) all.push(m.uid, ...m.enh); all.push(...s.combat.used); }
+  if (s.location) all.push(s.location);
   return all.length === TOTAL && new Set(all).size === TOTAL;
 }
 const N = Number(process.argv[2] || 300);

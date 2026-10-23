@@ -1,6 +1,7 @@
 // «Под Землёй» — клиент.
 import { def, RACE_NAMES, CLASS_NAMES } from '/shared/cards.js';
-import { esc, cardHTML, chipHTML, avatarSVG, iconSVG } from '/art.js';
+import { esc, cardHTML, chipHTML, avatarSVG, iconSVG, cardBackSVG, locationSVG } from '/art.js';
+import { fx } from '/fx.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const app = $('#app');
@@ -20,7 +21,7 @@ const S = {
   skew: 0,
   screen: null,
   pendingRoom: new URLSearchParams(location.search).get('room')?.toUpperCase() || null,
-  ui: { tab: 'log', mode: null, chatSeen: 0, lastFx: null, lastReveal: 0, sideOpen: false, helpAsked: null, overlay: null, dieQueue: [], dieBusy: false },
+  ui: { tab: 'log', mode: null, chatSeen: 0, lastFx: null, lastReveal: 0, sideOpen: false, helpAsked: null, overlay: null, dieQueue: [], dieBusy: false, prevHand: null, slam: null, lastLoc: undefined },
 };
 
 // ───────────────────────── утилиты ─────────────────────────
@@ -88,9 +89,10 @@ socket.on('room:state', ({ room, game, serverTime }) => {
   const first = !S.room || S.room.id !== room.id;
   if (serverTime) S.skew = serverTime - Date.now();
   S.room = room; S.game = game;
-  if (first) { setUrl(room.id); S.ui.lastFx = null; S.ui.mode = null; }
-  handleFx(first);
+  if (first) { setUrl(room.id); S.ui.lastFx = null; S.ui.mode = null; S.ui.prevHand = new Set(); }
+  const fresh = handleFx(first);
   render();
+  if (fresh.length) requestAnimationFrame(() => runFx(fresh));
 });
 
 // ───────────────────────── маршрутизация экранов ─────────────────────────
@@ -321,6 +323,7 @@ mount.game = () => {
       <div class="g-head">
         <span class="rtitle" id="rtitle"></span>
         <span class="turninfo" id="turninfo"></span>
+        <span id="locpill" class="locpill"></span>
         <span class="spacer"></span>
         <button class="btn ghost small side-toggle" data-act="sideToggle"><span class="long-label">Летопись и чат</span><span class="short">Чат</span></button>
         <button class="btn ghost small" data-act="rules">Правила</button>
@@ -328,8 +331,9 @@ mount.game = () => {
       </div>
     </div>
     <div class="band b-clay pebbles"><div class="opps" id="opps"></div></div>
-    <div class="band b-rock cave">
+    <div class="band b-rock cave" id="cave">
       <div class="cave-stage" id="stage"></div>
+      <div class="motes" aria-hidden="true">${'<i></i>'.repeat(12)}</div>
       <div class="sidepanel side" id="sidepanel">
         <div class="tabs" role="tablist">
           <button role="tab" data-tab="log">Летопись</button>
@@ -420,8 +424,16 @@ function renderStage() {
   const g = S.game;
   const el = $('#stage');
   const h = hints();
-  const decks = `<div class="decks"><div class="deck door" title="Колода проходов"><span><b>${g.decks.door}</b>проходы</span></div><div class="deck treasure" title="Колода клада"><span><b>${g.decks.treasure}</b>клад</span></div></div>`;
-  if (g.combat) { el.innerHTML = decks + `<div class="stage-inner">${fightHTML()}</div>`; return; }
+  const loc = g.location ? def(g.location) : null;
+  $('#cave').dataset.loc = loc ? loc.art : '';
+  const decks = `<div class="decks"><div class="deck door" id="deckDoor" title="Колода проходов" aria-label="Колода проходов: ${g.decks.door}">${cardBackSVG('door')}<span>${g.decks.door}</span></div><div class="deck treasure" id="deckTreasure" title="Колода клада" aria-label="Колода клада: ${g.decks.treasure}">${cardBackSVG('treasure')}<span>${g.decks.treasure}</span></div></div>`;
+  const lp = $('#locpill');
+  const key = loc ? g.location : '';
+  if (lp.dataset.key !== key) {
+    lp.dataset.key = key;
+    lp.innerHTML = loc ? `<button class="loc-banner" id="locBanner" data-uid="${esc(g.location)}" data-zone="view" title="${esc(loc.text)}">${locationSVG(loc.art)}<span><small>Локация</small><b>${esc(loc.name)}</b></span></button>` : '';
+  }
+  if (g.combat) { el.innerHTML = decks + `<div class="stage-inner">${fightHTML()}</div>`; afterStage(); return; }
   const tp = pl(g.turn.pid);
   const mine = tp?.id === S.room.me;
   let title = '', text = '';
@@ -443,6 +455,21 @@ function renderStage() {
     reveal = `<div class="${fresh ? 'reveal-in' : ''}">${cardHTML(rv.uid, { size: 'md', attrs: 'data-zone="view"' })}</div>`;
   }
   el.innerHTML = decks + `<div class="stage-inner"><div class="stage-msg"><h2>${title}</h2><p class="muted" style="margin:0">${text}</p></div>${reveal}<div class="act-bar">${actionButtons()}</div></div>`;
+  if (reveal.includes('reveal-in')) requestAnimationFrame(() => { const r = $('#stage .reveal-in'); if (r) { fx.dust(r, { n: 18 }); fx.burst(r, { n: 16, speed: 200, g: 200 }); } });
+  afterStage();
+}
+// эффекты, которые нужно запустить после перерисовки сцены
+function afterStage() {
+  const slam = S.ui.slam;
+  if (!slam) return;
+  S.ui.slam = null;
+  requestAnimationFrame(() => {
+    const c = document.querySelector(`#stage .mon-wrap .card[data-uid="${CSS.escape(slam.uid)}"]`);
+    if (!c) return;
+    c.classList.add('slam-in');
+    setTimeout(() => { fx.dust(c, { n: 30, rocks: 8 }); fx.shake($('#stage'), 'quake'); }, 260);
+    if (slam.ambush) setTimeout(() => { fx.vignette(); fx.banner('Засада!', def(slam.uid).name, 'bad'); }, 420);
+  });
 }
 
 function actionButtons() {
@@ -468,7 +495,8 @@ function fightHTML() {
     return `<div class="hero-pill" style="--seat:${p.color}"><span class="ava">${avatarSVG(p.avatar, p.color)}</span><span><b>${esc(p.name)}</b><br><small>сила ${c.heroStrengths[id]}</small></span></div>`;
   }).join('');
   const pm = [];
-  for (const m of c.mods) pm.push({ side: m.side, t: `${esc(pname(m.by))}: ${esc(def(m.uid).name)} +${m.n}` });
+  for (const m of c.mods) pm.push({ side: m.side, t: `${esc(pname(m.by))}: ${esc(m.uid ? def(m.uid).name : m.label || 'эффект')} ${m.n > 0 ? '+' : '−'}${Math.abs(m.n)}` });
+  for (const id of [c.fighter, c.helper].filter(Boolean)) { const v = pl(id)?.nextCombat; if (v) pm.push({ side: 'player', t: `${esc(pname(id))}: ${v > 0 ? 'зелье +' + v : 'слабость −' + Math.abs(v)}` }); }
   for (const [id, v] of Object.entries(c.rage || {})) if (v) pm.push({ side: 'player', t: `${esc(pname(id))}: ярость +${v}` });
   for (const [id, v] of Object.entries(c.turnUndead || {})) if (v) pm.push({ side: 'player', t: `${esc(pname(id))}: изгнание +${v}` });
   for (const bs of c.backstabs) pm.push({ side: 'monster', t: `${esc(pname(bs.by))} бьёт в спину ${esc(pname(bs.on))}: −2` });
@@ -477,8 +505,9 @@ function fightHTML() {
   const monsters = c.monsters.map((m, i) => `
     <div class="mon-wrap">
       ${cardHTML(m.uid, { size: 'sm', attrs: `data-zone="view"` })}
-      <span class="mon-str">сила ${m.strength}</span>
-      ${m.enh.length ? `<div class="enh-list">${m.enh.map(u => `<span class="mod m" data-uid="${u}" data-zone="view">${esc(def(u).name)} ${def(u).bonus > 0 ? '+' : ''}${def(u).bonus}</span>`).join('')}</div>` : ''}
+      <span class="mon-str">сила ${m.strength}${def(m.uid).mirror != null ? ` <small>(лидер ${m.level - def(m.uid).mirror} + ${def(m.uid).mirror})</small>` : ''}</span>
+      ${m.noEscape || def(m.uid).noHelp ? `<div class="mon-flags">${m.noEscape ? '<span class="flag">не убежать</span>' : ''}${def(m.uid).noHelp ? '<span class="flag">без помощи</span>' : ''}</div>` : ''}
+      ${m.enh.length ? `<div class="enh-list">${m.enh.map(u => `<span class="mod m" data-uid="${u}" data-zone="view">${esc(def(u).name)} ${def(u).double ? '×2' : (def(u).bonus > 0 ? '+' : '') + def(u).bonus}</span>`).join('')}</div>` : ''}
     </div>`).join('');
   let center;
   if (c.winAt) {
@@ -494,6 +523,7 @@ function fightHTML() {
     if (h.fight) b.push(`<button class="btn primary big" data-act="fight">Добить!</button>`);
     if (c.winAt) b.push(`<span class="hint">Остальные ещё могут помешать</span>`);
     if (h.askHelp && h.helpTargets?.length) b.push(`<button class="btn hero" data-act="askHelp">Позвать на помощь</button>`);
+    else if (h.noHelp && !c.helper && !n.winning) b.push(`<span class="hint">Этот монстр не терпит помощников</span>`);
     if (h.runAway) b.push(`<button class="btn danger" data-act="runAway">Бежать</button>`);
   } else {
     const canMeddle = Object.values(h.cards || {}).some(o => o.some(a => a.side || Number.isInteger(a.monster) || a.with));
@@ -502,9 +532,9 @@ function fightHTML() {
   }
   return `
     <div class="fight">
-      <div class="side-col hero"><div class="side-main"><div class="shield hero" title="Сила героев">${SHIELD('#3fa38c')}<b>${n.heroes}</b></div><div class="heroes-row">${heroes}</div></div><div class="mods">${mods('player')}</div></div>
+      <div class="side-col hero"><div class="side-main"><div class="shield hero" id="shieldHero" title="Сила героев">${SHIELD('#3fa38c')}<b>${n.heroes}</b></div><div class="heroes-row">${heroes}</div></div><div class="mods">${mods('player')}</div></div>
       <div class="versus">${center}${verdict}</div>
-      <div class="side-col mon"><div class="side-main"><div class="shield mon" title="Сила монстров">${SHIELD('#d2502f')}<b>${n.monsters}</b></div><div class="monsters-row">${monsters}</div></div><div class="mods">${mods('monster')}</div></div>
+      <div class="side-col mon"><div class="side-main"><div class="shield mon" id="shieldMon" title="Сила монстров">${SHIELD('#d2502f')}<b>${n.monsters}</b></div><div class="monsters-row">${monsters}</div></div><div class="mods">${mods('monster')}</div></div>
     </div>
     <div class="reward">За победу: +${n.levels} ${plural(n.levels, 'уровень', 'уровня', 'уровней')} и ${n.treasures} ${plural(n.treasures, 'карта', 'карты', 'карт')} клада${c.helper ? `, помощнику обещано ${c.helpOffer}` : ''}</div>
     <div class="act-bar">${b.join('')}</div>`;
@@ -523,7 +553,7 @@ function tickCountdowns() {
 requestAnimationFrame(tickCountdowns);
 
 // ───────────────────────── мой стол ─────────────────────────
-const SLOT_ORDER = [['head', 'Головняк'], ['armor', 'Броник'], ['feet', 'Обувка'], ['hand', 'В руках'], ['none', 'Прочее']];
+const SLOT_ORDER = [['head', 'Головняк'], ['armor', 'Броник'], ['feet', 'Обувка'], ['hand', 'В руках'], ['pet', 'Питомец'], ['none', 'Прочее']];
 const ABIL = {
   rage: { cls: 'warrior', label: 'Ярость', tip: 'Сбросьте до 3 карт: +1 к силе за каждую' },
   turn: { cls: 'cleric', label: 'Изгнание', tip: 'Против нежити: до 3 карт, +3 за каждую' },
@@ -531,7 +561,10 @@ const ABIL = {
   charm: { cls: 'mage', label: 'Чары', tip: 'Сбросьте всю руку (от 3 карт) и усыпите монстра' },
   backstab: { cls: 'rogue', label: 'Удар в спину', tip: 'Сбросьте карту: участник боя получает −2' },
   steal: { cls: 'rogue', label: 'Кража', tip: 'Сбросьте карту и бросьте кубик: 4+ — вещь ваша' },
+  lullaby: { cls: 'bard', label: 'Колыбельная', tip: 'Сбросьте карту: монстры −3 в этом бою (до двух раз)', need: 1 },
+  distill: { cls: 'alchemist', label: 'Перегонка', tip: 'Сбросьте 2 карты и возьмите карту клада (раз в ход)', need: 2 },
 };
+const abilNeed = name => ABIL[name]?.need || (name === 'backstab' || name === 'steal' ? 1 : 0);
 
 function renderMine() {
   const p = me();
@@ -548,7 +581,7 @@ function renderMine() {
   [p.halfbreed, p.supermunch].filter(Boolean).forEach(u => traits.push(`<button class="trait" data-uid="${u}" data-zone="trait">${iconSVG(def(u).art)}${esc(def(u).name)}</button>`));
 
   const slot = key => p.equipped.filter(u => def(u).slot === key).map(u => chipHTML(u, { cls: picked.has(u) ? 'picked' : '' })).join('');
-  const slots = SLOT_ORDER.map(([k, label]) => `<div class="slot"><small>${label}</small>${slot(k)}</div>`).join('')
+  const slots = SLOT_ORDER.filter(([k]) => k !== 'pet' || p.equipped.some(u => def(u).slot === 'pet')).map(([k, label]) => `<div class="slot"><small>${k === 'hand' && p.handsLimit > 2 ? `${label} (${p.handsLimit})` : label}</small>${slot(k)}</div>`).join('')
     + `<div class="slot"><small>Не надето</small>${p.carried.map(u => chipHTML(u, { cls: 'off' + (picked.has(u) ? ' picked' : '') })).join('')}</div>`;
 
   const abil = Object.entries(ABIL).filter(([k, a]) => p.classes.some(u => def(u).cls === a.cls)).map(([k, a]) => {
@@ -563,7 +596,7 @@ function renderMine() {
       <div><div class="me-name">${esc(p.name)}</div>
         <div class="me-stats"><span class="lvl" title="Уровень">${p.level}</span><span class="pow" title="Сила: уровень и надетые вещи">⚔ ${p.power}</span>
         <span class="badge" title="Сколько нужно выбросить на кубике, чтобы убежать">побег ${run <= 1 ? 'всегда' : run > 6 ? 'никогда' : run + '+'}</span>
-        ${p.nextCombat ? `<span class="badge warn">${p.nextCombat} в следующем бою</span>` : ''}${p.dead ? '<span class="badge warn">вы погибли до следующего хода</span>' : ''}</div>
+        ${p.nextCombat > 0 ? `<span class="badge good">+${p.nextCombat} в бою</span>` : p.nextCombat < 0 ? `<span class="badge warn">${p.nextCombat} в бою</span>` : ''}${p.nextEscape < 0 ? `<span class="badge warn">побег ${p.nextEscape}</span>` : ''}${p.dead ? '<span class="badge warn">вы погибли до следующего хода</span>' : ''}</div>
       </div>
     </div>
     <div class="traits">${traits.join('')}</div>
@@ -575,12 +608,16 @@ function renderMine() {
   $('#modebar').innerHTML = mode ? modeBarHTML() : '';
   const handEl = $('#hand');
   handEl.classList.toggle('has-play', !mode && p.hand.some(u => (h.cards?.[u] || []).length));
+  const prev = S.ui.prevHand;
+  let k = 0;
   handEl.innerHTML = p.hand.length ? p.hand.map(u => {
     let playable = (h.cards?.[u] || []).length > 0;
     let dim = false;
     if (mode) { playable = false; dim = !modeAccepts(u, 'hand'); }
-    return cardHTML(u, { playable, selected: picked.has(u), dim, attrs: 'data-zone="hand"' });
+    const isNew = prev && !prev.has(u);
+    return cardHTML(u, { playable, selected: picked.has(u), dim, cls: isNew ? 'deal-in' : '', attrs: `data-zone="hand"${isNew ? ` style="animation-delay:${(k++) * 90}ms"` : ''}` });
   }).join('') : `<p class="muted">Рука пуста.</p>`;
+  S.ui.prevHand = new Set(p.hand);
   fitHand();
 }
 function fitHand() {
@@ -603,16 +640,17 @@ function modeAccepts(uid, zone) {
   const m = S.ui.mode;
   if (!m) return false;
   if (m.kind === 'give' || m.kind === 'ability') return zone === 'hand';
-  if (m.kind === 'sell') return !!def(uid).value && (zone === 'hand' ? ['item', 'oneshot'].includes(def(uid).type) : true);
+  if (m.kind === 'sell') return !!def(uid).value && (zone === 'hand' ? ['item', 'oneshot', 'buff'].includes(def(uid).type) : true);
   return false;
 }
+// та же арифметика, что в движке (saleValue): гоблин +200 за вещь, полурослик удваивает самую дорогую, курс зависит от локации
 function saleTotal(picked) {
-  const p = me();
-  const vals = picked.map(u => def(u).value || 0);
+  const sale = S.game.sale || { rate: 1000 };
+  const vals = picked.map(u => (def(u).value || 0) + (sale.goblin ? 200 : 0));
   let total = vals.reduce((a, b) => a + b, 0);
-  const half = p.races.some(u => def(u).race === 'halfling') && !S.game.turn.halflingSold && vals.length;
+  const half = !!sale.halfling && vals.length > 0;
   if (half) total += Math.max(...vals);
-  return { total, half };
+  return { total, half, rate: sale.rate, goblin: !!sale.goblin, levels: Math.floor(total / sale.rate) };
 }
 function modeBarHTML() {
   const m = S.ui.mode;
@@ -621,16 +659,16 @@ function modeBarHTML() {
     return `<div class="modebar"><span>Выберите <b>${cardsWord(m.need)}</b>, которые ${hints().giveToLowest ? 'отдадите самому слабому' : 'сбросите'}: выбрано ${n}.</span><button class="btn primary small" data-act="modeOk" ${n === m.need ? '' : 'disabled'}>Готово</button><button class="btn ghost small" data-act="modeCancel">Отмена</button></div>`;
   }
   if (m.kind === 'sell') {
-    const { total, half } = saleTotal(m.picked);
-    const lv = Math.floor(total / 1000);
-    return `<div class="modebar"><span>Отметьте вещи в руке и на столе. Сумма: <b>${total} г</b>${half ? ' (полурослик продаёт одну вдвое дороже)' : ''} — это ${lv} ${plural(lv, 'уровень', 'уровня', 'уровней')}. Каждые 1000 голдов — уровень, сдача сгорает.</span><button class="btn primary small" data-act="modeOk" ${lv >= 1 ? '' : 'disabled'}>Продать</button><button class="btn ghost small" data-act="modeCancel">Отмена</button></div>`;
+    const { total, half, rate, goblin, levels: lv } = saleTotal(m.picked);
+    const extra = [half && 'полурослик продаёт одну вдвое дороже', goblin && 'гоблин выторговывает +200 за каждую'].filter(Boolean).join(', ');
+    return `<div class="modebar"><span>Отметьте вещи в руке и на столе. Сумма: <b>${total} г</b>${extra ? ` (${extra})` : ''} — это ${lv} ${plural(lv, 'уровень', 'уровня', 'уровней')}. Каждые ${rate} голдов — уровень${rate !== 1000 ? ' (так считают на этой локации)' : ''}, сдача сгорает.</span><button class="btn primary small" data-act="modeOk" ${lv >= 1 ? '' : 'disabled'}>Продать</button><button class="btn ghost small" data-act="modeCancel">Отмена</button></div>`;
   }
   if (m.kind === 'ability') {
     const a = ABIL[m.name];
-    const fixed = m.name === 'backstab' || m.name === 'steal';
-    const ok = fixed ? n === 1 : n >= 1 && n <= m.max;
+    const fixed = abilNeed(m.name);
+    const ok = fixed ? n === fixed : n >= 1 && n <= m.max;
     const what = m.name === 'steal' ? `, цель: «${esc(def(m.item).name)}» у ${esc(pname(m.target))}` : m.name === 'backstab' ? `, цель: ${esc(pname(m.target))}` : '';
-    return `<div class="modebar"><span><b>${a.label}</b>${what}. ${fixed ? 'Выберите карту для сброса.' : `Выберите от 1 до ${m.max} карт для сброса: выбрано ${n}.`}</span><button class="btn primary small" data-act="modeOk" ${ok ? '' : 'disabled'}>Применить</button><button class="btn ghost small" data-act="modeCancel">Отмена</button></div>`;
+    return `<div class="modebar"><span><b>${a.label}</b>${what}. ${fixed === 1 ? 'Выберите карту для сброса.' : fixed ? `Выберите ${cardsWord(fixed)} для сброса: выбрано ${n}.` : `Выберите от 1 до ${m.max} карт для сброса: выбрано ${n}.`}</span><button class="btn primary small" data-act="modeOk" ${ok ? '' : 'disabled'}>Применить</button><button class="btn ghost small" data-act="modeCancel">Отмена</button></div>`;
   }
   return '';
 }
@@ -640,7 +678,7 @@ function togglePick(uid, zone) {
   const i = m.picked.indexOf(uid);
   if (i >= 0) m.picked.splice(i, 1);
   else {
-    const cap = m.kind === 'give' ? m.need : m.kind === 'ability' ? (m.name === 'backstab' || m.name === 'steal' ? 1 : m.max) : 99;
+    const cap = m.kind === 'give' ? m.need : m.kind === 'ability' ? (abilNeed(m.name) || m.max) : 99;
     if (m.picked.length >= cap) m.picked.shift();
     m.picked.push(uid);
   }
@@ -684,7 +722,10 @@ function optLabel(a) {
     case 'item': return 'Выложить на стол';
     case 'levelup': return 'Получить уровень';
     case 'hoard': return 'Открыть схрон';
-    case 'oneshot': return d.effect === 'escape' ? 'Бросить шашку и сбежать' : 'Сыграть';
+    case 'oneshot': return d.effect === 'escape' ? 'Бросить шашку и сбежать' : d.effect === 'escapeBonus' ? `Закинуть верёвку: побег +${d.bonus}` : 'Сыграть';
+    case 'location': return S.game.location ? `Перенести всех сюда (вместо «${def(S.game.location).name}»)` : 'Перенести всех сюда';
+    case 'event': return 'Объявить событие';
+    case 'buff': return `Выпить: +${d.bonus} в бою`;
     default: return 'Сыграть';
   }
 }
@@ -697,6 +738,9 @@ function whenText(d) {
     case 'wandering': return 'Играется в любом бою вместе с монстром из руки.';
     case 'oneshot': return d.effect === 'ward' ? 'Срабатывает сам, когда на вас насылают проклятие.' : 'Играется во время боя.';
     case 'levelup': return 'Играется когда угодно, но 10-й уровень так не взять.';
+    case 'location': return 'Играется в свой ход вне боя. Меняет правила для всех, пока кто-нибудь не сменит локацию.';
+    case 'event': return 'Играется в свой ход вне боя и срабатывает сразу для всего стола.';
+    case 'buff': return 'Выпейте в любой момент: бонус сработает в текущем или следующем вашем бою.';
     default: return '';
   }
 }
@@ -802,6 +846,7 @@ function maybeEndScreen() {
   if ($('#endScreen')) return;
   const w = g.winners.map(pl).filter(Boolean);
   const isHost = S.room.hostId === S.room.me;
+  setTimeout(() => { fx.confetti({ n: 180 }); fx.sparkle($('#endScreen .crownbig'), { n: 22 }); }, 80);
   showOverlay(`<div class="modal endscreen" id="endScreen" role="dialog" aria-label="Итоги партии">
     ${iconSVG('crown', 'crownbig')}
     <h2>${w.map(p => esc(p.name)).join(' и ')} ${w.length > 1 ? 'побеждают' : 'побеждает'}!</h2>
@@ -818,34 +863,108 @@ const RULES = `<div class="modal rules" role="dialog" aria-label="Как игр�
   <h3>Бой</h3>
   <p>Ваша сила — уровень плюс надетые вещи. Если она больше силы монстров, жмите «Добить!». У остальных есть несколько секунд, чтобы помешать: усилить монстра, подбросить ещё одного, ударить в спину. За победу — уровень и клад. Не хватает сил — зовите на помощь, пообещав часть клада, или бегите: побег удаётся на 5–6 кубика. Не убежали — получите расплату с карты монстра.</p>
   <h3>Вещи и уровни</h3>
-  <p>Один головняк, один броник, одна обувка, две руки и одна большая вещь (гномам — сколько угодно). Вещи можно продать: каждые 1000 голдов — уровень.</p>
+  <p>Один головняк, один броник, одна обувка, две руки и одна большая вещь (гномам — сколько угодно, механикам — три руки). Можно завести одного питомца: он даёт бонус и один раз спасает от расплаты. Вещи можно продать: каждые 1000 голдов — уровень.</p>
   <h3>Расы и классы</h3>
-  <p>Эльф, Гном, Полурослик, Воин, Маг, Жрец и Плут дают свои способности — они написаны на картах. Кнопки способностей появляются у вас на столе.</p>
+  <p>Расы: эльф, гном, полурослик, орк, гоблин и кротолюд. Классы: воин, маг, жрец, плут, бард, алхимик и механик. У каждого свои способности — они написаны на картах, а кнопки способностей появляются у вас на столе.</p>
+  <h3>Локации и события</h3>
+  <p>Карта локации меняет правила для всех, пока кто-нибудь не сыграет другую: в затопленном тоннеле труднее убежать, на рынке вещи дороже, в котельной проклятия тают. События срабатывают сразу для всего стола. Зелья дают бонус в текущем или следующем бою.</p>
+  <h3>Особые монстры</h3>
+  <p>Одни нападают из засады, едва вы открыли дверь, другие не терпят помощников, от третьих не убежать. Зеркальный двойник всегда сильнее лидера партии. Читайте карту, прежде чем драться.</p>
   <h3>Смерть</h3>
   <p>Погибший теряет вещи и руку, но сохраняет уровень, расу и класс. В свой следующий ход он возвращается с новыми картами.</p>
   <button class="btn primary" data-act="closeOverlay">Понятно</button>
 </div>`;
 
 // ───────────────────────── эффекты ─────────────────────────
+// Сервер присылает короткий журнал событий (fx). Новые события проигрываются после перерисовки стола.
 function handleFx(first) {
   const g = S.game;
-  if (!g) return;
-  const fx = g.fx || [];
-  const maxId = fx.length ? fx[fx.length - 1].id : 0;
-  if (S.ui.lastFx === null || first) { S.ui.lastFx = maxId; return; }
-  const fresh = fx.filter(f => f.id > S.ui.lastFx);
+  if (!g) return [];
+  const list = g.fx || [];
+  const maxId = list.length ? list[list.length - 1].id : 0;
+  if (S.ui.lastFx === null || first) { S.ui.lastFx = maxId; S.ui.lastLoc = g.location; return []; }
+  const fresh = list.filter(f => f.id > S.ui.lastFx);
   S.ui.lastFx = maxId;
   for (const f of fresh) {
     if (f.kind === 'dice') S.ui.dieQueue.push(f);
-    if (f.kind === 'levelUp' || f.kind === 'levelDown' || f.kind === 'curse' || f.kind === 'death') {
-      requestAnimationFrame(() => {
-        const el = f.pid === S.room.me ? $('#meava') : document.querySelector(`[data-opp="${f.pid}"]`);
-        if (!el) return;
-        const cls = f.kind === 'levelUp' ? 'flash-up' : 'shake';
-        el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls);
-      });
+    if (f.kind === 'combat' || f.kind === 'wandering') S.ui.slam = { uid: f.card, ambush: false };
+    if (f.kind === 'ambush' && S.ui.slam) S.ui.slam.ambush = true;
+  }
+  return fresh;
+}
+const avaOf = pid => pid === S.room?.me ? $('#meava') : document.querySelector(`[data-opp="${pid}"] .ava`);
+function runFx(fresh) {
+  for (const f of fresh) {
+    const ava = avaOf(f.pid);
+    switch (f.kind) {
+      case 'levelUp':
+        fx.rise(ava); fx.float(ava, `+${f.to - f.from} ур.`, 'good'); fx.shake(ava?.closest('.opp') || ava, 'flash-up');
+        break;
+      case 'levelDown':
+        fx.drops(ava); fx.float(ava, `−${f.from - f.to} ур.`, 'bad'); fx.shake(ava?.closest('.opp') || ava);
+        break;
+      case 'curse':
+        fx.smoke(ava); fx.float(ava, 'Проклятие!', 'curse'); fx.shake(ava?.closest('.opp') || ava);
+        break;
+      case 'death':
+        fx.dust(ava, { n: 22 }); fx.float(ava, 'Погиб!', 'bad');
+        if (f.pid === S.room.me) toast('Вы погибли. Вернётесь в свой следующий ход с новыми картами.');
+        break;
+      case 'pet':
+        fx.hearts(ava); fx.float(ava, `${def(f.card).name} спасает!`, 'good');
+        break;
+      case 'buff':
+        fx.sparkle(ava, { colors: ['#ffb0c8', '#ff7aa8', '#fff3b0'] }); fx.float(ava, `+${f.n} в бою`, 'good');
+        break;
+      case 'victory': {
+        const st = $('#stage');
+        fx.banner('Победа!', `${pname(f.pid)} одолевает монстров`, 'win');
+        fx.confetti({ at: st, n: 90 });
+        fx.coins(st, avaOf(f.pid), { n: 14 });
+        break;
+      }
+      case 'location': {
+        const d = def(f.card);
+        fx.banner(d.name, d.text, 'loc');
+        const st = $('#stage');
+        setTimeout(() => fx.ambient(st, d.art), 200);
+        const b = $('#locBanner'); if (b) fx.shake(b, 'pop-in');
+        break;
+      }
+      case 'event': {
+        const d = def(f.card);
+        fx.banner(d.name, d.text, 'event');
+        fx.burst($('#stage'), { n: 30, speed: 340, g: 160 });
+        if (d.event === 'quake') { fx.shake(document.querySelector('.game'), 'quake'); fx.dust($('#stage'), { n: 30, rocks: 14 }); }
+        break;
+      }
+      case 'mod': {
+        const el = f.side === 'monster' ? $('#shieldMon') : $('#shieldHero');
+        fx.float(el, `${f.n > 0 ? '+' : '−'}${Math.abs(f.n)}`, f.side === 'monster' ? 'bad' : 'good');
+        fx.burst(el, { n: 16, colors: f.side === 'monster' ? undefined : ['#8ff0d2', '#3fa38c', '#fff'], speed: 220 });
+        fx.shake(el, 'bump');
+        break;
+      }
+      case 'enhance': {
+        const el = $('#shieldMon');
+        const d = def(f.card);
+        fx.float(el, d.double ? '×2' : `${d.bonus > 0 ? '+' : '−'}${Math.abs(d.bonus)}`, d.bonus < 0 ? 'good' : 'bad');
+        fx.burst(el, { n: 20, colors: ['#ff8a66', '#d2502f', '#ffd27a'], speed: 260 });
+        fx.shake(el, 'bump');
+        break;
+      }
+      case 'backstab': {
+        const el = $('#shieldHero');
+        fx.float(el, '−2', 'bad'); fx.burst(el, { n: 14, colors: ['#ff8a66', '#d2502f'], speed: 260 }); fx.shake(el, 'bump');
+        break;
+      }
+      case 'lullaby': {
+        const el = $('#shieldMon');
+        fx.notes(ava || $('#shieldHero'), el);
+        setTimeout(() => { fx.float(el, '−3', 'good'); fx.shake(el, 'bump'); }, 500);
+        break;
+      }
     }
-    if (f.kind === 'death' && f.pid === S.room.me) toast('Вы погибли. Вернётесь в свой следующий ход с новыми картами.');
   }
   playDice();
 }
@@ -853,9 +972,9 @@ function playDice() {
   if (S.ui.dieBusy || !S.ui.dieQueue.length) return;
   const f = S.ui.dieQueue.shift();
   S.ui.dieBusy = true;
-  const who = pname(f.pid);
-  $('#fx').innerHTML = `<div class="die ${f.ok ? 'ok' : 'fail'}"><div class="face">${f.value}</div><div class="dlabel">${esc(who)}: ${esc(f.label || 'бросок')}${f.bonus ? ` (${f.bonus > 0 ? '+' : ''}${f.bonus})` : ''} — ${f.ok ? 'успех' : 'неудача'}</div></div>`;
-  setTimeout(() => { $('#fx').innerHTML = ''; S.ui.dieBusy = false; playDice(); }, 1300);
+  const label = `${pname(f.pid)}: ${f.label || 'бросок'}${f.bonus ? ` (${f.bonus > 0 ? '+' : ''}${f.bonus})` : ''} — ${f.ok ? 'успех' : 'неудача'}`;
+  fx.dice($('#fx'), f.value, f.ok, label);
+  setTimeout(() => { $('#fx').innerHTML = ''; S.ui.dieBusy = false; playDice(); }, 2100);
 }
 
 // ───────────────────────── обработка кликов ─────────────────────────
@@ -870,8 +989,9 @@ document.addEventListener('click', async e => {
     const o = popOpts[Number(opt.dataset.popopt)];
     if (!o) return;
     if (o.fn) return o.fn();
+    const fly = flySource(o.action);
     const r = await act(o.action);
-    if (r.ok) closeOverlay();
+    if (r.ok) { closeOverlay(); flyCard(fly, o.action); }
     return;
   }
   const join = t.closest('[data-join]');
@@ -969,6 +1089,33 @@ document.addEventListener('click', async e => {
   }
 });
 
+// ───────────────────────── полёт сыгранной карты ─────────────────────────
+function flySource(a) {
+  const uid = a?.uid;
+  if (!uid) return null;
+  const el = document.querySelector(`#hand .card[data-uid="${CSS.escape(uid)}"]`) || document.querySelector(`.chip[data-uid="${CSS.escape(uid)}"]`);
+  if (!el) return null;
+  return { uid, rect: el.getBoundingClientRect(), html: cardHTML(uid, { size: 'md', tab: false }) };
+}
+function flyCard(src, a) {
+  if (!src) return;
+  const d = def(src.uid);
+  if (['equip', 'unequip', 'discardInPlay'].includes(a.type)) return;
+  let to = $('#stage');
+  if (a.target) to = a.target === S.room.me ? $('#meava') : document.querySelector(`[data-opp="${a.target}"] .ava`);
+  else if (a.type === 'gift') to = document.querySelector(`[data-opp="${a.to}"] .ava`);
+  else if (a.side === 'player') to = $('#shieldHero');
+  else if (a.side === 'monster' || Number.isInteger(a.monster)) to = $('#shieldMon');
+  else if (['race', 'class', 'halfbreed', 'supermunch', 'item', 'buff', 'levelup'].includes(d.type)) to = $('#meava');
+  else if (d.type === 'location') to = $('#stage');
+  fx.fly(src.html, src.rect, to || $('#stage'), { onArrive: () => {
+    const target = to || $('#stage');
+    if (d.type === 'curse') fx.smoke(target, { n: 14 });
+    else if (d.type === 'item' || d.type === 'race' || d.type === 'class') fx.sparkle(target, { n: 12 });
+    else fx.burst(target, { n: 14, speed: 180, g: 120 });
+  } });
+}
+
 function startAbility(name) {
   const h = hints();
   const g = S.game;
@@ -988,6 +1135,7 @@ function startAbility(name) {
     popOpts = (h.abilities.steal || []).map(s => ({ label: `${pname(s.target)}: «${def(s.item).name}» (${def(s.item).value} г)`, fn: () => startMode({ kind: 'ability', name, target: s.target, item: s.item, picked: [], max: 1 }), cls: 'ghost' }));
     return showOverlay(`<div class="modal" role="dialog" aria-label="Кража"><h2>Что стащить?</h2><p class="muted" style="margin:0">Сбросите карту и бросите кубик: на 4–6 вещь ваша, иначе потеряете уровень.</p><div class="pop-actions">${popOpts.map((o, i) => `<button class="btn ${o.cls}" data-popopt="${i}">${esc(o.label)}</button>`).join('')}</div><button class="btn ghost" data-act="closeOverlay">Отмена</button></div>`);
   }
+  if (abilNeed(name)) return startMode({ kind: 'ability', name, picked: [], max: abilNeed(name) });
   const used = name === 'rage' ? 'rage' : name === 'turn' ? 'turnUndead' : 'escape';
   const done = g.combat?.[used]?.[p.id] || 0;
   const max = 3 - (name === 'turn' ? done / 3 : done);
