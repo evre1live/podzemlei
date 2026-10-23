@@ -47,6 +47,16 @@ const row = lst.rooms.find(x => x.id === code);
 assert.equal(row.locked, true); assert.equal(row.players, 2); assert.equal(JSON.stringify(lst).includes('hash'), false);
 ok('в списке комнат замок, хэш пароля не утекает');
 
+{
+  const C = await client();
+  const rc = await C.call('room:create', { name: 'Пустая', playerName: 'Вика', maxPlayers: 3 });
+  assert.ok((await C.call('room:addBot')).ok);
+  assert.ok((await C.call('room:leave')).ok);
+  const after = await L.call('lobby:watch');
+  assert.equal(after.rooms.some(x => x.id === rc.roomId), false);
+  C.close();
+  ok('ушёл последний человек — комната с одними ботами удалена');
+}
 assert.equal((await B.call('room:start')).error, 'Это может только хозяин комнаты'); ok('стартовать может только хозяин');
 assert.ok((await A.call('room:addBot')).ok);
 await until(() => A.lastState?.room.members.length === 3, 3000, 'bot added');

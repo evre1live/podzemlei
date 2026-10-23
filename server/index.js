@@ -284,6 +284,8 @@ io.on('connection', socket => {
           const next = activeMembers(r).find(x => !x.isBot);
           if (next) { r.hostId = next.id; sysChat(r, `Хозяин комнаты теперь ${next.name}.`); }
         }
+        // ушёл последний живой человек — комната с одними ботами никому не нужна
+        if (!activeMembers(r).some(x => !x.isBot)) { rooms.delete(r.id); dirty = true; pushLobby(); }
       } else sysChat(r, `${m.name} выходит из игры — за него ходит автопилот.`);
     }
     detach();
