@@ -70,6 +70,9 @@ h1, h2, h3 { font-family: var(--display); font-weight: 400; margin: 0; line-heig
 .btn.ghost:hover { border-color: var(--muted); }
 .btn.small { min-height: 34px; padding: 4px 12px; font-size: 14px; box-shadow: 0 3px 0 var(--ink); }
 .btn.big { min-height: 52px; font-size: 18px; padding: 10px 26px; font-family: var(--display); font-weight: 400; letter-spacing: .02em; }
+.icon-btn { padding: 4px 8px; min-width: 38px; }
+.icon-btn svg { width: 20px; height: 20px; display: block; }
+input[type=range] { width: 100%; accent-color: var(--lamp); height: 28px; }
 .linkish { background: none; border: 0; padding: 0; color: var(--lamp); text-decoration: underline; text-underline-offset: 3px; }
 
 input[type=text], input[type=password], select {

@@ -2,6 +2,7 @@
 import { def, RACE_NAMES, CLASS_NAMES } from '/shared/cards.js';
 import { esc, cardHTML, chipHTML, avatarSVG, iconSVG, cardBackSVG, locationSVG } from '/art.js';
 import { fx } from '/fx.js';
+import { sfx } from '/sfx.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const app = $('#app');
@@ -28,6 +29,7 @@ const S = {
 function toast(text, ok = false) {
   const el = document.createElement('div');
   el.className = 'toast' + (ok ? ' ok' : '');
+  if (!ok) sfx.play('error');
   el.textContent = text;
   $('#toasts').append(el);
   setTimeout(() => el.remove(), 3200);
@@ -90,6 +92,13 @@ socket.on('room:state', ({ room, game, serverTime }) => {
   if (serverTime) S.skew = serverTime - Date.now();
   S.room = room; S.game = game;
   if (first) { setUrl(room.id); S.ui.lastFx = null; S.ui.mode = null; S.ui.prevHand = new Set(); }
+  // звук: начало моего хода и чужие сообщения в чате
+  const tk = game?.phase === 'playing' ? `${game.turn.n}:${game.turn.pid}` : '';
+  if (!first && tk && tk !== S.ui.turnKey && game.turn.pid === room.me) sfx.play('yourTurn', { always: true, delay: 0.25 });
+  S.ui.turnKey = tk;
+  const lastMsg = room.chat.at(-1);
+  if (!first && lastMsg && lastMsg.id !== S.ui.lastMsg && !lastMsg.sys && lastMsg.from !== room.me) sfx.play('pop', { always: true });
+  S.ui.lastMsg = lastMsg?.id;
   const fresh = handleFx(first);
   render();
   if (fresh.length) requestAnimationFrame(() => runFx(fresh));
@@ -98,7 +107,7 @@ socket.on('room:state', ({ room, game, serverTime }) => {
 // ───────────────────────── маршрутизация экранов ─────────────────────────
 function render() {
   const scr = !S.room ? 'home' : S.game ? 'game' : 'lobby';
-  if (scr !== S.screen) { S.screen = scr; mount[scr](); }
+  if (scr !== S.screen) { S.screen = scr; mount[scr](); soundIcons(); }
   update[scr]();
 }
 const mount = {}, update = {};
@@ -238,6 +247,7 @@ mount.lobby = () => {
         <button class="btn small" data-act="copy">Скопировать приглашение</button>
         <span class="spacer"></span>
         <button class="btn ghost small" data-act="rules">Как играть</button>
+        <button class="btn ghost small icon-btn sound-btn" data-act="sound" aria-label="Звук" title="Звук"></button>
         <button class="btn ghost small" data-act="leave">Выйти</button>
       </div>
     </header>
@@ -326,6 +336,7 @@ mount.game = () => {
         <span id="locpill" class="locpill"></span>
         <span class="spacer"></span>
         <button class="btn ghost small side-toggle" data-act="sideToggle"><span class="long-label">Летопись и чат</span><span class="short">Чат</span></button>
+        <button class="btn ghost small icon-btn sound-btn" data-act="sound" aria-label="Звук" title="Звук"></button>
         <button class="btn ghost small" data-act="rules">Правила</button>
         <button class="btn ghost small" data-act="menu">Меню</button>
       </div>
@@ -545,7 +556,10 @@ function tickCountdowns() {
   document.querySelectorAll('.countdown[data-until]').forEach(el => {
     const left = Number(el.dataset.until) - serverNow();
     const total = Number(el.dataset.total) || 5000;
-    el.querySelector('b').textContent = left > 0 ? Math.ceil(left / 1000) : '…';
+    const sec = left > 0 ? Math.ceil(left / 1000) : 0;
+    el.querySelector('b').textContent = sec || '…';
+    const key = `${el.dataset.until}:${sec}`;
+    if (sec > 0 && key !== S.ui.lastTick) { if (S.ui.lastTick?.startsWith(el.dataset.until + ':')) sfx.play('tick', { last: sec === 1, gap: 0 }); S.ui.lastTick = key; }
     el.querySelector('.ring').setAttribute('stroke-dashoffset', String(201 * (1 - Math.max(0, left) / total)));
   });
   requestAnimationFrame(tickCountdowns);
@@ -618,6 +632,7 @@ function renderMine() {
     return cardHTML(u, { playable, selected: picked.has(u), dim, cls: isNew ? 'deal-in' : '', attrs: `data-zone="hand"${isNew ? ` style="animation-delay:${(k++) * 90}ms"` : ''}` });
   }).join('') : `<p class="muted">Рука пуста.</p>`;
   S.ui.prevHand = new Set(p.hand);
+  for (let i = 0; i < Math.min(k, 6); i++) sfx.play('deal', { delay: i * 0.09, gap: 0 });
   fitHand();
 }
 function fitHand() {
@@ -829,6 +844,7 @@ function maybeHelpPrompt() {
   if (!req || req.to !== S.room.me) { if (S.ui.helpAsked && $('#helpPrompt')) closeOverlay(); S.ui.helpAsked = null; return; }
   if (S.ui.helpAsked === req.at && $('#helpPrompt')) return;
   S.ui.helpAsked = req.at;
+  sfx.play('bell', { always: true });
   const n = g.combat.numbers;
   const mine = me();
   const myStr = mine.power + (mine.nextCombat || 0);
@@ -847,6 +863,7 @@ function maybeEndScreen() {
   const w = g.winners.map(pl).filter(Boolean);
   const isHost = S.room.hostId === S.room.me;
   setTimeout(() => { fx.confetti({ n: 180 }); fx.sparkle($('#endScreen .crownbig'), { n: 22 }); }, 80);
+  sfx.play(w.some(p => p.id === S.room.me) ? 'fanfare' : 'victory', { always: true });
   showOverlay(`<div class="modal endscreen" id="endScreen" role="dialog" aria-label="Итоги партии">
     ${iconSVG('crown', 'crownbig')}
     <h2>${w.map(p => esc(p.name)).join(' и ')} ${w.length > 1 ? 'побеждают' : 'побеждает'}!</h2>
@@ -893,7 +910,35 @@ function handleFx(first) {
   return fresh;
 }
 const avaOf = pid => pid === S.room?.me ? $('#meava') : document.querySelector(`[data-opp="${pid}"] .ava`);
+function soundFx(fresh) {
+  const kinds = new Set(fresh.map(f => f.kind));
+  for (const f of fresh) {
+    switch (f.kind) {
+      case 'reveal': sfx.play('door'); break;
+      case 'combat': case 'wandering': {
+        const lv = def(f.card)?.level ?? 5;
+        sfx.play('growl', { delay: kinds.has('reveal') ? 0.4 : 0.1, pitch: 1.35 - Math.min(lv, 20) / 28, dur: 0.6 + Math.min(lv, 20) / 40 });
+        break;
+      }
+      case 'ambush': sfx.play('ambush', { delay: 0.42 }); break;
+      case 'curse': sfx.play('curse'); break;
+      case 'death': sfx.play('death', { delay: 0.1 }); break;
+      case 'levelUp': sfx.play('levelUp', { delay: kinds.has('victory') ? 0.75 : 0 }); break;
+      case 'levelDown': sfx.play('levelDown'); break;
+      case 'victory': sfx.play('victory'); break;
+      case 'pet': sfx.play('pet'); break;
+      case 'buff': sfx.play('buff'); break;
+      case 'location': sfx.play('location'); break;
+      case 'event': sfx.play('event'); if (def(f.card)?.event === 'quake') sfx.play('quake', { delay: 0.1 }); break;
+      case 'mod': sfx.play(f.side === 'monster' ? 'modBad' : 'modGood'); break;
+      case 'enhance': sfx.play(def(f.card)?.bonus < 0 ? 'modGood' : 'enhance'); break;
+      case 'backstab': sfx.play('backstab'); break;
+      case 'lullaby': sfx.play('lullaby'); break;
+    }
+  }
+}
 function runFx(fresh) {
+  soundFx(fresh);
   for (const f of fresh) {
     const ava = avaOf(f.pid);
     switch (f.kind) {
@@ -974,12 +1019,16 @@ function playDice() {
   S.ui.dieBusy = true;
   const label = `${pname(f.pid)}: ${f.label || 'бросок'}${f.bonus ? ` (${f.bonus > 0 ? '+' : ''}${f.bonus})` : ''} — ${f.ok ? 'успех' : 'неудача'}`;
   fx.dice($('#fx'), f.value, f.ok, label);
+  sfx.play('dice', { always: true });
+  setTimeout(() => sfx.play(f.ok ? 'diceOk' : 'diceFail', { always: true }), 900);
   setTimeout(() => { $('#fx').innerHTML = ''; S.ui.dieBusy = false; playDice(); }, 2100);
 }
 
 // ───────────────────────── обработка кликов ─────────────────────────
 document.addEventListener('click', async e => {
   const t = e.target;
+  if (t.closest('[data-uid]')) sfx.play(S.ui.mode ? 'click' : 'flip');
+  else if (t.closest('.btn, .seg button, .tabs button, .opp, .pick, .room-row')) sfx.play('click');
   if (t.matches('[data-backdrop]')) {
     if ($('#helpPrompt')) return; // на просьбу о помощи нужно ответить
     return closeOverlay();
@@ -1029,6 +1078,8 @@ document.addEventListener('click', async e => {
   if (!a) return;
   switch (a) {
     case 'closeOverlay': return closeOverlay();
+    case 'sound': return openSoundModal();
+    case 'soundTest': return sfx.play('victory', { gap: 0 });
     case 'rules': return showOverlay(RULES);
     case 'copy': {
       const text = `Заходи в «Под Землёй»: ${inviteLink()}${S.room.locked ? ' (пароль скажу отдельно)' : ''}`;
@@ -1089,6 +1140,30 @@ document.addEventListener('click', async e => {
   }
 });
 
+// ───────────────────────── настройки звука ─────────────────────────
+const SPEAKER = on => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor"/>${on
+  ? '<path d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>'
+  : '<path d="M16.5 9.5l5 5M21.5 9.5l-5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>'}</svg>`;
+function soundIcons() {
+  const on = sfx.state.on && sfx.state.vol > 0;
+  document.querySelectorAll('.sound-btn').forEach(b => { b.innerHTML = SPEAKER(on); b.setAttribute('aria-label', on ? 'Звук включён' : 'Звук выключен'); });
+}
+function openSoundModal() {
+  const s = sfx.state;
+  showOverlay(`<div class="modal" role="dialog" aria-label="Звук" id="soundModal">
+    <h2>Звук</h2>
+    <label class="check"><input type="checkbox" id="sndOn" ${s.on ? 'checked' : ''}> Звуки игры</label>
+    <label>Громкость<input type="range" id="sndVol" min="0" max="1" step="0.05" value="${s.vol}"></label>
+    <label class="check"><input type="checkbox" id="sndAmb" ${s.amb ? 'checked' : ''}> Атмосфера пещеры: гул, ветер и капли</label>
+    <p class="muted" style="margin:0;font-size:13.5px">Все звуки создаются прямо в браузере. Если на телефоне тишина, проверьте беззвучный режим.</p>
+    <div class="row"><button class="btn" data-act="soundTest">Послушать</button><button class="btn primary" data-act="closeOverlay">Готово</button></div>
+  </div>`);
+  $('#sndOn').addEventListener('change', e => { sfx.set({ on: e.target.checked }); soundIcons(); if (e.target.checked) sfx.play('yourTurn', { gap: 0 }); });
+  $('#sndVol').addEventListener('input', e => { sfx.set({ vol: Number(e.target.value) }); soundIcons(); });
+  $('#sndVol').addEventListener('change', () => sfx.play('coins', { n: 2, gap: 0 }));
+  $('#sndAmb').addEventListener('change', e => sfx.set({ amb: e.target.checked }));
+}
+
 // ───────────────────────── полёт сыгранной карты ─────────────────────────
 function flySource(a) {
   const uid = a?.uid;
@@ -1108,7 +1183,9 @@ function flyCard(src, a) {
   else if (a.side === 'monster' || Number.isInteger(a.monster)) to = $('#shieldMon');
   else if (['race', 'class', 'halfbreed', 'supermunch', 'item', 'buff', 'levelup'].includes(d.type)) to = $('#meava');
   else if (d.type === 'location') to = $('#stage');
+  sfx.play('whoosh');
   fx.fly(src.html, src.rect, to || $('#stage'), { onArrive: () => {
+    sfx.play('place');
     const target = to || $('#stage');
     if (d.type === 'curse') fx.smoke(target, { n: 14 });
     else if (d.type === 'item' || d.type === 'race' || d.type === 'class') fx.sparkle(target, { n: 12 });
