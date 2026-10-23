@@ -1,0 +1,17 @@
+# Рецепт для бесплатного запуска на Render (render.com).
+# Render прочитает этот файл и сам поднимет игру по адресу вида https://podzemlei.onrender.com
+services:
+  - type: web
+    name: podzemlei
+    runtime: node
+    plan: free
+    region: frankfurt        # ближайший к Ташкенту регион Render
+    buildCommand: npm ci --omit=dev
+    startCommand: npm start
+    healthCheckPath: /healthz
+    autoDeployTrigger: commit # новая версия в GitHub — игра обновится сама
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production

@@ -1,0 +1,20 @@
+services:
+  podzemlei:
+    build: .
+    image: podzemlei:latest
+    container_name: podzemlei
+    restart: unless-stopped
+    ports:
+      # снаружи доступен только на этой машине; наружу публикует nginx (см. deploy/nginx.conf).
+      # Если nginx не нужен и хочется открыть порт всем — замените на "3000:3000".
+      - "127.0.0.1:3000:3000"
+    environment:
+      PORT: 3000
+      DATA_DIR: /data
+      # MAX_ROOMS: 300
+      # BOT_DELAY_MS: 1100
+    volumes:
+      - podzemlei-data:/data
+
+volumes:
+  podzemlei-data:

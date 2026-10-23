@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Под Землёй</title>
+  <meta name="description" content="Карточная игра для друзей: выбивай двери, побеждай монстров, собирай клад и подставляй соседей.">
+  <meta name="theme-color" content="#2a2230">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="preload" href="/fonts/underdog-cyrillic-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/fonts/fonts.css">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <main id="app" aria-live="polite"></main>
+  <div id="layer"></div>
+  <div class="toasts" id="toasts" role="status"></div>
+  <div class="fxlayer" id="fx" aria-hidden="true"></div>
+  <script src="/socket.io/socket.io.js"></script>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
