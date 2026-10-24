@@ -32,6 +32,9 @@ const S = {
   skew: 0,
   screen: null,
   pendingRoom: new URLSearchParams(location.search).get('room')?.toUpperCase() || null,
+  // режим зрителя: какую комнату смотрим и с каким паролем (пароль живёт только до закрытия вкладки)
+  watch: null,
+  pendingWatch: new URLSearchParams(location.search).get('watch')?.toUpperCase() || null,
   ui: { tab: 'log', mode: null, chatSeen: 0, lastFx: null, lastReveal: 0, sideOpen: false, helpAsked: null, overlay: null, dieQueue: [], dieBusy: false, prevHand: null, slam: null, lastLoc: undefined },
 };
 
@@ -70,15 +73,23 @@ function classText(p) {
 }
 function saveToken(roomId, token) { S.tokens[roomId] = token; LS.set('tokens', S.tokens); }
 function dropToken(roomId) { delete S.tokens[roomId]; LS.set('tokens', S.tokens); }
-function setUrl(code) {
+function setUrl(code, watching = false) {
   const u = new URL(location.href);
-  if (code) u.searchParams.set('room', code); else u.searchParams.delete('room');
+  u.searchParams.delete('room'); u.searchParams.delete('watch');
+  if (code) u.searchParams.set(watching ? 'watch' : 'room', code);
   history.replaceState(null, '', u);
 }
 const inviteLink = () => `${location.origin}/?room=${S.room?.id}`;
+const watchLink = () => `${location.origin}/?watch=${S.room?.id}`;
+const spectating = () => !!S.room?.spectator;
 
 // ───────────────────────── связь ─────────────────────────
 socket.on('connect', async () => {
+  if (S.watch) {
+    const r = await call('room:watch', { roomId: S.watch.id, password: S.watch.pw, name: S.name });
+    if (r.ok) return;
+    S.watch = null; S.room = null; S.game = null; setUrl(null); render(); toast(r.error);
+  }
   const code = S.room?.id || S.pendingRoom;
   if (code && S.tokens[code]) {
     const r = await call('room:join', { roomId: code, token: S.tokens[code] });
@@ -89,6 +100,13 @@ socket.on('connect', async () => {
   const lst = await call('lobby:watch');
   if (lst.ok) { S.rooms = lst.rooms; if (S.screen === 'home') renderRooms(); }
   if (S.pendingRoom && !S.room) openJoinModal(S.pendingRoom);
+  else if (S.pendingWatch && !S.room) tryWatch(S.pendingWatch);
+});
+socket.on('watch:end', ({ reason }) => {
+  S.watch = null; S.room = null; S.game = null; setUrl(null);
+  toast(reason || 'Комната закрылась');
+  closeOverlay(); render();
+  call('lobby:watch').then(l => { if (l.ok) { S.rooms = l.rooms; renderRooms(); } });
 });
 socket.on('disconnect', () => { if (S.room) toast('Связь потеряна. Переподключаемся…'); });
 socket.on('rooms', list => { S.rooms = list; if (S.screen === 'home') renderRooms(); });
@@ -99,13 +117,14 @@ socket.on('kicked', ({ reason }) => {
   closeOverlay(); render();
 });
 socket.on('room:state', ({ room, game, serverTime }) => {
-  const first = !S.room || S.room.id !== room.id;
+  const first = !S.room || S.room.id !== room.id || S.room.me !== room.me;
   // копия панели боя до перерисовки: на ней доиграет развязка, если бой сейчас закончится
   const snap = !first && S.game?.combat && cine.on ? cine.snapStage() : null;
   if (serverTime) S.skew = serverTime - Date.now();
   S.room = room; S.game = game;
+  if (!room.spectator) S.watch = null;
   { const w = game?.opts?.winLevel || room.settings?.winLevel || 10; setRuleVars({ win: w, lux: Math.round(w * 0.7) }); }
-  if (first) { setUrl(room.id); S.ui.lastFx = null; S.ui.mode = null; S.ui.prevHand = new Set(); }
+  if (first) { setUrl(room.id, room.spectator); S.ui.lastFx = null; S.ui.watchPid = null; S.ui.mode = null; S.ui.prevHand = new Set(); }
   // звук: начало моего хода и чужие сообщения в чате
   const tk = game?.phase === 'playing' ? `${game.turn.n}:${game.turn.pid}` : '';
   if (!first && tk && tk !== S.ui.turnKey && game.turn.pid === room.me) { sfx.play('yourTurn', { always: true, delay: 0.25 }); cine.turn(); }
@@ -160,6 +179,7 @@ mount.home = () => {
         <form class="joincode" id="codeForm" autocomplete="off">
           <input type="text" id="codeInput" maxlength="6" placeholder="Код" aria-label="Код комнаты">
           <button class="btn" type="submit">Войти по коду</button>
+          <button class="btn ghost" type="button" data-act="watchCode" title="Смотреть партию, не садясь за стол">Смотреть</button>
         </form>
         <div class="rooms" id="roomlist"></div>
       </div>
@@ -206,13 +226,51 @@ function renderRooms() {
     return;
   }
   const st = { lobby: 'собираются', playing: 'идёт игра', ended: 'партия окончена' };
-  el.innerHTML = S.rooms.map(r => `
-    <button class="room-row" data-join="${esc(r.id)}" data-locked="${r.locked}">
-      <span class="lock">${iconSVG(r.locked ? 'amulet' : 'chest')}</span>
-      <span><span class="rname">${esc(r.name)}</span><br><span class="rmeta">${r.locked ? 'с паролем' : 'без пароля'}, хозяин ${esc(r.host)}</span></span>
-      <span class="rmeta">${r.players} из ${r.max}</span>
-      <span class="status ${r.status}">${st[r.status]}</span>
-    </button>`).join('');
+  // в собирающуюся комнату заходят игроком, на идущую партию — смотрят
+  el.innerHTML = S.rooms.map(r => {
+    const live = r.status !== 'lobby';
+    return `
+    <div class="room-row${live ? ' live' : ''}">
+      <button class="room-main" ${live ? `data-watch="${esc(r.id)}"` : `data-join="${esc(r.id)}"`} data-locked="${r.locked}" aria-label="${live ? 'Смотреть' : 'Войти'}: ${esc(r.name)}">
+        <span class="lock">${iconSVG(r.locked ? 'amulet' : 'chest')}</span>
+        <span><span class="rname">${esc(r.name)}</span><br><span class="rmeta">${r.locked ? 'с паролем' : 'без пароля'}, хозяин ${esc(r.host)}${r.watchers ? ` · ${EYE}${r.watchers}` : ''}</span></span>
+        <span class="rmeta">${r.players} из ${r.max}</span>
+        <span class="status ${r.status}">${st[r.status]}</span>
+      </button>
+      <button class="btn small ${live ? 'primary' : 'ghost'} watch-btn" data-watch="${esc(r.id)}" data-locked="${r.locked}" title="Смотреть, не садясь за стол">${EYE}Смотреть</button>
+    </div>`;
+  }).join('');
+}
+
+const EYE = `<svg class="eye" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12 C5 6.5 8.5 4.5 12 4.5 C15.5 4.5 19 6.5 22 12 C19 17.5 15.5 19.5 12 19.5 C8.5 19.5 5 17.5 2 12Z" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/><circle cx="12" cy="12" r="3.6" fill="currentColor"/></svg>`;
+
+// смотреть партию: место за столом не занимается, чужие руки не видны
+async function tryWatch(code, password) {
+  if (S.room && !S.room.spectator) return toast('Сначала выйдите из своей комнаты');
+  const row = S.rooms.find(r => r.id === code);
+  if (password === undefined && row?.locked) return openWatchModal(code, row);
+  const r = await call('room:watch', { roomId: code, password: password || '', name: S.name });
+  if (!r.ok) {
+    if (r.needPassword && !$('#watchModal')) return openWatchModal(code, row);
+    S.pendingWatch = null;
+    return toast(r.error);
+  }
+  S.watch = { id: r.roomId, pw: password || '' };
+  S.pendingWatch = null;
+  closeOverlay();
+}
+function openWatchModal(code, row) {
+  showOverlay(`
+    <form class="modal" id="watchModal" autocomplete="off">
+      <h2>Смотреть комнату ${esc(code)}</h2>
+      ${row ? `<p class="muted" style="margin:0">«${esc(row.name)}», ${row.players} из ${row.max} за столом</p>` : ''}
+      <p class="muted" style="margin:0">Комната закрыта паролем: смотреть игру можно, только если знаете его.</p>
+      <label>Пароль комнаты<input type="password" name="password" maxlength="64" required></label>
+      <div class="row"><button class="btn primary" type="submit">Смотреть</button><button class="btn ghost" type="button" data-act="closeOverlay">Отмена</button></div>
+    </form>`);
+  const f = $('#watchModal');
+  f.password.focus();
+  f.addEventListener('submit', e => { e.preventDefault(); tryWatch(code, f.password.value); });
 }
 
 async function tryJoin(code, password) {
@@ -291,6 +349,8 @@ update.lobby = () => {
   const isHost = r.hostId === r.me;
   $('#rtitle').textContent = r.name;
   $('#rcode').textContent = r.id;
+  const cp = app.querySelector('.topbar [data-act="copy"]');
+  if (cp) cp.textContent = r.spectator ? 'Ссылка для зрителей' : 'Скопировать приглашение';
   const seats = r.members.map(m => `
     <div class="seat ${m.id === r.me ? 'me' : ''}" style="--seat:${m.color}">
       ${isHost && m.id !== r.me ? `<button class="btn ghost small kick" data-kick="${m.id}" title="Убрать из-за стола" aria-label="Убрать ${esc(m.name)}">✕</button>` : ''}
@@ -315,6 +375,12 @@ update.lobby = () => {
       <div class="row"><button class="btn small" data-act="setPassword">${r.locked ? 'Сменить пароль' : 'Поставить пароль'}</button>${r.locked ? '<button class="btn ghost small" data-act="clearPassword">Убрать пароль</button>' : ''}</div>
     </div>` : `<p class="muted" style="margin-top:24px">Играем до ${r.settings.winLevel || 10}-го уровня. Настройки и старт — у хозяина комнаты. ${r.locked ? 'Комната закрыта паролем.' : ''}</p>`;
   const enough = r.members.length >= 2;
+  if (r.spectator) {
+    const free = r.status === 'lobby' && r.members.length < r.maxPlayers;
+    $('#startbar').innerHTML = `<span class="watch-pill on">${EYE}Вы зритель</span>${free ? '<button class="btn primary" data-act="sitDown">Сесть за стол</button>' : ''}<span class="muted">${free ? 'Пока партия не началась, можно занять свободное место.' : 'Свободных мест нет — смотрите, как играют другие.'}</span>`;
+    renderChat();
+    return;
+  }
   $('#startbar').innerHTML = isHost
     ? `<button class="btn primary big" data-act="start" ${enough ? '' : 'disabled'}>Начать партию</button><span class="muted">${enough ? (r.members.length < 3 ? 'Веселее от трёх: посадите бота.' : 'Все в сборе?') : 'Нужен хотя бы ещё один игрок или бот.'}</span>`
     : `<span class="muted">Ждём, пока хозяин начнёт партию.</span>`;
@@ -341,7 +407,7 @@ function renderChat() {
   const near = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
   el.innerHTML = S.room.chat.map(m => m.sys
     ? `<div class="sys">${esc(m.text)}</div>`
-    : `<div class="msg"><b style="color:${esc(m.color)}">${esc(m.name)}:</b> ${esc(m.text)}</div>`).join('') || '<div class="sys">Здесь пока тихо.</div>';
+    : `<div class="msg${m.spectator ? ' spec' : ''}"><b style="color:${esc(m.color)}">${esc(m.name)}</b>${m.spectator && m.name !== 'Зритель' ? ' <small>зритель</small>' : ''}<b style="color:${esc(m.color)}">:</b> ${esc(m.text)}</div>`).join('') || '<div class="sys">Здесь пока тихо.</div>';
   if (near) el.scrollTop = el.scrollHeight;
 }
 
@@ -355,6 +421,7 @@ mount.game = () => {
         <span class="turninfo" id="turninfo"></span>
         <span class="goal-pill" id="goalpill" title="Уровень победы"></span>
         <span id="locpill" class="locpill"></span>
+        <span id="watchpill"></span>
         <span class="spacer"></span>
         <button class="btn ghost small side-toggle" data-act="sideToggle"><span class="long-label">Летопись и чат</span><span class="short">Чат</span></button>
         <button class="btn ghost small icon-btn sound-btn" data-act="sound" aria-label="Звук" title="Звук"></button>
@@ -409,6 +476,9 @@ update.game = () => {
   const tp = pl(g.turn.pid);
   $('#turninfo').textContent = g.phase === 'ended' ? 'Партия окончена' : tp ? (tp.id === r.me ? 'Ваш ход' : `Ходит ${tp.name}`) : '';
   $('#goalpill').textContent = `Цель: ${winLvl()} ур.`;
+  const wn = r.watchers || 0;
+  $('#watchpill').innerHTML = r.spectator ? `<span class="watch-pill on" title="Вы видите стол, бои и летопись, но не чужие карты на руках">${EYE}Вы зритель${wn > 1 ? ` · ещё ${wn - 1}` : ''}</span>`
+    : wn ? `<span class="watch-pill" title="Столько людей смотрят партию со стороны">${EYE}${wn}</span>` : '';
   renderOpps();
   renderStage();
   renderMine();
@@ -664,7 +734,7 @@ const abilNeed = name => ABIL[name]?.need || (name === 'backstab' || name === 's
 function renderMine() {
   const p = me();
   const el = $('#mecard');
-  if (!p) { el.innerHTML = '<p class="muted">Вы смотрите партию со стороны.</p>'; $('#hand').innerHTML = ''; $('#handhead').innerHTML = ''; $('#modebar').innerHTML = ''; return; }
+  if (!p) return renderWatcher();
   const h = hints();
   const mode = S.ui.mode;
   const picked = new Set(mode?.picked || []);
@@ -714,6 +784,37 @@ function renderMine() {
   }).join('') : `<p class="muted">Рука пуста.</p>`;
   S.ui.prevHand = new Set(p.hand);
   for (let i = 0; i < Math.min(k, 6); i++) sfx.play('deal', { delay: i * 0.09, gap: 0 });
+  fitHand();
+}
+// зритель следит за любым героем: по умолчанию — за тем, кто ходит
+function renderWatcher() {
+  const g = S.game;
+  const p = pl(S.ui.watchPid) || pl(g.turn.pid) || g.players[0];
+  const el = $('#mecard');
+  if (!p) { el.innerHTML = ''; return; }
+  const trait = u => `<button class="trait" data-uid="${u}" data-zone="view">${iconSVG(def(u).art)}${esc(def(u).name)}</button>`;
+  const traits = [...p.races.map(trait), ...(p.races.length ? [] : ['<span class="trait none">Человек</span>']),
+    ...p.classes.map(trait), ...(p.classes.length ? [] : ['<span class="trait none">Без класса</span>']), ...[p.halfbreed, p.supermunch].filter(Boolean).map(trait)];
+  const slot = key => p.equipped.filter(u => def(u).slot === key).map(u => chipHTML(u)).join('');
+  const slots = SLOT_ORDER.filter(([k]) => k !== 'pet' || p.equipped.some(u => def(u).slot === 'pet')).map(([k, label]) => `<div class="slot"><small>${label}</small>${slot(k)}</div>`).join('')
+    + `<div class="slot"><small>Не надето</small>${p.carried.map(u => chipHTML(u, { cls: 'off' })).join('')}</div>`;
+  const run = 5 - p.runBonus;
+  const now = g.turn.pid === p.id && g.phase === 'playing';
+  el.innerHTML = `
+    <div class="me-top" style="--seat:${p.color}">
+      <div class="me-ava">${avatarSVG(p.avatar, p.color)}</div>
+      <div><div class="me-name">${esc(p.name)}${now ? ' <span class="badge lamp">ходит</span>' : ''}</div>
+        <div class="me-stats"><span class="lvl" title="Уровень">${p.level}</span><span class="pow" title="Сила: уровень и надетые вещи">⚔ ${p.power}</span>
+        <span class="badge" title="Сколько нужно выбросить на кубике, чтобы убежать">побег ${run <= 1 ? 'всегда' : run > 6 ? 'никогда' : run + '+'}</span>${p.dead ? '<span class="badge warn">погиб до следующего хода</span>' : ''}</div>
+      </div>
+    </div>
+    <div class="traits">${traits.join('')}</div>
+    <div class="slots">${slots}</div>`;
+  $('#handhead').innerHTML = `<span class="follow-row"><span>Следить за</span>${g.players.map(x => `<button class="follow${x.id === p.id ? ' on' : ''}" data-follow="${x.id}" style="--seat:${x.color}" title="${esc(x.name)}" aria-pressed="${x.id === p.id}"><span class="ava">${avatarSVG(x.avatar, x.color)}</span></button>`).join('')}</span>
+    <span>У ${esc(p.name)} в руке ${cardsNom(p.handCount)} — их видит только сам игрок.</span>`;
+  $('#modebar').innerHTML = '';
+  $('#hand').innerHTML = p.handCount ? Array.from({ length: p.handCount }, () => `<div class="card hand-back" aria-hidden="true">${cardBackSVG('door')}</div>`).join('') : '<p class="muted">Рука пуста.</p>';
+  S.ui.prevHand = null;
   fitHand();
 }
 const FAN = matchMedia('(max-width: 900px)');
@@ -981,7 +1082,7 @@ function maybeEndScreen() {
   showOverlay(`<div class="modal endscreen" id="endScreen" role="dialog" aria-label="Итоги партии">
     ${iconSVG('crown', 'crownbig')}
     <h2>${w.map(p => esc(p.name)).join(' и ')} ${w.length > 1 ? 'побеждают' : 'побеждает'}!</h2>
-    <p class="muted" style="margin:0">${w.some(p => p.id === S.room.me) ? 'Подземелье покорено. Можно гордиться.' : 'В следующий раз подставляйте лидера раньше.'}</p>
+    <p class="muted" style="margin:0">${spectating() ? 'Партия окончена. Было что посмотреть.' : w.some(p => p.id === S.room.me) ? 'Подземелье покорено. Можно гордиться.' : 'В следующий раз подставляйте лидера раньше.'}</p>
     <div class="row" style="justify-content:center">${isHost ? '<button class="btn primary" data-act="toLobby">Новая партия</button>' : '<span class="muted">Новую партию запускает хозяин.</span>'}<button class="btn ghost" data-act="closeOverlay">Посмотреть стол</button></div>
   </div>`);
 }
@@ -1188,6 +1289,10 @@ document.addEventListener('click', async e => {
     if (r.ok) { closeOverlay(); flyCard(fly, o.action); }
     return;
   }
+  const watchBtn = t.closest('[data-watch]');
+  if (watchBtn) return tryWatch(watchBtn.dataset.watch, watchBtn.dataset.locked === 'true' ? undefined : '');
+  const follow = t.closest('[data-follow]');
+  if (follow) { S.ui.watchPid = follow.dataset.follow; return renderMine(); }
   const join = t.closest('[data-join]');
   if (join) {
     if (!S.name.trim()) return openJoinModal(join.dataset.join, S.rooms.find(r => r.id === join.dataset.join));
@@ -1236,11 +1341,36 @@ document.addEventListener('click', async e => {
     case 'soundTest': return sfx.play('victory', { gap: 0 });
     case 'rules': return showOverlay(RULES);
     case 'copy': {
+      if (spectating()) {
+        const text = `Смотри партию в «Под Землёй»: ${watchLink()}${S.room.locked ? ' (нужен пароль комнаты)' : ''}`;
+        try { await navigator.clipboard.writeText(text); toast('Ссылка для зрителей скопирована', true); } catch { prompt('Скопируйте ссылку', watchLink()); }
+        return;
+      }
       const text = `Заходи в «Под Землёй»: ${inviteLink()}${S.room.locked ? ' (пароль скажу отдельно)' : ''}`;
       try { await navigator.clipboard.writeText(text); toast('Приглашение скопировано', true); } catch { prompt('Скопируйте ссылку', inviteLink()); }
       return;
     }
+    case 'copyWatch': {
+      const text = `Смотри нашу партию в «Под Землёй»: ${watchLink()}${S.room.locked ? ' (пароль скажу отдельно)' : ''}`;
+      try { await navigator.clipboard.writeText(text); toast('Ссылка для зрителей скопирована', true); } catch { prompt('Скопируйте ссылку', watchLink()); }
+      return;
+    }
+    case 'watchCode': {
+      const code = $('#codeInput').value.trim().toUpperCase();
+      if (code.length < 4) return toast('Введите код комнаты из ссылки');
+      return tryWatch(code);
+    }
+    case 'sitDown': {
+      if (!S.name.trim()) return openJoinModal(S.room.id, S.rooms.find(r => r.id === S.room.id));
+      return tryJoin(S.room.id, S.watch?.pw ?? '');
+    }
     case 'leave': {
+      if (spectating()) {
+        const r = await call('room:unwatch');
+        S.watch = null; S.room = null; S.game = null; setUrl(null); closeOverlay(); render();
+        if (r.ok) { S.rooms = r.rooms; renderRooms(); }
+        return;
+      }
       const id = S.room.id;
       await call('room:leave');
       dropToken(id); S.room = null; S.game = null; setUrl(null); closeOverlay(); render();
@@ -1249,9 +1379,17 @@ document.addEventListener('click', async e => {
     }
     case 'menu': {
       const isHost = S.room.hostId === S.room.me;
+      if (spectating()) {
+        return showOverlay(`<div class="modal" role="dialog" aria-label="Меню"><h2>Вы зритель</h2>
+          <p class="muted" style="margin:0">Вы видите стол, бои, летопись и чат, но не карты в чужих руках. Писать в чат можно — сообщения будут помечены «зритель».</p>
+          <button class="btn" data-act="copyWatch">Ссылка для зрителей</button>
+          <button class="btn ghost" data-act="leave">Перестать смотреть</button>
+          <button class="btn ghost" data-act="closeOverlay">Вернуться к столу</button></div>`);
+      }
       return showOverlay(`<div class="modal" role="dialog" aria-label="Меню"><h2>Меню</h2>
         <button class="btn" data-act="avatar">Внешность героя</button>
         <button class="btn" data-act="copy">Скопировать приглашение</button>
+        <button class="btn" data-act="copyWatch">Ссылка для зрителей</button>
         ${isHost && S.game.phase === 'playing' ? '<button class="btn danger" data-act="abort">Завершить партию для всех</button>' : ''}
         ${isHost && S.game.phase === 'ended' ? '<button class="btn primary" data-act="toLobby">Новая партия</button>' : ''}
         <button class="btn ghost" data-act="leave">${S.game.phase === 'playing' ? 'Выйти (за вас доиграет автопилот)' : 'Выйти из комнаты'}</button>

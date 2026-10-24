@@ -97,6 +97,30 @@ const C = await client();
 r = await C.call('room:join', { roomId: code, password: 'кирка', playerName: 'Вася' });
 assert.equal(r.ok, false); assert.match(r.error, /идёт/); ok('во время партии новых не пускают');
 
+// зритель: без пароля не пускают, с паролем видит стол без рук, не ходит, пишет в чат, место не занимает
+{
+  const V = await client();
+  let rv = await V.call('room:watch', { roomId: code, password: 'лопата', name: 'Зоя' });
+  assert.equal(rv.ok, false); assert.equal(rv.needPassword, true);
+  rv = await V.call('room:watch', { roomId: code.toLowerCase(), password: 'кирка', name: 'Зоя' });
+  assert.ok(rv.ok);
+  await until(() => V.lastState?.game, 3000, 'watch state');
+  assert.equal(V.lastState.room.me, null); assert.equal(V.lastState.room.spectator, true);
+  assert.ok(V.lastState.game.players.every(p => p.hand === undefined && p.handCount >= 0));
+  assert.equal(V.lastState.game.hints, null);
+  await until(() => A.lastState.room.watchers === 1, 3000, 'watchers count');
+  const lw = await L.call('lobby:watch');
+  assert.equal(lw.rooms.find(x => x.id === code).watchers, 1);
+  assert.equal((await V.call('game:act', { type: 'kick' })).ok, false);
+  assert.ok((await V.call('chat', { text: 'Удачи!' })).ok);
+  await until(() => A.lastState.room.chat.some(m => m.spectator && m.name === 'Зоя' && m.text === 'Удачи!'), 3000, 'spectator chat');
+  assert.equal(A.lastState.room.members.length, 3);
+  assert.ok((await V.call('room:unwatch')).ok);
+  await until(() => A.lastState.room.watchers === 0, 3000, 'unwatch');
+  V.close();
+  ok('зритель: нужен пароль, видит стол без чужих рук, не ходит, пишет в чат, место не занимает');
+}
+
 // чужое действие отклоняется
 const turnPid = A.lastState.game.turn.pid;
 const notMe = turnPid === idA ? B : A;

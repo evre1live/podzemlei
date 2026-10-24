@@ -61,9 +61,12 @@ const cleanDelay = v => (DELAYS.includes(Number(v)) ? Number(v) : DELAYS[0]);
 const cleanWin = v => (WIN_LEVELS.includes(Number(v)) ? Number(v) : WIN_LEVELS[0]);
 const cleanName = (n, fb = 'Игрок') => (String(n || '').replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, 20) || fb);
 
+// зрители — просто сокеты в комнате socket.io «watch:КОД»: место за столом они не занимают
+const watchCount = r => io.sockets.adapter.rooms.get('watch:' + r.id)?.size || 0;
+
 function roomSummary(r) {
   return {
-    id: r.id, name: r.name, locked: !!r.pass, players: r.members.filter(m => !m.left).length, max: r.maxPlayers,
+    id: r.id, name: r.name, locked: !!r.pass, players: r.members.filter(m => !m.left).length, max: r.maxPlayers, watchers: watchCount(r),
     status: r.game ? (r.game.phase === 'ended' ? 'ended' : 'playing') : 'lobby',
     host: r.members.find(m => m.id === r.hostId)?.name || '',
   };
@@ -72,7 +75,7 @@ function roomSummary(r) {
 function lobbyInfo(r, meId) {
   return {
     id: r.id, name: r.name, locked: !!r.pass, hostId: r.hostId, maxPlayers: r.maxPlayers,
-    settings: r.settings, status: roomSummary(r).status, me: meId,
+    settings: r.settings, status: roomSummary(r).status, me: meId, spectator: !meId, watchers: watchCount(r),
     members: r.members.filter(m => !m.left).map((m, i) => ({
       id: m.id, name: m.name, isBot: m.isBot, connected: m.isBot || m.connected, ready: m.ready, color: m.color, avatar: m.avatar,
       autopilot: !!m.autopilot,
@@ -89,7 +92,15 @@ function broadcastRoom(r) {
     if (!sock) continue;
     sock.emit('room:state', { room: lobbyInfo(r, m.id), game: r.game ? view(r.game, m.id) : null, serverTime: now() });
   }
+  // зрители видят стол, бои и летопись, но ни одной чужой руки
+  if (watchCount(r)) io.to('watch:' + r.id).emit('room:state', { room: lobbyInfo(r, null), game: r.game ? view(r.game, null) : null, serverTime: now() });
   pushLobby();
+}
+// комната закрывается: зрителей вежливо выпроваживаем
+function dropRoom(r, reason = 'Комната закрылась') {
+  io.to('watch:' + r.id).emit('watch:end', { reason });
+  io.in('watch:' + r.id).socketsLeave('watch:' + r.id);
+  rooms.delete(r.id); dirty = true; pushLobby();
 }
 
 let lobbyTimer = null;
@@ -232,6 +243,7 @@ io.on('connection', socket => {
   };
 
   function attach(r, m) {
+    unwatch();
     if (socket.data.roomId && socket.data.roomId !== r.id) detach();
     if (m.socketId && m.socketId !== socket.id) io.sockets.sockets.get(m.socketId)?.emit('kicked', { reason: 'Вы открыли игру в другой вкладке' });
     m.socketId = socket.id; m.connected = true; m.lastSeen = now(); m.autopilot = false;
@@ -247,6 +259,39 @@ io.on('connection', socket => {
   }
 
   socket.on('lobby:watch', (_, cb) => { socket.join('lobby'); cbOf(cb)({ ok: true, rooms: listRooms() }); });
+
+  // ───── режим зрителя ─────
+  function unwatch() {
+    const id = socket.data.watchId;
+    if (!id) return;
+    socket.leave('watch:' + id);
+    socket.data.watchId = null;
+    const r = rooms.get(id);
+    if (r) broadcastRoom(r);
+  }
+  socket.on('room:watch', (p = {}, cb) => {
+    cb = cbOf(cb);
+    if (limited()) return cb({ ok: false, error: 'Слишком часто' });
+    const r = rooms.get(String(p.roomId || '').toUpperCase().trim());
+    if (!r) return cb({ ok: false, error: 'Комната не найдена' });
+    if (ctx().m) return cb({ ok: false, error: 'Сначала выйдите из своей комнаты' });
+    const t = now();
+    badPw = badPw.filter(x => t - x < 60000);
+    if (badPw.length >= 6) return cb({ ok: false, error: 'Слишком много попыток. Подождите минуту.' });
+    if (!checkPassword(p.password, r.pass)) { badPw.push(t); return cb({ ok: false, error: 'Неверный пароль', needPassword: true }); }
+    if (socket.data.watchId !== r.id) unwatch();
+    socket.data.watchId = r.id;
+    socket.data.watchName = cleanName(p.name, 'Зритель');
+    socket.leave('lobby');
+    socket.join('watch:' + r.id);
+    cb({ ok: true, roomId: r.id });
+    broadcastRoom(r);
+  });
+  socket.on('room:unwatch', (_, cb) => {
+    unwatch();
+    socket.join('lobby');
+    cbOf(cb)({ ok: true, rooms: listRooms() });
+  });
 
   socket.on('room:create', (p = {}, cb) => {
     cb = cbOf(cb);
@@ -316,7 +361,7 @@ io.on('connection', socket => {
           if (next) { r.hostId = next.id; sysChat(r, `Хозяин комнаты теперь ${next.name}.`); }
         }
         // ушёл последний живой человек — комната с одними ботами никому не нужна
-        if (!activeMembers(r).some(x => !x.isBot)) { rooms.delete(r.id); dirty = true; pushLobby(); }
+        if (!activeMembers(r).some(x => !x.isBot)) dropRoom(r);
       } else sysChat(r, `${m.name} выходит из игры — за него ходит автопилот.`);
     }
     detach();
@@ -409,11 +454,14 @@ io.on('connection', socket => {
   socket.on('chat', (p = {}, cb) => {
     cb = cbOf(cb);
     if (limited()) return cb({ ok: false, error: 'Слишком часто' });
-    const { r, m } = ctx();
-    if (!r || !m) return cb({ ok: false });
+    const { r: own, m } = ctx();
+    // зрители тоже могут писать в чат стола — их сообщения помечены
+    const r = own && m ? own : rooms.get(socket.data.watchId);
+    if (!r) return cb({ ok: false });
     const text = String(p.text || '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, 300);
     if (!text) return cb({ ok: false });
-    r.chat.push({ id: newId(), from: m.id, name: m.name, color: m.color, text, t: now() });
+    if (m && own) r.chat.push({ id: newId(), from: m.id, name: m.name, color: m.color, text, t: now() });
+    else r.chat.push({ id: newId(), from: null, spectator: true, name: socket.data.watchName || 'Зритель', color: '#a9b2c3', text, t: now() });
     if (r.chat.length > 120) r.chat.splice(0, r.chat.length - 120);
     cb({ ok: true });
     broadcastRoom(r);
@@ -441,7 +489,7 @@ io.on('connection', socket => {
 
   socket.on('ping:me', () => { const { m } = ctx(); if (m) m.lastSeen = now(); });
 
-  socket.on('disconnect', () => detach());
+  socket.on('disconnect', () => { detach(); unwatch(); });
 });
 
 // ───────────────────────── таймеры ─────────────────────────
@@ -462,7 +510,7 @@ setInterval(() => {
     const humansOnline = r.members.some(m => !m.isBot && m.connected);
     if (humansOnline) { r.lastActive = Math.max(r.lastActive, t - 1); continue; }
     const idle = t - (r.lastActive || r.createdAt);
-    if (idle > (r.game ? 6 : 1) * 60 * 60 * 1000) { rooms.delete(r.id); dirty = true; pushLobby(); }
+    if (idle > (r.game ? 6 : 1) * 60 * 60 * 1000) dropRoom(r);
   }
   save();
 }, 15000);
