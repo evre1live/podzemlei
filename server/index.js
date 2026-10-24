@@ -203,7 +203,8 @@ app.use((req, res, next) => {
 // Код и стили браузер перепроверяет при каждой загрузке (дёшево: ответ 304 по ETag),
 // чтобы после обновления игры ни у кого не смешались старые и новые файлы. Шрифты кэшируются надолго.
 const fresh = { etag: true, lastModified: true, setHeaders(res, file) {
-  res.setHeader('Cache-Control', /\.(woff2?|ttf)$/.test(file) ? 'public, max-age=2592000, immutable' : 'no-cache');
+  // шрифты и звуки (папка звуков с номером версии) кэшируются надолго, остальное перепроверяется
+  res.setHeader('Cache-Control', /\.(woff2?|ttf|mp3)$/.test(file) ? 'public, max-age=2592000, immutable' : 'no-cache');
 } };
 app.use('/shared', express.static(path.join(ROOT, 'shared'), fresh));
 app.use(express.static(path.join(ROOT, 'public'), { ...fresh, extensions: ['html'] }));

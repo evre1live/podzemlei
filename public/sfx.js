@@ -383,6 +383,207 @@ const SOUNDS = {
   },
 };
 
+
+// ───────────── записанные звуки ─────────────
+// Настоящие записи из свободных библиотек (CC0): Kenney и OpenGameArt, см. public/sfx/CREDITS.txt.
+// Файлы подгружаются после первого касания. Пока они не пришли, звучит синтезатор выше.
+const SFX_DIR = '/sfx/v1/';
+const BANK = {};
+const lastPick = {};
+let bankReady = false, bankLoading = null;
+function pickBuf(name) {
+  const l = BANK[name];
+  if (!l || !l.length) return null;
+  let i = Math.floor(Math.random() * l.length);
+  if (l.length > 1 && i === lastPick[name]) i = (i + 1) % l.length;
+  lastPick[name] = i;
+  return l[i];
+}
+// сыграть запись: o.vol, o.rate, o.vary (разброс высоты), o.wet (эхо пещеры), o.lp/o.hp (фильтры), o.dur, o.fade
+function S(E, t, name, o = {}) {
+  const buf = pickBuf(name);
+  if (!buf) return 0;
+  const { ac } = E;
+  const src = ac.createBufferSource();
+  src.buffer = buf;
+  const rate = (o.rate || 1) * (1 + (Math.random() * 2 - 1) * (o.vary ?? 0.035));
+  src.playbackRate.setValueAtTime(rate, t);
+  const g = ac.createGain();
+  const vol = o.vol ?? 0.5;
+  g.gain.setValueAtTime(vol, t);
+  let node = src;
+  for (const [type, f] of [['lowpass', o.lp], ['highpass', o.hp]]) {
+    if (!f) continue;
+    const fl = ac.createBiquadFilter(); fl.type = type; fl.frequency.value = f;
+    node.connect(fl); node = fl;
+  }
+  node.connect(g);
+  E.out(g, o.wet ?? 0.2);
+  const len = (o.dur ?? buf.duration / rate);
+  if (o.fade != null) { g.gain.setValueAtTime(vol, t + o.fade); g.gain.linearRampToValueAtTime(0.0001, t + Math.min(len, o.fade + 0.25)); }
+  src.start(t, 0, o.dur ? o.dur * rate : undefined);
+  return len;
+}
+// нота живого инструмента: записанная нота ми первой октавы, транспонированная скоростью
+const NOTE = (E, t, inst, midi, vol = 0.4, o = {}) => S(E, t, inst, { ...o, vol, vary: 0, rate: Math.pow(2, (midi - 64) / 12) });
+const arp = (E, t, inst, notes, step, vol, o) => notes.forEach((m, i) => NOTE(E, t + i * step, inst, m, vol, o));
+
+const SAMPLED = {
+  click(E, t) { S(E, t, 'click', { vol: 0.32, wet: 0, vary: 0.06 }); },
+  flip(E, t) { S(E, t, 'slide', { vol: 0.24, wet: 0.06, rate: 1.12, dur: 0.32, fade: 0.2 }); },
+  deal(E, t) { S(E, t, 'slide', { vol: 0.19, wet: 0.06, rate: 1.22, dur: 0.3, fade: 0.18 }); },
+  whoosh(E, t) { S(E, t, 'shove', { vol: 0.22, wet: 0.12, rate: 1.05 }); S(E, t + 0.04, 'swing', { vol: 0.16, rate: 0.72, wet: 0.2 }); },
+  place(E, t) { S(E, t, 'place', { vol: 0.33, wet: 0.12 }); },
+  door(E, t) { S(E, t, 'door', { vol: 0.62, wet: 0.38 }); },
+  growl(E, t, o = {}) {
+    const p = o.pitch || 1;
+    const k = o.kind;
+    if (k === 'slime') { S(E, t, 'slime', { vol: 0.6, rate: p * 1.05, wet: 0.35 }); S(E, t + 0.12, 'bubble', { vol: 0.35, rate: p, wet: 0.4 }); return; }
+    if (k === 'ghost') { S(E, t, 'ghost', { vol: 0.62, rate: Math.min(1.1, p * 1.05), wet: 0.6 }); return; }
+    if (k === 'bug') { S(E, t, 'bug', { vol: 0.55, rate: p * 1.1, wet: 0.25 }); S(E, t + 0.18, 'bug', { vol: 0.35, rate: p, wet: 0.3 }); return; }
+    if (k === 'water') { S(E, t, 'burble', { vol: 0.55, rate: p, wet: 0.4 }); S(E, t + 0.05, 'splash', { vol: 0.4, wet: 0.35 }); }
+    if (k === 'fire') S(E, t, 'poof', { vol: 0.35, rate: 0.8, wet: 0.35 });
+    const pool = p > 1.08 ? 'growlS' : p > 0.86 ? 'growlM' : 'growlL';
+    const rate = pool === 'growlS' ? p * 0.95 : pool === 'growlM' ? p * 1.05 : Math.max(0.74, p * 1.15);
+    S(E, t, pool, { vol: pool === 'growlL' ? 0.72 : 0.62, rate, wet: 0.38 });
+    // у крупных снизу добавляется густой гул
+    if (p < 0.95) tone(E, { t, f: 70 * p, f2: 42 * p, type: 'triangle', dur: 0.7, a: 0.05, vol: 0.16 * (1.1 - p), wet: 0.3 });
+  },
+  ambush(E, t) {
+    S(E, t, 'jTrill', { vol: 0.42, wet: 0.45, rate: 0.9 });
+    S(E, t + 0.08, 'punch', { vol: 0.5, wet: 0.3 });
+    SAMPLED.growl(E, t + 0.15, { pitch: 0.85 });
+  },
+  curse(E, t) {
+    S(E, t, 'spell', { vol: 0.42, wet: 0.6, dur: 1.4, fade: 1.0 });
+    S(E, t + 0.08, 'ghost', { vol: 0.32, rate: 0.82, wet: 0.65 });
+    tone(E, { t, f: 110, f2: 96, type: 'triangle', dur: 1.3, a: 0.4, vol: 0.09, wet: 0.6 });
+  },
+  death(E, t) {
+    S(E, t, 'soft', { vol: 0.62, rate: 0.85, wet: 0.3 });
+    S(E, t + 0.12, 'jSad', { vol: 0.55, wet: 0.45 });
+    bell(E, { t: t + 0.2, f: 147, dur: 1.6, vol: 0.06, wet: 0.7 });
+  },
+  levelUp(E, t) {
+    arp(E, t, 'steel', [72, 76, 79, 84], 0.075, 0.42, { wet: 0.4 });
+    arp(E, t + 0.02, 'pizz', [72, 76, 79, 84], 0.075, 0.22, { wet: 0.4 });
+    S(E, t + 0.3, 'gem', { vol: 0.32, wet: 0.5 });
+  },
+  levelDown(E, t) { S(E, t, 'jDown', { vol: 0.28, wet: 0.35 }); S(E, t, 'soft', { vol: 0.28, rate: 0.8, wet: 0.2 }); },
+  victory(E, t) {
+    arp(E, t, 'steel', [67, 72, 76, 79], 0.09, 0.4, { wet: 0.38 });
+    [72, 76, 79, 84].forEach(m => { NOTE(E, t + 0.4, 'steel', m, 0.3, { wet: 0.45 }); NOTE(E, t + 0.4, 'pizz', m, 0.18, { wet: 0.45 }); });
+    S(E, t + 0.42, 'coinbag', { vol: 0.42, wet: 0.3 });
+    for (let i = 0; i < 3; i++) S(E, t + 0.5 + i * 0.09, 'coin', { vol: 0.32, wet: 0.35 });
+  },
+  fanfare(E, t) {
+    arp(E, t, 'steel', [67, 72, 76, 79], 0.12, 0.42, { wet: 0.4 });
+    arp(E, t + 0.02, 'pizz', [67, 72, 76, 79], 0.12, 0.24, { wet: 0.4 });
+    arp(E, t + 0.6, 'steel', [76, 79], 0.12, 0.42, { wet: 0.45 });
+    [72, 76, 79, 84, 88].forEach(m => { NOTE(E, t + 0.86, 'steel', m, 0.3, { wet: 0.5 }); NOTE(E, t + 0.86, 'pizz', m, 0.18, { wet: 0.5 }); });
+    S(E, t + 0.86, 'bell', { vol: 0.28, rate: 1.5, wet: 0.6 });
+    for (let i = 0; i < 6; i++) S(E, t + 0.95 + i * 0.08, 'coin', { vol: 0.28, wet: 0.4 });
+  },
+  coins(E, t, o = {}) { const n = o.n || 4; for (let i = 0; i < n; i++) S(E, t + i * 0.075 + rnd(0, 0.025), 'coin', { vol: 0.55, wet: 0.3 }); },
+  dice(E, t) { S(E, t + 0.42, 'die', { vol: 1.0, wet: 0.2 }); },
+  diceOk(E, t) { S(E, t, 'jOk', { vol: 0.38, wet: 0.35 }); },
+  diceFail(E, t) { S(E, t, 'jNo', { vol: 0.36, wet: 0.35 }); },
+  modGood(E, t) { S(E, t, 'gem', { vol: 0.3, wet: 0.4 }); arp(E, t + 0.02, 'pizz', [76, 83], 0.07, 0.2, { wet: 0.3 }); },
+  modBad(E, t) { S(E, t, 'punchM', { vol: 0.33, wet: 0.25 }); S(E, t + 0.03, 'growlS', { vol: 0.12, rate: 1.25, wet: 0.3 }); },
+  enhance(E, t) { SAMPLED.growl(E, t, { pitch: 1.05 }); S(E, t + 0.05, 'punch', { vol: 0.45, wet: 0.25 }); },
+  backstab(E, t) { S(E, t, 'knife', { vol: 0.42, wet: 0.25 }); S(E, t + 0.08, 'punchM', { vol: 0.28, wet: 0.2 }); },
+  lullaby(E, t) { arp(E, t, 'pizz', [79, 76, 72, 76, 74, 72], 0.21, 0.26, { wet: 0.6 }); },
+  pet(E, t) { S(E, t, 'cute', { vol: 0.3, wet: 0.35 }); NOTE(E, t + 0.25, 'steel', 84, 0.18, { wet: 0.5 }); },
+  buff(E, t) { S(E, t, 'gem', { vol: 0.26, wet: 0.4 }); arp(E, t + 0.05, 'pizz', [72, 76, 79, 84], 0.06, 0.2, { wet: 0.35 }); },
+  location(E, t) { S(E, t, 'jUp', { vol: 0.34, wet: 0.55 }); S(E, t + 0.1, 'magic', { vol: 0.22, wet: 0.6 }); bell(E, { t: t + 0.3, f: G4, dur: 1.6, vol: 0.05, wet: 0.8 }); },
+  event(E, t) { S(E, t, 'bell', { vol: 0.85, wet: 0.55 }); S(E, t, 'punch', { vol: 0.4, rate: 0.8, wet: 0.3 }); },
+  quake(E, t) {
+    S(E, t, 'rockfall', { vol: 0.85, wet: 0.4 }); S(E, t + 0.25, 'rockbreak', { vol: 0.8, wet: 0.4 }); S(E, t + 0.5, 'rockfall', { vol: 0.7, wet: 0.45 });
+    noiseV(E, { t, dur: 1.1, a: 0.08, hold: 0.3, vol: 0.32, type: 'lowpass', f: 140, wet: 0.4 });
+  },
+  yourTurn(E, t) { NOTE(E, t, 'steel', 72, 0.36, { wet: 0.45 }); NOTE(E, t + 0.13, 'steel', 79, 0.36, { wet: 0.5 }); },
+  tick(E, t, o = {}) { S(E, t, 'click', { vol: o.last ? 0.8 : 0.6, rate: o.last ? 1.25 : 1, vary: 0, wet: 0 }); },
+  bell(E, t) { S(E, t, 'question', { vol: 0.5, wet: 0.35 }); NOTE(E, t + 0.25, 'steel', 81, 0.3, { wet: 0.5 }); },
+  pop(E, t) { S(E, t, 'drop', { vol: 0.28, wet: 0.1 }); },
+  error(E, t) { S(E, t, 'error', { vol: 0.13, wet: 0.08 }); },
+  mutagen(E, t) {
+    for (let i = 0; i < 3; i++) S(E, t + i * 0.08, 'bubble', { vol: 0.28, rate: 0.9 + i * 0.12, wet: 0.35 });
+    S(E, t + 0.3, 'magic', { vol: 0.22, wet: 0.5 });
+    arp(E, t + 0.35, 'steel', [64, 71, 76, 83], 0.08, 0.2, { wet: 0.45 });
+  },
+  legendary(E, t) {
+    S(E, t, 'jUp', { vol: 0.42, wet: 0.6 });
+    for (let i = 0; i < 4; i++) S(E, t + 0.15 + i * 0.09, 'gem', { vol: 0.3, wet: 0.6 });
+    [84, 88, 91].forEach(m => NOTE(E, t + 0.55, 'steel', m, 0.24, { wet: 0.7 }));
+    S(E, t + 0.5, 'bell', { vol: 0.24, rate: 1.6, wet: 0.7 });
+  },
+  doorOpen(E, t) {
+    S(E, t, 'creak', { vol: 0.38, rate: 0.85, wet: 0.45 });
+    S(E, t + 0.12, 'door', { vol: 0.6, wet: 0.45 });
+    noiseV(E, { t: t + 0.3, dur: 0.7, a: 0.25, vol: 0.1, type: 'bandpass', f: 260, f2: 1500, q: 0.9, wet: 0.5 });
+    S(E, t + 0.45, 'gem', { vol: 0.22, wet: 0.8, rate: 0.9 });
+  },
+  portal(E, t) { S(E, t, 'magic', { vol: 0.25, wet: 0.6 }); S(E, t + 0.05, 'spell', { vol: 0.15, wet: 0.6, dur: 0.9, fade: 0.6 }); },
+  boom(E, t, o = {}) {
+    const k = o.k || 1;
+    S(E, t, 'boom', { vol: 0.75 * k, wet: 0.45 });
+    S(E, t, 'punch', { vol: 0.4 * k, rate: 0.85, wet: 0.3 });
+    tone(E, { t, f: 46, f2: 28, type: 'triangle', dur: 0.8, vol: 0.2 * k, wet: 0.3 });
+  },
+  thunder(E, t) {
+    noiseV(E, { t, dur: 0.08, vol: 0.28, type: 'highpass', f: 1800, wet: 0.3 });
+    S(E, t + 0.02, 'boom', { vol: 0.52, rate: 0.72, wet: 0.75 });
+    S(E, t + 0.15, 'rockfall', { vol: 0.25, rate: 0.7, wet: 0.7, lp: 900 });
+  },
+  claw(E, t) { S(E, t, 'knife', { vol: 0.42, wet: 0.25 }); S(E, t + 0.06, 'knife', { vol: 0.34, rate: 1.12, wet: 0.25 }); S(E, t + 0.12, 'blade', { vol: 0.32, wet: 0.25 }); },
+  slam(E, t) { S(E, t, 'wood', { vol: 0.6, wet: 0.3 }); S(E, t, 'punch', { vol: 0.42, rate: 0.82, wet: 0.3 }); },
+  clang(E, t) { S(E, t, 'metal', { vol: 0.85, wet: 0.4 }); S(E, t + 0.01, 'unsheathe', { vol: 0.22, rate: 1.25, wet: 0.4 }); },
+  shing(E, t) { S(E, t, 'unsheathe', { vol: 0.38, wet: 0.35 }); },
+  slash(E, t) { S(E, t, 'swing', { vol: 0.6, rate: 0.9, wet: 0.25 }); S(E, t + 0.05, 'blade', { vol: 0.55, wet: 0.3 }); },
+  shatter(E, t) { S(E, t, 'glassbreak', { vol: 0.8, wet: 0.35 }); },
+  poof(E, t) { S(E, t, 'poof', { vol: 0.38, wet: 0.45 }); noiseV(E, { t, dur: 0.45, a: 0.02, vol: 0.1, type: 'lowpass', f: 1300, f2: 260, wet: 0.45 }); },
+  stone(E, t) { S(E, t, 'rockbreak', { vol: 1.0, wet: 0.35 }); S(E, t + 0.32, 'rockfall', { vol: 0.7, wet: 0.4 }); },
+  zap(E, t) { S(E, t, 'zap', { vol: 0.2, wet: 0.35, dur: 0.55, fade: 0.32 }); },
+  dash(E, t) { S(E, t, 'swing', { vol: 0.34, rate: 0.72, wet: 0.2 }); },
+  charge(E, t) { arp(E, t, 'steel', [67, 72, 76, 79], 0.07, 0.22, { wet: 0.4 }); S(E, t, 'swing', { vol: 0.2, rate: 0.75, wet: 0.3 }); },
+  heartbeat(E, t) { S(E, t, 'soft', { vol: 0.38, lp: 420, vary: 0, wet: 0.1 }); S(E, t + 0.17, 'soft', { vol: 0.25, lp: 420, vary: 0, wet: 0.1 }); },
+  firework(E, t, o = {}) {
+    const fly = o.fly ?? 0.8;
+    if (fly > 0.2) tone(E, { t, f: 520, f2: 1900, dur: fly, a: 0.05, vol: 0.03, wet: 0.5, lin: true });
+    S(E, t + fly, 'crunch', { vol: 0.32, wet: 0.6, rate: rnd(0.85, 1.15) });
+    for (let i = 0; i < 8; i++) noiseV(E, { t: t + fly + 0.12 + rnd(0, 0.5), dur: 0.02, vol: rnd(0.03, 0.07), type: 'highpass', f: 4000, wet: 0.6 });
+  },
+  sleep(E, t) { arp(E, t, 'pizz', [76, 72, 67], 0.22, 0.3, { wet: 0.65 }); },
+  ward(E, t) { S(E, t, 'force', { vol: 0.28, wet: 0.45 }); S(E, t + 0.05, 'glass', { vol: 0.24, wet: 0.5 }); },
+};
+
+async function loadBank(ctx) {
+  if (bankLoading) return bankLoading;
+  bankLoading = (async () => {
+    try {
+      const man = await (await fetch(SFX_DIR + 'manifest.json')).json();
+      const jobs = [];
+      for (const [name, files] of Object.entries(man)) files.forEach(f => jobs.push([name, f]));
+      let i = 0;
+      const worker = async () => {
+        while (i < jobs.length) {
+          const [name, f] = jobs[i++];
+          try {
+            const data = await (await fetch(SFX_DIR + f)).arrayBuffer();
+            const buf = await new Promise((res, rej) => { const p = ctx.decodeAudioData(data, res, rej); if (p && p.then) p.then(res, rej); });
+            (BANK[name] ||= []).push(buf);
+          } catch { /* один файл не загрузился — останется синтезатор */ }
+        }
+      };
+      await Promise.all(Array.from({ length: 6 }, worker));
+      bankReady = Object.keys(BANK).length > 0;
+    } catch { bankReady = false; }
+    return bankReady;
+  })();
+  return bankLoading;
+}
+const recipe = name => (bankReady && SAMPLED[name]) || SOUNDS[name];
+
 // ───────────── живой звук в браузере ─────────────
 let ac = null, E = null;
 const last = {};
@@ -399,6 +600,7 @@ function unlock() {
     E = makeEngine(ac, ac.destination);
     E.master.gain.value = 0;
     applyVol();
+    loadBank(ac);
     if (st.on && st.amb) ambStart();
   }
   if (ac.state === 'suspended') ac.resume().catch(() => {});
@@ -457,7 +659,7 @@ export const sfx = {
   play(name, o = {}) {
     if (!st.on || !E || ac.state === 'closed') return;
     if (document.hidden && !o.always) return;
-    const fn = SOUNDS[name];
+    const fn = recipe(name);
     if (!fn) return;
     const now = performance.now();
     if (last[name] && now - last[name] < (o.gap ?? 45)) return;
@@ -473,11 +675,14 @@ export const sfx = {
     if (st.on && st.amb) ambStart(); else ambStop();
   },
   names: Object.keys(SOUNDS),
+  get samples() { return bankReady; },
+  // для проверки: загрузить записи без касания экрана
+  preload() { const c = ac || new OfflineAudioContext(1, 1, 44100); return loadBank(c); },
   // для проверки: отрисовать звук без колонок и вернуть буфер
-  async render(name, o = {}, seconds = 3) {
+  async render(name, o = {}, seconds = 3, synthOnly = false) {
     const oc = new OfflineAudioContext(2, Math.floor(44100 * seconds), 44100);
     const e = makeEngine(oc, oc.destination);
-    SOUNDS[name](e, 0.01, o);
+    (synthOnly ? SOUNDS[name] : recipe(name))(e, 0.01, o);
     return oc.startRendering();
   },
 };

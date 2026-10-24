@@ -1,0 +1,26 @@
+Звуки игры «Под Землёй»
+
+Все записи в этой папке распространяются под лицензией CC0 1.0 (общественное достояние):
+их можно использовать, изменять и распространять без разрешения и без указания авторов.
+Мы всё равно благодарим авторов.
+
+Kenney (https://kenney.nl), CC0:
+  Casino Audio — карты, кубик
+  RPG Audio — двери, скрип, монеты, нож
+  Impact Sounds — удары, металл, дерево, колокол
+  Interface Sounds — щелчки, сигналы
+  Digital Audio — электрические разряды
+  Sci-Fi Sounds — низкий взрыв, хлопок, силовое поле
+  Music Jingles — ноты пиццикато и стальных барабанов, короткие заставки
+
+rubberduck (https://opengameart.org/users/rubberduck), CC0:
+  80 CC0 creature SFX и 80 CC0 creature SFX 2 — рыки, слизь, жуки, милые звуки
+  80 CC0 RPG SFX — монеты, самоцветы, клинки, заклинание
+  75 CC0 breaking/falling/hit SFX — стекло и камень
+  40 CC0 water/splash/slime SFX — пузыри, всплеск
+
+artisticdude (https://opengameart.org/content/rpg-sound-pack), CC0:
+  RPG Sound Pack — взмахи, меч из ножен, магия, голоса великанов, огров и теней
+
+Источник подборки: https://github.com/Legerdo/open-game-sfx-index
+Файлы обрезаны, сведены в моно, выровнены по громкости и сжаты в MP3.

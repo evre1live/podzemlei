@@ -4,7 +4,7 @@ import { esc, cardHTML, chipHTML, avatarSVG, iconSVG, cardBackSVG, locationSVG }
 import { fx } from '/fx.js';
 import { sfx } from '/sfx.js';
 import { setWorld } from '/world.js';
-import { cine } from '/cine.js';
+import { cine, growlKind } from '/cine.js';
 import { AVATAR_PARTS, avatarFromSeed, cleanAvatar } from '/shared/avatar.js';
 import { AV_LABELS, SKIN, HAIRC, CLOTH, BGC } from '/art-avatar.js';
 
@@ -1011,7 +1011,7 @@ function soundFx(fresh) {
       case 'reveal': sfx.play('door'); break;
       case 'combat': case 'wandering': {
         const lv = def(f.card)?.level ?? 5;
-        sfx.play('growl', { delay: kinds.has('reveal') ? 0.4 : 0.1, pitch: 1.35 - Math.min(lv, 20) / 28, dur: 0.6 + Math.min(lv, 20) / 40 });
+        sfx.play('growl', { delay: kinds.has('reveal') ? 0.4 : 0.1, pitch: 1.35 - Math.min(lv, 20) / 28, dur: 0.6 + Math.min(lv, 20) / 40, kind: growlKind(def(f.card)) });
         break;
       }
       case 'ambush': sfx.play('ambush', { delay: 0.42 }); break;
@@ -1327,7 +1327,7 @@ function openSoundModal() {
     <label class="check"><input type="checkbox" id="sndAmb" ${s.amb ? 'checked' : ''}> Атмосфера пещеры: гул, ветер и капли</label>
     <label class="check"><input type="checkbox" id="liveBg" ${liveBg() ? 'checked' : ''}> Живой фон: вода, снег, светлячки (на слабом телефоне лучше выключить)</label>
     <label class="check"><input type="checkbox" id="cineOn" ${cine.enabled ? 'checked' : ''}> Зрелищные сцены: двери, удары, разрубленные карты, салют</label>
-    <p class="muted" style="margin:0;font-size:13.5px">Все звуки создаются прямо в браузере. Если на телефоне тишина, проверьте беззвучный режим.</p>
+    <p class="muted" style="margin:0;font-size:13.5px">Звуки — записи из свободных библиотек Kenney и OpenGameArt (лицензия CC0), мелодии сыграны на пиццикато и стальных барабанах. Если на телефоне тишина, проверьте беззвучный режим.</p>
     <div class="row"><button class="btn" data-act="soundTest">Послушать</button><button class="btn primary" data-act="closeOverlay">Готово</button></div>
   </div>`);
   $('#sndOn').addEventListener('change', e => { sfx.set({ on: e.target.checked }); soundIcons(); if (e.target.checked) sfx.play('yourTurn', { gap: 0 }); });

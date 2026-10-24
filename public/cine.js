@@ -386,6 +386,8 @@ function themeBurst(d, c, fit) {
   }
   fx.dust(area, { n: 22, rocks: kind === 'rock' ? 0 : 6 });
 }
+// чем рычит монстр: нежить стонет, насекомые жужжат, слизь и грибы хлюпают
+export const growlKind = d => { const t = d?.tags || []; return t.includes('undead') ? 'ghost' : t.includes('insect') ? 'bug' : t.includes('fungus') ? 'slime' : t.includes('water') ? 'water' : t.includes('fire') ? 'fire' : ''; };
 const tierOf = d => {
   const lv = d.mirror != null ? 15 : d.level || 1;
   return { lv, tier: lv >= 16 ? 'boss' : lv >= 12 ? 'high' : lv >= 6 ? 'mid' : 'low', boss: lv >= 14 || d.mirror != null };
@@ -450,7 +452,7 @@ S.intro = (f, o) => {
         { transform: `scale(${fit}) rotate(0deg)`, opacity: 1 }], { dur: 540, delay: t0, ease: EASE.out });
       // монстр «дышит», пока висит в центре
       k.a(card.firstElementChild, [{ transform: 'scale(1)' }, { transform: 'scale(1.035) translateY(-3px)' }, { transform: 'scale(1)' }], { dur: 900, delay: t0 + 540, it: 2, ease: EASE.io, fill: 'none' });
-      k.snd('growl', { pitch: 1.35 - Math.min(lv, 20) / 28, dur: 0.6 + Math.min(lv, 20) / 40 }, t0 + 60);
+      k.snd('growl', { pitch: 1.35 - Math.min(lv, 20) / 28, dur: 0.6 + Math.min(lv, 20) / 40, kind: growlKind(d) }, t0 + 60);
       k.at(t0 + 290, () => {
         ring(k, c.x, c.y, tier, fit, 700);
         if (tier === 'high' || tier === 'boss') ring(k, c.x, c.y, tier, fit * 0.7, 800, 90);
@@ -807,7 +809,7 @@ S.caught = f => ({
       { transform: `translate(${dx * 0.62}px, ${dy * 0.62}px) scale(.86) rotate(5deg)`, opacity: 1, offset: 0.82 },
       { transform: `translate(${dx * 0.45}px, ${dy * 0.45}px) scale(.7) rotate(0deg)`, opacity: 0 }], { dur: D, ease: EASE.lin });
     k.rm(m, D + 20);
-    sfx.play('growl', { pitch: 1.1, dur: 0.5 });
+    sfx.play('growl', { pitch: 1.1, dur: 0.5, kind: growlKind(d) });
     k.at(D * 0.44, () => sfx.play('dash'));
     k.at(D * 0.66, () => {
       const size = Math.max(110, (ar?.width || 80) * 1.7);
