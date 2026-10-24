@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 import { createGame, act, tick, view, combatNumbers, P, saleValue, fillText } from '../shared/engine.js';
 import { def } from '../shared/cards.js';
+import { AVATAR_PARTS, cleanAvatar, avatarFromSeed, withGender } from '../shared/avatar.js';
 
 let seed = 7; const rng = () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
 function fresh(n = 3) {
@@ -199,11 +200,38 @@ t('расы: орк без шапки, гоблин торгуется и бер
   assert.equal(saleValue(s, g, ['i_tokens#0', 'i_boots#0']).total, 1000);
   // гоблин-помощник
   p.level = 4; g.level = 8;
-  fight(s, 'm_zhek#0'); // 10, 3 клада
+  fight(s, 'm_zhek#0'); // 10, 3 клада (+1 орку за крупного монстра)
+  const base = combatNumbers(s).treasures;
   A(s, 'p0', { type: 'askHelp', to: 'p1', offer: 1 });
   A(s, 'p1', { type: 'answerHelp', accept: true });
+  const before = p.hand.length;
   A(s, 'p0', { type: 'fight' }, 1000); tick(s, { rng, now: 9000 });
-  assert.equal(g.hand.length, 2 + 2); // 2 своих + 1 обещанная + 1 гоблинская
+  assert.equal(g.hand.length, 2 + 2); // 2 своих + 1 обещанная + 1 гоблинская сверху
+  assert.equal(p.hand.length - before, base - 1); // бойцу — всё, что не обещал
+});
+
+t('обещал 1 из 2 — себе 1, даже если помощник гоблин или дело в таверне', () => {
+  for (const extra of ['goblin', 'tavern', 'both', 'none']) {
+    const s = fresh(); const p = P(s, 'p0'); const h = P(s, 'p1');
+    if (extra === 'goblin' || extra === 'both') h.races.push(take(s, 'r_goblin#0'));
+    if (extra === 'tavern' || extra === 'both') s.location = take(s, 'loc_tavern#0');
+    p.level = 1; h.level = 9;
+    s.decks.door.push(take(s, 'm_robovac#0'));
+    A(s, 'p0', { type: 'kick' });
+    const base = combatNumbers(s).treasures;
+    assert.ok(base >= 2, 'монстр с двумя кладами');
+    assert.equal(A(s, 'p0', { type: 'askHelp', to: 'p1', offer: 1 }).ok, true);
+    A(s, 'p1', { type: 'answerHelp', accept: true });
+    const bonus = (extra === 'none' ? 0 : extra === 'both' ? 2 : 1);
+    const n = combatNumbers(s);
+    assert.equal(n.helperShare, 1 + bonus);
+    assert.equal(n.treasures - n.helperShare, base - 1);
+    const hp = h.hand.length, pp = p.hand.length;
+    A(s, 'p0', { type: 'fight' }, 1000); tick(s, { rng, now: 9000 });
+    assert.equal(s.combat, null, extra);
+    assert.equal(h.hand.length - hp, 1 + bonus, extra);
+    assert.equal(p.hand.length - pp, base - 1, extra);
+  }
 });
 
 t('кротолюда не берут проклятия на одежду', () => {
@@ -414,6 +442,19 @@ t('по умолчанию и при мусоре в настройках — 10
   A(s, 'p0', { type: 'kick' }); A(s, 'p0', { type: 'fight' }, 1000);
   tick(s, { rng, now: 9000 });
   assert.equal(s.phase, 'ended');
+});
+
+t('внешность: пол, телосложение и 10 видов одежды; старые аватары не ломаются', () => {
+  assert.equal(AVATAR_PARTS.gender, 2); assert.equal(AVATAR_PARTS.body, 4); assert.equal(AVATAR_PARTS.outfit, 10); assert.equal(AVATAR_PARTS.hair, 20);
+  const a = cleanAvatar({ skin: 2, hair: 3, gender: 1, body: 3, outfit: 9 });
+  assert.deepEqual([a.gender, a.body, a.outfit], [1, 3, 9]);
+  const old = cleanAvatar({ skin: 2, hair: 3 });
+  assert.deepEqual([old.gender, old.body, old.outfit], [0, 0, 0]);
+  const junk = cleanAvatar({ gender: 5, body: -1, outfit: 'кожанка' });
+  assert.deepEqual([junk.gender, junk.body, junk.outfit], [0, 0, 0]);
+  for (let i = 0; i < 300; i++) { const r = avatarFromSeed(i); if (r.gender) assert.equal(r.facial, 0); }
+  const w = withGender({ ...old, hair: 1, facial: 4 }, 1);
+  assert.equal(w.facial, 0); assert.notEqual(w.hair, 1);
 });
 
 console.log(`Правила: ${n} проверок пройдено.`);

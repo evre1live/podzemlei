@@ -460,13 +460,18 @@ export function combatNumbers(s) {
   let bonusT = 0;
   if (c.monsters.length) {
     bonusT += locationOf(s)?.treasureBonus || 0;
-    if (c.helper) bonusT += locationOf(s)?.helperBonus || 0;
-    if (hasClass(f, 'bard')) bonusT += 1;
+    // бард берёт лишнюю карту, только когда побеждает сам
+    if (hasClass(f, 'bard') && !c.helper) bonusT += 1;
     if (hasRace(f, 'orc') && c.monsters.some(m => monsterBaseLevel(s, def(m.uid)) >= 10)) bonusT += 1;
   }
-  const treasures = c.monsters.reduce((a, m) => a + monsterTreasure(s, m), 0) + (c.charmTreasure || 0) + bonusT;
+  // Клад делится так: помощник получает ровно обещанное, остальное — тому, кто дрался.
+  // Бонусы помощника (гоблин, таверна) — это лишние карты из колоды сверху, а не из доли бойца.
+  const base = c.monsters.reduce((a, m) => a + monsterTreasure(s, m), 0) + (c.charmTreasure || 0) + bonusT;
+  const extra = c.helper && c.monsters.length ? helperExtra(s, P(s, c.helper)) : 0;
+  const treasures = base + extra;
+  const helperShare = c.helper ? Math.min(c.helpOffer || 0, base) + extra : 0;
   const levels = c.monsters.reduce((a, m) => a + (def(m.uid).levels || 1), 0) + (c.monsters.length ? locationOf(s)?.levelBonus || 0 : 0);
-  return { heroes, monsters, winning, warrior, perMonster, treasures, levels };
+  return { heroes, monsters, winning, warrior, perMonster, treasures, levels, helperShare, helperExtra: extra };
 }
 
 function startCombat(s, p, monsterUid, rng = Math.random) {
@@ -503,11 +508,17 @@ function removeMonster(s, idx) {
   return m;
 }
 
-function shareTreasure(s, count, rng) {
+// сколько лишних карт клада помощник берёт сверху обещанного
+function helperExtra(s, h) {
+  if (!h) return 0;
+  return (hasRace(h, 'goblin') ? 1 : 0) + (locationOf(s)?.helperBonus || 0);
+}
+
+function shareTreasure(s, count, rng, want = 0) {
   const c = s.combat;
   const f = P(s, c.fighter);
   const h = c.helper ? P(s, c.helper) : null;
-  const want = h ? (c.helpOffer || 0) + (hasRace(h, 'goblin') ? 1 : 0) + (locationOf(s)?.helperBonus || 0) : 0;
+  if (!h) want = 0;
   let rigP = s.rig ? [f, h].find(x => x && x.id === s.rig.pid) : null;
   if (rigP && rigP === h && Math.min(want, count) === 0) rigP = null;
   const drawn = [];
@@ -533,7 +544,7 @@ function afterMonstersGone(s, rng) {
   // все монстры убраны без убийства: только клад за усыплённых
   const c = s.combat;
   if (c.charmTreasure) {
-    const r = shareTreasure(s, c.charmTreasure, rng);
+    const r = shareTreasure(s, c.charmTreasure, rng, Math.min(c.helpOffer || 0, c.charmTreasure));
     log(s, `Бой окончен без убийства. Клад за усыплённых: ${r.total}.`, 'good');
   } else log(s, 'Монстров больше нет — бой окончен без наград.', 'info');
   endCombat(s);
@@ -547,7 +558,7 @@ function resolveVictory(s, rng) {
   const names = c.monsters.map(m => q(def(m.uid).name)).join(', ');
   setLevel(s, f, f.level + n.levels, { canWin: true });
   if (h && hasRace(h, 'elf')) setLevel(s, h, h.level + c.monsters.length, { canWin: true });
-  const r = shareTreasure(s, n.treasures, rng);
+  const r = shareTreasure(s, n.treasures, rng, n.helperShare);
   fx(s, { kind: 'victory', pid: f.id, helper: c.helper || null, cards: c.monsters.map(m => m.uid), levels: n.levels, treasures: r.total });
   log(s, `⚔️ ${f.name}${h ? ' и ' + h.name : ''} побеждают ${names}! ${f.name} получает +${n.levels} ур. и ${r.total - r.share} клада${h && r.share ? `, ${h.name} — ${r.share}` : ''}.`, 'good');
   endCombat(s);

@@ -603,6 +603,13 @@ label { display: grid; gap: 6px; font-size: 14px; color: var(--muted); }
 .av-opt:hover { transform: scale(1.06); border-color: rgba(245,184,61,.6); }
 .av-opt.on { border-color: var(--lamp); box-shadow: 0 0 0 2px var(--ink), 0 0 14px rgba(245,184,61,.6); }
 .av-opt svg { width: 100%; height: 100%; display: block; }
+.av-grid.labeled { grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 10px 8px; }
+.av-pick { display: grid; justify-items: center; align-content: start; gap: 5px; padding: 0; border: 0; background: none; box-shadow: none; color: var(--muted); font-family: inherit; font-weight: 600; font-size: 11.5px; line-height: 1.15; text-align: center; min-height: 0; }
+.av-pick .c { width: 100%; aspect-ratio: 1; border-radius: 50%; overflow: hidden; border: 3px solid rgba(255,255,255,.08); background: rgba(0,0,0,.25); transition: transform .12s, border-color .12s; }
+.av-pick .c svg { width: 100%; height: 100%; display: block; }
+.av-pick:hover .c { transform: scale(1.06); border-color: rgba(245,184,61,.6); }
+.av-pick.on { color: var(--text); }
+.av-pick.on .c { border-color: var(--lamp); box-shadow: 0 0 0 2px var(--ink), 0 0 14px rgba(245,184,61,.6); }
 .av-swatches { display: flex; flex-wrap: wrap; gap: 10px; }
 .av-sw { position: relative; width: 38px; height: 38px; padding: 0; border-radius: 50%; border: 3px solid var(--ink); background: var(--c); box-shadow: inset 0 -5px 0 rgba(0,0,0,.18), inset 0 3px 0 rgba(255,255,255,.3); }
 .av-sw.on { outline: 3px solid var(--lamp); outline-offset: 2px; }

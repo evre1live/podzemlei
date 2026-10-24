@@ -5,7 +5,7 @@ import { fx } from '/fx.js';
 import { sfx } from '/sfx.js';
 import { setWorld } from '/world.js';
 import { cine, growlKind } from '/cine.js';
-import { AVATAR_PARTS, avatarFromSeed, cleanAvatar } from '/shared/avatar.js';
+import { AVATAR_PARTS, avatarFromSeed, cleanAvatar, withGender } from '/shared/avatar.js';
 import { AV_LABELS, SKIN, HAIRC, CLOTH, BGC } from '/art-avatar.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -609,7 +609,7 @@ function fightHTML() {
       <div class="side-col mon"><div class="side-main"><div class="shield mon${n.winning ? '' : ' lead'}" id="shieldMon" title="Сила монстров">${SHIELD('#d2502f')}<b data-roll="${n.monsters}">${prev ? prev.monsters : n.monsters}</b></div><div class="monsters-row">${monsters}</div></div><div class="mods">${mods('monster')}</div></div>
     </div>
     <div class="tug" style="--k:${(prev ? prev.k : tk).toFixed(3)}" data-k="${tk.toFixed(3)}" title="Перевес сил: ${n.heroes} против ${n.monsters}"><i class="tug-fill"></i><i class="tug-mark"></i></div>
-    <div class="reward">За победу: +${n.levels} ${plural(n.levels, 'уровень', 'уровня', 'уровней')} и ${n.treasures} ${plural(n.treasures, 'карта', 'карты', 'карт')} клада${c.helper ? `, помощнику обещано ${c.helpOffer}` : ''}</div>
+    <div class="reward">За победу: +${n.levels} ${plural(n.levels, 'уровень', 'уровня', 'уровней')} и ${n.treasures} ${plural(n.treasures, 'карта', 'карты', 'карт')} клада${c.helper ? `: ${esc(pname(c.fighter))} — ${n.treasures - n.helperShare}, ${esc(pname(c.helper))} — ${n.helperShare}${n.helperExtra ? ` (обещано ${c.helpOffer}, ещё ${n.helperExtra} сверху из колоды)` : ''}` : ''}</div>
     <div class="act-bar">${b.join('')}</div>`;
 }
 
@@ -920,12 +920,24 @@ function openHelpModal() {
       <h2>Позвать на помощь</h2>
       <p class="muted" style="margin:0">Не хватает ${n.monsters - n.heroes + (n.warrior ? 0 : 1)} силы. Помощник добавит свою силу, а вы пообещаете ему часть клада.</p>
       <div class="pick-list">${h.helpTargets.map(id => { const p = pl(id); return `<button class="pick" data-helpto="${id}" aria-pressed="${id === target}" style="--seat:${p.color}"><span class="ava">${avatarSVG(p.avatar, p.color)}</span><span><b>${esc(p.name)}</b><br><small class="muted">сила ${p.power}, ${esc(raceText(p))}</small></span></button>`; }).join('')}</div>
-      <div><div class="muted" style="font-size:14px">Сколько карт клада отдать из ${n.treasures}</div><div class="stepper"><button class="btn small" data-offer="-1" aria-label="Меньше">−</button><b>${offer}</b><button class="btn small" data-offer="1" aria-label="Больше">+</button></div></div>
+      <div><div class="muted" style="font-size:14px">Сколько карт клада отдать из ${n.treasures}</div><div class="stepper"><button class="btn small" data-offer="-1" aria-label="Меньше">−</button><b>${offer}</b><button class="btn small" data-offer="1" aria-label="Больше">+</button></div>
+        <div class="muted" style="font-size:13.5px;margin-top:6px">Вам останется ${n.treasures - offer} из ${n.treasures}.${helpBonusNote(target)}</div></div>
       <div class="row"><button class="btn hero" data-act="sendHelp">Позвать</button><button class="btn ghost" data-act="closeOverlay">Отмена</button></div>
     </div>`);
   };
   S.ui.helpForm = { get: () => ({ target, offer }), setT: t => { target = t; draw(); }, setO: d => { offer = Math.max(0, Math.min(n.treasures, offer + d)); draw(); } };
   draw();
+}
+
+// бонусы помощника идут сверху из колоды и не уменьшают долю того, кто дерётся
+function helpBonusNote(pid) {
+  const p = pl(pid);
+  const goblin = p?.races.some(u => def(u).race === 'goblin');
+  const tavern = S.game.location && def(S.game.location).helperBonus;
+  const parts = [];
+  if (goblin) parts.push(`${esc(p.name)} — гоблин и возьмёт ещё карту`);
+  if (tavern) parts.push('в таверне помощнику положена ещё карта');
+  return parts.length ? ` ${parts.join(', ')} — она берётся из колоды сверху, вашу долю это не уменьшит.` : '';
 }
 
 function maybeHelpPrompt() {
@@ -941,7 +953,7 @@ function maybeHelpPrompt() {
   showOverlay(`<div class="modal" id="helpPrompt" role="alertdialog" aria-label="Просьба о помощи">
     <h2>${esc(pname(req.from))} зовёт на помощь</h2>
     <p style="margin:0">Бой против ${g.combat.monsters.map(m => '«' + esc(def(m.uid).name) + '»').join(', ')}. Сейчас ${n.heroes} против ${n.monsters}, с вами будет около ${n.heroes + myStr}.</p>
-    <p style="margin:0">Обещает <b>${req.offer}</b> ${plural(req.offer, 'карту', 'карты', 'карт')} клада.${mine.races.some(u => def(u).race === 'elf') ? ' Вы эльф: за победу получите уровень.' : ''} Если проиграете, расплата достанется и вам.</p>
+    <p style="margin:0">Обещает <b>${req.offer}</b> ${plural(req.offer, 'карту', 'карты', 'карт')} клада${(() => { const x = (mine.races.some(u => def(u).race === 'goblin') ? 1 : 0) + ((S.game.location && def(S.game.location).helperBonus) || 0); return x ? ` и ещё ${x} сверху из колоды` : ''; })()}.${mine.races.some(u => def(u).race === 'elf') ? ' Вы эльф: за победу получите уровень.' : ''} Если проиграете, расплата достанется и вам.</p>
     <div class="row"><button class="btn hero" data-help="1">Помочь</button><button class="btn ghost" data-help="0">Отказаться</button></div>
   </div>`);
 }
@@ -1184,7 +1196,7 @@ document.addEventListener('click', async e => {
   const tab = t.closest('[data-tab]');
   if (tab) return setTab(tab.dataset.tab);
   const avk = t.closest('[data-av-k]');
-  if (avk) { S.ui.avEdit.cfg[avk.dataset.avK] = Number(avk.dataset.avV); return drawAvatarEditor(); }
+  if (avk) { S.ui.avEdit.cfg = avWith(S.ui.avEdit.cfg, avk.dataset.avK, Number(avk.dataset.avV)); return drawAvatarEditor(); }
   const avt = t.closest('[data-av-tab]');
   if (avt) { S.ui.avEdit.tab = avt.dataset.avTab; return drawAvatarEditor(); }
   const ab = t.closest('[data-ability]');
@@ -1271,25 +1283,31 @@ document.addEventListener('click', async e => {
 
 // ───────────────────────── внешность героя ─────────────────────────
 const AV_TABS = [
-  { id: 'face', label: 'Лицо', rows: [['skin', 'Кожа', SKIN.map(c => c[1])], ['eyes', 'Глаза'], ['brows', 'Брови'], ['mouth', 'Рот']] },
+  { id: 'body', label: 'Тело', rows: [['gender', 'Пол', null, true], ['body', 'Телосложение', null, true], ['skin', 'Кожа', SKIN.map(c => c[1])]] },
+  { id: 'face', label: 'Лицо', rows: [['eyes', 'Глаза'], ['brows', 'Брови'], ['mouth', 'Рот'], ['extra', 'Приметы']] },
   { id: 'hair', label: 'Волосы', rows: [['hair', 'Причёска'], ['hairColor', 'Цвет волос', HAIRC], ['facial', 'Борода и усы']] },
-  { id: 'hat', label: 'Шапка', rows: [['hat', 'Головной убор'], ['hatColor', 'Цвет', CLOTH]] },
-  { id: 'acc', label: 'Аксессуары', rows: [['glasses', 'Очки'], ['extra', 'Приметы'], ['shirt', 'Одежда', CLOTH]] },
+  { id: 'wear', label: 'Одежда', rows: [['outfit', 'Верхняя одежда', null, true], ['shirt', 'Цвет одежды', CLOTH]] },
+  { id: 'hat', label: 'Шапка и очки', rows: [['hat', 'Головной убор'], ['hatColor', 'Цвет шапки', CLOTH], ['glasses', 'Очки']] },
   { id: 'bg', label: 'Фон', rows: [['bg', 'Цвет фона', BGC]] },
 ];
+// вариант внешности для превью и для клика: пол меняет ещё бороду и причёску
+const avWith = (cfg, k, i) => (k === 'gender' ? withGender(cfg, i) : { ...cfg, [k]: i });
 const seatColor = () => S.room?.members.find(m => m.id === S.room.me)?.color || '#f5b83d';
 function openAvatarEditor() {
-  S.ui.avEdit = { cfg: { ...S.avatar }, tab: S.ui.avEdit?.tab || 'face' };
+  S.ui.avEdit = { cfg: cleanAvatar(S.avatar && typeof S.avatar === 'object' ? S.avatar : avatarFromSeed(Number(S.avatar) || 0)), tab: S.ui.avEdit?.tab || 'body' };
   drawAvatarEditor();
 }
 function drawAvatarEditor() {
   const E = S.ui.avEdit, cfg = E.cfg, sc = seatColor();
   const tab = AV_TABS.find(t => t.id === E.tab) || AV_TABS[0];
-  const row = ([k, title, colors]) => {
+  const row = ([k, title, colors, labeled]) => {
     const n = AVATAR_PARTS[k];
+    const lab = i => esc(AV_LABELS[k]?.[i] || title);
+    if (labeled) return `<div class="av-row"><div class="av-title">${title}: <b>${lab(cfg[k])}</b></div><div class="av-grid labeled">${Array.from({ length: n }, (_, i) =>
+      `<button class="av-pick${cfg[k] === i ? ' on' : ''}" data-av-k="${k}" data-av-v="${i}" aria-pressed="${cfg[k] === i}"><span class="c">${avatarSVG(avWith(cfg, k, i), sc)}</span><small>${lab(i)}</small></button>`).join('')}</div></div>`;
     const items = Array.from({ length: n }, (_, i) => colors
       ? `<button class="av-sw${cfg[k] === i ? ' on' : ''}" data-av-k="${k}" data-av-v="${i}" style="--c:${colors[i] || sc}" aria-pressed="${cfg[k] === i}" aria-label="${title} ${i + 1}" title="${k === 'bg' && i === 0 ? 'Цвет вашего места' : ''}">${k === 'bg' && i === 0 ? '<i>место</i>' : ''}</button>`
-      : `<button class="av-opt${cfg[k] === i ? ' on' : ''}" data-av-k="${k}" data-av-v="${i}" aria-pressed="${cfg[k] === i}" title="${esc(AV_LABELS[k]?.[i] || '')}" aria-label="${esc(AV_LABELS[k]?.[i] || title)}">${avatarSVG({ ...cfg, [k]: i }, sc)}</button>`).join('');
+      : `<button class="av-opt${cfg[k] === i ? ' on' : ''}" data-av-k="${k}" data-av-v="${i}" aria-pressed="${cfg[k] === i}" title="${esc(AV_LABELS[k]?.[i] || '')}" aria-label="${lab(i)}">${avatarSVG(avWith(cfg, k, i), sc)}</button>`).join('');
     return `<div class="av-row"><div class="av-title">${title}${!colors && AV_LABELS[k] ? `: <b>${esc(AV_LABELS[k][cfg[k]])}</b>` : ''}</div><div class="${colors ? 'av-swatches' : 'av-grid'}">${items}</div></div>`;
   };
   showOverlay(`<div class="modal av-modal" role="dialog" aria-label="Внешность героя" id="avModal">

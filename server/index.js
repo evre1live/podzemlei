@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { Server } from 'socket.io';
 import { createGame, act, tick, view, P, WIN_LEVELS } from '../shared/engine.js';
 import { botDecide } from '../shared/bot.js';
-import { cleanAvatar } from '../shared/avatar.js';
+import { cleanAvatar, avatarFromSeed, withGender } from '../shared/avatar.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
@@ -53,6 +53,7 @@ const newCode = () => { let c; do { c = Array.from({ length: 6 }, () => CODE_CHA
 const newId = () => crypto.randomBytes(6).toString('hex');
 const newToken = () => crypto.randomBytes(24).toString('hex');
 const BOT_NAMES = ['Кротыч', 'Диггер Петя', 'Шахтёрка Зоя', 'Сталактитыч', 'Гоша из подвала', 'Тётя Вагонетка', 'Дед Фонарь', 'Крыса Лариса'];
+const BOT_WOMEN = new Set(['Шахтёрка Зоя', 'Тётя Вагонетка', 'Крыса Лариса']);
 const COLORS = ['#e8604c', '#f2b134', '#58b368', '#4aa3df', '#a46ad6', '#e86fb1'];
 
 const DELAYS = [10000, 20000, 30000];
@@ -353,7 +354,8 @@ io.on('connection', socket => {
     if (activeMembers(r).length >= r.maxPlayers) return 'Мест нет';
     const used = new Set(activeMembers(r).map(m => m.name));
     const name = BOT_NAMES.find(n => !used.has(n)) || 'Бот';
-    addMember(r, { name, isBot: true });
+    // у ботов внешность под стать имени: Зоя и Лариса — женщины, Кротыч и Дед Фонарь — мужчины
+    addMember(r, { name, isBot: true, avatar: withGender(avatarFromSeed(crypto.randomInt(100000)), BOT_WOMEN.has(name) ? 1 : 0) });
     sysChat(r, `За стол садится бот ${name}.`);
   }));
 
