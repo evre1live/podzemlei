@@ -376,6 +376,17 @@ const SOUNDS = {
     bell(E, { t: t + 0.09, f: 1975.5, dur: 0.8, vol: 0.06, wet: 0.6 });
     tone(E, { t, f: 400, f2: 900, dur: 0.3, vol: 0.06, wet: 0.4 });
   },
+  // выход босса: низкий гул с тритоном нарастает, затем три тяжёлых удара «дан — дан — ДАН»
+  bossRise(E, t) {
+    tone(E, { t, f: 55, type: 'sawtooth', dur: 2.6, a: 0.7, hold: 1.1, vol: 0.09, lp: 380, wet: 0.6, vib: 1.2, vibF: 5 });
+    tone(E, { t, f: 77.8, type: 'sawtooth', dur: 2.6, a: 0.7, hold: 1.1, vol: 0.07, lp: 420, wet: 0.6, vib: 1.5, vibF: 4.3 });
+    noiseV(E, { t, dur: 1.6, a: 0.9, vol: 0.12, type: 'bandpass', f: 220, f2: 900, q: 0.8, wet: 0.6 });
+    [[0.95, 110, 0.32], [1.3, 103.8, 0.32], [1.68, 82.4, 1.5]].forEach(([dt, f, d]) => {
+      tone(E, { t: t + dt, f, type: 'sawtooth', dur: d, a: 0.01, vol: 0.15, lp: 900, wet: 0.45 });
+      tone(E, { t: t + dt, f: f / 2, type: 'square', dur: d, a: 0.01, vol: 0.07, lp: 400, wet: 0.45 });
+      thud(E, t + dt, d > 1 ? 1.2 : 0.7);
+    });
+  },
   drip(E, t) {
     const f = rnd(900, 1700);
     tone(E, { t, f, f2: f * 1.7, dur: 0.07, vol: 0.12, wet: 0.95 });
@@ -442,6 +453,7 @@ const SAMPLED = {
     if (k === 'ghost') { S(E, t, 'ghost', { vol: 0.62, rate: Math.min(1.1, p * 1.05), wet: 0.6 }); return; }
     if (k === 'bug') { S(E, t, 'bug', { vol: 0.55, rate: p * 1.1, wet: 0.25 }); S(E, t + 0.18, 'bug', { vol: 0.35, rate: p, wet: 0.3 }); return; }
     if (k === 'water') { S(E, t, 'burble', { vol: 0.55, rate: p, wet: 0.4 }); S(E, t + 0.05, 'splash', { vol: 0.4, wet: 0.35 }); }
+    if (k === 'demon') { S(E, t, 'growlL', { vol: 0.75, rate: 0.68, wet: 0.6 }); S(E, t + 0.05, 'ghost', { vol: 0.35, rate: 0.55, wet: 0.7 }); tone(E, { t, f: 49, f2: 33, type: 'triangle', dur: 1.2, a: 0.05, vol: 0.2, wet: 0.4 }); return; }
     if (k === 'fire') S(E, t, 'poof', { vol: 0.35, rate: 0.8, wet: 0.35 });
     const pool = p > 1.08 ? 'growlS' : p > 0.86 ? 'growlM' : 'growlL';
     const rate = pool === 'growlS' ? p * 0.95 : pool === 'growlM' ? p * 1.05 : Math.max(0.74, p * 1.15);
@@ -555,6 +567,14 @@ const SAMPLED = {
   },
   sleep(E, t) { arp(E, t, 'pizz', [76, 72, 67], 0.22, 0.3, { wet: 0.65 }); },
   ward(E, t) { S(E, t, 'force', { vol: 0.28, wet: 0.45 }); S(E, t + 0.05, 'glass', { vol: 0.24, wet: 0.5 }); },
+  bossRise(E, t) {
+    SOUNDS.bossRise(E, t);
+    S(E, t + 0.1, 'ghost', { vol: 0.45, rate: 0.62, wet: 0.75 });
+    S(E, t + 0.95, 'boom', { vol: 0.45, rate: 0.8, wet: 0.5 });
+    S(E, t + 1.3, 'boom', { vol: 0.45, rate: 0.76, wet: 0.5 });
+    S(E, t + 1.68, 'boom', { vol: 0.75, rate: 0.62, wet: 0.7 });
+    S(E, t + 1.72, 'growlL', { vol: 0.62, rate: 0.7, wet: 0.55 });
+  },
 };
 
 async function loadBank(ctx) {

@@ -24,6 +24,8 @@ function dangerous(uid) {
   const fx = def(uid).bad?.fx || [];
   return fx.some(f => f.k === 'death' || f.k === 'allItems' || (f.k === 'levels' && f.n >= 2));
 }
+// монстр не тронет героя такого уровня — тратить на него карты незачем
+const calmFor = (p, uid) => !!def(uid).noPursue && p.level <= def(uid).noPursue;
 
 export function botDecide(s, pid, { rng = Math.random, now = Date.now() } = {}) {
   if (s.phase !== 'playing') return null;
@@ -100,14 +102,14 @@ function fighterMove(s, p, rng, now) {
   const boost = boostSelf(s, p, gap);
   if (boost) return boost;
 
-  const danger = c.monsters.some(m => dangerous(m.uid));
+  const danger = c.monsters.some(m => dangerous(m.uid) && !calmFor(p, m.uid));
   // окаменить самого сильного, если без него побеждаем
   const petrify = p.hand.find(u => def(u).effect === 'remove');
   if (petrify && c.monsters.length) {
     const idx = n.perMonster.indexOf(Math.max(...n.perMonster));
     if (c.monsters.length > 1 || danger) return { type: 'playCard', uid: petrify, monster: idx };
   }
-  if (hasClass(p, 'mage') && p.hand.length >= 3 && c.monsters.length === 1 && danger) {
+  if (hasClass(p, 'mage') && p.hand.length >= 3 && c.monsters.length === 1 && danger && !def(c.monsters[0].uid).boss) {
     return { type: 'ability', name: 'charm', cards: [], monster: 0 };
   }
   // попросить помощи
@@ -161,8 +163,9 @@ function interfere(s, p) {
     }
     if (d.type === 'oneshot' && d.effect === 'bonus') opts.push({ v: d.bonus, a: { type: 'playCard', uid: u, side: 'monster' } });
     if (d.type === 'wandering') {
-      const m = p.hand.filter(x => def(x).type === 'monster').sort((a, b) => monsterBaseLevel(s, def(b)) - monsterBaseLevel(s, def(a)))[0];
-      if (m) opts.push({ v: monsterBaseLevel(s, def(m)), a: { type: 'playCard', uid: u, with: m } });
+      const m = p.hand.filter(x => def(x).type === 'monster').sort((a, b) => (def(b).boss ? 1e4 : monsterBaseLevel(s, def(b))) - (def(a).boss ? 1e4 : monsterBaseLevel(s, def(a))))[0];
+      // босс из темноты встанет с силой вдвое больше силы бойца
+      if (m) opts.push({ v: def(m).boss ? 2 * heroStrength(s, f) : monsterBaseLevel(s, def(m)), a: { type: 'playCard', uid: u, with: m } });
     }
   }
   if (hasClass(p, 'rogue') && p.hand.length) {

@@ -387,11 +387,21 @@ function themeBurst(d, c, fit) {
   fx.dust(area, { n: 22, rocks: kind === 'rock' ? 0 : 6 });
 }
 // чем рычит монстр: нежить стонет, насекомые жужжат, слизь и грибы хлюпают
-export const growlKind = d => { const t = d?.tags || []; return t.includes('undead') ? 'ghost' : t.includes('insect') ? 'bug' : t.includes('fungus') ? 'slime' : t.includes('water') ? 'water' : t.includes('fire') ? 'fire' : ''; };
+export const growlKind = d => { const t = d?.tags || []; return d?.boss ? 'demon' : t.includes('undead') ? 'ghost' : t.includes('insect') ? 'bug' : t.includes('fungus') ? 'slime' : t.includes('water') ? 'water' : t.includes('fire') ? 'fire' : ''; };
 const tierOf = d => {
+  if (d.boss) return { lv: d.level, tier: 'hell', boss: true, hell: true };
   const lv = d.mirror != null ? 15 : d.level || 1;
   return { lv, tier: lv >= 16 ? 'boss' : lv >= 12 ? 'high' : lv >= 6 ? 'mid' : 'low', boss: lv >= 14 || d.mirror != null };
 };
+// стена адского огня снизу экрана и пепел, летящий вверх
+function hellfire(k, dur = 1600) {
+  const W = vw(), H = vh();
+  fx.spray({ x: W / 2, y: H + 6, w: W, h: 0 }, { n: 90, spreadX: 1, speed: [220, 520], angle: [-1.85, -1.3], g: -40, size: [2.4, 5.5], colors: ['#ff4a1a', '#ff8a3d', '#ffd27a', '#ff2a10'], shape: 'dot', life: [0.7, 1.4], delay: [0, dur / 1000] });
+  fx.spray({ x: W / 2, y: H + 6, w: W, h: 0 }, { n: 50, spreadX: 1, speed: [60, 160], angle: [-1.8, -1.35], g: -30, size: [1.2, 2.4], colors: ['#ffe6a0', '#ffb347'], shape: 'spark', life: [1.4, 2.4], delay: [0, dur / 1000] });
+  const wall = k.el('cn-hellwall', '');
+  k.a(wall, [{ opacity: 0, transform: 'translateY(40%)' }, { opacity: 1, transform: 'translateY(0)', offset: 0.25 }, { opacity: 0.85, transform: 'translateY(4%)', offset: 0.75 }, { opacity: 0, transform: 'translateY(30%)' }], { dur: dur + 600, ease: EASE.io });
+  k.rm(wall, dur + 650);
+}
 
 // ───────────── дверь ─────────────
 // возвращает момент (мс), когда из двери вылетает карта
@@ -437,9 +447,11 @@ S.intro = (f, o) => {
       closePanel();
       const c = { x: vw() / 2, y: vh() * 0.44 };
       const fit = fitBig();
+      const hell = !!d.boss;
       const dim = k.el('cn-dim ' + tier);
-      k.a(dim, [{ opacity: 0 }, { opacity: 1 }], { dur: 240 });
-      const t0 = o.door ? door(k, c, fit) : sigil(k, c, fit, o.wandering ? 'wander' : tier);
+      k.a(dim, [{ opacity: 0 }, { opacity: 1 }], { dur: hell ? 600 : 240 });
+      if (hell) { k.snd('bossRise'); quake(0.6); k.at(200, () => hellfire(k, 1500)); }
+      const t0 = o.door ? door(k, c, fit) : sigil(k, c, fit, hell ? 'hell' : o.wandering ? 'wander' : tier);
       const rays = k.pt('cn-rays ' + tier, raysSVG(), c.x, c.y);
       k.a(rays, [{ opacity: 0, transform: `scale(${fit * 0.5}) rotate(0deg)` }, { opacity: 1, transform: `scale(${fit}) rotate(28deg)`, offset: 0.3 }, { opacity: 0, transform: `scale(${fit * 1.1}) rotate(80deg)` }], { dur: 1700, delay: t0 - 60, ease: EASE.lin });
       const aura = k.pt('cn-aura ' + tier, '', c.x, c.y);
@@ -452,14 +464,23 @@ S.intro = (f, o) => {
         { transform: `scale(${fit}) rotate(0deg)`, opacity: 1 }], { dur: 540, delay: t0, ease: EASE.out });
       // монстр «дышит», пока висит в центре
       k.a(card.firstElementChild, [{ transform: 'scale(1)' }, { transform: 'scale(1.035) translateY(-3px)' }, { transform: 'scale(1)' }], { dur: 900, delay: t0 + 540, it: 2, ease: EASE.io, fill: 'none' });
-      k.snd('growl', { pitch: 1.35 - Math.min(lv, 20) / 28, dur: 0.6 + Math.min(lv, 20) / 40, kind: growlKind(d) }, t0 + 60);
+      k.snd('growl', { pitch: 1.35 - Math.min(lv, 20) / 28, dur: 0.6 + Math.min(lv, 20) / 40, kind: growlKind(d) }, t0 + (hell ? 1200 : 60));
       k.at(t0 + 290, () => {
         ring(k, c.x, c.y, tier, fit, 700);
         if (tier === 'high' || tier === 'boss') ring(k, c.x, c.y, tier, fit * 0.7, 800, 90);
         quake(boss ? 1.6 : 1);
         themeBurst(d, c, fit);
         sfx.play('boom', { k: boss ? 1.2 : lv >= 8 ? 0.9 : 0.65 });
-        if (boss) {
+        if (hell) {
+          flash(k, 'rgba(255,60,20,.6)', 480);
+          bolt(k, c.x - 300 * fit, 0, c.x - 110 * fit, c.y + 40, '#ff7a4a');
+          k.at(110, () => bolt(k, c.x + 300 * fit, 0, c.x + 120 * fit, c.y - 20, '#ffb347'));
+          k.at(260, () => bolt(k, c.x - 40 * fit, 0, c.x + 10 * fit, c.y - 160 * fit, '#ff4a1a'));
+          k.at(240, () => { quake(2.2); ring(k, c.x, c.y, 'hell', fit * 1.3, 900); });
+          sfx.play('thunder');
+          fx.vignette('rgba(200,20,0,.75)');
+          k.at(260, () => stamp(k, c.x, Math.max(70, c.y - 168 * fit - 34), 'Босс!', d.quote || '', 'hell', 1300));
+        } else if (boss) {
           flash(k, 'rgba(255,40,30,.42)', 360);
           bolt(k, c.x - 260 * fit, 0, c.x - 110 * fit, c.y + 40, '#ff9a8a');
           k.at(130, () => bolt(k, c.x + 280 * fit, 0, c.x + 120 * fit, c.y - 20, '#ffb3ff'));
@@ -467,10 +488,11 @@ S.intro = (f, o) => {
           fx.spray({ x: c.x, y: vh() + 10, w: vw(), h: 0 }, { n: 40, spreadX: 1, speed: [120, 300], angle: [-1.9, -1.25], g: -60, size: [1.5, 3], colors: ['#ff8a3d', '#ffb347', '#ff5a3d'], shape: 'spark', life: [1, 1.8], delay: [0, 0.6] });
         } else flash(k, 'rgba(255,240,210,.28)', 220);
       });
-      const plate = k.pt('cn-plate ' + tier, `<span class="cn-lv">${d.mirror != null ? '?' : lv}</span><span><small>${o.wandering ? 'Подкрепление!' : boss ? 'Босс подземелья' : 'Уровень ' + (d.mirror != null ? '?' : lv)}</small><b></b></span>`, c.x, Math.min(vh() - 40, c.y + 168 * fit + 30));
+      const sub = hell ? `${o.wandering ? 'Из темноты · ' : ''}сила ${f.power ?? '×2'} — вдвое больше героя` : o.wandering ? 'Подкрепление!' : boss ? 'Босс подземелья' : 'Уровень ' + (d.mirror != null ? '?' : lv);
+      const plate = k.pt('cn-plate ' + tier, `<span class="cn-lv">${d.mirror != null ? '?' : lv}</span><span><small>${sub}</small><b></b></span>`, c.x, Math.min(vh() - 40, c.y + 168 * fit + 30));
       plate.querySelector('b').textContent = d.name;
       k.a(plate, [{ opacity: 0, transform: 'translateY(16px) scale(.6)' }, { opacity: 1, transform: 'translateY(-4px) scale(1.06)', offset: 0.65 }, { opacity: 1, transform: 'none' }], { dur: 340, delay: t0 + 330, ease: EASE.out });
-      let T = t0 + 1000;
+      let T = t0 + (hell ? 2300 : 1000);
       if (o.ambush) {
         k.at(t0 + 640, () => {
           const cl = k.pt('cn-claw big', CLAW, c.x, c.y);

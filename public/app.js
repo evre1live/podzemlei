@@ -550,6 +550,17 @@ const SWORDS = (() => {
   const sw = `<path d="M32 3 L36 10 L36 40 L28 40 L28 10 Z" fill="#e9eef5"/><path d="M32 9 V38" stroke="#b9c3cf" stroke-width="1.6"/><rect x="21" y="39" width="22" height="5" rx="2" fill="#e8c15a"/><rect x="29.5" y="44" width="5" height="11" rx="2" fill="#7a4b2c"/><circle cx="32" cy="57.5" r="3.2" fill="#e8c15a"/>`;
   return `<svg viewBox="0 0 64 64" aria-hidden="true"><g stroke="#231a26" stroke-width="2.6" stroke-linejoin="round"><g transform="rotate(42 32 32)">${sw}</g><g transform="rotate(-42 32 32)">${sw}</g></g></svg>`;
 })();
+// пометки под монстром: босс, «не убежать», «без помощи»; босс подсказывает, тронет ли он участников боя
+function monFlags(m, c) {
+  const d = def(m.uid), f = [];
+  if (d.boss) {
+    const calm = [c.fighter, c.helper].filter(Boolean).every(id => (pl(id)?.level || 1) <= d.noPursue);
+    f.push('<span class="flag hell">босс</span>', calm ? `<span class="flag calm">не гонится ниже ${d.noPursue + 1}-го ур.</span>` : '<span class="flag">не убежал — −5 ур. и смерть</span>');
+  }
+  if (m.noEscape) f.push('<span class="flag">не убежать</span>');
+  if (d.noHelp) f.push('<span class="flag">без помощи</span>');
+  return f.length ? `<div class="mon-flags">${f.join('')}</div>` : '';
+}
 const tierClass = str => (str >= 16 ? 'boss' : str >= 12 ? 'high' : str >= 6 ? 'mid' : 'low');
 
 function fightHTML() {
@@ -573,9 +584,9 @@ function fightHTML() {
   const mods = side => pm.filter(x => x.side === side).map(x => `<span class="mod ${side === 'player' ? 'p' : 'm'}">${x.t}</span>`).join('');
   const monsters = c.monsters.map((m, i) => `
     <div class="mon-wrap">
-      <div class="mon-body ${tierClass(m.strength)}">${cardHTML(m.uid, { size: 'sm', attrs: `data-zone="view"` })}</div>
-      <span class="mon-str">сила ${m.strength}${def(m.uid).mirror != null ? ` <small>(лидер ${m.level - def(m.uid).mirror} + ${def(m.uid).mirror})</small>` : ''}</span>
-      ${m.noEscape || def(m.uid).noHelp ? `<div class="mon-flags">${m.noEscape ? '<span class="flag">не убежать</span>' : ''}${def(m.uid).noHelp ? '<span class="flag">без помощи</span>' : ''}</div>` : ''}
+      <div class="mon-body ${def(m.uid).boss ? 'boss hell' : tierClass(m.strength)}">${cardHTML(m.uid, { size: 'sm', attrs: `data-zone="view"` })}</div>
+      <span class="mon-str">сила ${m.strength}${def(m.uid).mirror != null ? ` <small>(лидер ${m.level - def(m.uid).mirror} + ${def(m.uid).mirror})</small>` : ''}${def(m.uid).boss ? ` <small>(вдвое больше силы ${esc(pname(c.fighter))})</small>` : ''}</span>
+      ${monFlags(m, c)}
       ${m.enh.length ? `<div class="enh-list">${m.enh.map(u => `<span class="mod m" data-uid="${u}" data-zone="view">${esc(def(u).name)} ${def(u).double ? '×2' : (def(u).bonus > 0 ? '+' : '') + def(u).bonus}</span>`).join('')}</div>` : ''}
     </div>`).join('');
   let center;
@@ -990,6 +1001,8 @@ const RULES = `<div class="modal rules" role="dialog" aria-label="Как игр�
   <p>Карта локации меняет правила для всех, пока кто-нибудь не сыграет другую: в затопленном тоннеле труднее убежать, на рынке вещи дороже, в котельной проклятия тают. События срабатывают сразу для всего стола. Зелья дают бонус в текущем или следующем бою.</p>
   <h3>Особые монстры</h3>
   <p>Одни нападают из засады, едва вы открыли дверь, другие не терпят помощников, от третьих не убежать. Зеркальный двойник всегда сильнее лидера партии. Читайте карту, прежде чем драться.</p>
+  <h3>Боссы</h3>
+  <p>В колоде три босса — Люцифер, Аид и Анубис. Уровень у них 666, а сила — вдвое больше силы героя, против которого босс вышел. Усилители и чары на них не действуют, зато помощник, зелья и разовые карты помогают как обычно: вдвоём босса можно одолеть и получить 5 кладов и 2 уровня. За героями ниже 9-го уровня боссы не гонятся, а тех, кто постарше, при неудачном побеге убивают и отбрасывают на 5 уровней.</p>
   <h3>Смерть</h3>
   <p>Погибший теряет вещи и руку, но сохраняет уровень, расу и класс. В свой следующий ход он возвращается с новыми картами.</p>
   <button class="btn primary" data-act="closeOverlay">Понятно</button>
@@ -1030,6 +1043,7 @@ function soundFx(fresh) {
     switch (f.kind) {
       case 'reveal': sfx.play('door'); break;
       case 'combat': case 'wandering': {
+        if (def(f.card)?.boss) sfx.play('bossRise');
         const lv = def(f.card)?.level ?? 5;
         sfx.play('growl', { delay: kinds.has('reveal') ? 0.4 : 0.1, pitch: 1.35 - Math.min(lv, 20) / 28, dur: 0.6 + Math.min(lv, 20) / 40, kind: growlKind(def(f.card)) });
         break;

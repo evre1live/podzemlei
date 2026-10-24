@@ -1,6 +1,6 @@
 // «Под Землёй» — игровой движок. Чистые функции над JSON-состоянием.
 // Сервер хранит состояние, вызывает act()/tick() и рассылает view() каждому игроку.
-import { def, allUids, RACE_NAMES, CLASS_NAMES, ruleText } from './cards.js';
+import { def, allUids, RACE_NAMES, CLASS_NAMES, ruleText, BOSS_MULT, BOSS_MIN_LEVEL } from './cards.js';
 
 export const WIN_LEVEL = 10;
 // до какого уровня идёт партия: 10 по умолчанию, в лобби можно выбрать 15 или 20
@@ -422,8 +422,13 @@ export function heroStrength(s, p) {
 export function monsterBaseLevel(s, d) {
   return d.mirror != null ? Math.max(...s.players.map(x => x.level)) + d.mirror : d.level;
 }
+export function bossPower(s, p) {
+  return p ? Math.max(2, BOSS_MULT * heroStrength(s, p)) : 2;
+}
 export function monsterStrength(s, m) {
   const d = def(m.uid);
+  // сила босса запоминается, когда он выходит в бой: вдвое больше силы героя; усилители и локации её не меняют
+  if (d.boss) return m.power ?? bossPower(s, P(s, s.combat?.fighter));
   let base = monsterBaseLevel(s, d);
   if (m.enh.some(u => def(u).double)) base *= 2;
   let v = base + m.enh.reduce((a, u) => a + (def(u).bonus || 0), 0);
@@ -483,8 +488,11 @@ function startCombat(s, p, monsterUid, rng = Math.random) {
   };
   s.turn.step = 'combat';
   const d = def(monsterUid);
+  const m0 = s.combat.monsters[0];
+  if (d.boss) m0.power = bossPower(s, p);
   log(s, `${p.name} встречает ${q(d.name)} (ур. ${monsterBaseLevel(s, d)}). Бой!`, 'combat');
-  fx(s, { kind: 'combat', pid: p.id, card: monsterUid });
+  if (d.boss) log(s, `👹 Это босс! Его сила вдвое больше силы ${p.name}: ${m0.power}. ${p.level < BOSS_MIN_LEVEL ? `За героями ниже ${BOSS_MIN_LEVEL}-го уровня он не гонится.` : 'Не одолеешь и не убежишь — −5 уровней и смерть.'}`, 'bad');
+  fx(s, { kind: 'combat', pid: p.id, card: monsterUid, ...(d.boss ? { power: m0.power } : {}) });
   if (d.ambush) {
     log(s, d.ambush.text, 'bad');
     fx(s, { kind: 'ambush', pid: p.id, card: monsterUid });
@@ -619,7 +627,7 @@ export function cardWorth(uid) {
   const d = def(uid);
   if (d.rarity === 'legendary') return 5000;
   if (d.type === 'levelup') return 900;
-  if (d.type === 'monster') return 50 + (d.level || 10) * 10;
+  if (d.type === 'monster') return d.boss ? 600 : 50 + (d.level || 10) * 10;
   if (d.type === 'buff') return 250 + d.bonus * 60;
   if (d.type === 'location' || d.type === 'event') return 250;
   return (d.value || 0) + (d.bonus || 0) * 50 + 100;
@@ -733,6 +741,7 @@ function playCheck(s, p, a) {
     case 'enhancer':
       if (!c) return 'Только во время боя';
       if (!Number.isInteger(a.monster) || !c.monsters[a.monster]) return 'Выберите монстра';
+      if (def(c.monsters[a.monster].uid).boss) return 'На босса усилители не действуют: его сила — вдвое больше силы героя';
       return null;
     case 'wandering':
       if (!c) return 'Только во время боя';
@@ -808,9 +817,11 @@ H.playCard = {
       case 'wandering':
         without(p.hand, a.with);
         c.used.push(a.uid);
-        c.monsters.push({ uid: a.with, enh: [] });
-        log(s, `${p.name}: из темноты вылезает ${q(def(a.with).name)} (ур. ${def(a.with).level})!`, 'combat');
-        fx(s, { kind: 'wandering', pid: p.id, card: a.with });
+        const wm = { uid: a.with, enh: [] };
+        if (def(a.with).boss) wm.power = bossPower(s, P(s, c.fighter));
+        c.monsters.push(wm);
+        log(s, `${p.name}: из темноты вылезает ${q(def(a.with).name)} (${wm.power ? `босс, сила ${wm.power}` : `ур. ${def(a.with).level}`})!`, 'combat');
+        fx(s, { kind: 'wandering', pid: p.id, card: a.with, ...(wm.power ? { power: wm.power } : {}) });
         break;
       case 'oneshot':
         c.used.push(a.uid);
@@ -1046,6 +1057,7 @@ H.ability = {
         if (!c || !isParticipant(s, p.id)) return 'Только в своём бою';
         if (p.hand.length < 3) return 'Нужно минимум 3 карты в руке';
         if (!Number.isInteger(a.monster) || !c.monsters[a.monster]) return 'Выберите монстра';
+        if (def(c.monsters[a.monster].uid).boss) return 'Босса чарами не усыпить';
         return null;
       }
       case 'backstab': {

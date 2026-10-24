@@ -377,6 +377,25 @@ label { display: grid; gap: 6px; font-size: 14px; color: var(--muted); }
 .card.r-legendary .c-name span { background: linear-gradient(90deg, #fff3b0, #ffd56a, #a6f2ff, #ffb0e0, #fff3b0); background-size: 200% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; text-shadow: none; filter: drop-shadow(0 1.5px 0 rgba(0,0,0,.75)); animation: legName 4s linear infinite; }
 .card.r-legendary .corner.bonus { background: linear-gradient(#fff3b0, #f2c14e 55%, #a8680c); color: #3a2508; }
 .card.r-legendary .c-type { background: linear-gradient(90deg, #7a3fa0, #c8922c); color: #fff; }
+/* боссы: почти чёрная карта с багровым огнём, имя горит, рамка пульсирует */
+.card.boss { --fa: #4a1016; --fb: #1a0508; --fc: #050102; --rim: rgba(255,120,90,.45); --nm: #fff1e0; --paper: #f6e6dc; --paper2: #e2c4b6; border-color: #000;
+  background: radial-gradient(120% 70% at 50% 0%, rgba(255,90,40,.35), rgba(255,60,20,0) 62%), linear-gradient(165deg, var(--fa), var(--fb) 52%, var(--fc));
+  animation: hellGlow 1.8s ease-in-out infinite alternate; }
+.card.boss .c-name span { background: linear-gradient(180deg, #fff6c0, #ffb347 45%, #ff4a1a 80%); -webkit-background-clip: text; background-clip: text; color: transparent; text-shadow: none; filter: drop-shadow(0 1.5px 0 #000) drop-shadow(0 0 6px rgba(255,80,30,.7)); }
+.card.boss .c-art { border-color: #000; box-shadow: 0 0 0 1.5px #ff7a4a, 0 0 12px rgba(255,70,30,.65); }
+.card.boss .c-text { border-color: #7a1e16; }
+.card.boss .c-text .bad { color: #a01208; font-weight: 600; }
+.card.boss .c-type { background: linear-gradient(90deg, #8a0e10, #ff5a1a); color: #fff6d8; }
+.card.boss .corner.hell { background: radial-gradient(circle at 50% 30%, #ffdf8a, #ff5a1a 45%, #6a0606); color: #fff; font-size: 13px; text-shadow: 0 1px 0 #000, 0 0 6px #ff3a10; }
+.card.lg.boss .corner.hell { font-size: 19px; }
+.card.sm.boss .corner.hell { font-size: 11.5px; }
+.card.boss.r-epic::before { background: linear-gradient(100deg, transparent, rgba(255,150,90,.5), transparent); animation-duration: 2.6s; }
+.card.boss.r-epic::after { background: radial-gradient(circle at 18% 30%, #ffd27a 0 1.2px, transparent 2px), radial-gradient(circle at 82% 22%, #ff8a3d 0 1.1px, transparent 2px), radial-gradient(circle at 70% 58%, #ffd27a 0 1.3px, transparent 2.2px), radial-gradient(circle at 28% 62%, #ff8a3d 0 1px, transparent 1.9px); }
+.card.boss .c-foot span:last-child { color: #ffb38a; }
+@keyframes hellGlow {
+  from { box-shadow: inset 0 0 0 2px #ff7a4a, inset 0 0 12px rgba(255,60,20,.4), 0 4px 0 rgba(0,0,0,.5), 0 0 12px rgba(255,50,20,.35); }
+  to { box-shadow: inset 0 0 0 2px #ffb38a, inset 0 0 18px rgba(255,90,30,.6), 0 4px 0 rgba(0,0,0,.5), 0 0 26px rgba(255,60,20,.75); }
+}
 @keyframes legGlow {
   from { box-shadow: inset 0 0 0 2px #fff7d6, 0 4px 0 rgba(0,0,0,.45), 0 0 14px rgba(255,200,90,.45), 0 0 26px rgba(170,110,255,.25); }
   to { box-shadow: inset 0 0 0 2px #fff7d6, 0 4px 0 rgba(0,0,0,.45), 0 0 26px rgba(255,210,110,.8), 0 0 50px rgba(170,110,255,.5); }
@@ -580,6 +599,8 @@ label { display: grid; gap: 6px; font-size: 14px; color: var(--muted); }
 
 .mon-flags { display: flex; gap: 4px; flex-wrap: wrap; justify-content: center; }
 .flag { font-size: 11px; font-weight: 700; padding: 1px 8px; border-radius: 99px; background: var(--rust); color: #fff; }
+.flag.hell { background: linear-gradient(90deg, #6a0606, #ff4a1a); color: #fff6d8; letter-spacing: .06em; text-transform: uppercase; box-shadow: 0 0 10px rgba(255,70,30,.55); }
+.flag.calm { background: #2f7a5a; }
 .mon-str small { font-family: var(--ui); font-size: 11px; color: var(--muted); }
 .badge.good { background: var(--verdigris); color: #0f2a24; }
 .chip.r-epic { box-shadow: inset 0 0 0 1.5px rgba(255,213,106,.7); }
@@ -830,6 +851,9 @@ body.has-world { background: #120e22; }
 .cn-dim.soft { background: radial-gradient(ellipse 62% 58% at 50% 44%, rgba(16,10,26,.2), rgba(6,3,10,.68)); }
 .cn-dim.high { background: radial-gradient(ellipse 62% 58% at 50% 44%, rgba(60,14,10,.4), rgba(10,3,4,.88)); }
 .cn-dim.boss { background: radial-gradient(ellipse 62% 58% at 50% 44%, rgba(80,8,24,.46), rgba(10,2,6,.92)); }
+.cn-dim.hell { background: radial-gradient(ellipse 62% 58% at 50% 44%, rgba(120,16,6,.5), rgba(14,2,2,.94)); }
+.cn-hellwall { left: 0; right: 0; bottom: 0; height: 46vh; pointer-events: none; mix-blend-mode: screen;
+  background: radial-gradient(60% 90% at 20% 100%, rgba(255,90,20,.85), rgba(255,60,10,0) 70%), radial-gradient(55% 80% at 55% 100%, rgba(255,150,40,.8), rgba(255,80,10,0) 70%), radial-gradient(60% 95% at 88% 100%, rgba(255,70,20,.85), rgba(255,40,10,0) 70%); }
 .cn-dim.legend { background: radial-gradient(ellipse 62% 58% at 50% 44%, rgba(70,48,10,.34), rgba(8,5,12,.9)); }
 .cn-flash, .cn-bolt { left: 0; top: 0; width: 100%; height: 100%; }
 .cn-bolt svg { display: block; }
@@ -846,6 +870,10 @@ body.has-world { background: #120e22; }
 
 .cn-rays { --rc: 255,236,190; width: 900px; height: 900px; color: rgb(var(--rc)); }
 .cn-rays svg { display: block; width: 100%; height: 100%; }
+.cn-rays.hell { --rc: 255,110,40; } .cn-aura.hell { --ac: 255,70,20; } .cn-ring.hell { --rc: 255,90,30; } .cn-sigil.hell { color: #ff5a1a; }
+.cn-plate.hell { --pc: #ffb38a; --ac: 255,70,20; } .cn-plate.hell .cn-lv { width: 62px; font-size: 24px; border-radius: 31px; background: radial-gradient(circle at 50% 30%, #ffdf8a, #ff5a1a 45%, #6a0606); text-shadow: 0 1px 0 #000; }
+.cn-stamp.hell b { background-image: linear-gradient(180deg, #fff6c0 8%, #ffb347 40%, #ff3a10 75%, #7a0606); -webkit-text-stroke-color: rgba(60,0,0,.7); filter: drop-shadow(0 4px 0 #3a0202) drop-shadow(0 0 22px rgba(255,60,10,.85)); }
+.cn-stamp.hell small { border-color: rgba(255,120,60,.5); color: #ffe6d0; font-style: italic; white-space: normal; max-width: min(520px, 86vw); text-align: center; }
 .cn-rays.low { --rc: 160,245,215; } .cn-rays.mid { --rc: 255,214,140; } .cn-rays.high { --rc: 255,140,100; } .cn-rays.boss { --rc: 255,120,220; }
 .cn-rays.curse { --rc: 210,170,255; } .cn-rays.loc { --rc: 150,236,210; } .cn-rays.event { --rc: 255,196,120; } .cn-rays.legend { --rc: 255,226,150; }
 .cn-aura { --ac: 255,200,90; width: 430px; height: 540px; border-radius: 50%; background: radial-gradient(closest-side, rgba(var(--ac),.8), rgba(var(--ac),.28) 55%, rgba(var(--ac),0)); }
@@ -939,7 +967,7 @@ body.has-world { background: #120e22; }
 .mon-body { --ac: 255,170,60; position: relative; z-index: 0; animation: monBreath 3.4s ease-in-out infinite; animation-delay: var(--ph, 0s); }
 .mon-body::before { content: ''; position: absolute; inset: -22px -28px; z-index: -1; border-radius: 45%; pointer-events: none;
   background: radial-gradient(closest-side, rgba(var(--ac),.58), rgba(var(--ac),.18) 62%, rgba(var(--ac),0)); animation: auraPulse 2.2s ease-in-out infinite alternate; animation-delay: var(--ph2, 0s); }
-.mon-body.low { --ac: 110,230,190; } .mon-body.high { --ac: 255,80,50; } .mon-body.boss { --ac: 220,60,255; }
+.mon-body.low { --ac: 110,230,190; } .mon-body.high { --ac: 255,80,50; } .mon-body.boss { --ac: 220,60,255; } .mon-body.hell { --ac: 255,70,20; }
 .mon-body.high::after, .mon-body.boss::after { content: ''; position: absolute; inset: -8px; z-index: -1; border-radius: 18px; border: 2px solid rgba(var(--ac),.7); pointer-events: none; animation: bossRing 1.7s ease-out infinite; animation-delay: var(--ph2, 0s); }
 @keyframes monBreath { 0%, 100% { transform: translateY(0) scale(1); } 50% { transform: translateY(-4px) scale(1.018); } }
 @keyframes auraPulse { from { opacity: .5; transform: scale(.93); } to { opacity: 1; transform: scale(1.06); } }

@@ -15,11 +15,24 @@
 //  soloBonus — сильнее против одиночки; noHelp — звать на помощь нельзя
 //  escape:false — убежать нельзя; escapeMod — поправка к побегу; noPursue — не гонится за низкими уровнями
 //  ambush — эффект при встрече; mirror — сила = уровень лидера + mirror
+//  boss — босс: уровень 666, сила вдвое больше силы героя; усилители, локации и чары на него не действуют
 //  art — параметры рисунка: body, hue, props, eyes, mouth, pattern, heads, crown
 
 const M = (id, name, level, treasures, extra = {}) => ({
   id, deck: 'door', type: 'monster', name, level, treasures, levels: 1, copies: 1,
   rarity: level >= 15 ? 'epic' : level >= 10 ? 'rare' : 'common', ...extra,
+});
+// Боссы — гроза лидеров. Новичков не трогают, а тех, кто дорос до 9-го уровня, при неудачном побеге убивают и отбрасывают на 5 уровней.
+// Уровень на карте всегда 666, а сила — вдвое больше силы героя, против которого босс вышел.
+export const BOSS_LEVEL = 666;
+export const BOSS_MULT = 2;
+export const BOSS_MIN_LEVEL = 9;
+const BOSS = (id, name, extra) => ({
+  id, deck: 'door', type: 'monster', boss: true, name, level: BOSS_LEVEL, treasures: 5, levels: 2, copies: 1, rarity: 'epic',
+  noPursue: BOSS_MIN_LEVEL - 1,
+  text: `Сила вдвое больше силы героя, против которого он вышел. Не гонится за героями ниже ${BOSS_MIN_LEVEL}-го уровня.`,
+  bad: { text: '−5 уровней, и ты погибаешь.', fx: [{ k: 'levels', n: 5 }, { k: 'death' }] },
+  ...extra,
 });
 const RACE = (id, race, name, copies, text) => ({ id, deck: 'door', type: 'race', race, name, copies, art: race, text, rarity: 'rare' });
 const CLS = (id, cls, name, copies, text) => ({ id, deck: 'door', type: 'class', cls, name, copies, art: cls, text, rarity: 'rare' });
@@ -230,6 +243,12 @@ export const CARD_DEFS = [
     tags: ['fire', 'metro'], art: { body: 'dragon', hue: 125, heads: 3 }, levels: 2, noPursue: 5,
     text: 'Три головы, три пересадки. Не гонится за 5-м уровнем и ниже.',
     bad: { text: 'Проехал по тебе всю кольцевую. Ты погибаешь.', fx: [{ k: 'death' }] } }),
+
+  // ───────────── БОССЫ ─────────────
+  // Одному не справиться: нужен помощник, зелья и разовые карты. Или убежать, бросить шашку, окаменить свитком, подставить питомца.
+  BOSS('m_lucifer', 'Люцифер', { art: { boss: 'lucifer', hue: 0 }, quote: 'Ну здравствуй, герой. Присаживайся, у нас тепло.' }),
+  BOSS('m_hades', 'Аид', { art: { boss: 'hades', hue: 160 }, quote: 'Добро пожаловать в моё подземелье. Обратно не провожаем.' }),
+  BOSS('m_anubis', 'Анубис', { art: { boss: 'anubis', hue: 42 }, quote: 'Положи сердце на весы. Посмотрим, сколько ты весишь.' }),
 
   // ───────────── ПРОКЛЯТИЯ ─────────────
   { id: 'k_draft', deck: 'door', type: 'curse', name: 'Проклятие: Сквозняк', copies: 2, art: 'wind',

@@ -362,6 +362,8 @@ const TYPE_LABEL = {
 const SLOT_LABEL = SLOT_NAMES;
 
 export function cardText(d) {
+  // у босса главное — расплата: она идёт первой, чтобы читалась и на маленькой карте
+  if (d.boss) return `<span class="bad"><b>Расплата:</b> ${esc(d.bad.text)}</span> ${esc(d.text)}`;
   if (d.type === 'monster') {
     const parts = [];
     if (d.tags?.length) parts.push(`<span class="tags">${d.tags.map(t => `<i>${esc(TAG_NAMES[t] || t)}</i>`).join('')}</span>`);
@@ -383,6 +385,7 @@ function nameClass(n) {
 }
 
 export function cornerOf(d) {
+  if (d.boss) return { cls: 'lv hell', v: d.level, t: 'Уровень босса — 666, а сила — вдвое больше силы героя' };
   if (d.type === 'monster') return d.mirror != null ? { cls: 'lv', v: '?', t: 'Сила зависит от лидера' } : { cls: 'lv', v: d.level, t: 'Уровень монстра' };
   if (d.type === 'oneshot' && d.effect === 'escapeBonus') return { cls: 'run', v: '+' + d.bonus, t: 'К побегу' };
   if ((d.type === 'item' || d.type === 'oneshot' || d.type === 'buff') && d.bonus) return { cls: 'bonus', v: '+' + d.bonus, t: 'Бонус к силе' };
@@ -395,6 +398,7 @@ export function cardHTML(uid, o = {}) {
   const cls = ['card', d.deck, 't-' + d.type, o.size || 'md'];
   if (d.rarity && d.rarity !== 'common') cls.push('r-' + d.rarity);
   if (d.bg) cls.push('k-' + d.bg);
+  if (d.boss) cls.push('boss');
   if (o.selected) cls.push('selected');
   if (o.playable) cls.push('playable');
   if (o.dim) cls.push('dim');
@@ -402,11 +406,12 @@ export function cardHTML(uid, o = {}) {
   const c = cornerOf(d);
   const corner = c ? `<span class="corner ${c.cls}${String(c.v).length > 2 ? ' wide' : ''}" title="${c.t}">${c.v}</span>` : '';
   let foot = '';
-  if (d.type === 'monster') foot = `<span title="Клад за победу"><i class="ico-gem"></i>${d.treasures}</span><span>+${d.levels || 1} ур.</span>`;
+  if (d.boss) foot = `<span title="Сила босса — вдвое больше силы героя, против которого он вышел">сила ×2</span><span title="Клад и уровни за победу"><i class="ico-gem"></i>${d.treasures} · +${d.levels} ур.</span>`;
+  else if (d.type === 'monster') foot = `<span title="Клад за победу"><i class="ico-gem"></i>${d.treasures}</span><span>+${d.levels || 1} ур.</span>`;
   else if (d.type === 'item') foot = `<span>${SLOT_LABEL[d.slot] || ''}${d.hands === 2 ? ' ×2' : d.hands === 3 ? ' ×3' : ''}${d.big ? ' · большая' : ''}</span><span>${d.value ? d.value + ' г' : 'бесценно'}</span>`;
   else if (d.value) foot = `<span>${TYPE_LABEL[d.type]}</span><span>${d.value} г</span>`;
   else foot = `<span>${TYPE_LABEL[d.type]}</span>`;
-  const typeTag = d.rarity === 'legendary' ? 'Легенда' : d.type === 'monster' ? (d.tags?.includes('undead') ? 'Нежить' : 'Монстр') : TYPE_LABEL[d.type];
+  const typeTag = d.boss ? 'Босс' : d.rarity === 'legendary' ? 'Легенда' : d.type === 'monster' ? (d.tags?.includes('undead') ? 'Нежить' : 'Монстр') : TYPE_LABEL[d.type];
   return `<div class="${cls.join(' ')}" data-uid="${esc(uid)}" ${o.attrs || ''} tabindex="${o.tab === false ? -1 : 0}" role="button" aria-label="${esc(d.name)}">
     <div class="c-name ${nameClass(d.name)}"><span>${esc(d.name)}</span></div>
     <div class="c-art">${cardArt(d, uid)}${corner}<span class="c-type">${typeTag}</span></div>

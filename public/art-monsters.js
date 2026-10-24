@@ -1,6 +1,7 @@
 // «Под Землёй» — мультяшные монстры. Всё рисуется кодом в SVG по параметрам карты.
 // Каждое тело возвращает разметку и «точки крепления» для лица, шапки и реквизита.
 import { def } from '/shared/cards.js';
+import { bossSVG, bossDefs } from '/art-bosses.js';
 
 export const INK = '#231a26';
 const OUT = `stroke="${INK}" stroke-width="3.2" stroke-linejoin="round" stroke-linecap="round"`;
@@ -417,6 +418,7 @@ const BODIES = {
 export function monsterSVG(uid) {
   const d = def(uid);
   const a = d.art || {};
+  if (a.boss) return bossSVG(a.boss);
   const h = a.hue ?? 30, sat = a.sat ?? 52;
   const gid = 'mg-' + d.id;
   const C = { f: `url(#${gid})`, fl: col(h, sat, 74), fd: col(h, Math.max(0, sat - 6), 36), h, s: sat, iris: col((h + 180) % 360, 60, 48) };
@@ -456,6 +458,7 @@ export function monsterSVG(uid) {
 // Градиенты всех монстров и сцен: кладутся в документ один раз (см. art.js → injectDefs).
 export function monsterDefs(defs) {
   let out = '';
+  out += bossDefs();
   for (const [k, P] of Object.entries(SCENE_PAL)) out += `<radialGradient id="sc-${k}" cx="50%" cy="42%" r="75%"><stop offset="0" stop-color="${P[0]}"/><stop offset="1" stop-color="${P[1]}"/></radialGradient>`;
   for (const d of defs) {
     if (d.type !== 'monster') continue;

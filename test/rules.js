@@ -457,4 +457,97 @@ t('внешность: пол, телосложение и 10 видов оде�
   assert.equal(w.facial, 0); assert.notEqual(w.hair, 1);
 });
 
+// кубик всегда показывает 1 или 6 — чтобы побег точно провалился или удался
+const lowDie = () => 0, highDie = () => 0.99;
+const runWith = (s, pid, die) => act(s, pid, { type: 'runAway' }, { rng: die, now: 1000 });
+
+t('боссы: уровень 666, сила вдвое больше силы героя, усилители и чары не действуют', () => {
+  const bosses = ['m_lucifer', 'm_hades', 'm_anubis'].map(id => def(id + '#0'));
+  assert.deepEqual(bosses.map(d => [d.boss, d.level, d.noPursue]), [[true, 666, 8], [true, 666, 8], [true, 666, 8]]);
+  const s = fresh(); const p = P(s, 'p0'); p.level = 9;
+  p.hand.push(take(s, 'i_jackhammer#0')); A(s, 'p0', { type: 'playCard', uid: 'i_jackhammer#0' }); // сила 9 + 5 = 14
+  s.location = take(s, 'loc_storm#0'); // монстрам +2 — боссу всё равно
+  fight(s, 'm_lucifer#0');
+  assert.equal(combatNumbers(s).monsters, 28);
+  // сила запомнилась при выходе: зелье героя её не поднимает
+  p.hand.push(take(s, 'b_pies#0')); A(s, 'p0', { type: 'playCard', uid: 'b_pies#0' });
+  assert.equal(combatNumbers(s).heroes, 18); assert.equal(combatNumbers(s).monsters, 28);
+  const o = P(s, 'p1'); o.hand.push(take(s, 'e_hungry#0'), take(s, 'e_baby#0'));
+  assert.match(A(s, 'p1', { type: 'playCard', uid: 'e_hungry#0', monster: 0 }).error, /усилители/);
+  assert.match(A(s, 'p1', { type: 'playCard', uid: 'e_baby#0', monster: 0 }).error, /усилители/);
+  p.classes.push(take(s, 'c_mage#0')); p.hand.push(take(s, 'o_kvass#0'), take(s, 'o_cola#0'), take(s, 'b_energy#0'));
+  assert.match(A(s, 'p0', { type: 'ability', name: 'charm', cards: [], monster: 0 }).error, /чарами/);
+  // колыбельная барда и разовые карты действуют как обычно
+  o.classes.push(take(s, 'c_bard#0')); o.hand.push(take(s, 'i_ladle#0'));
+  assert.equal(A(s, 'p1', { type: 'ability', name: 'lullaby', cards: ['i_ladle#0'] }).ok, true);
+  assert.equal(combatNumbers(s).monsters, 25);
+});
+
+t('босс не гонится за героями ниже 9-го уровня', () => {
+  for (const lvl of [1, 6, 8]) {
+    const s = fresh(); const p = P(s, 'p0'); p.level = lvl;
+    p.hand.push(take(s, 'i_helmet#0')); A(s, 'p0', { type: 'playCard', uid: 'i_helmet#0' });
+    fight(s, 'm_hades#0');
+    assert.equal(combatNumbers(s).monsters, 2 * (lvl + 1));
+    assert.equal(runWith(s, 'p0', lowDie).ok, true);
+    assert.equal(s.combat, null);
+    assert.equal(p.level, lvl); assert.equal(p.dead, false); assert.ok(p.equipped.includes('i_helmet#0'));
+    assert.ok(s.log.some(l => l.text.includes('не стал гнаться')));
+  }
+});
+
+t('босс догнал героя 9-го уровня: −5 уровней и смерть, раса и класс остаются', () => {
+  const s = fresh(); const p = P(s, 'p0'); p.level = 9;
+  p.races.push(take(s, 'r_elf#0')); p.classes.push(take(s, 'c_warrior#0'));
+  p.equipped.push(take(s, 'i_helmet#0')); p.hand.push(take(s, 'l_stash#0'));
+  fight(s, 'm_anubis#0');
+  assert.equal(runWith(s, 'p0', lowDie).ok, true);
+  assert.equal(s.combat, null);
+  assert.equal(p.level, 4); assert.equal(p.dead, true);
+  assert.deepEqual([p.races, p.classes, p.equipped, p.hand], [['r_elf#0'], ['c_warrior#0'], [], []]);
+  assert.ok(s.fx.some(f => f.kind === 'levelDown' && f.pid === 'p0' && f.from === 9 && f.to === 4));
+  assert.ok(s.fx.some(f => f.kind === 'death' && f.pid === 'p0'));
+});
+
+t('босса можно одолеть вдвоём: +2 уровня и 5 кладов', () => {
+  const s = fresh(); const p = P(s, 'p0'); p.level = 5;
+  p.hand.push(take(s, 'i_helmet#0')); A(s, 'p0', { type: 'playCard', uid: 'i_helmet#0' }); // сила 6
+  fight(s, 'm_lucifer#0');
+  assert.equal(combatNumbers(s).monsters, 12);
+  const h = P(s, 'p1'); h.level = 7;
+  assert.equal(A(s, 'p0', { type: 'askHelp', to: 'p1', offer: 2 }).ok, true);
+  A(s, 'p1', { type: 'answerHelp', accept: true });
+  assert.equal(combatNumbers(s).monsters, 12, 'помощник не делает босса сильнее');
+  assert.equal(combatNumbers(s).winning, true);
+  const before = p.hand.length;
+  A(s, 'p0', { type: 'fight' }, 1000); tick(s, { rng, now: 9000 });
+  assert.equal(s.combat, null);
+  assert.equal(p.level, 7);
+  assert.equal(p.hand.length - before + h.hand.length, 5);
+});
+
+t('от босса можно удрать кубиком, дымовой шашкой, свитком или питомцем', () => {
+  { const s = fresh(); const p = P(s, 'p0'); p.level = 9; fight(s, 'm_lucifer#0');
+    assert.equal(runWith(s, 'p0', highDie).ok, true); assert.equal(p.level, 9); assert.equal(p.dead, false); }
+  { const s = fresh(); const p = P(s, 'p0'); p.level = 9; fight(s, 'm_lucifer#0');
+    p.hand.push(take(s, 'o_smoke#0')); assert.equal(A(s, 'p0', { type: 'playCard', uid: 'o_smoke#0' }).ok, true);
+    assert.equal(s.combat, null); assert.equal(p.level, 9); }
+  { const s = fresh(); const p = P(s, 'p0'); p.level = 9; fight(s, 'm_lucifer#0');
+    p.hand.push(take(s, 'o_petrify#0')); assert.equal(A(s, 'p0', { type: 'playCard', uid: 'o_petrify#0', monster: 0 }).ok, true);
+    assert.equal(s.combat, null); assert.equal(p.level, 9); }
+  { const s = fresh(); const p = P(s, 'p0'); p.level = 9; p.equipped.push(take(s, 'p_hamster#0')); fight(s, 'm_lucifer#0');
+    assert.equal(runWith(s, 'p0', lowDie).ok, true); assert.equal(p.level, 9); assert.equal(p.dead, false); assert.ok(!p.equipped.includes('p_hamster#0')); }
+});
+
+t('босс из темноты встаёт с силой вдвое больше силы бойца', () => {
+  const s = fresh(); const p = P(s, 'p0'); p.level = 9;
+  p.hand.push(take(s, 'i_jackhammer#0')); A(s, 'p0', { type: 'playCard', uid: 'i_jackhammer#0' });
+  fight(s, 'm_mosquito#0');
+  assert.equal(combatNumbers(s).winning, true);
+  const o = P(s, 'p1'); o.hand.push(take(s, 'w_wandering#0'), take(s, 'm_hades#0'));
+  assert.equal(A(s, 'p1', { type: 'playCard', uid: 'w_wandering#0', with: 'm_hades#0' }).ok, true);
+  assert.equal(combatNumbers(s).winning, false);
+  assert.equal(combatNumbers(s).monsters, 2 + 28);
+});
+
 console.log(`Правила: ${n} проверок пройдено.`);
