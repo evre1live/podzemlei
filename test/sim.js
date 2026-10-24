@@ -21,7 +21,7 @@ const stats = { deaths: 0, wins: {} , help: 0, interfere: 0, steals: 0 };
 for (let g = 0; g < N; g++) {
   const rng = mulberry32(g + 1);
   const n = 3 + (g % 4);
-  const s = createGame(Array.from({ length: n }, (_, i) => ({ id: 'p' + i, name: 'Бот' + i, isBot: true })), { winDelayMs: 3000 }, rng);
+  const s = createGame(Array.from({ length: n }, (_, i) => ({ id: 'p' + i, name: 'Бот' + i, isBot: true })), { winDelayMs: 3000, winLevel: Number(process.env.WIN || 10) }, rng);
   let now = 1000, guard = 0;
   while (s.phase === 'playing' && guard++ < 20000) {
     now += 500;
@@ -41,7 +41,7 @@ for (let g = 0; g < N; g++) {
     if (!did) { now += 4000; if (!tick(s, { rng, now })) { stuck++; console.log('STUCK game', g, 'step', s.turn.step, 'combat', !!s.combat, JSON.stringify(s.combat?.helpReq)); break; } }
     const cnt = countCards(s);
     if (cnt.length !== TOTAL || new Set(cnt).size !== TOTAL) { console.log('CARD LEAK game', g, cnt.length, TOTAL, new Set(cnt).size); process.exit(1); }
-    for (const p of s.players) if (p.level < 1 || p.level > 10) { console.log('BAD LEVEL', p.level); process.exit(1); }
+    for (const p of s.players) if (p.level < 1 || p.level > s.opts.winLevel) { console.log('BAD LEVEL', p.level); process.exit(1); }
   }
   if (s.phase === 'ended') { ended++; turnsTotal += s.turn.n; maxTurns = Math.max(maxTurns, s.turn.n); }
   stats.deaths += s.log.filter(l => l.text.includes('погибает')).length;

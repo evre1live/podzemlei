@@ -1,6 +1,6 @@
 // «Под Землёй» — вся графика игры рисуется кодом: мультяшные монстры (art-monsters.js),
 // иконки вещей, сцены локаций, рубашки колод, аватары героев и рамки карт.
-import { def, DEFS, RACE_NAMES, CLASS_NAMES, TAG_NAMES, SLOT_NAMES } from '/shared/cards.js';
+import { def, DEFS, RACE_NAMES, CLASS_NAMES, TAG_NAMES, SLOT_NAMES, ruleText } from '/shared/cards.js';
 import { monsterSVG, monsterDefs, INK } from '/art-monsters.js';
 import { avatarSVG, avatarDefs } from '/art-avatar.js';
 
@@ -27,6 +27,7 @@ const TOON = {
   red: ['#ff8f8f', '#e0413a', '#8c1e1e'],
   orange: ['#ffc58a', '#f08a3a', '#a4501a'],
   leaf: ['#9ff0b5', '#4cbf73', '#21673b'],
+  beige: ['#fff7e4', '#ead3a6', '#b8955c'],
 };
 // яркие сочные фоны под картинкой карты: светлый центр, насыщенный край
 const BG = {
@@ -67,7 +68,7 @@ export function injectDefs() {
 const u = k => `url(#t-${k})`;
 const L = u('lamp'), GD = u('gold'), R = u('rust'), G = u('verd'), B = u('blue'), W = u('white'), S = u('steel'), Br = u('wood'),
   Pu = u('purple'), SK = u('skin'), BN = u('bone'), GL = u('glass'), DK = u('dark'), GR = u('green'), PK = u('pink'), RD = u('red'),
-  OR = u('orange'), LF = u('leaf');
+  OR = u('orange'), LF = u('leaf'), BE = u('beige');
 // плоские цвета — для линий (градиент по рамке не работает на прямых без ширины)
 const fL = '#f5b83d', fR = '#d2502f', fG = '#3fa38c', fS = '#9aa3ad', fBr = '#8a5a3c', fPu = '#8f6bc9', fW = '#efe6d4';
 const st = `stroke="${INK}" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"`;
@@ -174,7 +175,26 @@ const ICONS = {
   // ── классы
   warrior: `<path d="M14 50 L46 18" stroke="${INK}" stroke-width="10" stroke-linecap="round"/><path d="M14 50 L46 18" stroke="${fS}" stroke-width="6" stroke-linecap="round"/><path d="M9 40 l15 15 M7 59 l9 -9" ${st}/><path d="M50 50 L18 18" stroke="${INK}" stroke-width="10" stroke-linecap="round"/><path d="M50 50 L18 18" stroke="#d9dee6" stroke-width="6" stroke-linecap="round"/><path d="M55 40 l-15 15 M57 59 l-9 -9" ${st}/><path d="M22 34 L32 22 L42 34 L32 52Z" fill="${RD}" ${st}/><path d="M32 28 v16" stroke="#fff" stroke-width="2.4"/>`,
   mage: `<path d="M32 2 L50 50 H14Z" fill="${Pu}" ${st}/><path d="M32 2 q10 14 24 8" stroke="${INK}" stroke-width="2.4" fill="none"/><ellipse cx="32" cy="52" rx="26" ry="7" fill="${Pu}" ${st}/><g fill="#fff36b"><path d="M29 24 l2 4 l4 .5 l-3 3 l.8 4 l-3.8 -2 l-3.8 2 l.8 -4 l-3 -3 l4 -.5z"/><circle cx="38" cy="40" r="2.4"/><circle cx="24" cy="42" r="1.6"/></g><path d="M18 44 q14 4 28 0" stroke="${fL}" stroke-width="4" fill="none"/>`,
-  cleric: `<circle cx="32" cy="30" r="22" fill="url(#glow)"/><rect x="26" y="5" width="12" height="54" rx="3" fill="${GD}" ${st}/><rect x="11" y="19" width="42" height="12" rx="3" fill="${GD}" ${st}/><circle cx="32" cy="25" r="4" fill="${RD}" ${st2}/>` + hl('M30 10 v6', 2.4),
+  cleric: `<circle cx="32" cy="32" r="27" fill="url(#glow)" opacity=".5"/>`
+    // золотой скипетр с солнечным самоцветом
+    + `<rect x="47.4" y="15" width="5.2" height="45" rx="2.4" fill="${GD}" ${st2}/><rect x="46" y="16" width="8" height="3.4" rx="1.6" fill="${GD}" ${st2}/>`
+    + `<g stroke="${fL}" stroke-width="2.2" stroke-linecap="round"><path d="M50 0.8 v2.4 M58.8 3.4 l-1.7 1.7 M41.2 3.4 l1.7 1.7 M61 11 h-2.4 M39 11 h2.4"/></g>`
+    + `<circle cx="50" cy="10.5" r="6.4" fill="${GD}" ${st2}/><circle cx="50" cy="10.5" r="2.8" fill="#7cd3ff" stroke="${INK}" stroke-width="1.4"/><circle cx="49" cy="9.4" r="1" fill="#fff"/>`
+    // бежевая мантия с золотой каймой и верёвочным поясом
+    + `<path d="M9 63 Q10 43 19 36 Q28 31 38 34 Q46 38 47 63 Z" fill="${BE}" ${st}/>`
+    + `<path d="M24 36 L21.5 62 M36 35.5 L38.5 62" stroke="${INK}" stroke-width="5.6"/><path d="M24 36 L21.5 62 M36 35.5 L38.5 62" stroke="${fL}" stroke-width="3"/>`
+    + `<path d="M10.5 58.5 Q28 62.5 46.6 58.5" stroke="${INK}" stroke-width="5" fill="none"/><path d="M10.5 58.5 Q28 62.5 46.6 58.5" stroke="${fL}" stroke-width="2.6" fill="none"/>`
+    + `<path d="M14 47.5 Q28 52 45 47.5" stroke="${INK}" stroke-width="4.6" fill="none" stroke-linecap="round"/><path d="M14 47.5 Q28 52 45 47.5" stroke="#d8b06a" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-dasharray="2.6 1.6"/>`
+    + `<path d="M20 50 l-1.6 7" stroke="${INK}" stroke-width="3.6" stroke-linecap="round"/><path d="M20 50 l-1.6 7" stroke="#d8b06a" stroke-width="1.8" stroke-linecap="round"/>`
+    // капюшон за головой
+    + `<path d="M15.5 31 Q13 12 30 8.5 Q47 12 44.5 31 Q38 36.5 30 36.5 Q22 36.5 15.5 31Z" fill="${BE}" ${st}/><path d="M18.5 29 Q17.5 15 30 12.5" stroke="#fff" stroke-opacity=".6" stroke-width="2" fill="none" stroke-linecap="round"/>`
+    // круглое улыбчивое лицо с хохолком на макушке
+    + `<circle cx="30" cy="23.5" r="10.6" fill="${SK}" ${st}/><path d="M27.5 13.6 q2.5 -4.6 5.5 -1.2 q-2.6 -0.6 -2.4 1.6" fill="none" stroke="${INK}" stroke-width="1.9" stroke-linecap="round"/>`
+    + `<path d="M24.6 22.4 q2 -2.6 4 0 M31.4 22.4 q2 -2.6 4 0" stroke="${INK}" stroke-width="2" fill="none" stroke-linecap="round"/>` + blush(23.6, 36.4, 26.6)
+    + `<circle cx="30" cy="25" r="1.7" fill="#e7a07f"/><path d="M25.6 28 q4.4 5.4 8.8 0 z" fill="#fff" stroke="${INK}" stroke-width="1.9" stroke-linejoin="round"/>`
+    // рука держит скипетр, вторая лежит на животе
+    + `<path d="M37.5 37 Q45 37.5 47.6 31.5" stroke="${INK}" stroke-width="8.4" stroke-linecap="round" fill="none"/><path d="M37.5 37 Q45 37.5 47.6 31.5" stroke="#ead3a6" stroke-width="5" stroke-linecap="round" fill="none"/>`
+    + `<circle cx="49.8" cy="30" r="3.7" fill="${SK}" ${st2}/><circle cx="23" cy="43.5" r="3.3" fill="${SK}" ${st2}/>`,
   rogue: `<path d="M8 30 q24 -24 48 0 q-24 14 -48 0z" fill="${DK}" ${st}/><ellipse cx="22" cy="28" rx="5" ry="4" fill="#fff"/><ellipse cx="42" cy="28" rx="5" ry="4" fill="#fff"/><circle cx="23" cy="28" r="2" fill="${INK}"/><circle cx="43" cy="28" r="2" fill="${INK}"/><path d="M4 32 l-4 8 M60 32 l4 8" stroke="${INK}" stroke-width="3" stroke-linecap="round"/><path d="M14 50 L44 50" stroke="${INK}" stroke-width="8" stroke-linecap="round"/><path d="M14 50 L44 50" stroke="#d9dee6" stroke-width="4" stroke-linecap="round"/><path d="M44 50 l10 -5 v10z" fill="${S}" ${st2}/><rect x="6" y="45" width="10" height="10" rx="2" fill="${Br}" ${st2}/>`,
   bard: `<path d="M8 22 q24 -20 48 0 q-6 8 -24 8 q-18 0 -24 -8z" fill="${RD}" ${st}/><path d="M42 16 q12 -18 20 -12 q-8 2 -14 16" fill="${GD}" ${st2}/><g fill="${INK}"><path d="M20 58 v-20 l18 -5 v20" stroke="${INK}" stroke-width="3" fill="none"/><ellipse cx="17" cy="58" rx="5" ry="4"/><ellipse cx="35" cy="53" rx="5" ry="4"/></g><path d="M20 42 l18 -5" stroke="${INK}" stroke-width="3"/><circle cx="48" cy="44" r="3" fill="${fL}"/><circle cx="54" cy="36" r="2" fill="${fL}"/>`,
   alchemist: `<path d="M26 6 h12 v16 l14 26 q3 8 -6 8 h-28 q-9 0 -6 -8 l14 -26z" fill="${GL}" ${st}/><path d="M15 40 h34 l4 8 q3 8 -6 8 h-30 q-9 0 -6 -8z" fill="${LF}"/><path d="M26 6 h12 v16 l14 26 q3 8 -6 8 h-28 q-9 0 -6 -8 l14 -26z" fill="none" ${st}/><rect x="23" y="2" width="18" height="6" rx="2" fill="${Br}" ${st2}/><g fill="#fff"><circle cx="26" cy="48" r="2.4"/><circle cx="36" cy="44" r="1.6"/><circle cx="40" cy="51" r="1.2"/></g><path d="M44 14 q4 -4 2 -8 M50 20 q6 -4 4 -10" stroke="#a6f2b7" stroke-width="2.4" fill="none" stroke-linecap="round"/>`,
@@ -352,7 +372,7 @@ export function cardText(d) {
     parts.push(`<span class="bad"><b>Расплата:</b> ${esc(d.bad.text)}</span>`);
     return parts.join(' ');
   }
-  return esc(d.text || '');
+  return esc(ruleText(d.text || ''));
 }
 
 function nameClass(n) {

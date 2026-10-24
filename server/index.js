@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { Server } from 'socket.io';
-import { createGame, act, tick, view, P } from '../shared/engine.js';
+import { createGame, act, tick, view, P, WIN_LEVELS } from '../shared/engine.js';
 import { botDecide } from '../shared/bot.js';
 import { cleanAvatar } from '../shared/avatar.js';
 
@@ -57,6 +57,7 @@ const COLORS = ['#e8604c', '#f2b134', '#58b368', '#4aa3df', '#a46ad6', '#e86fb1'
 
 const DELAYS = [10000, 20000, 30000];
 const cleanDelay = v => (DELAYS.includes(Number(v)) ? Number(v) : DELAYS[0]);
+const cleanWin = v => (WIN_LEVELS.includes(Number(v)) ? Number(v) : WIN_LEVELS[0]);
 const cleanName = (n, fb = 'Игрок') => (String(n || '').replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, 20) || fb);
 
 function roomSummary(r) {
@@ -136,7 +137,7 @@ function load() {
     for (const r of data) {
       r.members.forEach(m => { m.socketId = null; m.connected = false; m.lastSeen = now(); });
       if (r.game?.combat) r.game.combat.winAt = null;
-      r.settings = { ...(r.settings || {}), winDelayMs: cleanDelay(r.settings?.winDelayMs) };
+      r.settings = { ...(r.settings || {}), winDelayMs: cleanDelay(r.settings?.winDelayMs), winLevel: cleanWin(r.settings?.winLevel) };
       rooms.set(r.id, r);
     }
     console.log(`Восстановлено комнат: ${rooms.size}`);
@@ -256,7 +257,7 @@ io.on('connection', socket => {
     const r = {
       id: newCode(), name, pass: pw ? hashPassword(pw) : null, hidden: !!p.hidden, hostId: null,
       maxPlayers: Math.min(6, Math.max(2, Number(p.maxPlayers) || 6)),
-      settings: { winDelayMs: cleanDelay(p.winDelayMs) },
+      settings: { winDelayMs: cleanDelay(p.winDelayMs), winLevel: cleanWin(p.winLevel) },
       members: [], chat: [], game: null, createdAt: now(), lastActive: now(),
     };
     const m = addMember(r, { name: cleanName(p.playerName), avatar: p.avatar });
@@ -369,6 +370,10 @@ io.on('connection', socket => {
     if (r.game && r.game.phase === 'playing') return 'Во время игры нельзя';
     if (p.maxPlayers) r.maxPlayers = Math.min(6, Math.max(Math.max(2, activeMembers(r).length), Number(p.maxPlayers) || 6));
     if (DELAYS.includes(Number(p.winDelayMs))) r.settings.winDelayMs = Number(p.winDelayMs);
+    if (WIN_LEVELS.includes(Number(p.winLevel)) && Number(p.winLevel) !== r.settings.winLevel) {
+      r.settings.winLevel = Number(p.winLevel);
+      sysChat(r, `Играем до ${r.settings.winLevel}-го уровня.`);
+    }
     if (typeof p.password === 'string') {
       if (p.password.length > 64) return 'Пароль слишком длинный';
       r.pass = p.password ? hashPassword(p.password) : null;
@@ -381,7 +386,7 @@ io.on('connection', socket => {
     if (r.game && r.game.phase === 'playing') return 'Игра уже идёт';
     const seats = activeMembers(r);
     if (seats.length < 2) return 'Нужно минимум 2 участника (можно добавить ботов)';
-    r.game = createGame(seats.map(m => ({ id: m.id, name: m.name, isBot: m.isBot, color: m.color, avatar: m.avatar })), { winDelayMs: r.settings.winDelayMs }, rng);
+    r.game = createGame(seats.map(m => ({ id: m.id, name: m.name, isBot: m.isBot, color: m.color, avatar: m.avatar })), { winDelayMs: r.settings.winDelayMs, winLevel: cleanWin(r.settings.winLevel) }, rng);
     r.game.now = now();
     r.nextBotAt = now() + 1500;
     sysChat(r, 'Партия началась! Удачи под землёй.');

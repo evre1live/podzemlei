@@ -2,7 +2,7 @@
 import { def } from './cards.js';
 import {
   P, check, combatNumbers, playOptions, handLimit, hasClass, hasRace, cardWorth,
-  equipError, participants, heroStrength, WIN_LEVEL, saleValue, monsterBaseLevel, powerOf, locationOf,
+  equipError, participants, heroStrength, winLevel, luxLevel, saleValue, monsterBaseLevel, powerOf, locationOf,
 } from './engine.js';
 
 const byWorth = list => [...list].sort((a, b) => cardWorth(a) - cardWorth(b));
@@ -38,7 +38,7 @@ export function botDecide(s, pid, { rng = Math.random, now = Date.now() } = {}) 
     const n = combatNumbers(s);
     const mine = heroStrength(s, p);
     const wouldWin = n.heroes + mine > n.monsters || (hasClass(p, 'warrior') && n.heroes + mine === n.monsters);
-    const givesGame = f.level + n.levels >= WIN_LEVEL;
+    const givesGame = f.level + n.levels >= winLevel(s);
     const worth = c.helpReq.offer > 0 || hasRace(p, 'elf');
     return { type: 'answerHelp', accept: !!(wouldWin && !givesGame && worth) };
   }
@@ -147,9 +147,9 @@ function interfere(s, p) {
   const f = P(s, c.fighter);
   const n = combatNumbers(s);
   if (!n.winning) return null;
-  const forGame = f.level + n.levels >= WIN_LEVEL;
+  const forGame = f.level + n.levels >= winLevel(s);
   const top = leader(s, null);
-  const isLeader = f.level >= 6 && f.level >= top.level && f.id !== p.id;
+  const isLeader = f.level >= winLevel(s) - 4 && f.level >= top.level && f.id !== p.id;
   if (!forGame && !isLeader) return null;
   const margin = n.heroes - n.monsters + (n.warrior ? 1 : 0); // сколько добавить монстрам
   const opts = [];
@@ -215,7 +215,7 @@ function turnMove(s, p, rng) {
       const good = d.event === 'fair' || d.event === 'quake' || d.event === 'draft'
         || (d.event === 'rollcall' && lowest)
         || (d.event === 'light' && (hasClass(p, 'cleric') || hasClass(p, 'bard')))
-        || (d.event === 'luxtax' && p.level < 7);
+        || (d.event === 'luxtax' && p.level < luxLevel(s));
       if (good) return { type: 'playCard', uid: u };
     }
     // алхимик перегоняет лишнее

@@ -989,3 +989,6 @@ body.has-world { background: #120e22; }
 @media (max-width: 900px) and (min-width: 521px) {
   .hand.fan .card { bottom: -52px; }
 }
+
+.goal-pill { font-size: 13px; font-weight: 700; padding: 3px 10px; border-radius: 99px; background: rgba(245,184,61,.16); border: 1.5px solid rgba(245,184,61,.55); color: var(--lamp); white-space: nowrap; }
+@media (max-width: 520px) { .goal-pill { font-size: 12px; padding: 2px 8px; } }

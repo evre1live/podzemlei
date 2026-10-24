@@ -347,7 +347,7 @@ export const CARD_DEFS = [
   { id: 'ev_quake', deck: 'door', type: 'event', event: 'quake', name: 'Подземный толчок', copies: 1, art: 'ev_quake',
     text: 'Все сбрасывают по случайной карте с руки.' },
   { id: 'ev_light', deck: 'door', type: 'event', event: 'light', name: 'Свет в конце тоннеля', copies: 1, art: 'ev_light', rarity: 'rare',
-    text: 'Все жрецы и барды получают уровень (не 10-й).' },
+    text: 'Все жрецы и барды получают уровень (не {win}-й).' },
   { id: 'ev_fair', deck: 'door', type: 'event', event: 'fair', name: 'Ярмарка в переходе', copies: 1, art: 'ev_fair',
     text: 'Все берут по карте клада.' },
   { id: 'ev_draft', deck: 'door', type: 'event', event: 'draft', name: 'Сквозняк перемен', copies: 1, art: 'wind',
@@ -355,7 +355,7 @@ export const CARD_DEFS = [
   { id: 'ev_rollcall', deck: 'door', type: 'event', event: 'rollcall', name: 'Перекличка', copies: 1, art: 'ev_rollcall',
     text: 'Отстающие с самым низким уровнем получают уровень.' },
   { id: 'ev_luxtax', deck: 'door', type: 'event', event: 'luxtax', name: 'Налог на роскошь', copies: 1, art: 'paper',
-    text: 'Все игроки 7-го уровня и выше теряют уровень.' },
+    text: 'Все игроки {lux}-го уровня и выше теряют уровень.' },
 
   // ───────────── КЛАД: ВЕЩИ ─────────────
   // slot: head | armor | feet | hand | none | pet ; hands: 1|2|3 ; big ; tags: ['light','water'] ; vsTag ; clsBonus
@@ -472,20 +472,26 @@ export const CARD_DEFS = [
     text: '+4 к силе в этом или следующем бою. С капустой.' },
 
   // ───────────── КЛАД: УРОВНИ И ПРОЧЕЕ ─────────────
-  { id: 'l_stash', deck: 'treasure', type: 'levelup', name: 'Нашёл заначку', art: 'up', text: 'Получи уровень. Не 10-й.' },
-  { id: 'l_bribe', deck: 'treasure', type: 'levelup', name: 'Подкупил смотрителя', art: 'up', text: 'Получи уровень. Не 10-й.' },
-  { id: 'l_manual', deck: 'treasure', type: 'levelup', name: 'Прочитал инструкцию', art: 'up', text: 'Получи уровень. Не 10-й. Никто так не делает.' },
-  { id: 'l_sleep', deck: 'treasure', type: 'levelup', name: 'Выспался', art: 'up', text: 'Получи уровень. Не 10-й.' },
-  { id: 'l_exam', deck: 'treasure', type: 'levelup', name: 'Сдал зачёт по спелеологии', art: 'up', text: 'Получи уровень. Не 10-й.' },
-  { id: 'l_friend', deck: 'treasure', type: 'levelup', name: 'Знакомый диггер', art: 'up', text: 'Получи уровень. Не 10-й.' },
-  { id: 'l_map', deck: 'treasure', type: 'levelup', name: 'Карта с крестиком', art: 'up', text: 'Получи уровень. Не 10-й.' },
-  { id: 'l_bonus', deck: 'treasure', type: 'levelup', name: 'Премия за вредность', art: 'up', text: 'Получи уровень. Не 10-й.' },
-  { id: 'l_shortcut', deck: 'treasure', type: 'levelup', name: 'Короткий путь', art: 'up', text: 'Получи уровень. Не 10-й.' },
+  { id: 'l_stash', deck: 'treasure', type: 'levelup', name: 'Нашёл заначку', art: 'up', text: 'Получи уровень. Не {win}-й.' },
+  { id: 'l_bribe', deck: 'treasure', type: 'levelup', name: 'Подкупил смотрителя', art: 'up', text: 'Получи уровень. Не {win}-й.' },
+  { id: 'l_manual', deck: 'treasure', type: 'levelup', name: 'Прочитал инструкцию', art: 'up', text: 'Получи уровень. Не {win}-й. Никто так не делает.' },
+  { id: 'l_sleep', deck: 'treasure', type: 'levelup', name: 'Выспался', art: 'up', text: 'Получи уровень. Не {win}-й.' },
+  { id: 'l_exam', deck: 'treasure', type: 'levelup', name: 'Сдал зачёт по спелеологии', art: 'up', text: 'Получи уровень. Не {win}-й.' },
+  { id: 'l_friend', deck: 'treasure', type: 'levelup', name: 'Знакомый диггер', art: 'up', text: 'Получи уровень. Не {win}-й.' },
+  { id: 'l_map', deck: 'treasure', type: 'levelup', name: 'Карта с крестиком', art: 'up', text: 'Получи уровень. Не {win}-й.' },
+  { id: 'l_bonus', deck: 'treasure', type: 'levelup', name: 'Премия за вредность', art: 'up', text: 'Получи уровень. Не {win}-й.' },
+  { id: 'l_shortcut', deck: 'treasure', type: 'levelup', name: 'Короткий путь', art: 'up', text: 'Получи уровень. Не {win}-й.' },
   { id: 'h_hoard', deck: 'treasure', type: 'hoard', name: 'Схрон!', copies: 2, art: 'chest', rarity: 'rare',
     text: 'Сыграй в свой ход вне боя: возьми 2 карты клада. Не больше одного схрона за ход.' },
 ];
 
 export const DEFS = Object.fromEntries(CARD_DEFS.map(d => [d.id, d]));
+
+// Тексты некоторых карт зависят от длины партии: {win} — уровень победы, {lux} — порог «налога на роскошь».
+// В браузере идёт одна партия, поэтому значения хранятся глобально; сервер подставляет их сам для каждой партии.
+export const RULE_VARS = { win: 10, lux: 7 };
+export const setRuleVars = v => Object.assign(RULE_VARS, v);
+export const ruleText = (t, vars = RULE_VARS) => String(t ?? '').replace(/\{(\w+)\}/g, (m, k) => (vars[k] ?? m));
 
 export function def(uid) {
   const d = DEFS[String(uid).split('#')[0]];

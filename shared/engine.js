@@ -1,8 +1,13 @@
 // «Под Землёй» — игровой движок. Чистые функции над JSON-состоянием.
 // Сервер хранит состояние, вызывает act()/tick() и рассылает view() каждому игроку.
-import { def, allUids, RACE_NAMES, CLASS_NAMES } from './cards.js';
+import { def, allUids, RACE_NAMES, CLASS_NAMES, ruleText } from './cards.js';
 
 export const WIN_LEVEL = 10;
+// до какого уровня идёт партия: 10 по умолчанию, в лобби можно выбрать 15 или 20
+export const WIN_LEVELS = [10, 15, 20];
+export const luxLevel = s => Math.round(winLevel(s) * 0.7);
+export const fillText = (s, t) => ruleText(t, { win: winLevel(s), lux: luxLevel(s) });
+export const winLevel = s => (WIN_LEVELS.includes(s?.opts?.winLevel) ? s.opts.winLevel : WIN_LEVEL);
 const d6 = rng => 1 + Math.floor(rng() * 6);
 
 function shuffle(arr, rng) {
@@ -20,7 +25,7 @@ const q = name => `«${name}»`;
 export function createGame(seats, opts = {}, rng = Math.random) {
   const s = {
     phase: 'playing', version: 1, now: 0, logSeq: 0, fxSeq: 0, revealSeq: 0, log: [], fx: [],
-    opts: { winDelayMs: 10000, ...opts },
+    opts: { winDelayMs: 10000, winLevel: WIN_LEVEL, ...opts },
     players: seats.map((x, i) => ({
       id: x.id, name: x.name, color: x.color || null, avatar: x.avatar ?? i, isBot: !!x.isBot, seat: i,
       level: 1, races: [], classes: [], halfbreed: null, supermunch: null,
@@ -35,7 +40,8 @@ export function createGame(seats, opts = {}, rng = Math.random) {
   for (const p of s.players) {
     for (let i = 0; i < 4; i++) { give(p, draw(s, 'door', rng)); give(p, draw(s, 'treasure', rng)); }
   }
-  log(s, 'Партия началась. Первым дошедший до 10-го уровня побеждает.', 'sys');
+  if (!WIN_LEVELS.includes(s.opts.winLevel)) s.opts.winLevel = WIN_LEVEL;
+  log(s, `Партия началась. Первым дошедший до ${s.opts.winLevel}-го уровня побеждает.`, 'sys');
   beginTurn(s, Math.floor(rng() * s.players.length), rng);
   return s;
 }
@@ -192,10 +198,11 @@ function normalize(s, p) {
 }
 
 function setLevel(s, p, lvl, { canWin = false } = {}) {
-  const cap = canWin ? WIN_LEVEL : WIN_LEVEL - 1;
+  const W = winLevel(s);
+  const cap = canWin ? W : W - 1;
   const nl = Math.max(1, Math.min(lvl, Math.max(cap, p.level)));
   if (nl !== p.level) fx(s, { kind: nl > p.level ? 'levelUp' : 'levelDown', pid: p.id, from: p.level, to: nl });
-  p.level = Math.min(nl, WIN_LEVEL);
+  p.level = Math.min(nl, W);
 }
 
 // ───────────────────────── эффекты (расплата и проклятия) ─────────────────────────
@@ -338,7 +345,7 @@ function setLocation(s, p, uid) {
   s.location = uid;
   const d = def(uid);
   fx(s, { kind: 'location', pid: p.id, card: uid });
-  log(s, `${p.name} открывает локацию ${q(d.name)}: ${d.text}`, 'event');
+  log(s, `${p.name} открывает локацию ${q(d.name)}: ${fillText(s, d.text)}`, 'event');
   for (const x of s.players) normalize(s, x);
 }
 
@@ -346,7 +353,7 @@ function resolveEvent(s, p, uid, rng) {
   const d = def(uid);
   const alive = s.players.filter(x => !x.dead);
   fx(s, { kind: 'event', pid: p.id, card: uid });
-  log(s, `Событие ${q(d.name)}: ${d.text}`, 'event');
+  log(s, `Событие ${q(d.name)}: ${fillText(s, d.text)}`, 'event');
   switch (d.event) {
     case 'quake':
       for (const x of alive) if (x.hand.length) { const u = pick(x.hand, rng); without(x.hand, u); toDiscard(s, u); }
@@ -369,7 +376,7 @@ function resolveEvent(s, p, uid, rng) {
       break;
     }
     case 'luxtax':
-      for (const x of alive) if (x.level >= 7) { setLevel(s, x, x.level - 1); log(s, `${x.name} платит налог: −1 уровень.`, 'bad'); }
+      for (const x of alive) if (x.level >= luxLevel(s)) { setLevel(s, x, x.level - 1); log(s, `${x.name} платит налог: −1 уровень.`, 'bad'); }
       break;
   }
   toDiscard(s, uid);
@@ -544,11 +551,11 @@ function resolveVictory(s, rng) {
   fx(s, { kind: 'victory', pid: f.id, helper: c.helper || null, cards: c.monsters.map(m => m.uid), levels: n.levels, treasures: r.total });
   log(s, `⚔️ ${f.name}${h ? ' и ' + h.name : ''} побеждают ${names}! ${f.name} получает +${n.levels} ур. и ${r.total - r.share} клада${h && r.share ? `, ${h.name} — ${r.share}` : ''}.`, 'good');
   endCombat(s);
-  const winners = [f, h].filter(x => x && x.level >= WIN_LEVEL);
+  const winners = [f, h].filter(x => x && x.level >= winLevel(s));
   if (winners.length) {
     s.phase = 'ended';
     s.winners = winners.map(x => x.id);
-    log(s, `🏆 ${winners.map(x => x.name).join(' и ')} достигает 10-го уровня и побеждает!`, 'win');
+    log(s, `🏆 ${winners.map(x => x.name).join(' и ')} достигает ${winLevel(s)}-го уровня и побеждает!`, 'win');
   }
 }
 
@@ -705,7 +712,7 @@ function playCheck(s, p, a) {
     case 'event': return manageErr(s, p);
     case 'buff': return null;
     case 'hoard': return manageErr(s, p) || (s.turn.hoardPlayed ? 'Схрон можно открыть только один раз за ход' : null);
-    case 'levelup': return p.level >= WIN_LEVEL - 1 ? 'Последний уровень — только убийством монстра' : null;
+    case 'levelup': return p.level >= winLevel(s) - 1 ? 'Последний уровень — только убийством монстра' : null;
     case 'curse': {
       const t = P(s, a.target);
       if (!t || t === p) return 'Выберите жертву';
@@ -879,7 +886,7 @@ H.sell = {
     }
     const { total, rate, levels: lv } = saleValue(s, p, u);
     if (lv < 1) return `Нужно минимум ${rate} голдов, у вас ${total}`;
-    if (p.level + lv >= WIN_LEVEL) return 'Продажей нельзя дойти до 10-го уровня';
+    if (p.level + lv >= winLevel(s)) return `Продажей нельзя дойти до ${winLevel(s)}-го уровня`;
     return null;
   },
   run(s, p, a) {
@@ -1272,7 +1279,7 @@ export function view(s, pid) {
   const c = s.combat;
   return {
     phase: s.phase, version: s.version, turn: { ...s.turn }, winners: [...s.winners],
-    reveal: s.reveal, opts: { winDelayMs: s.opts.winDelayMs }, location: s.location,
+    reveal: s.reveal, opts: { winDelayMs: s.opts.winDelayMs, winLevel: winLevel(s) }, location: s.location,
     log: s.log.slice(-80), fx: s.fx.slice(-20),
     decks: { door: s.decks.door.length, treasure: s.decks.treasure.length },
     discard: {

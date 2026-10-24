@@ -1,6 +1,6 @@
 // Точечные проверки правил.
 import assert from 'node:assert/strict';
-import { createGame, act, tick, view, combatNumbers, P, saleValue } from '../shared/engine.js';
+import { createGame, act, tick, view, combatNumbers, P, saleValue, fillText } from '../shared/engine.js';
 import { def } from '../shared/cards.js';
 
 let seed = 7; const rng = () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
@@ -385,4 +385,35 @@ t('ник «Еврей»: если клада нет, легендарка на�
   }
   assert.equal(b.hand.filter(u => def(u).rarity === 'legendary').length, 2);
 });
+t('партия до 15 уровня: карты уровня и продажа не берут последний, победа — на 15-м', () => {
+  const s = createGame(Array.from({ length: 3 }, (_, i) => ({ id: 'p' + i, name: 'И' + i })), { winDelayMs: 5000, winLevel: 15 }, rng);
+  for (const p of s.players) { for (const u of p.hand) s.discard[def(u).deck].push(u); p.hand = []; }
+  s.turn = { idx: 0, pid: 'p0', step: 'pre', n: 1 };
+  const p = P(s, 'p0'); p.level = 13;
+  p.hand.push(take(s, 'l_stash#0'));
+  assert.equal(A(s, 'p0', { type: 'playCard', uid: 'l_stash#0' }).ok, true);
+  assert.equal(p.level, 14);
+  p.hand.push(take(s, 'l_bribe#0'));
+  assert.equal(A(s, 'p0', { type: 'playCard', uid: 'l_bribe#0' }).ok, false);
+  p.hand.push(take(s, 'i_jackhammer#0'), take(s, 'i_diver#0'));
+  assert.match(A(s, 'p0', { type: 'sell', uids: ['i_jackhammer#0', 'i_diver#0'] }).error, /15/);
+  assert.equal(fillText(s, 'Не {win}-й, с {lux}-го'), 'Не 15-й, с 11-го');
+  assert.equal(view(s, 'p0').opts.winLevel, 15);
+  // уровень 14 и бой с монстром: 10-й уровень больше не победа, а 15-й — да
+  p.hand = []; s.decks.door.push(take(s, 'm_mosquito#0'));
+  A(s, 'p0', { type: 'kick' }); A(s, 'p0', { type: 'fight' }, 1000);
+  tick(s, { rng, now: 9000 });
+  assert.equal(p.level, 15); assert.equal(s.phase, 'ended'); assert.deepEqual(s.winners, ['p0']);
+});
+
+t('по умолчанию и при мусоре в настройках — 10 уровней', () => {
+  assert.equal(createGame([{ id: 'a', name: 'А' }, { id: 'b', name: 'Б' }], {}, rng).opts.winLevel, 10);
+  assert.equal(createGame([{ id: 'a', name: 'А' }, { id: 'b', name: 'Б' }], { winLevel: 99 }, rng).opts.winLevel, 10);
+  const s = fresh(); const p = P(s, 'p0'); p.level = 9;
+  s.decks.door.push(take(s, 'm_mosquito#0'));
+  A(s, 'p0', { type: 'kick' }); A(s, 'p0', { type: 'fight' }, 1000);
+  tick(s, { rng, now: 9000 });
+  assert.equal(s.phase, 'ended');
+});
+
 console.log(`Правила: ${n} проверок пройдено.`);

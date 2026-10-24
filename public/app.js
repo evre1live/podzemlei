@@ -1,5 +1,5 @@
 // «Под Землёй» — клиент.
-import { def, RACE_NAMES, CLASS_NAMES } from '/shared/cards.js';
+import { def, RACE_NAMES, CLASS_NAMES, setRuleVars, ruleText } from '/shared/cards.js';
 import { esc, cardHTML, chipHTML, avatarSVG, iconSVG, cardBackSVG, locationSVG } from '/art.js';
 import { fx } from '/fx.js';
 import { sfx } from '/sfx.js';
@@ -54,6 +54,7 @@ const me = () => S.game?.players.find(p => p.id === S.room?.me);
 const pl = id => S.game?.players.find(p => p.id === id);
 const pname = id => pl(id)?.name || S.room?.members.find(m => m.id === id)?.name || '—';
 const hints = () => S.game?.hints || {};
+const winLvl = () => S.game?.opts?.winLevel || S.room?.settings?.winLevel || 10;
 const serverNow = () => Date.now() + S.skew;
 const plural = (n, a, b, c) => { const m = n % 10, h = n % 100; return m === 1 && h !== 11 ? a : m >= 2 && m <= 4 && (h < 10 || h >= 20) ? b : c; };
 const cardsWord = n => `${n} ${plural(n, 'карту', 'карты', 'карт')}`;
@@ -103,6 +104,7 @@ socket.on('room:state', ({ room, game, serverTime }) => {
   const snap = !first && S.game?.combat && cine.on ? cine.snapStage() : null;
   if (serverTime) S.skew = serverTime - Date.now();
   S.room = room; S.game = game;
+  { const w = game?.opts?.winLevel || room.settings?.winLevel || 10; setRuleVars({ win: w, lux: Math.round(w * 0.7) }); }
   if (first) { setUrl(room.id); S.ui.lastFx = null; S.ui.mode = null; S.ui.prevHand = new Set(); }
   // звук: начало моего хода и чужие сообщения в чате
   const tk = game?.phase === 'playing' ? `${game.turn.n}:${game.turn.pid}` : '';
@@ -136,7 +138,7 @@ mount.home = () => {
     </header>
     <section class="band b-clay pebbles title-wrap">
       <h1 class="title">Под Землёй</h1>
-      <p class="subtitle">Карточная игра для компании от двух до шести человек. Выбивайте двери, побеждайте монстров из подвалов и тоннелей, собирайте клад и не стесняйтесь подставлять друзей. Кто первым дойдёт до 10-го уровня, тот и победил.</p>
+      <p class="subtitle">Карточная игра для компании от двух до шести человек. Выбивайте двери, побеждайте монстров из подвалов и тоннелей, собирайте клад и не стесняйтесь подставлять друзей. Кто первым дойдёт до 10-го уровня, тот и победил. Для долгой партии хозяин комнаты может поставить цель 15 или 20.</p>
     </section>
     <section class="band b-rock home-main">
       <div class="panel">
@@ -303,12 +305,15 @@ update.lobby = () => {
   $('#settings').innerHTML = isHost ? `
     <div class="settings">
       <h3>Настройки</h3>
+      <div><div class="muted" style="font-size:14px;margin-bottom:6px">До какого уровня играем</div>
+        <div class="seg" role="group" aria-label="Уровень победы">${[10, 15, 20].map(v => `<button type="button" data-win="${v}" aria-pressed="${(r.settings.winLevel || 10) === v}">${v}</button>`).join('')}</div>
+        <div class="muted" style="font-size:13px;margin-top:6px">${(r.settings.winLevel || 10) === 10 ? 'Обычная партия.' : (r.settings.winLevel === 15 ? 'Длинная партия: примерно в полтора раза дольше обычной.' : 'Очень длинная партия: почти вдвое дольше обычной.')}</div></div>
       <div><div class="muted" style="font-size:14px;margin-bottom:6px">Сколько секунд даётся, чтобы помешать добить монстра</div>
         <div class="seg" role="group">${[10000, 20000, 30000].map(v => `<button type="button" data-delay="${v}" aria-pressed="${r.settings.winDelayMs === v}">${v / 1000} с</button>`).join('')}</div></div>
       <div><div class="muted" style="font-size:14px;margin-bottom:6px">Мест за столом</div>
         <div class="seg" role="group">${[2, 3, 4, 5, 6].map(v => `<button type="button" data-max="${v}" aria-pressed="${r.maxPlayers === v}">${v}</button>`).join('')}</div></div>
       <div class="row"><button class="btn small" data-act="setPassword">${r.locked ? 'Сменить пароль' : 'Поставить пароль'}</button>${r.locked ? '<button class="btn ghost small" data-act="clearPassword">Убрать пароль</button>' : ''}</div>
-    </div>` : `<p class="muted" style="margin-top:24px">Настройки и старт — у хозяина комнаты. ${r.locked ? 'Комната закрыта паролем.' : ''}</p>`;
+    </div>` : `<p class="muted" style="margin-top:24px">Играем до ${r.settings.winLevel || 10}-го уровня. Настройки и старт — у хозяина комнаты. ${r.locked ? 'Комната закрыта паролем.' : ''}</p>`;
   const enough = r.members.length >= 2;
   $('#startbar').innerHTML = isHost
     ? `<button class="btn primary big" data-act="start" ${enough ? '' : 'disabled'}>Начать партию</button><span class="muted">${enough ? (r.members.length < 3 ? 'Веселее от трёх: посадите бота.' : 'Все в сборе?') : 'Нужен хотя бы ещё один игрок или бот.'}</span>`
@@ -348,6 +353,7 @@ mount.game = () => {
       <div class="g-head">
         <span class="rtitle" id="rtitle"></span>
         <span class="turninfo" id="turninfo"></span>
+        <span class="goal-pill" id="goalpill" title="Уровень победы"></span>
         <span id="locpill" class="locpill"></span>
         <span class="spacer"></span>
         <button class="btn ghost small side-toggle" data-act="sideToggle"><span class="long-label">Летопись и чат</span><span class="short">Чат</span></button>
@@ -402,6 +408,7 @@ update.game = () => {
   $('#rtitle').textContent = r.name;
   const tp = pl(g.turn.pid);
   $('#turninfo').textContent = g.phase === 'ended' ? 'Партия окончена' : tp ? (tp.id === r.me ? 'Ваш ход' : `Ходит ${tp.name}`) : '';
+  $('#goalpill').textContent = `Цель: ${winLvl()} ур.`;
   renderOpps();
   renderStage();
   renderMine();
@@ -835,7 +842,7 @@ function whenText(d) {
     case 'enhancer': return 'Играется на монстра в любом бою.';
     case 'wandering': return 'Играется в любом бою вместе с монстром из руки.';
     case 'oneshot': return d.effect === 'ward' ? 'Срабатывает сам, когда на вас насылают проклятие.' : 'Играется во время боя.';
-    case 'levelup': return 'Играется когда угодно, но 10-й уровень так не взять.';
+    case 'levelup': return `Играется когда угодно, но ${winLvl()}-й уровень так не взять.`;
     case 'location': return 'Играется в свой ход вне боя. Меняет правила для всех, пока кто-нибудь не сменит локацию.';
     case 'event': return 'Играется в свой ход вне боя и срабатывает сразу для всего стола.';
     case 'buff': return 'Выпейте в любой момент: бонус сработает в текущем или следующем вашем бою.';
@@ -958,7 +965,7 @@ function maybeEndScreen() {
 
 const RULES = `<div class="modal rules" role="dialog" aria-label="Как играть" style="max-width:640px">
   <h2>Как играть</h2>
-  <p>Каждый начинает человеком первого уровня с 4 картами проходов и 4 картами клада. Побеждает тот, кто первым дойдёт до <b>10-го уровня</b>. Последний уровень берётся только победой над монстром.</p>
+  <p>Каждый начинает человеком первого уровня с 4 картами проходов и 4 картами клада. Побеждает тот, кто первым дойдёт до <b>10-го уровня</b>; для долгой партии хозяин в лобби может выбрать 15 или 20. Последний уровень берётся только победой над монстром.</p>
   <h3>Ход</h3>
   <p>1. Разложите расу, класс и вещи. 2. <b>Выбейте дверь</b>: монстр — бой, проклятие — сработает на вас, остальное уходит в руку. 3. Если монстра не было — сразитесь с монстром из руки или обшарьте комнату. 4. Лишние карты сверх пяти отдаются самому слабому.</p>
   <h3>Бой</h3>
@@ -1003,6 +1010,7 @@ cine.init({
   lvlEl: pid => (pid === S.room?.me ? $('#mecard .lvl') : document.querySelector(`[data-opp="${pid}"] .lvl`)),
   color: pid => pl(pid)?.color || '#f5b83d',
   avatar: pid => pl(pid)?.avatar,
+  winLevel: winLvl,
 });
 function soundFx(fresh) {
   const kinds = new Set(fresh.map(f => f.kind));
@@ -1067,7 +1075,7 @@ function runFx(fresh, snap) {
       }
       case 'location': {
         const d = def(f.card);
-        fx.banner(d.name, d.text, 'loc');
+        fx.banner(d.name, ruleText(d.text), 'loc');
         const st = $('#stage');
         setTimeout(() => fx.ambient(st, d.art), 200);
         const b = $('#locBanner'); if (b) fx.shake(b, 'pop-in');
@@ -1075,7 +1083,7 @@ function runFx(fresh, snap) {
       }
       case 'event': {
         const d = def(f.card);
-        fx.banner(d.name, d.text, 'event');
+        fx.banner(d.name, ruleText(d.text), 'event');
         fx.burst($('#stage'), { n: 30, speed: 340, g: 160 });
         if (d.event === 'quake') { fx.shake(document.querySelector('.game'), 'quake'); fx.dust($('#stage'), { n: 30, rocks: 14 }); }
         break;
@@ -1167,6 +1175,8 @@ document.addEventListener('click', async e => {
   if (off) return S.ui.helpForm.setO(Number(off.dataset.offer));
   const kick = t.closest('[data-kick]');
   if (kick) { const r = await call('room:kick', { memberId: kick.dataset.kick }); if (!r.ok) toast(r.error); return; }
+  const winBtn = t.closest('[data-win]');
+  if (winBtn) { const r = await call('room:settings', { winLevel: Number(winBtn.dataset.win) }); if (!r.ok) toast(r.error); return; }
   const delay = t.closest('[data-delay]');
   if (delay) { const r = await call('room:settings', { winDelayMs: Number(delay.dataset.delay) }); if (!r.ok) toast(r.error); return; }
   const max = t.closest('[data-max]');

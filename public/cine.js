@@ -8,7 +8,7 @@
 import { fx } from '/fx.js';
 import { sfx } from '/sfx.js';
 import { cardHTML, cardBackSVG, avatarSVG } from '/art.js';
-import { def } from '/shared/cards.js';
+import { def, ruleText } from '/shared/cards.js';
 import { sceneKind } from '/art-monsters.js';
 
 const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -1024,7 +1024,8 @@ S.levelUp = f => ({
     const lvl = api.lvlEl(f.pid);
     if (lvl) k.a(lvl, [{ transform: 'rotateX(0) scale(1)' }, { transform: 'rotateX(180deg) scale(1.5)', offset: 0.5 }, { transform: 'rotateX(360deg) scale(1)' }], { dur: 600, ease: EASE.io, fill: 'none' });
     sfx.play('levelUp');
-    if (f.to >= 10) stamp(k, c.x, c.y - 70, '10-й уровень!', api.pname(f.pid), 'legend', 900);
+    const W = api.winLevel?.() || 10;
+    if (f.to >= W) stamp(k, c.x, c.y - 70, `${W}-й уровень!`, api.pname(f.pid), 'legend', 900);
     return 650;
   },
 });
@@ -1115,7 +1116,7 @@ S.location = (f, o = {}) => ({
       if (r) { card = k.pt('cn-card', src.outerHTML, cen(r).x, cen(r).y); src.style.visibility = 'hidden'; k.at(1500, () => { if (src.isConnected) src.style.visibility = ''; }); }
     } else card = showcase(k, f.card, 'loc').card;
     k.at(260, () => fx.ambient({ x: c.x, y: c.y, w: Math.min(vw(), 700), h: 300 }, d.art));
-    caption(k, c.x, Math.min(vh() - 70, c.y + 200), d.name, d.text, 'loc', 1000);
+    caption(k, c.x, Math.min(vh() - 70, c.y + 200), d.name, ruleText(d.text), 'loc', 1000);
     k.at(1350, () => {
       const pill = document.getElementById('locBanner');
       const tr = box(pill);
@@ -1142,7 +1143,7 @@ S.event = (f, o = {}) => ({
     let card = null;
     if (!o.fromDoor) card = showcase(k, f.card, 'event').card;
     sfx.play('event');
-    caption(k, c.x, Math.min(vh() - 70, c.y + 200), d.name, d.text, 'event', 1100);
+    caption(k, c.x, Math.min(vh() - 70, c.y + 200), d.name, ruleText(d.text), 'event', 1100);
     k.at(420, () => {
       const W = vw(), H = vh();
       switch (d.event) {
