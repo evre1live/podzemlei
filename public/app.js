@@ -1,5 +1,5 @@
 // «Под Землёй» — клиент.
-import { def, RACE_NAMES, CLASS_NAMES, setRuleVars, ruleText } from '/shared/cards.js';
+import { def, RACE_NAMES, CLASS_NAMES, setRuleVars, ruleText, BOSS_FLOOR } from '/shared/cards.js';
 import { esc, cardHTML, chipHTML, avatarSVG, iconSVG, cardBackSVG, locationSVG } from '/art.js';
 import { fx } from '/fx.js';
 import { sfx } from '/sfx.js';
@@ -7,6 +7,7 @@ import { setWorld } from '/world.js';
 import { cine, growlKind } from '/cine.js';
 import { AVATAR_PARTS, avatarFromSeed, cleanAvatar, withGender } from '/shared/avatar.js';
 import { AV_LABELS, SKIN, HAIRC, CLOTH, BGC } from '/art-avatar.js';
+import { createVoice } from '/voice.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const app = $('#app');
@@ -27,6 +28,7 @@ const S = {
     return v;
   })(),
   tokens: LS.get('tokens', {}),
+  cid: LS.get('cid', null) || (() => { const c = Array.from(crypto.getRandomValues(new Uint8Array(10)), b => (b % 36).toString(36)).join(''); LS.set('cid', c); return c; })(),
   rooms: [],
   room: null, game: null,
   skew: 0,
@@ -86,7 +88,7 @@ const spectating = () => !!S.room?.spectator;
 // ───────────────────────── связь ─────────────────────────
 socket.on('connect', async () => {
   if (S.watch) {
-    const r = await call('room:watch', { roomId: S.watch.id, password: S.watch.pw, name: S.name });
+    const r = await call('room:watch', { roomId: S.watch.id, password: S.watch.pw, name: S.name, cid: S.cid });
     if (r.ok) return;
     S.watch = null; S.room = null; S.game = null; setUrl(null); render(); toast(r.error);
   }
@@ -103,6 +105,7 @@ socket.on('connect', async () => {
   else if (S.pendingWatch && !S.room) tryWatch(S.pendingWatch);
 });
 socket.on('watch:end', ({ reason }) => {
+  vc.leave();
   S.watch = null; S.room = null; S.game = null; setUrl(null);
   toast(reason || 'Комната закрылась');
   closeOverlay(); render();
@@ -111,6 +114,7 @@ socket.on('watch:end', ({ reason }) => {
 socket.on('disconnect', () => { if (S.room) toast('Связь потеряна. Переподключаемся…'); });
 socket.on('rooms', list => { S.rooms = list; if (S.screen === 'home') renderRooms(); });
 socket.on('kicked', ({ reason }) => {
+  vc.leave();
   if (S.room) dropToken(S.room.id);
   S.room = null; S.game = null; setUrl(null);
   toast(reason || 'Вы вышли из комнаты');
@@ -132,17 +136,21 @@ socket.on('room:state', ({ room, game, serverTime }) => {
   const lastMsg = room.chat.at(-1);
   if (!first && lastMsg && lastMsg.id !== S.ui.lastMsg && !lastMsg.sys && lastMsg.from !== room.me) sfx.play('pop', { always: true });
   S.ui.lastMsg = lastMsg?.id;
+  vc.sync(room.voice?.peers);
   const fresh = handleFx(first);
   render();
+  renderVoice();
   if (fresh.length) requestAnimationFrame(() => runFx(fresh, snap));
+  arenaSync(fresh);
 });
 
 // ───────────────────────── маршрутизация экранов ─────────────────────────
 function render() {
   const scr = !S.room ? 'home' : S.game ? 'game' : 'lobby';
-  if (scr !== S.screen) { S.screen = scr; mount[scr](); soundIcons(); }
+  if (scr !== S.screen) { if (S.screen === 'game') arenaOff(true); S.screen = scr; mount[scr](); soundIcons(); }
   setWorld($('#world'), scr === 'home' ? null : scr === 'game' && S.game.location ? def(S.game.location).art : 'default');
   update[scr]();
+  if (scr !== 'home') renderVoice();
 }
 const mount = {}, update = {};
 
@@ -153,7 +161,7 @@ mount.home = () => {
   app.innerHTML = `
   <div class="home">
     <header class="band b-surface"><div class="grassline"></div>
-      <div class="home-top"><div class="logo-row">${HATCH}<span class="spacer"></span><button class="btn ghost small" data-act="rules">Как играть</button></div></div>
+      <div class="home-top"><div class="logo-row">${HATCH}<span class="spacer"></span><a class="btn ghost small" href="/guide">Справочник</a><button class="btn ghost small" data-act="rules">Как играть</button></div></div>
     </header>
     <section class="band b-clay pebbles title-wrap">
       <h1 class="title">Под Землёй</h1>
@@ -249,7 +257,7 @@ async function tryWatch(code, password) {
   if (S.room && !S.room.spectator) return toast('Сначала выйдите из своей комнаты');
   const row = S.rooms.find(r => r.id === code);
   if (password === undefined && row?.locked) return openWatchModal(code, row);
-  const r = await call('room:watch', { roomId: code, password: password || '', name: S.name });
+  const r = await call('room:watch', { roomId: code, password: password || '', name: S.name, cid: S.cid });
   if (!r.ok) {
     if (r.needPassword && !$('#watchModal')) return openWatchModal(code, row);
     S.pendingWatch = null;
@@ -321,6 +329,8 @@ mount.lobby = () => {
         <span class="code-pill" id="rcode" title="Код комнаты"></span>
         <button class="btn small" data-act="copy">Скопировать приглашение</button>
         <span class="spacer"></span>
+        <span class="voice-ctl"></span>
+        <button class="btn ghost small" data-act="guide">Справочник</button>
         <button class="btn ghost small" data-act="rules">Как играть</button>
         <button class="btn ghost small icon-btn sound-btn" data-act="sound" aria-label="Звук" title="Звук"></button>
         <button class="btn ghost small" data-act="leave">Выйти</button>
@@ -352,7 +362,7 @@ update.lobby = () => {
   const cp = app.querySelector('.topbar [data-act="copy"]');
   if (cp) cp.textContent = r.spectator ? 'Ссылка для зрителей' : 'Скопировать приглашение';
   const seats = r.members.map(m => `
-    <div class="seat ${m.id === r.me ? 'me' : ''}" style="--seat:${m.color}">
+    <div class="seat ${m.id === r.me ? 'me' : ''}" style="--seat:${m.color}" data-vmember="${m.id}">
       ${isHost && m.id !== r.me ? `<button class="btn ghost small kick" data-kick="${m.id}" title="Убрать из-за стола" aria-label="Убрать ${esc(m.name)}">✕</button>` : ''}
       ${m.id === r.me ? `<button class="ava ava-edit" data-act="avatar" aria-label="Настроить внешность" title="Настроить внешность">${avatarSVG(m.avatar, m.color)}<i>✎</i></button>` : `<div class="ava">${avatarSVG(m.avatar, m.color)}</div>`}
       <div class="sname">${esc(m.name)}</div>
@@ -423,6 +433,7 @@ mount.game = () => {
         <span id="locpill" class="locpill"></span>
         <span id="watchpill"></span>
         <span class="spacer"></span>
+        <span class="voice-ctl"></span>
         <button class="btn ghost small side-toggle" data-act="sideToggle"><span class="long-label">Летопись и чат</span><span class="short">Чат</span></button>
         <button class="btn ghost small icon-btn sound-btn" data-act="sound" aria-label="Звук" title="Звук"></button>
         <button class="btn ghost small" data-act="rules">Правила</button>
@@ -431,6 +442,7 @@ mount.game = () => {
     </div>
     <div class="band b-clay pebbles"><div class="opps" id="opps"></div></div>
     <div class="band b-rock cave" id="cave">
+      <div class="arena3d" id="arena3d" aria-hidden="true" hidden></div>
       <div class="cave-stage" id="stage"></div>
       <div class="motes" aria-hidden="true">${'<i></i>'.repeat(12)}</div>
       <div class="sidepanel side" id="sidepanel">
@@ -513,7 +525,7 @@ function statusTags(p) {
 }
 function oppHTML(p) {
   const g = S.game;
-  return `<button class="opp ${g.turn.pid === p.id ? 'turn' : ''} ${p.dead ? 'dead' : ''}" data-opp="${p.id}" style="--seat:${p.color}" aria-label="${esc(p.name)}, уровень ${p.level}">
+  return `<button class="opp ${g.turn.pid === p.id ? 'turn' : ''} ${p.dead ? 'dead' : ''}" data-opp="${p.id}" data-vmember="${p.id}" style="--seat:${p.color}" aria-label="${esc(p.name)}, уровень ${p.level}">
     <div class="ava">${avatarSVG(p.avatar, p.color)}</div>
     <div class="oname">${esc(p.name)}</div>
     <div class="ometa"><span>${esc(raceText(p))}</span><span>${esc(classText(p))}</span></div>
@@ -544,7 +556,7 @@ function renderStage() {
   if (g.phase === 'ended') { title = 'Партия окончена'; text = ''; }
   else if (mine) {
     if (step === 'pre') { title = 'Ваш ход'; text = 'Разложите вещи и выбейте дверь — посмотрим, кто за ней.'; }
-    else if (step === 'post') { title = 'За дверью никого'; text = 'Можно сразиться с монстром из своей руки или обшарить комнату и взять карту втёмную.'; }
+    else if (step === 'post') { title = 'За дверью никого'; text = 'Можно поискать неприятности — выйдет случайный монстр из колоды — или обшарить комнату и взять карту втёмную.'; }
     else { title = 'Ход почти закончен'; text = h.mustGive ? `В руке на ${cardsWord(h.mustGive)} больше нормы — лишнее уйдёт ${h.giveToLowest ? 'самому слабому игроку' : 'в сброс'}.` : 'Наведите порядок в вещах и передайте ход.'; }
   } else if (tp) {
     title = `Ходит ${esc(tp.name)}`;
@@ -606,10 +618,7 @@ function actionButtons() {
   if (!h || g.phase !== 'playing') return '';
   const b = [];
   if (h.kick) b.push(`<button class="btn primary big" data-act="kick">Выбить дверь</button>`);
-  if (h.lookForTrouble) {
-    const monsters = me().hand.filter(u => def(u).type === 'monster');
-    b.push(`<button class="btn danger" data-act="trouble" ${monsters.length ? '' : 'disabled title="В руке нет монстров"'}>Искать неприятности</button>`);
-  }
+  if (h.lookForTrouble) b.push(`<button class="btn danger" data-act="trouble" title="Бой со случайным монстром из колоды: можно нарваться и на босса">Искать неприятности</button>`);
   if (h.loot) b.push(`<button class="btn" data-act="loot">Обшарить комнату</button>`);
   if (h.endTurn) b.push(`<button class="btn primary big" data-act="endTurn">${h.mustGive ? `Отдать ${cardsWord(h.mustGive)} и закончить ход` : 'Закончить ход'}</button>`);
   if (h.autoEquip && h.manage) b.push(`<button class="btn ghost small" data-act="autoEquip">Надеть лучшее</button>`);
@@ -629,6 +638,7 @@ function monFlags(m, c) {
   }
   if (m.noEscape) f.push('<span class="flag">не убежать</span>');
   if (d.noHelp) f.push('<span class="flag">без помощи</span>');
+  if (d.levelOnly) f.push('<span class="flag" title="Вещи, зелья, способности и разовые бонусы героям не помогают">только уровень</span>');
   return f.length ? `<div class="mon-flags">${f.join('')}</div>` : '';
 }
 const tierClass = str => (str >= 16 ? 'boss' : str >= 12 ? 'high' : str >= 6 ? 'mid' : 'low');
@@ -642,7 +652,7 @@ function fightHTML() {
   S.ui.fightNums = { key: fk, heroes: n.heroes, monsters: n.monsters, k: tk, win: n.winning };
   const heroes = [c.fighter, c.helper].filter(Boolean).map(id => {
     const p = pl(id);
-    return `<div class="hero-pill" data-pid="${p.id}" style="--seat:${p.color}"><span class="ava">${avatarSVG(p.avatar, p.color)}</span><span><b>${esc(p.name)}</b><br><small>сила ${c.heroStrengths[id]}</small></span></div>`;
+    return `<div class="hero-pill" data-pid="${p.id}" data-vmember="${p.id}" style="--seat:${p.color}"><span class="ava">${avatarSVG(p.avatar, p.color)}</span><span><b>${esc(p.name)}</b><br><small>сила ${c.heroStrengths[id]}</small></span></div>`;
   }).join('');
   const pm = [];
   for (const m of c.mods) pm.push({ side: m.side, t: `${esc(pname(m.by))}: ${esc(m.uid ? def(m.uid).name : m.label || 'эффект')} ${m.n > 0 ? '+' : '−'}${Math.abs(m.n)}` });
@@ -655,7 +665,7 @@ function fightHTML() {
   const monsters = c.monsters.map((m, i) => `
     <div class="mon-wrap">
       <div class="mon-body ${def(m.uid).boss ? 'boss hell' : tierClass(m.strength)}">${cardHTML(m.uid, { size: 'sm', attrs: `data-zone="view"` })}</div>
-      <span class="mon-str">сила ${m.strength}${def(m.uid).mirror != null ? ` <small>(лидер ${m.level - def(m.uid).mirror} + ${def(m.uid).mirror})</small>` : ''}${def(m.uid).boss ? ` <small>(вдвое больше силы ${esc(pname(c.fighter))})</small>` : ''}</span>
+      <span class="mon-str">сила ${m.strength}${def(m.uid).mirror != null ? ` <small>(лидер ${m.level - def(m.uid).mirror} + ${def(m.uid).mirror})</small>` : ''}${def(m.uid).boss ? ` <small>(вдвое больше силы ${esc(pname(c.fighter))}, но не меньше ${BOSS_FLOOR})</small>` : ''}</span>
       ${monFlags(m, c)}
       ${m.enh.length ? `<div class="enh-list">${m.enh.map(u => `<span class="mod m" data-uid="${u}" data-zone="view">${esc(def(u).name)} ${def(u).double ? '×2' : (def(u).bonus > 0 ? '+' : '') + def(u).bonus}</span>`).join('')}</div>` : ''}
     </div>`).join('');
@@ -756,7 +766,7 @@ function renderMine() {
   }).join('');
   const run = 5 - p.runBonus;
   el.innerHTML = `
-    <div class="me-top" style="--seat:${p.color}">
+    <div class="me-top" style="--seat:${p.color}" data-vmember="${p.id}">
       <div class="me-ava" id="meava">${avatarSVG(p.avatar, p.color)}</div>
       <div><div class="me-name">${esc(p.name)}</div>
         <div class="me-stats"><span class="lvl" title="Уровень">${p.level}</span><span class="pow" title="Сила: уровень и надетые вещи">⚔ ${p.power}</span>
@@ -928,8 +938,7 @@ function closeOverlay() { layer.innerHTML = ''; S.ui.overlay = null; popOpts = [
 
 function optLabel(a) {
   const d = def(a.uid);
-  if (a.type === 'lookForTrouble') return 'Сразиться с ним';
-  if (a.target) return `Наслать на ${pname(a.target)}`;
+  if (a.target) return d.effect === 'enslave' ? `Заставить помогать: ${pname(a.target)}` : `Наслать на ${pname(a.target)}`;
   if (a.side) return a.side === 'player' ? `Героям +${d.bonus}` : `Монстрам +${d.bonus}`;
   if (Number.isInteger(a.monster)) return `${d.type === 'enhancer' ? 'Усилить' : 'Окаменить'} «${def(S.game.combat.monsters[a.monster].uid).name}»`;
   if (a.with) return `Выпустить «${def(a.with).name}» (ур. ${def(a.with).level})`;
@@ -1001,7 +1010,7 @@ function openOppPop(pid) {
   const mine = me();
   popOpts = [];
   if (mine) {
-    for (const u of mine.hand) for (const a of h.cards?.[u] || []) if (a.target === pid) popOpts.push({ label: `Наслать «${def(u).name}»`, action: a, cls: 'danger' });
+    for (const u of mine.hand) for (const a of h.cards?.[u] || []) if (a.target === pid) popOpts.push({ label: def(u).effect === 'enslave' ? `«${def(u).name}»: пусть помогает` : `Наслать «${def(u).name}»`, action: a, cls: 'danger' });
     for (const s of h.abilities?.steal || []) if (s.target === pid) popOpts.push({ label: `Стащить «${def(s.item).name}»`, fn: () => startMode({ kind: 'ability', name: 'steal', target: pid, item: s.item, picked: [], max: 1 }), cls: 'ghost' });
     for (const t of h.abilities?.backstab || []) if (t === pid) popOpts.push({ label: 'Ударить в спину (−2)', fn: () => startMode({ kind: 'ability', name: 'backstab', target: pid, picked: [], max: 1 }), cls: 'danger' });
   }
@@ -1091,9 +1100,9 @@ const RULES = `<div class="modal rules" role="dialog" aria-label="Как игр�
   <h2>Как играть</h2>
   <p>Каждый начинает человеком первого уровня с 4 картами проходов и 4 картами клада. Побеждает тот, кто первым дойдёт до <b>10-го уровня</b>; для долгой партии хозяин в лобби может выбрать 15 или 20. Последний уровень берётся только победой над монстром.</p>
   <h3>Ход</h3>
-  <p>1. Разложите расу, класс и вещи. 2. <b>Выбейте дверь</b>: монстр — бой, проклятие — сработает на вас, остальное уходит в руку. 3. Если монстра не было — сразитесь с монстром из руки или обшарьте комнату. 4. Лишние карты сверх пяти отдаются самому слабому.</p>
+  <p>1. Разложите расу, класс и вещи. 2. <b>Выбейте дверь</b>: монстр — бой, проклятие — сработает на вас, остальное уходит в руку. 3. Если монстра не было — ищите неприятности (выйдет случайный монстр из колоды) или обшарьте комнату. 4. Лишние карты сверх пяти отдаются самому слабому.</p>
   <h3>Бой</h3>
-  <p>Ваша сила — уровень плюс надетые вещи. Если она больше силы монстров, жмите «Добить!». У остальных есть несколько секунд, чтобы помешать: усилить монстра, подбросить ещё одного, ударить в спину. За победу — уровень и клад. Не хватает сил — зовите на помощь, пообещав часть клада, или бегите: побег удаётся на 5–6 кубика. Не убежали — получите расплату с карты монстра.</p>
+  <p>Ваша сила — уровень плюс надетые вещи. Если она больше силы монстров, жмите «Добить!». У остальных есть несколько секунд, чтобы помешать: усилить монстра, подбросить ещё одного, ударить в спину. За победу — уровень и клад. Не хватает сил — зовите на помощь, пообещав часть клада, или бегите: побег удаётся на 5–6 кубика. Карта «Ты мой раб» заставляет любого игрока вступить в ваш бой: отказаться он не может, а клада ему не положено. Не убежали — получите расплату с карты монстра.</p>
   <h3>Вещи и уровни</h3>
   <p>Один головняк, один броник, одна обувка, две руки и одна большая вещь (гномам — сколько угодно, механикам — три руки). Можно завести одного питомца: он даёт бонус и один раз спасает от расплаты. Вещи можно продать: каждые 1000 голдов — уровень.</p>
   <h3>Расы и классы</h3>
@@ -1101,12 +1110,12 @@ const RULES = `<div class="modal rules" role="dialog" aria-label="Как игр�
   <h3>Локации и события</h3>
   <p>Карта локации меняет правила для всех, пока кто-нибудь не сыграет другую: в затопленном тоннеле труднее убежать, на рынке вещи дороже, в котельной проклятия тают. События срабатывают сразу для всего стола. Зелья дают бонус в текущем или следующем бою.</p>
   <h3>Особые монстры</h3>
-  <p>Одни нападают из засады, едва вы открыли дверь, другие не терпят помощников, от третьих не убежать. Зеркальный двойник всегда сильнее лидера партии. Читайте карту, прежде чем драться.</p>
+  <p>Одни нападают из засады, едва вы открыли дверь, другие не терпят помощников (метка «без помощи»), от третьих не убежать. Против монстров с меткой «только уровень» — Лихо, Горгоны, Циклопа и Кощея — считается один уровень героя: вещи, зелья, способности и разовые бонусы не помогают. Зеркальный двойник всегда сильнее лидера партии. Читайте карту, прежде чем драться.</p>
   <h3>Боссы</h3>
-  <p>В колоде три босса — Люцифер, Аид и Анубис. Уровень у них 666, а сила — вдвое больше силы героя, против которого босс вышел. Усилители и чары на них не действуют, зато помощник, зелья и разовые карты помогают как обычно: вдвоём босса можно одолеть и получить 5 кладов и 2 уровня. За героями ниже 9-го уровня боссы не гонятся, а тех, кто постарше, при неудачном побеге убивают и отбрасывают на 5 уровней.</p>
+  <p>В колоде три босса — Люцифер, Аид и Анубис. Уровень у них 666, а сила — вдвое больше силы героя, против которого босс вышел, но не меньше ${BOSS_FLOOR}. Усилители и чары на них не действуют, зато помощник, зелья и разовые карты помогают как обычно: вдвоём босса можно одолеть и получить 5 кладов и 2 уровня. За героями ниже 9-го уровня боссы не гонятся, а тех, кто постарше, при неудачном побеге убивают и отбрасывают на 5 уровней.</p>
   <h3>Смерть</h3>
   <p>Погибший теряет вещи и руку, но сохраняет уровень, расу и класс. В свой следующий ход он возвращается с новыми картами.</p>
-  <button class="btn primary" data-act="closeOverlay">Понятно</button>
+  <div class="row"><button class="btn primary" data-act="closeOverlay">Понятно</button><button class="btn ghost" data-act="guide">Справочник карт</button></div>
 </div>`;
 
 // ───────────────────────── эффекты ─────────────────────────
@@ -1128,6 +1137,7 @@ function handleFx(first) {
   return fresh;
 }
 const avaOf = pid => pid === S.room?.me ? $('#meava') : document.querySelector(`[data-opp="${pid}"] .ava`);
+cine.arenaActive = () => arenaOn() && (!!S.game?.combat || arenaShown());
 cine.init({
   meId: () => S.room?.me,
   pname,
@@ -1279,6 +1289,8 @@ document.addEventListener('click', async e => {
     if ($('#helpPrompt')) return; // на просьбу о помощи нужно ответить
     return closeOverlay();
   }
+  // внутри справочника свои обработчики: карты там только рассматривают
+  if (t.closest('.guide')) return;
   const opt = t.closest('[data-popopt]');
   if (opt) {
     const o = popOpts[Number(opt.dataset.popopt)];
@@ -1289,6 +1301,14 @@ document.addEventListener('click', async e => {
     if (r.ok) { closeOverlay(); flyCard(fly, o.action); }
     return;
   }
+  const vf = t.closest('[data-vforce]');
+  if (vf) { const r = await call('voice:force', { id: vf.dataset.vforce, on: vf.dataset.on === '1' }); if (!r.ok) toast(r.error); return; }
+  const vk = t.closest('[data-vkick]');
+  if (vk) { const r = await call('voice:kick', { id: vk.dataset.vkick }); if (!r.ok) toast(r.error); return; }
+  const vu = t.closest('[data-vunban]');
+  if (vu) { const r = await call('voice:unban', { key: vu.dataset.vunban }); if (!r.ok) toast(r.error); return; }
+  const wk = t.closest('[data-wkick]');
+  if (wk) { const r = await call('room:kickWatcher', { id: wk.dataset.wkick }); if (!r.ok) toast(r.error); return; }
   const watchBtn = t.closest('[data-watch]');
   if (watchBtn) return tryWatch(watchBtn.dataset.watch, watchBtn.dataset.locked === 'true' ? undefined : '');
   const follow = t.closest('[data-follow]');
@@ -1340,6 +1360,19 @@ document.addEventListener('click', async e => {
     case 'avatarSave': return saveAvatar();
     case 'soundTest': return sfx.play('victory', { gap: 0 });
     case 'rules': return showOverlay(RULES);
+    case 'voicePanel': return openVoicePanel();
+    case 'voiceJoin': await vc.join(); return drawVoicePanel();
+    case 'voiceLeave': await vc.leave(); return drawVoicePanel();
+    case 'voiceMute': return vc.setMuted(!vc.state.muted);
+    case 'guide': {
+      // справочник открывается окном прямо в игре, чтобы не уходить из комнаты
+      e.preventDefault();
+      showOverlay('<div class="modal guide-modal" id="guideModal"></div>');
+      const { renderGuide } = await import('/guide.js');
+      const host = $('#guideModal');
+      if (host) renderGuide(host, { onClose: closeOverlay });
+      return;
+    }
     case 'copy': {
       if (spectating()) {
         const text = `Смотри партию в «Под Землёй»: ${watchLink()}${S.room.locked ? ' (нужен пароль комнаты)' : ''}`;
@@ -1365,6 +1398,7 @@ document.addEventListener('click', async e => {
       return tryJoin(S.room.id, S.watch?.pw ?? '');
     }
     case 'leave': {
+      await vc.leave();
       if (spectating()) {
         const r = await call('room:unwatch');
         S.watch = null; S.room = null; S.game = null; setUrl(null); closeOverlay(); render();
@@ -1383,6 +1417,7 @@ document.addEventListener('click', async e => {
         return showOverlay(`<div class="modal" role="dialog" aria-label="Меню"><h2>Вы зритель</h2>
           <p class="muted" style="margin:0">Вы видите стол, бои, летопись и чат, но не карты в чужих руках. Писать в чат можно — сообщения будут помечены «зритель».</p>
           <button class="btn" data-act="copyWatch">Ссылка для зрителей</button>
+          <button class="btn" data-act="guide">Справочник карт</button>
           <button class="btn ghost" data-act="leave">Перестать смотреть</button>
           <button class="btn ghost" data-act="closeOverlay">Вернуться к столу</button></div>`);
       }
@@ -1390,6 +1425,7 @@ document.addEventListener('click', async e => {
         <button class="btn" data-act="avatar">Внешность героя</button>
         <button class="btn" data-act="copy">Скопировать приглашение</button>
         <button class="btn" data-act="copyWatch">Ссылка для зрителей</button>
+        <button class="btn" data-act="guide">Справочник карт</button>
         ${isHost && S.game.phase === 'playing' ? '<button class="btn danger" data-act="abort">Завершить партию для всех</button>' : ''}
         ${isHost && S.game.phase === 'ended' ? '<button class="btn primary" data-act="toLobby">Новая партия</button>' : ''}
         <button class="btn ghost" data-act="leave">${S.game.phase === 'playing' ? 'Выйти (за вас доиграет автопилот)' : 'Выйти из комнаты'}</button>
@@ -1414,12 +1450,7 @@ document.addEventListener('click', async e => {
       if (h.mustGive) { S.ui.mode = { kind: 'give', need: h.mustGive, picked: [] }; return render(); }
       return act({ type: 'endTurn', give: [] });
     }
-    case 'trouble': {
-      const monsters = me().hand.filter(u => def(u).type === 'monster');
-      if (monsters.length === 1) return act({ type: 'lookForTrouble', uid: monsters[0] });
-      popOpts = monsters.map(u => ({ label: `${def(u).name} (ур. ${def(u).level})`, action: { type: 'lookForTrouble', uid: u }, cls: 'danger' }));
-      return showOverlay(`<div class="modal" role="dialog" aria-label="Выбор монстра"><h2>С кем драться?</h2><div class="pop-actions">${popOpts.map((o, i) => `<button class="btn ${o.cls}" data-popopt="${i}">${esc(o.label)}</button>`).join('')}</div><button class="btn ghost" data-act="closeOverlay">Отмена</button></div>`);
-    }
+    case 'trouble': return act({ type: 'lookForTrouble' });
     case 'askHelp': return openHelpModal();
     case 'sendHelp': {
       const { target, offer } = S.ui.helpForm.get();
@@ -1486,6 +1517,108 @@ async function saveAvatar() {
   else toast('Внешность сохранена', true);
 }
 
+// ───────────────────────── 3D-арена боя ─────────────────────────
+// Three.js и модели грузятся только тогда, когда начинается первый бой.
+const WEBGL = (() => { try { const c = document.createElement('canvas'); return !!(c.getContext('webgl2') || c.getContext('webgl')); } catch { return false; } })();
+const weakDevice = () => (navigator.hardwareConcurrency || 4) <= 2 || (navigator.deviceMemory || 4) <= 2 || matchMedia('(prefers-reduced-motion: reduce)').matches;
+const arenaOn = () => WEBGL && LS.get('arena3d', !weakDevice());
+const ARENA = { mod: null, inst: null, hideAt: 0, timer: null, prefetched: false };
+function arenaShown() { return !!$('#cave')?.classList.contains('arena-on'); }
+function arenaShow(on) {
+  const cave = $('#cave'), el = $('#arena3d');
+  if (!cave || !el) return;
+  cave.classList.toggle('arena-on', on);
+  el.hidden = !on;
+  if (on) ARENA.inst?.resume(); else ARENA.inst?.pause();
+}
+function arenaOff(dispose = false) {
+  clearTimeout(ARENA.timer);
+  arenaShow(false);
+  if (dispose) { ARENA.inst?.dispose(); ARENA.inst = null; }
+}
+async function arenaSync(fresh) {
+  if (S.screen !== 'game' || !S.game) return arenaOff(true);
+  if (!arenaOn()) return arenaOff();
+  const g = S.game;
+  const el = $('#arena3d');
+  if (!el) return;
+  // модели заранее, пока идёт ход: первый бой не будет ждать загрузки
+  if (!ARENA.prefetched && g.phase === 'playing') { ARENA.prefetched = true; (ARENA.mod ||= import('/arena3d.js')).then(m => m.prefetch(['hero_knight', 'hero_barbarian', 'hero_mage'])).catch(() => {}); }
+  if (!g.combat && !ARENA.inst?.key) return;
+  try {
+    const mod = await (ARENA.mod ||= import('/arena3d.js'));
+    if (!ARENA.inst || ARENA.inst.host !== el) { ARENA.inst?.dispose(); ARENA.inst = new mod.Arena(el, { lite: cine.lite || weakDevice() }); }
+    if (g.combat) { clearTimeout(ARENA.timer); arenaShow(true); }
+    const r = await ARENA.inst.sync(g, fresh);
+    if (S.game?.combat) return;
+    clearTimeout(ARENA.timer);
+    const left = r?.active ? Math.max(0, r.until - performance.now()) : 0;
+    ARENA.timer = setTimeout(() => { if (!S.game?.combat) arenaShow(false); }, left);
+  } catch (e) {
+    console.warn('3D-арена недоступна', e);
+    LS.set('arena3d', false); arenaOff(true); render();
+  }
+}
+
+// ───────────────────────── голосовой чат ─────────────────────────
+const MIC = off => `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3" fill="currentColor"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>${off ? '<path d="M4 4l16 16" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>' : ''}</svg>`;
+// громкость каждого собеседника запоминается по игроку (или по имени зрителя)
+const volKey = id => { const p = S.room?.voice?.peers.find(x => x.id === id); return p ? (p.memberId || 'name:' + p.name) : id; };
+const volumeFor = id => LS.get('vvol', {})[volKey(id)] ?? 1;
+const vc = createVoice(socket, { onChange: () => { renderVoice(); if ($('#voiceModal')) drawVoicePanel(); }, onError: msg => toast(msg), getVolume: volumeFor });
+const voicePeers = () => S.room?.voice?.peers || [];
+function renderVoice() {
+  const V = vc.state;
+  const n = voicePeers().length;
+  document.querySelectorAll('.voice-ctl').forEach(el => {
+    el.innerHTML = V.joined
+      ? `<button class="btn small icon-btn voice-mic ${V.muted ? 'off' : 'on'}${V.selfSpeaking ? ' talking' : ''}" data-act="voiceMute" title="${V.forced ? 'Хозяин выключил вам микрофон' : V.muted ? 'Включить микрофон' : 'Выключить микрофон'}" aria-label="${V.muted ? 'Включить микрофон' : 'Выключить микрофон'}">${MIC(V.muted)}</button><button class="btn ghost small voice-open" data-act="voicePanel" title="Голосовой чат">Голос · ${n}</button>`
+      : `<button class="btn ghost small voice-open" data-act="voicePanel" title="Голосовой чат">${MIC(false)}<span>${V.joining ? 'Подключаемся…' : n ? `Голос · ${n}` : 'Голос'}</span></button>`;
+  });
+  // кто говорит — светится аватарка; кто в чате — значок микрофона
+  const byMember = new Map(voicePeers().filter(p => p.memberId).map(p => [p.memberId, p]));
+  document.querySelectorAll('[data-vmember]').forEach(el => {
+    const p = byMember.get(el.dataset.vmember);
+    el.classList.toggle('in-voice', !!p);
+    el.classList.toggle('voice-muted', !!p?.muted);
+    el.classList.toggle('speaking', !!p && vc.isSpeaking(p.id));
+  });
+  document.querySelectorAll('[data-vpeer]').forEach(el => el.classList.toggle('speaking', vc.isSpeaking(el.dataset.vpeer)));
+}
+function openVoicePanel() { showOverlay('<div class="modal voice-modal" id="voiceModal" role="dialog" aria-label="Голосовой чат"></div>'); drawVoicePanel(); }
+function drawVoicePanel() {
+  const host = $('#voiceModal');
+  if (!host) return;
+  const V = vc.state, isHost = S.room?.hostId === S.room?.me && !spectating();
+  const peers = voicePeers();
+  const bans = S.room?.voice?.bans || [];
+  const row = p => {
+    const me = p.id === V.me;
+    const st = V.peers.get(p.id)?.state;
+    const status = p.forced ? 'микрофон выключил хозяин' : p.muted ? 'микрофон выключен' : st === 'failed' ? 'нет связи' : vc.isSpeaking(p.id) ? 'говорит' : 'в чате';
+    return `<div class="v-row${vc.isSpeaking(p.id) ? ' speaking' : ''}" data-vpeer="${esc(p.id)}">
+      <span class="v-dot" style="--c:${esc(p.color)}">${MIC(p.muted)}</span>
+      <span class="v-who"><b>${esc(p.name)}</b>${me ? ' <small>это вы</small>' : ''}<br><small class="muted">${p.spectator ? 'зритель' : 'за столом'} · ${status}</small></span>
+      ${!me && V.joined ? `<label class="v-vol" title="Громкость"><span class="sr">Громкость ${esc(p.name)}</span><input type="range" min="0" max="1" step="0.05" value="${volumeFor(p.id)}" data-vvol="${esc(p.id)}"></label>` : ''}
+      ${isHost && !me && p.memberId !== S.room.me ? `<span class="v-host"><button class="btn small ${p.forced ? 'hero' : 'ghost'}" data-vforce="${esc(p.id)}" data-on="${p.forced ? 0 : 1}">${p.forced ? 'Вернуть микрофон' : 'Выключить микрофон'}</button><button class="btn small danger" data-vkick="${esc(p.id)}">Убрать из чата</button>${p.spectator ? `<button class="btn small ghost" data-wkick="${esc(p.id)}">Попросить уйти</button>` : ''}</span>` : ''}
+    </div>`;
+  };
+  host.innerHTML = `<h2>Голосовой чат</h2>
+    <p class="muted" style="margin:0">Слышат все, кто подключился: и игроки за столом, и зрители — до ${S.room?.voice?.max || 10} человек. Звук идёт напрямую между браузерами; в некоторых мобильных и рабочих сетях связь может не установиться.</p>
+    ${V.joined
+      ? `<div class="row"><button class="btn ${V.muted ? 'hero' : ''}" data-act="voiceMute" ${V.forced ? 'disabled' : ''}>${V.forced ? 'Хозяин выключил вам микрофон' : V.muted ? 'Включить микрофон' : 'Выключить микрофон'}</button><button class="btn ghost" data-act="voiceLeave">Отключиться</button></div>`
+      : `<div class="row"><button class="btn primary" data-act="voiceJoin" ${V.joining ? 'disabled' : ''}>${V.joining ? 'Подключаемся…' : 'Подключиться к голосу'}</button></div>`}
+    <div class="v-list">${peers.length ? peers.map(row).join('') : '<p class="muted" style="margin:0">Пока никого. Подключитесь первым — остальные увидят, что вы в голосовом чате.</p>'}</div>
+    ${isHost && bans.length ? `<h3>Убраны из голосового чата</h3><div class="v-list">${bans.map(b => `<div class="v-row"><span class="v-who"><b>${esc(b.name)}</b></span><button class="btn small" data-vunban="${esc(b.key)}">Пустить снова</button></div>`).join('')}</div>` : ''}
+    <div class="row" style="justify-content:flex-end"><button class="btn ghost" data-act="closeOverlay">Закрыть</button></div>`;
+}
+document.addEventListener('input', e => {
+  const v = e.target.closest?.('[data-vvol]');
+  if (!v) return;
+  const all = LS.get('vvol', {}); all[volKey(v.dataset.vvol)] = Number(v.value); LS.set('vvol', all);
+  vc.applyVolume(v.dataset.vvol);
+});
+
 // ───────────────────────── настройки звука ─────────────────────────
 const SPEAKER = on => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor"/>${on
   ? '<path d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>'
@@ -1507,6 +1640,7 @@ function openSoundModal() {
     <label class="check"><input type="checkbox" id="sndAmb" ${s.amb ? 'checked' : ''}> Атмосфера пещеры: гул, ветер и капли</label>
     <label class="check"><input type="checkbox" id="liveBg" ${liveBg() ? 'checked' : ''}> Живой фон: вода, снег, светлячки (на слабом телефоне лучше выключить)</label>
     <label class="check"><input type="checkbox" id="cineOn" ${cine.enabled ? 'checked' : ''}> Зрелищные сцены: двери, удары, разрубленные карты, салют</label>
+    <label class="check"><input type="checkbox" id="arenaOn" ${arenaOn() ? 'checked' : ''} ${WEBGL ? '' : 'disabled'}> 3D-бои: герои и монстры дерутся на арене${WEBGL ? '' : ' (браузер не поддерживает 3D)'}</label>
     <p class="muted" style="margin:0;font-size:13.5px">Звуки — записи из свободных библиотек Kenney и OpenGameArt (лицензия CC0), мелодии сыграны на пиццикато и стальных барабанах. Если на телефоне тишина, проверьте беззвучный режим.</p>
     <div class="row"><button class="btn" data-act="soundTest">Послушать</button><button class="btn primary" data-act="closeOverlay">Готово</button></div>
   </div>`);
@@ -1516,6 +1650,7 @@ function openSoundModal() {
   $('#sndAmb').addEventListener('change', e => sfx.set({ amb: e.target.checked }));
   $('#liveBg').addEventListener('change', e => { LS.set('liveBg', e.target.checked); applyBg(); });
   $('#cineOn').addEventListener('change', e => { cine.set(e.target.checked); render(); });
+  $('#arenaOn').addEventListener('change', e => { LS.set('arena3d', e.target.checked); if (!e.target.checked) arenaOff(true); render(); arenaSync([]); });
 }
 
 // ───────────────────────── полёт сыгранной карты ─────────────────────────

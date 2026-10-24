@@ -58,14 +58,14 @@ t('победа: уровень и клад после отсчёта', () => {
 
 t('помощник получает обещанный клад, эльф — уровень', () => {
   const s = fresh(); const p = P(s, 'p0'); const h = P(s, 'p1');
-  s.decks.door.push(take(s, 'm_zhek#0')); // 10 ур, 3 клада
+  s.decks.door.push(take(s, 'm_zhek#0')); // 12 ур, 3 клада
   A(s, 'p0', { type: 'kick' });
-  p.level = 3; h.level = 8; h.races.push(take(s, 'r_elf#0'));
+  p.level = 5; h.level = 8; h.races.push(take(s, 'r_elf#0'));
   assert.equal(A(s, 'p0', { type: 'askHelp', to: 'p1', offer: 2 }).ok, true);
   assert.equal(A(s, 'p2', { type: 'answerHelp', accept: true }).ok, false);
   assert.equal(A(s, 'p1', { type: 'answerHelp', accept: true }).ok, true);
   A(s, 'p0', { type: 'fight' }, 1000); tick(s, { rng, now: 9000 });
-  assert.equal(h.hand.length, 2); assert.equal(p.hand.length, 1); assert.equal(h.level, 9); assert.equal(p.level, 4);
+  assert.equal(h.hand.length, 2); assert.equal(p.hand.length, 1); assert.equal(h.level, 9); assert.equal(p.level, 6);
 });
 
 t('отказавшего второй раз не просят', () => {
@@ -183,10 +183,10 @@ t('зеркальный двойник сильнее лидера на 2, «С�
   fight(s, 'm_mirror#0');
   assert.equal(combatNumbers(s).monsters, 9);
   s.combat = null; s.turn.step = 'pre';
-  fight(s, 'm_gossip#0'); // 5
+  fight(s, 'm_gossip#0'); // 6
   P(s, 'p1').hand.push(take(s, 'e_pack#0'));
   A(s, 'p1', { type: 'playCard', uid: 'e_pack#0', monster: 0 });
-  assert.equal(combatNumbers(s).monsters, 10);
+  assert.equal(combatNumbers(s).monsters, 12);
 });
 
 t('расы: орк без шапки, гоблин торгуется и берёт лишний клад', () => {
@@ -199,8 +199,8 @@ t('расы: орк без шапки, гоблин торгуется и бер
   g.hand.push(take(s, 'i_tokens#0'), take(s, 'i_boots#0'));
   assert.equal(saleValue(s, g, ['i_tokens#0', 'i_boots#0']).total, 1000);
   // гоблин-помощник
-  p.level = 4; g.level = 8;
-  fight(s, 'm_zhek#0'); // 10, 3 клада (+1 орку за крупного монстра)
+  p.level = 5; g.level = 8;
+  fight(s, 'm_zhek#0'); // 12, 3 клада (+1 орку за крупного монстра)
   const base = combatNumbers(s).treasures;
   A(s, 'p0', { type: 'askHelp', to: 'p1', offer: 1 });
   A(s, 'p1', { type: 'answerHelp', accept: true });
@@ -256,20 +256,20 @@ t('механик держит перфоратор тремя руками и �
 t('бард поёт колыбельную и берёт лишний клад; алхимик усиливает разовые', () => {
   const s = fresh(); const p = P(s, 'p0'); p.level = 3;
   p.classes.push(take(s, 'c_bard#0'));
-  fight(s, 'm_gossip#0'); // 5
+  fight(s, 'm_gossip#0'); // 6
   p.hand.push(take(s, 'i_ladle#0'));
   A(s, 'p0', { type: 'ability', name: 'lullaby', cards: ['i_ladle#0'] });
-  assert.equal(combatNumbers(s).monsters, 2);
+  assert.equal(combatNumbers(s).monsters, 3);
   assert.equal(combatNumbers(s).treasures, 3);
   const al = P(s, 'p1'); al.classes.push(take(s, 'c_alchemist#0'));
   al.hand.push(take(s, 'o_kvass#0'));
   A(s, 'p1', { type: 'playCard', uid: 'o_kvass#0', side: 'monster' });
-  assert.equal(combatNumbers(s).monsters, 6);
+  assert.equal(combatNumbers(s).monsters, 7);
 });
 
 t('святая вода против нежити даёт +8, бафф действует в текущем бою', () => {
   const s = fresh(); const p = P(s, 'p0');
-  fight(s, 'm_plumber#0'); // нежить 8
+  fight(s, 'm_plumber#0'); // нежить 9
   p.hand.push(take(s, 'o_holywater#0'));
   A(s, 'p0', { type: 'playCard', uid: 'o_holywater#0', side: 'player' });
   assert.equal(combatNumbers(s).heroes, 9);
@@ -319,7 +319,7 @@ t('«Не мешаю»: отказ всех соседей не сбрасыва
 
 t('ведьмак: +5 всегда, мутаген +10 один раз за партию', () => {
   const s = fresh(); const p = P(s, 'p0'); p.classes.push(take(s, 'c_witcher#0'));
-  fight(s, 'm_zhek#0'); // 10 ур
+  fight(s, 'm_zhek#0'); // 12 ур
   assert.equal(combatNumbers(s).heroes, 6);
   p.hand.push(take(s, 'i_ladle#0'), take(s, 'i_boots#0'), take(s, 'i_helmet#0'), take(s, 'i_helmet#1'));
   assert.equal(A(s, 'p0', { type: 'ability', name: 'mutagen', cards: ['i_ladle#0', 'i_boots#0'] }).ok, true);
@@ -349,7 +349,7 @@ t('Золотой Дракон: +10, не крадётся и не улетае�
   const s = fresh(); const p = P(s, 'p0'); p.level = 2;
   p.hand.push(take(s, 'p_golddragon#0'));
   A(s, 'p0', { type: 'playCard', uid: 'p_golddragon#0' });
-  fight(s, 'm_endless#0'); // 10 ур, убежать нельзя
+  fight(s, 'm_endless#0'); // 12 ур, убежать нельзя
   assert.equal(combatNumbers(s).heroes, 12);
   s.combat.monsters[0].enh.push(take(s, 'e_hungry#0')); // +10: проигрываем
   A(s, 'p0', { type: 'runAway' });
@@ -465,13 +465,14 @@ t('боссы: уровень 666, сила вдвое больше силы г�
   const bosses = ['m_lucifer', 'm_hades', 'm_anubis'].map(id => def(id + '#0'));
   assert.deepEqual(bosses.map(d => [d.boss, d.level, d.noPursue]), [[true, 666, 8], [true, 666, 8], [true, 666, 8]]);
   const s = fresh(); const p = P(s, 'p0'); p.level = 9;
-  p.hand.push(take(s, 'i_jackhammer#0')); A(s, 'p0', { type: 'playCard', uid: 'i_jackhammer#0' }); // сила 9 + 5 = 14
+  for (const u of ['i_jackhammer#0', 'p_golddragon#0']) { p.hand.push(take(s, u)); A(s, 'p0', { type: 'playCard', uid: u }); } // сила 9 + 5 + 10 = 24
   s.location = take(s, 'loc_storm#0'); // монстрам +2 — боссу всё равно
   fight(s, 'm_lucifer#0');
-  assert.equal(combatNumbers(s).monsters, 28);
+  assert.equal(combatNumbers(s).heroes, 24);
+  assert.equal(combatNumbers(s).monsters, 48);
   // сила запомнилась при выходе: зелье героя её не поднимает
   p.hand.push(take(s, 'b_pies#0')); A(s, 'p0', { type: 'playCard', uid: 'b_pies#0' });
-  assert.equal(combatNumbers(s).heroes, 18); assert.equal(combatNumbers(s).monsters, 28);
+  assert.equal(combatNumbers(s).heroes, 28); assert.equal(combatNumbers(s).monsters, 48);
   const o = P(s, 'p1'); o.hand.push(take(s, 'e_hungry#0'), take(s, 'e_baby#0'));
   assert.match(A(s, 'p1', { type: 'playCard', uid: 'e_hungry#0', monster: 0 }).error, /усилители/);
   assert.match(A(s, 'p1', { type: 'playCard', uid: 'e_baby#0', monster: 0 }).error, /усилители/);
@@ -480,7 +481,14 @@ t('боссы: уровень 666, сила вдвое больше силы г�
   // колыбельная барда и разовые карты действуют как обычно
   o.classes.push(take(s, 'c_bard#0')); o.hand.push(take(s, 'i_ladle#0'));
   assert.equal(A(s, 'p1', { type: 'ability', name: 'lullaby', cards: ['i_ladle#0'] }).ok, true);
-  assert.equal(combatNumbers(s).monsters, 25);
+  assert.equal(combatNumbers(s).monsters, 45);
+});
+
+t('босс слабее 30 не бывает: лёгкой добычей для новичка он не станет', () => {
+  const s = fresh(); const p = P(s, 'p0'); p.level = 3;
+  fight(s, 'm_anubis#0');
+  assert.equal(combatNumbers(s).monsters, 30);
+  assert.ok(s.log.some(l => l.text.includes('слабее 30')));
 });
 
 t('босс не гонится за героями ниже 9-го уровня', () => {
@@ -488,7 +496,7 @@ t('босс не гонится за героями ниже 9-го уровня
     const s = fresh(); const p = P(s, 'p0'); p.level = lvl;
     p.hand.push(take(s, 'i_helmet#0')); A(s, 'p0', { type: 'playCard', uid: 'i_helmet#0' });
     fight(s, 'm_hades#0');
-    assert.equal(combatNumbers(s).monsters, 2 * (lvl + 1));
+    assert.equal(combatNumbers(s).monsters, Math.max(30, 2 * (lvl + 1)));
     assert.equal(runWith(s, 'p0', lowDie).ok, true);
     assert.equal(s.combat, null);
     assert.equal(p.level, lvl); assert.equal(p.dead, false); assert.ok(p.equipped.includes('i_helmet#0'));
@@ -510,19 +518,20 @@ t('босс догнал героя 9-го уровня: −5 уровней и 
 });
 
 t('босса можно одолеть вдвоём: +2 уровня и 5 кладов', () => {
-  const s = fresh(); const p = P(s, 'p0'); p.level = 5;
-  p.hand.push(take(s, 'i_helmet#0')); A(s, 'p0', { type: 'playCard', uid: 'i_helmet#0' }); // сила 6
+  const s = fresh(); const p = P(s, 'p0'); p.level = 7;
+  for (const u of ['i_helmet#0', 'i_jackhammer#0', 'i_pick#0']) { p.hand.push(take(s, u)); A(s, 'p0', { type: 'playCard', uid: u }); }
+  const str = view(s, 'p0').players[0].power;
   fight(s, 'm_lucifer#0');
-  assert.equal(combatNumbers(s).monsters, 12);
-  const h = P(s, 'p1'); h.level = 7;
+  assert.equal(combatNumbers(s).monsters, Math.max(30, 2 * str));
+  const h = P(s, 'p1'); h.level = 8; h.equipped.push(take(s, 'p_golddragon#0')); // 18
   assert.equal(A(s, 'p0', { type: 'askHelp', to: 'p1', offer: 2 }).ok, true);
   A(s, 'p1', { type: 'answerHelp', accept: true });
-  assert.equal(combatNumbers(s).monsters, 12, 'помощник не делает босса сильнее');
+  assert.equal(combatNumbers(s).monsters, Math.max(30, 2 * str), 'помощник не делает босса сильнее');
   assert.equal(combatNumbers(s).winning, true);
   const before = p.hand.length;
   A(s, 'p0', { type: 'fight' }, 1000); tick(s, { rng, now: 9000 });
   assert.equal(s.combat, null);
-  assert.equal(p.level, 7);
+  assert.equal(p.level, 9);
   assert.equal(p.hand.length - before + h.hand.length, 5);
 });
 
@@ -547,7 +556,83 @@ t('босс из темноты встаёт с силой вдвое больш
   const o = P(s, 'p1'); o.hand.push(take(s, 'w_wandering#0'), take(s, 'm_hades#0'));
   assert.equal(A(s, 'p1', { type: 'playCard', uid: 'w_wandering#0', with: 'm_hades#0' }).ok, true);
   assert.equal(combatNumbers(s).winning, false);
-  assert.equal(combatNumbers(s).monsters, 2 + 28);
+  assert.equal(combatNumbers(s).monsters, 2 + 30);
+});
+
+t('«Искать неприятности»: бой со случайным монстром из колоды, а не с руки', () => {
+  const s = fresh(); const p = P(s, 'p0'); p.level = 3;
+  s.turn.step = 'post';
+  const handMon = take(s, 'm_troll#0'); p.hand.push(handMon);
+  const deckMons = s.decks.door.filter(u => def(u).type === 'monster').length;
+  assert.equal(A(s, 'p0', { type: 'lookForTrouble' }).ok, true);
+  assert.ok(s.combat);
+  assert.notEqual(s.combat.monsters[0].uid, handMon);
+  assert.ok(p.hand.includes(handMon));
+  assert.equal(s.decks.door.filter(u => def(u).type === 'monster').length, deckMons - 1);
+});
+
+t('«Искать неприятности»: только после двери и пока в колоде есть монстры', () => {
+  const s = fresh();
+  assert.equal(A(s, 'p0', { type: 'lookForTrouble' }).ok, false); // шаг «до двери»
+  s.turn.step = 'post';
+  for (const pile of [s.decks.door, s.discard.door]) for (let i = pile.length - 1; i >= 0; i--) if (def(pile[i]).type === 'monster') pile.splice(i, 1);
+  assert.match(A(s, 'p0', { type: 'lookForTrouble' }).error, /Монстр/);
+});
+
+t('монстр «только уровень»: вещи, зелья и бонусы героям не считаются', () => {
+  const s = fresh(); const p = P(s, 'p0'); p.level = 3;
+  p.hand.push(take(s, 'i_jackhammer#0')); A(s, 'p0', { type: 'playCard', uid: 'i_jackhammer#0' });
+  fight(s, 'm_likho#0'); // ур. 4
+  const n0 = combatNumbers(s);
+  assert.equal(n0.heroes, 3); assert.equal(n0.monsters, 4); assert.equal(n0.winning, false);
+  const bonus = s.decks.treasure.concat(s.discard.treasure).find(u => def(u).type === 'oneshot' && def(u).effect === 'bonus');
+  p.hand.push(take(s, bonus));
+  assert.match(A(s, 'p0', { type: 'playCard', uid: bonus, side: 'player' }).error, /только уровень/);
+  // монстру помогать по-прежнему можно
+  assert.equal(A(s, 'p0', { type: 'playCard', uid: bonus, side: 'monster' }).ok, true);
+  p.level = 9;
+  assert.equal(combatNumbers(s).heroes, 9);
+});
+
+t('монстр «только уровень»: ярость воина не прибавляет', () => {
+  const s = fresh(); const p = P(s, 'p0'); p.level = 4;
+  p.classes.push(take(s, 'c_warrior#0'));
+  p.hand.push(take(s, 'i_jackhammer#0'));
+  fight(s, 'm_cyclops#0');
+  assert.match(A(s, 'p0', { type: 'ability', name: 'rage', cards: ['i_jackhammer#0'] }).error, /только уровень/);
+});
+
+t('монстр «без помощи»: позвать нельзя ни просьбой, ни «Ты мой раб»', () => {
+  const s = fresh(); const p = P(s, 'p0'); p.level = 2;
+  fight(s, 'm_kikimora#0');
+  assert.match(A(s, 'p0', { type: 'askHelp', to: 'p1', offer: 1 }).error, /помощник/);
+  p.hand.push(take(s, 'o_slave#0'));
+  assert.match(A(s, 'p0', { type: 'playCard', uid: 'o_slave#0', target: 'p1' }).error, /никого не позвать/);
+});
+
+t('«Ты мой раб»: помощник обязан драться и не получает клада', () => {
+  const s = fresh(); const p = P(s, 'p0'); const h = P(s, 'p1');
+  p.level = 5; h.level = 8;
+  fight(s, 'm_zhek#0'); // 12 ур, 3 клада
+  assert.equal(combatNumbers(s).winning, false);
+  p.hand.push(take(s, 'o_slave#0'));
+  assert.equal(A(s, 'p0', { type: 'playCard', uid: 'o_slave#0', target: 'p0' }).ok, false);
+  assert.equal(A(s, 'p2', { type: 'playCard', uid: 'o_slave#0', target: 'p1' }).ok, false);
+  assert.equal(A(s, 'p0', { type: 'playCard', uid: 'o_slave#0', target: 'p1' }).ok, true);
+  assert.equal(s.combat.helper, 'p1'); assert.equal(s.combat.forced, true);
+  assert.equal(combatNumbers(s).winning, true);
+  assert.equal(A(s, 'p0', { type: 'askHelp', to: 'p2', offer: 1 }).ok, false);
+  A(s, 'p0', { type: 'fight' }, 1000); tick(s, { rng, now: 9000 });
+  assert.equal(h.hand.length, 0); assert.equal(p.hand.length, 3); assert.equal(p.level, 6);
+});
+
+t('«Ты мой раб» вне своего боя не играется', () => {
+  const s = fresh(); const p = P(s, 'p0');
+  p.hand.push(take(s, 'o_slave#0'));
+  assert.equal(A(s, 'p0', { type: 'playCard', uid: 'o_slave#0', target: 'p1' }).ok, false);
+  fight(s, 'm_mosquito#0', 'p0');
+  const o = P(s, 'p1'); o.hand.push(take(s, 'o_slave#1'));
+  assert.match(A(s, 'p1', { type: 'playCard', uid: 'o_slave#1', target: 'p2' }).error, /своём бою/);
 });
 
 console.log(`Правила: ${n} проверок пройдено.`);

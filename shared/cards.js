@@ -14,6 +14,7 @@
 //  vsItem: [{tag, n, text}] — бонус/штраф, если у героя надета вещь с тегом (свет, вода)
 //  soloBonus — сильнее против одиночки; noHelp — звать на помощь нельзя
 //  escape:false — убежать нельзя; escapeMod — поправка к побегу; noPursue — не гонится за низкими уровнями
+//  levelOnly — против него считается только уровень героя: вещи, зелья, способности и разовые карты героям не помогают
 //  ambush — эффект при встрече; mirror — сила = уровень лидера + mirror
 //  boss — босс: уровень 666, сила вдвое больше силы героя; усилители, локации и чары на него не действуют
 //  art — параметры рисунка: body, hue, props, eyes, mouth, pattern, heads, crown
@@ -27,10 +28,11 @@ const M = (id, name, level, treasures, extra = {}) => ({
 export const BOSS_LEVEL = 666;
 export const BOSS_MULT = 2;
 export const BOSS_MIN_LEVEL = 9;
+export const BOSS_FLOOR = 30; // слабого героя босс не трогает, но и лёгкой добычей не становится
 const BOSS = (id, name, extra) => ({
   id, deck: 'door', type: 'monster', boss: true, name, level: BOSS_LEVEL, treasures: 5, levels: 2, copies: 1, rarity: 'epic',
   noPursue: BOSS_MIN_LEVEL - 1,
-  text: `Сила вдвое больше силы героя, против которого он вышел. Не гонится за героями ниже ${BOSS_MIN_LEVEL}-го уровня.`,
+  text: `Сила вдвое больше силы героя, против которого он вышел, но не меньше ${BOSS_FLOOR}. Не гонится за героями ниже ${BOSS_MIN_LEVEL}-го уровня.`,
   bad: { text: '−5 уровней, и ты погибаешь.', fx: [{ k: 'levels', n: 5 }, { k: 'death' }] },
   ...extra,
 });
@@ -108,141 +110,215 @@ export const CARD_DEFS = [
     tags: ['water'], noPursue: 2, art: { body: 'bird', hue: 50, props: ['sailorcap'] },
     text: 'Не гонится за 2-м уровнем и ниже.',
     bad: { text: 'Утащила шапку в гнездо. Теряешь головняк.', fx: [{ k: 'slot', slot: 'head' }] } }),
-  M('m_gossip', 'Сталактит-сплетник', 5, 2, {
+  M('m_gossip', 'Сталактит-сплетник', 6, 2, {
     tags: ['rock'], art: { body: 'spike', hue: 262, props: ['phone'] },
     bad: { text: 'Рассказал всем твои секреты. −1 уровень.', fx: [{ k: 'levels', n: 1 }] } }),
-  M('m_mycel', 'Грибница-сплетница', 5, 2, {
+  M('m_mycel', 'Грибница-сплетница', 6, 2, {
     tags: ['fungus'], art: { body: 'shroom', hue: 300, props: ['scarf'], mouth: 'smile' }, vs: [{ race: 'elf', n: -2, text: '−2 против эльфов: они её не слушают' }],
     bad: { text: 'Опутала руку. Сбрось все карты с руки.', fx: [{ k: 'hand' }] } }),
-  M('m_hypno', 'Гриб-гипнотизёр', 6, 2, {
+  M('m_hypno', 'Гриб-гипнотизёр', 7, 2, {
     tags: ['fungus'], art: { body: 'shroom', hue: 200, eyes: 'spiral', props: ['pendulum'] },
     ambush: { text: 'Засада! Загипнотизировал: сбрось случайную карту.', fx: [{ k: 'cards', n: 1 }] },
     bad: { text: 'Ты забыл, кем работал. Теряешь класс.', fx: [{ k: 'class' }] } }),
-  M('m_ratunion', 'Крысиный профсоюз', 6, 2, {
+  M('m_ratunion', 'Крысиный профсоюз', 7, 2, {
     tags: ['rat'], soloBonus: 3, art: { body: 'round', hue: 0, sat: 8, heads: 3, props: ['flag'] },
     text: 'Один в поле не воин: +3 против одиночки.',
     bad: { text: 'Объявили забастовку тебе. −1 уровень.', fx: [{ k: 'levels', n: 1 }] } }),
-  M('m_lasttrain', 'Призрак последней электрички', 6, 2, {
+  M('m_lasttrain', 'Призрак последней электрички', 7, 2, {
     tags: ['undead', 'metro'], art: { body: 'ghost', hue: 180, props: ['conductorcap', 'lantern'] },
     bad: { text: 'Увёз в депо. −2 уровня.', fx: [{ k: 'levels', n: 2 }] } }),
-  M('m_inspector', 'Скелет-контролёр', 6, 2, {
+  M('m_inspector', 'Скелет-контролёр', 7, 2, {
     tags: ['undead', 'metro'], art: { body: 'skull', hue: 45, props: ['conductorcap', 'ticket'] }, vs: [{ race: 'halfling', n: 3, text: '+3 против полуросликов — ловит безбилетников' }],
     bad: { text: 'Выписал штраф. Теряешь броник.', fx: [{ k: 'slot', slot: 'armor' }] } }),
-  M('m_slug', 'Слизень-коллектор', 7, 2, {
+  M('m_slug', 'Слизень-коллектор', 8, 2, {
     art: { body: 'blob', hue: 108, props: ['briefcase', 'tie'], eyes: 'angry' }, vs: [{ race: 'dwarf', n: 4, text: '+4 против гномов — у них долги по ипотеке шахты' }],
     bad: { text: 'Взыскал. −1 уровень и сбрось 2 карты.', fx: [{ k: 'levels', n: 1 }, { k: 'cards', n: 2 }] } }),
-  M('m_cart', 'Вагонетка-оборотень', 7, 2, {
+  M('m_cart', 'Вагонетка-оборотень', 8, 2, {
     tags: ['metro'], art: { body: 'box', hue: 25, eyes: 'angry', mouth: 'fangs', props: ['fur'] },
     bad: { text: 'Переехала. Теряешь большую вещь.', fx: [{ k: 'slot', slot: 'big' }] } }),
-  M('m_batchoir', 'Хор летучих мышей', 8, 2, {
+  M('m_batchoir', 'Хор летучих мышей', 9, 2, {
     soloBonus: 4, art: { body: 'swarm', hue: 275, props: ['notes'] },
     text: 'Нападают стаей на одиночек: +4, если ты без помощника.',
     bad: { text: 'Перепели тебя. Сбрось 2 карты.', fx: [{ k: 'cards', n: 2 }] } }),
-  M('m_watchman', 'Ночной сторож', 8, 2, {
+  M('m_watchman', 'Ночной сторож', 9, 2, {
     art: { body: 'humanoid', hue: 220, props: ['cap', 'keys', 'mustache'], eyes: 'sleepy' },
     vsItem: [{ tag: 'light', n: -5, text: '−5 против героя с фонарём: боится света' }],
     bad: { text: 'Выгнал до утра. −2 уровня.', fx: [{ k: 'levels', n: 2 }] } }),
-  M('m_dj', 'Двухголовая крыса-диджей', 8, 2, {
+  M('m_dj', 'Двухголовая крыса-диджей', 9, 2, {
     tags: ['rat'], art: { body: 'round', hue: 330, heads: 2, props: ['headphones'] },
     bad: { text: 'Басы сорвали с тебя всё лишнее. Теряешь головняк и обувку.', fx: [{ k: 'slot', slot: 'head' }, { k: 'slot', slot: 'feet' }] } }),
-  M('m_plumber', 'Мумия сантехника', 8, 2, {
+  M('m_plumber', 'Мумия сантехника', 9, 2, {
     tags: ['undead', 'water'], art: { body: 'ghost', hue: 38, pattern: 'bandage', props: ['plunger'] },
     bad: { text: 'Перекрыла стояк. −2 уровня.', fx: [{ k: 'levels', n: 2 }] } }),
-  M('m_banshee', 'Банши из бойлерной', 9, 2, {
+  M('m_banshee', 'Банши из бойлерной', 10, 2, {
     tags: ['undead'], art: { body: 'ghost', hue: 285, mouth: 'o', props: ['soundwaves'] },
     bad: { text: 'Перекричала тебя. Теряешь класс.', fx: [{ k: 'class' }] } }),
-  M('m_cashier', 'Кассир подземного банка', 9, 3, {
+  M('m_cashier', 'Кассир подземного банка', 10, 3, {
     noHelp: true, art: { body: 'humanoid', hue: 160, props: ['visor', 'glasses', 'coins'] },
     text: 'Обслуживание строго по одному: звать на помощь нельзя.',
     bad: { text: 'Списал комиссию. Теряешь самую ценную вещь.', fx: [{ k: 'bestItems', n: 1 }] } }),
-  M('m_zhek', 'Подземный ЖЭК', 10, 3, {
+  M('m_zhek', 'Подземный ЖЭК', 12, 3, {
     art: { body: 'box', hue: 210, props: ['stamp', 'tie'], eyes: 'sleepy' },
     bad: { text: 'Предписание об изъятии. Теряешь броник и 1 уровень.', fx: [{ k: 'slot', slot: 'armor' }, { k: 'levels', n: 1 }] } }),
-  M('m_minotaur', 'Минотавр-экскурсовод', 10, 3, {
+  M('m_minotaur', 'Минотавр-экскурсовод', 12, 3, {
     art: { body: 'horned', hue: 15, props: ['flag'] }, vs: [{ cls: 'mage', n: 5, text: '+5 против магов — он слышал все фокусы' }],
     bad: { text: 'Водил по лабиринту три часа. −2 уровня.', fx: [{ k: 'levels', n: 2 }] } }),
-  M('m_endless', 'Червь-бесконечник', 10, 3, {
+  M('m_endless', 'Червь-бесконечник', 12, 3, {
     tags: ['metro'], escape: false, art: { body: 'worm', hue: 258, props: ['hardhat'], eyes: 'sleepy' },
     text: 'Убежать нельзя: тоннель везде. Зато кусается небольно.',
     bad: { text: 'Укусил в пятку. −1 уровень.', fx: [{ k: 'levels', n: 1 }] } }),
-  M('m_salamander', 'Саламандра из котельной', 10, 3, {
+  M('m_salamander', 'Саламандра из котельной', 12, 3, {
     tags: ['fire'], art: { body: 'croc', hue: 12, props: ['flames'] },
     vsItem: [{ tag: 'water', n: -5, text: '−5 против героя с огнетушителем' }],
     bad: { text: 'Прожгла одежду. Теряешь броник.', fx: [{ k: 'slot', slot: 'armor' }] } }),
-  M('m_spider', 'Паук-вязальщица', 11, 3, {
+  M('m_spider', 'Паук-вязальщица', 13, 3, {
     art: { body: 'spider', hue: 340, props: ['yarn'] },
     bad: { text: 'Связала тебе новую личность. Теряешь расу.', fx: [{ k: 'race' }] } }),
-  M('m_croc', 'Канализационный аллигатор', 11, 3, {
+  M('m_croc', 'Канализационный аллигатор', 13, 3, {
     tags: ['water'], escapeMod: -2, art: { body: 'croc', hue: 135, props: ['sunglasses'] },
     text: 'Плавает быстрее тебя: −2 к побегу.',
     bad: { text: 'Откусил кусок броника. Теряешь броник и 1 уровень.', fx: [{ k: 'slot', slot: 'armor' }, { k: 'levels', n: 1 }] } }),
-  M('m_paranoid', 'Бункерный параноик', 11, 3, {
+  M('m_paranoid', 'Бункерный параноик', 13, 3, {
     noHelp: true, art: { body: 'humanoid', hue: 90, props: ['foilhat'], eyes: 'crazy' }, vs: [{ cls: 'rogue', n: 4, text: '+4 против плутов — никому не верит' }],
     text: 'Посторонних не пускает: звать на помощь нельзя.',
     bad: { text: 'Конфисковал всё подозрительное. Сбрось руку.', fx: [{ k: 'hand' }] } }),
-  M('m_golem', 'Каменный голем-вахтёр', 12, 3, {
+  M('m_golem', 'Каменный голем-вахтёр', 14, 3, {
     tags: ['rock'], art: { body: 'golem', hue: 30, sat: 6, props: ['cap', 'keys'] }, noPursue: 4,
     text: 'Не гонится за 4-м уровнем и ниже: «Детям можно».',
     bad: { text: '«Посторонним вход воспрещён!» −3 уровня.', fx: [{ k: 'levels', n: 3 }] } }),
-  M('m_worm', 'Червь-метростроевец', 12, 3, {
+  M('m_worm', 'Червь-метростроевец', 14, 3, {
     tags: ['metro'], art: { body: 'worm', hue: 350, props: ['hardhat'] },
     bad: { text: 'Прорыл тоннель через твою экипировку. Теряешь всё, что в руках.', fx: [{ k: 'slot', slot: 'hands' }] } }),
-  M('m_ghostdriver', 'Призрак-машинист', 12, 3, {
+  M('m_ghostdriver', 'Призрак-машинист', 14, 3, {
     tags: ['undead', 'metro'], noPursue: 3, art: { body: 'ghost', hue: 195, props: ['conductorcap', 'whistle'] },
     text: 'Не гонится за 3-м уровнем и ниже.',
     bad: { text: '«Осторожно, двери закрываются!» −2 уровня.', fx: [{ k: 'levels', n: 2 }] } }),
-  M('m_excavator', 'Экскаватор-мертвец', 13, 3, {
+  M('m_excavator', 'Экскаватор-мертвец', 15, 3, {
     tags: ['undead'], art: { body: 'excavator', hue: 45 },
     bad: { text: 'Зачерпнул ковшом. Теряешь большую вещь и 2 уровня.', fx: [{ k: 'slot', slot: 'big' }, { k: 'levels', n: 2 }] } }),
   M('m_mirror', 'Зеркальный двойник', 0, 3, {
     mirror: 2, rarity: 'epic', art: { body: 'ghost', hue: 200, props: ['mirrorframe'], eyes: 'angry' },
     text: 'Сила — уровень лидера партии плюс 2. Чем ты круче, тем он злее.',
     bad: { text: 'Поменялся с тобой местами. Теряешь расу и класс.', fx: [{ k: 'race' }, { k: 'class' }] } }),
-  M('m_concrete', 'Бетонный голем', 14, 4, {
+  M('m_concrete', 'Бетонный голем', 16, 4, {
     tags: ['rock'], art: { body: 'golem', hue: 210, sat: 4, props: ['rebar'], eyes: 'angry' }, vs: [{ race: 'dwarf', n: -3, text: '−3 против гномов: знают, где трещины' }],
     bad: { text: 'Залил тебя бетоном. −2 уровня, теряешь броник.', fx: [{ k: 'levels', n: 2 }, { k: 'slot', slot: 'armor' }] } }),
-  M('m_vampire', 'Вампир-ростовщик', 14, 4, {
+  M('m_vampire', 'Вампир-ростовщик', 16, 4, {
     tags: ['undead'], art: { body: 'bat', hue: 340, props: ['monocle', 'coins'] },
     bad: { text: 'Проценты выросли. Теряешь 2 самые ценные вещи.', fx: [{ k: 'bestItems', n: 2 }] } }),
-  M('m_heatpipe', 'Змей теплотрассы', 14, 4, {
+  M('m_heatpipe', 'Змей теплотрассы', 16, 4, {
     tags: ['fire'], art: { body: 'worm', hue: 18, props: ['steam'], eyes: 'angry' }, levels: 2,
     bad: { text: 'Горячий приём. Ты погибаешь.', fx: [{ k: 'death' }] } }),
-  M('m_lich', 'Лич из архива', 15, 4, {
+  M('m_lich', 'Лич из архива', 17, 4, {
     tags: ['undead'], art: { body: 'skull', hue: 150, props: ['book', 'glasses'] }, vs: [{ cls: 'cleric', n: 4, text: '+4 против жрецов — у него справка' }],
-    bad: { text: 'Сдал тебя в архив. −3 уровня.', fx: [{ k: 'levels', n: 3 }] } }),
-  M('m_moldking', 'Плесневой король', 15, 4, {
+    bad: { text: 'Сдал тебя в архив — навечно. Ты погибаешь.', fx: [{ k: 'death' }] } }),
+  M('m_moldking', 'Плесневой король', 17, 4, {
     tags: ['fungus'], art: { body: 'shroom', hue: 85, crown: true, pattern: 'spots', eyes: 'angry' },
     ambush: { text: 'Засада! Споры в лицо: сбрось случайную карту.', fx: [{ k: 'cards', n: 1 }] },
     bad: { text: 'Всё покрылось плесенью. Теряешь все вещи.', fx: [{ k: 'allItems' }] } }),
-  M('m_ratqueen', 'Королева пещерных крыс', 16, 4, {
+  M('m_ratqueen', 'Королева пещерных крыс', 18, 4, {
     tags: ['rat'], art: { body: 'round', hue: 300, crown: true, props: ['cape'] }, levels: 2,
     bad: { text: 'Свита отобрала всё. −2 уровня и сбрось руку.', fx: [{ k: 'levels', n: 2 }, { k: 'hand' }] } }),
-  M('m_troll', 'Тролль-налоговик', 16, 4, {
+  M('m_troll', 'Тролль-налоговик', 18, 4, {
     art: { body: 'horned', hue: 120, props: ['briefcase', 'tie'] }, levels: 2,
     bad: { text: 'Налог на всё. Теряешь все вещи.', fx: [{ k: 'allItems' }] } }),
-  M('m_cricket', 'Медведка-великан', 17, 4, {
+  M('m_cricket', 'Медведка-великан', 19, 4, {
     tags: ['insect'], escapeMod: -1, art: { body: 'bug', hue: 30, props: ['claws'], eyes: 'angry', mouth: 'fangs' }, levels: 2,
     text: 'Роет быстрее тебя: −1 к побегу.',
     bad: { text: 'Закопала заживо. Ты погибаешь.', fx: [{ k: 'death' }] } }),
-  M('m_dragon', 'Дракон из-под моста', 18, 5, {
+  M('m_dragon', 'Дракон из-под моста', 20, 5, {
     tags: ['fire'], art: { body: 'dragon', hue: 0 }, levels: 2, noPursue: 5,
     text: 'Не гонится за 5-м уровнем и ниже: мелочь не жуёт.',
     bad: { text: 'Поджарил. Ты погибаешь.', fx: [{ k: 'death' }] } }),
-  M('m_pit', 'Бездонная яма с зубами', 19, 5, {
+  M('m_pit', 'Бездонная яма с зубами', 21, 5, {
     art: { body: 'pit', hue: 270 }, levels: 2,
     bad: { text: 'Дна действительно нет. Ты погибаешь.', fx: [{ k: 'death' }] } }),
-  M('m_philosopher', 'Сталагмит-философ', 19, 5, {
+  M('m_philosopher', 'Сталагмит-философ', 21, 5, {
     tags: ['rock'], noPursue: 6, art: { body: 'spike', hue: 28, flip: true, props: ['beard', 'glasses'], eyes: 'sleepy' }, levels: 2,
     text: 'Не гонится за 6-м уровнем и ниже: им рано о вечном.',
     bad: { text: 'Объяснил смысл жизни. −3 уровня.', fx: [{ k: 'levels', n: 3 }] } }),
-  M('m_molekron', 'Древний Кротокрон', 20, 5, {
+  M('m_molekron', 'Древний Кротокрон', 22, 5, {
     art: { body: 'round', hue: 25, crown: true, heads: 3, props: ['beard'] }, levels: 2, noPursue: 5,
     text: 'Не гонится за 5-м уровнем и ниже.',
     bad: { text: 'Закопал на тысячу лет. Ты погибаешь.', fx: [{ k: 'death' }] } }),
-  M('m_gorynych', 'Змей кольцевой линии', 20, 5, {
+  M('m_gorynych', 'Змей кольцевой линии', 22, 5, {
     tags: ['fire', 'metro'], art: { body: 'dragon', hue: 125, heads: 3 }, levels: 2, noPursue: 5,
     text: 'Три головы, три пересадки. Не гонится за 5-м уровнем и ниже.',
     bad: { text: 'Проехал по тебе всю кольцевую. Ты погибаешь.', fx: [{ k: 'death' }] } }),
+
+  // ───────────── ИЗ СКАЗОК, МИФОВ И ЛЕГЕНД ─────────────
+  M('m_kolobok', 'Колобок-беглец', 2, 1, {
+    escapeMod: -1, art: { body: 'blob', hue: 42, eyes: 'happy', mouth: 'grin' },
+    text: 'Сам от всех ушёл — и от него не уйдёшь: −1 к побегу.',
+    bad: { text: 'Укатился с твоей обувкой. Теряешь обувку.', fx: [{ k: 'slot', slot: 'feet' }] } }),
+  M('m_kikimora', 'Кикимора болотная', 4, 2, {
+    tags: ['water'], noHelp: true, art: { body: 'blob', hue: 120, eyes: 'crazy', props: ['scarf', 'yarn'] },
+    text: 'Путает дорогу всем, кто спешит на помощь.',
+    bad: { text: 'Запутала. Сбрось 2 карты и потеряй обувку.', fx: [{ k: 'cards', n: 2 }, { k: 'slot', slot: 'feet' }] } }),
+  M('m_likho', 'Лихо Одноглазое', 4, 2, {
+    levelOnly: true, art: { body: 'humanoid', hue: 25, cyclops: true, props: ['beard'], eyes: 'angry' },
+    text: 'Лихо вещами не обманешь.',
+    bad: { text: 'Лихо привязалось. −2 уровня.', fx: [{ k: 'levels', n: 2 }] } }),
+  M('m_mimic', 'Мимик-сундук', 5, 3, {
+    art: { body: 'box', hue: 35, mouth: 'fangs', props: ['coins'], eyes: 'angry' },
+    ambush: { text: 'Засада! Притворялся кладом: сбрось случайную карту.', fx: [{ k: 'cards', n: 1 }] },
+    bad: { text: 'Проглотил самую ценную вещь.', fx: [{ k: 'bestItems', n: 1 }] } }),
+  M('m_medusa', 'Горгона-вахтёрша', 6, 2, {
+    levelOnly: true, rarity: 'rare', art: { body: 'humanoid', hue: 140, props: ['snakes', 'glasses'], eyes: 'angry' },
+    text: 'Взглянет на вещи и зелья — и те окаменеют.',
+    bad: { text: 'Окаменел до утра. Теряешь броник и обувку.', fx: [{ k: 'slot', slot: 'armor' }, { k: 'slot', slot: 'feet' }] } }),
+  M('m_leshy', 'Леший-регулировщик', 7, 2, {
+    escapeMod: -2, art: { body: 'spike', hue: 95, props: ['leaves', 'beard', 'whistle'], eyes: 'crazy' },
+    text: 'Водит кругами: −2 к побегу.',
+    bad: { text: 'Завёл в чащу. −2 уровня.', fx: [{ k: 'levels', n: 2 }] } }),
+  M('m_cyclops', 'Циклоп-сварщик', 7, 2, {
+    levelOnly: true, rarity: 'rare', art: { body: 'golem', hue: 205, cyclops: true, props: ['visor'], eyes: 'angry' },
+    text: 'Одним глазом видит только твой уровень.',
+    bad: { text: 'Приварил к рельсам. −2 уровня и теряешь большую вещь.', fx: [{ k: 'levels', n: 2 }, { k: 'slot', slot: 'big' }] } }),
+  M('m_solovey', 'Соловей-разбойник', 8, 2, {
+    noHelp: true, art: { body: 'bird', hue: 25, props: ['soundwaves', 'bandana'], eyes: 'angry' },
+    text: 'Свистит так, что помощники глохнут.',
+    bad: { text: 'Сдул свистом шапку и уровень.', fx: [{ k: 'slot', slot: 'head' }, { k: 'levels', n: 1 }] } }),
+  M('m_koschei', 'Кощей Бессмертный', 7, 3, {
+    tags: ['undead'], levelOnly: true, noHelp: true, rarity: 'epic', art: { body: 'skull', hue: 140, crown: true, props: ['cape', 'sword'] },
+    text: 'Смерть его в игле, а где игла — никто не знает.',
+    bad: { text: 'Запер в темнице. −3 уровня.', fx: [{ k: 'levels', n: 3 }] } }),
+  M('m_griffin', 'Грифон-почтальон', 9, 3, {
+    escape: false, art: { body: 'bird', hue: 40, props: ['wings', 'cap'], eyes: 'angry' },
+    text: 'Летает быстрее всех: убежать нельзя.',
+    bad: { text: 'Унёс в гнездо твой броник.', fx: [{ k: 'slot', slot: 'armor' }] } }),
+  M('m_vodyanoy', 'Водяной из коллектора', 9, 2, {
+    tags: ['water'], escapeMod: -1, art: { body: 'blob', hue: 170, props: ['beard', 'crown'], eyes: 'sleepy' },
+    text: 'В воде он хозяин: −1 к побегу.',
+    bad: { text: 'Утащил на дно. Теряешь броник и 2 уровня.', fx: [{ k: 'slot', slot: 'armor' }, { k: 'levels', n: 2 }] } }),
+  M('m_genie', 'Джинн из лампы', 10, 3, {
+    noHelp: true, art: { body: 'ghost', hue: 250, props: ['genielamp', 'mustache'], eyes: 'happy' },
+    text: 'Исполняет желания строго по одному.',
+    bad: { text: 'Исполнил твоё желание наоборот. −3 уровня.', fx: [{ k: 'levels', n: 3 }] } }),
+  M('m_babayaga', 'Баба-Яга в ступе', 11, 3, {
+    escapeMod: -1, art: { body: 'humanoid', hue: 30, props: ['scarf', 'broom'], eyes: 'crazy', mouth: 'fangs' },
+    text: 'Ступа быстрее тебя: −1 к побегу.',
+    bad: { text: 'Посадила на лопату — и в печь. Ты погибаешь.', fx: [{ k: 'death' }] } }),
+  M('m_basilisk', 'Василиск из шахты', 13, 3, {
+    tags: ['rock'], escapeMod: -1, art: { body: 'croc', hue: 95, crown: true, eyes: 'spiral' },
+    text: 'Не смотри ему в глаза: −1 к побегу.',
+    bad: { text: 'Взглянул — и ты окаменел. Теряешь все вещи.', fx: [{ k: 'allItems' }] } }),
+  M('m_cerberus', 'Цербер-вахтёр', 13, 4, {
+    escapeMod: -2, art: { body: 'round', hue: 0, sat: 8, heads: 3, props: ['keys'], eyes: 'angry', mouth: 'fangs' },
+    text: 'Три головы — шесть глаз: −2 к побегу.',
+    bad: { text: 'Покусал в три пасти. −2 уровня и сбрось руку.', fx: [{ k: 'levels', n: 2 }, { k: 'hand' }] } }),
+  M('m_manticore', 'Мантикора', 14, 4, {
+    noPursue: 4, art: { body: 'horned', hue: 28, props: ['stinger', 'fur'], eyes: 'angry', mouth: 'fangs' },
+    text: 'Не гонится за 4-м уровнем и ниже.',
+    bad: { text: 'Жало в хвосте. Ты погибаешь.', fx: [{ k: 'death' }] } }),
+  M('m_hydra', 'Гидра канализационная', 16, 4, {
+    tags: ['water'], soloBonus: 4, levels: 2, art: { body: 'dragon', hue: 160, heads: 3 },
+    text: 'Отрубишь голову — вырастут две: +4 против одиночки.',
+    bad: { text: 'Головы договорились. Ты погибаешь.', fx: [{ k: 'death' }] } }),
+  M('m_kraken', 'Кракен из коллектора', 18, 5, {
+    tags: ['water'], noHelp: true, escapeMod: -1, levels: 2, art: { body: 'blob', hue: 330, props: ['tentacles'], eyes: 'angry', mouth: 'fangs' },
+    text: 'Щупалец хватит на всех. −1 к побегу.',
+    bad: { text: 'Утащил в глубину. Ты погибаешь.', fx: [{ k: 'death' }] } }),
 
   // ───────────── БОССЫ ─────────────
   // Одному не справиться: нужен помощник, зелья и разовые карты. Или убежать, бросить шашку, окаменить свитком, подставить питомца.
@@ -478,6 +554,8 @@ export const CARD_DEFS = [
     name: 'Дымовая шашка', text: 'Разовая. Участник боя: все герои сбегают без расплаты и без наград.' },
   { id: 'o_petrify', deck: 'treasure', type: 'oneshot', effect: 'remove', value: 300, copies: 2, art: 'scroll', rarity: 'rare',
     name: 'Свиток окаменения', text: 'Разовая. В любом бою: убери одного монстра. Ни уровня, ни клада за него.' },
+  { id: 'o_slave', deck: 'treasure', type: 'oneshot', effect: 'enslave', value: 300, copies: 2, art: 'shackles', rarity: 'rare',
+    name: 'Ты мой раб', text: 'Сыграй в своём бою: выбери любого игрока — он обязан вступить в бой на твоей стороне. Отказаться нельзя, клада ему не положено.' },
   { id: 'o_ward', deck: 'treasure', type: 'oneshot', effect: 'ward', value: 300, copies: 2, art: 'amulet',
     name: 'Куриный бог', text: 'Держи в руке: первое проклятие на тебя срабатывает впустую, а камушек уходит в сброс.' },
 

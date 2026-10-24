@@ -24,7 +24,7 @@ function scan(s) {
     if (l.text.startsWith('👹')) stats.bossMeet++;
     if (/(Люцифер|Аид|Анубис)» не стал гнаться/.test(l.text)) stats.bossCalm++;
     if (/удирает от «(Люцифер|Аид|Анубис)»/.test(l.text)) stats.bossEscaped++;
-    if (/побеждают .*«(Люцифер|Аид|Анубис)»/.test(l.text)) stats.bossKilled++;
+    if (/побежда(ют|ет) .*«(Люцифер|Аид|Анубис)»/.test(l.text)) stats.bossKilled++;
     if (/не убежал от «(Люцифер|Аид|Анубис)»/.test(l.text)) stats.bossCaught++;
   }
   s._seen = s.logSeq;

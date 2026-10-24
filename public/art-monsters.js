@@ -107,6 +107,16 @@ const PROPS = {
   hat: (x, y, w) => `<ellipse cx="${x}" cy="${y + 4}" rx="${w * 0.6}" ry="6" fill="#6b4a3a" ${OUT}/><path d="M${x - w * 0.34} ${y + 2} Q${x - w * 0.36} ${y - 18} ${x} ${y - 18} Q${x + w * 0.36} ${y - 18} ${x + w * 0.34} ${y + 2}Z" fill="#7a5644" ${OUT}/><path d="M${x - w * 0.34} ${y - 4} h${w * 0.68}" stroke="#3a2620" stroke-width="4"/><path d="M${x + 6} ${y - 14} l4 4" stroke="${INK}" stroke-width="1.6"/>`,
   headphones: (x, y, w) => `<path d="M${x - w * 0.5} ${y + 16} Q${x - w * 0.5} ${y - 10} ${x} ${y - 10} Q${x + w * 0.5} ${y - 10} ${x + w * 0.5} ${y + 16}" fill="none" stroke="${INK}" stroke-width="6" stroke-linecap="round"/><path d="M${x - w * 0.5} ${y + 16} Q${x - w * 0.5} ${y - 10} ${x} ${y - 10} Q${x + w * 0.5} ${y - 10} ${x + w * 0.5} ${y + 16}" fill="none" stroke="#3a3f4f" stroke-width="3" stroke-linecap="round"/><rect x="${x - w * 0.5 - 8}" y="${y + 8}" width="13" height="18" rx="5" fill="#d2502f" ${OUT2}/><rect x="${x + w * 0.5 - 5}" y="${y + 8}" width="13" height="18" rx="5" fill="#d2502f" ${OUT2}/>`,
   crown: (x, y, w) => `<path d="M${x - w * 0.34} ${y + 2} v-16 l${w * 0.17} 9 l${w * 0.17} -14 l${w * 0.17} 14 l${w * 0.17} -9 v16Z" fill="${Y}" ${OUT}/><circle cx="${x}" cy="${y - 3}" r="3" fill="#d2502f" ${OUT2}/><circle cx="${x - w * 0.2}" cy="${y - 2}" r="2" fill="#3fa38c"/><circle cx="${x + w * 0.2}" cy="${y - 2}" r="2" fill="#4a7fc1"/>`,
+  snakes: (x, y, w) => [-0.42, -0.2, 0.02, 0.24, 0.44].map((k, i) => {
+    const sx = x + w * k, up = i % 2 ? 22 : 30, dir = k < 0 ? -1 : 1;
+    const d = `M${sx} ${y + 6} q${-dir * 8} ${-up * 0.45} ${dir * 2} ${-up * 0.7} q${dir * 9} ${-up * 0.2} ${dir * 4} ${-up}`;
+    return `<path d="${d}" stroke="${INK}" stroke-width="8" fill="none" stroke-linecap="round"/><path d="${d}" stroke="#5fae4a" stroke-width="4.4" fill="none" stroke-linecap="round"/>`
+      + `<ellipse cx="${sx + dir * 4}" cy="${y + 6 - up}" rx="5" ry="4" fill="#5fae4a" ${OUT2}/><circle cx="${sx + dir * 5.5}" cy="${y + 5 - up}" r="1.3" fill="${INK}"/><path d="M${sx + dir * 9} ${y + 7 - up} l${dir * 4} 2 m${-dir * 4} -2 l${dir * 4} -1" stroke="#d2502f" stroke-width="1.2"/>`;
+  }).join(''),
+  leaves: (x, y, w) => [-0.42, -0.22, 0, 0.22, 0.42].map((k, i) => {
+    const lx = x + w * k, ly = y + 2 - (i % 2 ? 6 : 12), rot = k * 70;
+    return `<path d="M${lx} ${ly + 12} q-9 -12 0 -24 q9 12 0 24z" fill="${i % 2 ? '#5f9b3a' : '#7dbb4a'}" ${OUT2} transform="rotate(${rot} ${lx} ${ly + 12})"/><path d="M${lx} ${ly + 10} v-18" stroke="#3d6b25" stroke-width="1.2" transform="rotate(${rot} ${lx} ${ly + 12})"/>`;
+  }).join('') + `<circle cx="${x + w * 0.3}" cy="${y - 2}" r="3.4" fill="#d2502f" ${OUT2}/>`,
   // лицо: (x, y — центр глаз, g — расстояние между глазами)
   glasses: (x, y, g) => `<circle cx="${x - g / 2}" cy="${y}" r="${g * 0.42}" fill="rgba(200,230,255,.25)" ${OUT2}/><circle cx="${x + g / 2}" cy="${y}" r="${g * 0.42}" fill="rgba(200,230,255,.25)" ${OUT2}/><path d="M${x - g * 0.08} ${y} h${g * 0.16}" stroke="${INK}" stroke-width="2.4"/>`,
   sunglasses: (x, y, g) => `<path d="M${x - g * 0.98} ${y - 5} h${g * 0.86} q0 11 -${g * 0.43} 11 q-${g * 0.43} 0 -${g * 0.43} -11Z M${x + g * 0.12} ${y - 5} h${g * 0.86} q0 11 -${g * 0.43} 11 q-${g * 0.43} 0 -${g * 0.43} -11Z" fill="#1c1820" ${OUT2}/><path d="M${x - g * 0.8} ${y - 3} l5 0" stroke="#fff" stroke-width="2" stroke-linecap="round"/>`,
@@ -131,6 +141,8 @@ const PROPS = {
   yarn: (x, y) => `<circle cx="${x}" cy="${y + 2}" r="10" fill="#e86fb1" ${OUT2}/><path d="M${x - 8} ${y - 2} q8 6 16 -2 M${x - 9} ${y + 5} q9 6 18 -2" stroke="#b5427f" stroke-width="1.6" fill="none"/><path d="M${x - 16} ${y - 18} l12 18 M${x + 16} ${y - 18} l-12 18" stroke="#c9ced8" stroke-width="2.6" stroke-linecap="round"/>`,
   pendulum: (x, y) => `<path d="M${x} ${y - 6} l10 22" stroke="${Y}" stroke-width="1.6"/><circle cx="${x + 10}" cy="${y + 18}" r="5" fill="${Y}" ${OUT2}/>`,
   whistle: (x, y) => `<path d="M${x - 8} ${y - 4} h12 a6 6 0 1 1 -6 6 h-6z" fill="#c9ced8" ${OUT2}/>`,
+  broom: (x, y) => `<path d="M${x - 8} ${y + 14} L${x + 16} ${y - 36}" stroke="#8a5a32" stroke-width="5" stroke-linecap="round"/><path d="M${x - 10} ${y + 10} l-12 20 q8 6 20 2 l2 -18z" fill="#d9b66a" ${OUT2}/><path d="M${x - 14} ${y + 16} l-4 10 M${x - 9} ${y + 16} l-2 12 M${x - 4} ${y + 16} l0 11" stroke="#a5843f" stroke-width="1.4"/><path d="M${x - 11} ${y + 12} l10 4" stroke="#7a3f2a" stroke-width="3"/>`,
+  genielamp: (x, y) => `<path d="M${x - 16} ${y + 4} q2 10 16 10 q14 0 16 -10z" fill="${Y}" ${OUT2}/><path d="M${x + 16} ${y + 4} q8 -2 12 -10 q-2 8 -8 14" fill="${Y}" ${OUT2}/><path d="M${x - 16} ${y + 6} q-10 -2 -8 8 q2 6 10 2" fill="none" stroke="${INK}" stroke-width="2.4"/><ellipse cx="${x}" cy="${y + 3}" rx="7" ry="3" fill="${YD}" ${OUT2}/><circle cx="${x}" cy="${y - 1}" r="2.4" fill="${YD}" ${OUT2}/><path d="M${x + 27} ${y - 8} q6 -8 0 -14 q-6 -6 2 -12" stroke="#c8b8ff" stroke-width="3" fill="none" stroke-linecap="round" opacity=".8"/>`,
   rebar: (x, y) => `<path d="M${x - 4} ${y + 10} L${x + 18} ${y - 32}" stroke="#a5582f" stroke-width="5" stroke-linecap="round"/><path d="M${x} ${y + 2} l4 1 M${x + 6} ${y - 10} l4 1 M${x + 12} ${y - 22} l4 1" stroke="${INK}" stroke-width="1.4"/>`,
   // на теле: (x, y — шея, w — ширина)
   tie: (x, y) => `<path d="M${x - 4} ${y} h8 l-2 4 l4 18 l-6 6 l-6 -6 l4 -18z" fill="#d2502f" ${OUT2}/>`,
@@ -140,6 +152,16 @@ const PROPS = {
 const BACK = {
   cape: (A) => `<path d="M${A.face.x - 34} ${A.face.y + 14} Q${A.face.x - 60} ${A.face.y + 50} ${A.face.x - 52} 112 H${A.face.x + 52} Q${A.face.x + 60} ${A.face.y + 50} ${A.face.x + 34} ${A.face.y + 14}Z" fill="#8f2a3a" ${OUT}/><path d="M${A.face.x - 40} ${A.face.y + 18} q40 -16 80 0 l-6 12 q-34 -12 -68 0z" fill="#f3eee4" ${OUT2}/><g fill="${INK}"><circle cx="${A.face.x - 24}" cy="${A.face.y + 22}" r="1.6"/><circle cx="${A.face.x}" cy="${A.face.y + 18}" r="1.6"/><circle cx="${A.face.x + 24}" cy="${A.face.y + 22}" r="1.6"/></g>`,
   mirrorframe: () => `<rect x="36" y="8" width="88" height="100" rx="44" fill="rgba(170,220,255,.18)" stroke="${Y}" stroke-width="6"/><rect x="36" y="8" width="88" height="100" rx="44" fill="none" stroke="${INK}" stroke-width="2"/><path d="M50 30 l14 -12 M48 46 l26 -24" stroke="#fff" stroke-width="3" opacity=".45" stroke-linecap="round"/>`,
+  wings: (A) => {
+    const y = A.neck.y - 10;
+    const wing = dir => {
+      const x0 = 80 + dir * 18;
+      return `<path d="M${x0} ${y} Q${80 + dir * 60} ${y - 54} ${80 + dir * 76} ${y - 34} Q${80 + dir * 66} ${y - 22} ${80 + dir * 72} ${y - 12} Q${80 + dir * 58} ${y - 8} ${80 + dir * 64} ${y + 4} Q${80 + dir * 48} ${y + 2} ${80 + dir * 50} ${y + 14} Q${80 + dir * 34} ${y + 12} ${x0} ${y + 8}Z" fill="#f0e2c0" ${OUT}/>`
+        + `<path d="M${80 + dir * 34} ${y - 10} q${dir * 16} -10 ${dir * 30} -14 M${80 + dir * 34} ${y} q${dir * 14} -4 ${dir * 26} -2" stroke="#c4ab78" stroke-width="2" fill="none"/>`;
+    };
+    return wing(-1) + wing(1);
+  },
+  stinger: (A) => `<path d="M112 96 Q150 92 146 56 Q142 26 116 24" stroke="${INK}" stroke-width="12" fill="none" stroke-linecap="round"/><path d="M112 96 Q150 92 146 56 Q142 26 116 24" stroke="#b4572f" stroke-width="7" fill="none" stroke-linecap="round" stroke-dasharray="9 3"/><path d="M118 18 l-14 8 l12 6z" fill="#2a2230" ${OUT2}/>`,
   flames: () => `<path d="M24 108 Q18 80 32 70 Q30 88 42 86 Q36 64 52 50 Q50 76 62 80" fill="#ff8a3d" opacity=".55"/><path d="M136 108 Q144 80 128 70 Q130 88 118 86 Q124 64 108 50 Q110 76 98 80" fill="#ff8a3d" opacity=".55"/>`,
 };
 // передний план: эффекты
@@ -151,11 +173,15 @@ const FRONT = {
   nails: () => `<g fill="#c9ced8" ${OUT2}><circle cx="24" cy="66" r="3"/><circle cx="136" cy="66" r="3"/></g>`,
   needle: (A) => `<path d="M${A.mouth.x} ${A.mouth.y} L${A.mouth.x + 4} ${A.mouth.y + 26}" stroke="${INK}" stroke-width="3" stroke-linecap="round"/>`,
   claws: (A) => [A.handL, A.handR].map(h => `<path d="M${h.x - 6} ${h.y} l-4 9 M${h.x} ${h.y + 2} l0 10 M${h.x + 6} ${h.y} l4 9" stroke="#efe6d4" stroke-width="3.4" stroke-linecap="round"/>`).join(''),
+  tentacles: () => [[22, 1], [138, -1], [46, 1], [114, -1]].map(([x, dir], i) => {
+    const d = `M${x + dir * 14} ${96 - i * 3} Q${x - dir * 10} ${84 - i * 6} ${x} ${62 - i * 4} Q${x + dir * 10} ${50 - i * 4} ${x - dir * 2} ${44 - i * 3}`;
+    return `<path d="${d}" stroke="${INK}" stroke-width="12" fill="none" stroke-linecap="round"/><path d="${d}" stroke="hsl(330 48% 52%)" stroke-width="7.4" fill="none" stroke-linecap="round"/><circle cx="${x - dir * 3}" cy="${72 - i * 5}" r="1.8" fill="#ffd3e4"/><circle cx="${x + dir * 1}" cy="${60 - i * 4}" r="1.5" fill="#ffd3e4"/>`;
+  }).join(''),
   fur: () => `<path d="M40 56 l-6 -4 l8 -2 M120 56 l6 -4 l-8 -2 M60 30 l-2 -8 l6 4 M100 30 l2 -8 l-6 4" stroke="#5a3a2a" stroke-width="3" fill="none" stroke-linecap="round"/>`,
 };
-const HAT = new Set(['headphones', 'conductorcap', 'hardhat', 'cap', 'sailorcap', 'bandana', 'foilhat', 'visor', 'hat']);
+const HAT = new Set(['headphones', 'conductorcap', 'hardhat', 'cap', 'sailorcap', 'bandana', 'foilhat', 'visor', 'hat', 'snakes', 'leaves']);
 const FACE = new Set(['glasses', 'sunglasses', 'monocle', 'mustache', 'beard']);
-const HELD = new Set(['briefcase', 'calculator', 'phone', 'flag', 'lantern', 'plunger', 'ticket', 'coins', 'cup', 'sword', 'dumbbell', 'keys', 'stamp', 'book', 'yarn', 'pendulum', 'whistle', 'rebar']);
+const HELD = new Set(['briefcase', 'calculator', 'phone', 'flag', 'lantern', 'plunger', 'ticket', 'coins', 'cup', 'sword', 'dumbbell', 'keys', 'stamp', 'book', 'yarn', 'pendulum', 'whistle', 'rebar', 'broom', 'genielamp']);
 const NECK = new Set(['tie', 'scarf']);
 
 // ───────────── тела ─────────────
@@ -439,7 +465,7 @@ export function monsterSVG(uid) {
     if (B.skullEyes) {
       faceSvg = `<ellipse cx="${A.face.x - 14}" cy="${A.face.y}" rx="11" ry="12" fill="${INK}"/><ellipse cx="${A.face.x + 14}" cy="${A.face.y}" rx="11" ry="12" fill="${INK}"/><circle cx="${A.face.x - 14}" cy="${A.face.y + 1}" r="3.4" fill="${col(h, 90, 62)}"/><circle cx="${A.face.x + 14}" cy="${A.face.y + 1}" r="3.4" fill="${col(h, 90, 62)}"/>`;
     } else {
-      faceSvg = face(A.face.x, A.face.y, { n: A.face.n || 2, r: Math.max(5, A.face.g * 0.36), gap: A.face.g, style: a.eyes || 'normal', iris: C.iris, lid: B.lid || C.fd });
+      faceSvg = face(A.face.x, A.face.y, { n: a.cyclops ? 1 : A.face.n || 2, r: Math.max(5, A.face.g * (a.cyclops ? 0.6 : 0.36)), gap: A.face.g, style: a.eyes || 'normal', iris: C.iris, lid: B.lid || C.fd });
     }
     if (!B.noMouth) faceSvg += mouth(A.mouth.x, A.mouth.y, a.mouth || B.defaultMouth || 'grin', A.mouth.w);
   }

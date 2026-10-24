@@ -8,7 +8,7 @@
 import { fx } from '/fx.js';
 import { sfx } from '/sfx.js';
 import { cardHTML, cardBackSVG, avatarSVG } from '/art.js';
-import { def, ruleText } from '/shared/cards.js';
+import { def, ruleText, BOSS_FLOOR } from '/shared/cards.js';
 import { sceneKind } from '/art-monsters.js';
 
 const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -488,7 +488,7 @@ S.intro = (f, o) => {
           fx.spray({ x: c.x, y: vh() + 10, w: vw(), h: 0 }, { n: 40, spreadX: 1, speed: [120, 300], angle: [-1.9, -1.25], g: -60, size: [1.5, 3], colors: ['#ff8a3d', '#ffb347', '#ff5a3d'], shape: 'spark', life: [1, 1.8], delay: [0, 0.6] });
         } else flash(k, 'rgba(255,240,210,.28)', 220);
       });
-      const sub = hell ? `${o.wandering ? 'Из темноты · ' : ''}сила ${f.power ?? '×2'} — вдвое больше героя` : o.wandering ? 'Подкрепление!' : boss ? 'Босс подземелья' : 'Уровень ' + (d.mirror != null ? '?' : lv);
+      const sub = hell ? `${o.wandering ? 'Из темноты · ' : ''}сила ${f.power ?? '×2'} — ${f.power != null && f.power <= BOSS_FLOOR ? 'меньше не бывает' : 'вдвое больше героя'}` : o.wandering ? 'Подкрепление!' : boss ? 'Босс подземелья' : 'Уровень ' + (d.mirror != null ? '?' : lv);
       const plate = k.pt('cn-plate ' + tier, `<span class="cn-lv">${d.mirror != null ? '?' : lv}</span><span><small>${sub}</small><b></b></span>`, c.x, Math.min(vh() - 40, c.y + 168 * fit + 30));
       plate.querySelector('b').textContent = d.name;
       k.a(plate, [{ opacity: 0, transform: 'translateY(16px) scale(.6)' }, { opacity: 1, transform: 'translateY(-4px) scale(1.06)', offset: 0.65 }, { opacity: 1, transform: 'none' }], { dur: 340, delay: t0 + 330, ease: EASE.out });
@@ -722,11 +722,13 @@ S.helper = f => ({
     const from = api.avaOf(f.pid), to = api.heroAva(f.pid) || shieldEl('hero');
     const tr = box(to);
     if (!tr) return 0;
-    sfx.play('charge');
-    const dur = throwThing(k, `<div class="cn-avafly" style="--seat:${api.color(f.pid)}">${avatarSVG(api.avatar(f.pid), api.color(f.pid))}</div>`, from, to, { s0: 0.7, s1: 0.9, spin: 0, lift: 140, dur: 620, trail: ['#8ff0d2', '#3fa38c', '#ffffff'],
-      hit: () => { const c = cen(tr); ring(k, c.x, c.y, 'good', 0.55, 520); fx.sparkle(to, { n: 18, colors: ['#8ff0d2', '#ffffff', '#fff3b0'] }); fx.shake(shieldEl('hero'), 'bump'); } });
-    k.at(dur, () => { const c = cen(box(shieldEl('hero')) || tr); stamp(k, c.x, c.y - 90, 'На помощь!', api.pname(f.pid), 'good', 650); });
-    return dur + 700;
+    // «Ты мой раб»: помощника тащат в бой в кандалах
+    const forced = !!f.forced;
+    sfx.play(forced ? 'clang' : 'charge');
+    const dur = throwThing(k, `<div class="cn-avafly${forced ? ' chained' : ''}" style="--seat:${api.color(f.pid)}">${avatarSVG(api.avatar(f.pid), api.color(f.pid))}</div>`, from, to, { s0: 0.7, s1: 0.9, spin: 0, lift: forced ? 60 : 140, dur: forced ? 760 : 620, trail: forced ? ['#a9b2be', '#6b7480', '#ffffff'] : ['#8ff0d2', '#3fa38c', '#ffffff'],
+      hit: () => { const c = cen(tr); ring(k, c.x, c.y, forced ? 'bad' : 'good', 0.55, 520); fx.sparkle(to, { n: 18, colors: forced ? ['#c9ced8', '#ffffff', '#8d96a3'] : ['#8ff0d2', '#ffffff', '#fff3b0'] }); fx.shake(shieldEl('hero'), 'bump'); if (forced) sfx.play('clang'); } });
+    k.at(dur, () => { const c = cen(box(shieldEl('hero')) || tr); stamp(k, c.x, c.y - 90, forced ? 'Ты мой раб!' : 'На помощь!', forced ? `${api.pname(f.pid)} обязан помогать` : api.pname(f.pid), forced ? 'bad' : 'good', forced ? 900 : 650); });
+    return dur + (forced ? 950 : 700);
   },
 });
 
@@ -1230,6 +1232,38 @@ S.dice = f => ({
 });
 
 const PANEL_KINDS = new Set(['victory', 'caught', 'escaped', 'pet', 'vanish']);
+// с 3D-ареной развязку разыгрывают модели, а сцена добавляет только надпись, звук и конфетти
+S.arenaEnd = f => ({
+  run(k) {
+    const r = box(document.getElementById('stage'));
+    const c = r ? { x: r.left + r.width / 2, y: r.top + Math.min(110, r.height * 0.3) } : focus();
+    const d = f.card ? def(f.card) : null;
+    switch (f.kind) {
+      case 'victory':
+        k.at(900, () => {
+          stamp(k, c.x, c.y, 'Победа!', f.helper ? `${api.pname(f.pid)} и ${api.pname(f.helper)}` : api.pname(f.pid), 'win', 1200);
+          fx.confetti({ at: { x: c.x, y: c.y, w: 300, h: 0 }, n: 70 });
+          sfx.play('victory');
+        });
+        return 2200;
+      case 'caught':
+        k.at(380, () => { stamp(k, c.x, c.y, 'Расплата!', d?.bad?.text || '', 'bad', 1100); sfx.play('claw'); });
+        return 1500;
+      case 'escaped':
+        sfx.play('dash');
+        k.at(200, () => stamp(k, c.x, c.y, f.calm ? 'Не погнался' : 'Удрал!', api.pname(f.pid), 'good', 700));
+        return 1000;
+      case 'pet':
+        sfx.play('pet');
+        stamp(k, c.x, c.y, 'Питомец спас!', api.pname(f.pid), 'good', 800);
+        return 1000;
+      case 'vanish':
+        sfx.play(f.how === 'smoke' ? 'poof' : f.how === 'stone' ? 'stone' : 'sleep');
+        return 700;
+    }
+    return 0;
+  },
+});
 // порядок внутри одной пачки событий: появление → вмешательство → кубик → развязка → последствия
 const RANK = { combat: 1, wandering: 1, strike: 2, helper: 2, mod: 2, enhance: 2, backstab: 2, lullaby: 2, mutagen: 2, power: 2, buff: 2, dice: 3, escaped: 4, caught: 4, pet: 4, vanish: 4, victory: 5, location: 6, event: 6, curse: 6, ward: 6.5, death: 7, levelUp: 8, levelDown: 8, legendary: 9 };
 
@@ -1264,7 +1298,8 @@ export const cine = {
     const scenes = [];
     const dt = reveal ? def(doorCard) : null;
     if (reveal && dt.type !== 'monster') scenes.push(S.reveal(reveal));
-    const aftermath = !!snap && items.some(f => PANEL_KINDS.has(f.kind));
+    const arena = !!this.arenaActive?.();
+    const aftermath = !arena && !!snap && items.some(f => PANEL_KINDS.has(f.kind));
     let lastPanel = -1;
     for (const f of items) {
       let sc = null;
@@ -1274,7 +1309,7 @@ export const cine = {
         case 'curse': sc = S.curse(f, { fromDoor: f.card === doorCard }); break;
         case 'location': sc = S.location(f, { fromDoor: f.card === doorCard }); break;
         case 'event': sc = S.event(f, { fromDoor: f.card === doorCard }); break;
-        default: sc = S[f.kind]?.(f);
+        default: sc = arena && PANEL_KINDS.has(f.kind) ? S.arenaEnd(f) : S[f.kind]?.(f);
       }
       if (!sc) continue;
       scenes.push(sc);

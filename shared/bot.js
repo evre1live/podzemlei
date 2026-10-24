@@ -2,7 +2,7 @@
 import { def } from './cards.js';
 import {
   P, check, combatNumbers, playOptions, handLimit, hasClass, hasRace, cardWorth,
-  equipError, participants, heroStrength, winLevel, luxLevel, saleValue, monsterBaseLevel, powerOf, locationOf,
+  equipError, participants, heroStrength, levelOnlyFight, winLevel, luxLevel, saleValue, monsterBaseLevel, powerOf, locationOf,
 } from './engine.js';
 
 const byWorth = list => [...list].sort((a, b) => cardWorth(a) - cardWorth(b));
@@ -63,13 +63,15 @@ function boostSelf(s, p, gap) {
     if (d.type === 'buff') return d.bonus;
     return d.bonus + alch + (d.tagBonus && undead && d.tagBonus.tag === 'undead' ? d.tagBonus.n : 0);
   };
-  const isBoost = u => (def(u).type === 'oneshot' && def(u).effect === 'bonus') || def(u).type === 'buff';
+  // против «только уровня» вещи, зелья и способности героев не работают — остаётся колыбельная барда
+  const onlyLevel = levelOnlyFight(s);
+  const isBoost = u => !onlyLevel && ((def(u).type === 'oneshot' && def(u).effect === 'bonus') || def(u).type === 'buff');
   const bonusCards = hand.filter(isBoost).sort((a, b) => val(b) - val(a));
   const cheap = byWorth(hand.filter(u => !isBoost(u) && def(u).type !== 'levelup'));
-  const turnLeft = hasClass(p, 'cleric') && undead ? 3 - (c.turnCount[p.id] || 0) : 0;
-  const rageLeft = hasClass(p, 'warrior') ? 3 - (c.rageCount[p.id] || 0) : 0;
+  const turnLeft = !onlyLevel && hasClass(p, 'cleric') && undead ? 3 - (c.turnCount[p.id] || 0) : 0;
+  const rageLeft = !onlyLevel && hasClass(p, 'warrior') ? 3 - (c.rageCount[p.id] || 0) : 0;
   const songLeft = hasClass(p, 'bard') ? 2 - (c.lullaby[p.id] || 0) : 0;
-  const mutagen = hasClass(p, 'witcher') && !p.mutagenUsed && cheap.length >= 2;
+  const mutagen = !onlyLevel && hasClass(p, 'witcher') && !p.mutagenUsed && cheap.length >= 2;
   const potential = bonusCards.reduce((a, u) => a + val(u), 0)
     + Math.min(turnLeft, cheap.length) * 3 + Math.min(songLeft, cheap.length) * 3
     + Math.min(rageLeft, Math.max(0, cheap.length - turnLeft)) + (mutagen ? 10 : 0);
@@ -112,10 +114,16 @@ function fighterMove(s, p, rng, now) {
   if (hasClass(p, 'mage') && p.hand.length >= 3 && c.monsters.length === 1 && danger && !def(c.monsters[0].uid).boss) {
     return { type: 'ability', name: 'charm', cards: [], monster: 0 };
   }
-  // попросить помощи
+  // позвать на помощь: «Ты мой раб» — без торга и без доли, иначе просим за часть клада
   if (!c.helper && !c.monsters.some(m => def(m.uid).noHelp)) {
+    const strOf = x => (levelOnlyFight(s) ? x.level : powerOf(s, x));
+    const slave = p.hand.find(u => def(u).effect === 'enslave');
+    if (slave) {
+      const t = s.players.filter(x => x.id !== p.id && !x.dead).map(x => ({ x, str: strOf(x) })).filter(o => o.str >= gap).sort((a, b) => a.str - b.str)[0];
+      if (t && !check(s, p.id, { type: 'playCard', uid: slave, target: t.x.id })) return { type: 'playCard', uid: slave, target: t.x.id };
+    }
     const cands = s.players.filter(x => x.id !== p.id && !x.dead && !c.declined.includes(x.id))
-      .map(x => ({ x, str: powerOf(s, x) }))
+      .map(x => ({ x, str: strOf(x) }))
       .filter(o => o.str >= gap)
       .sort((a, b) => a.str - b.str);
     if (cands.length && n.treasures >= 0) {
@@ -252,10 +260,11 @@ function turnMove(s, p, rng) {
   }
   if (step === 'pre') return { type: 'kick' };
   if (step === 'post') {
+    // неприятности — это случайный монстр из колоды: идём, только если большинство монстров там нам по силам
     const power = powerOf(s, p) + (p.nextCombat || 0);
-    const easy = p.hand.filter(u => def(u).type === 'monster' && !def(u).ambush && monsterBaseLevel(s, def(u)) + 1 < power)
-      .sort((a, b) => monsterBaseLevel(s, def(b)) - monsterBaseLevel(s, def(a)))[0];
-    if (easy) return { type: 'lookForTrouble', uid: easy };
+    const pool = s.decks.door.filter(u => def(u).type === 'monster');
+    const beatable = pool.filter(u => !def(u).boss && !def(u).levelOnly && monsterBaseLevel(s, def(u)) + 1 < power).length;
+    if (pool.length >= 4 && beatable / pool.length >= 0.65 && ok({ type: 'lookForTrouble' })) return { type: 'lookForTrouble' };
     return { type: 'loot' };
   }
   if (step === 'charity') {

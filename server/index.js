@@ -1,5 +1,6 @@
 // «Под Землёй» — сервер: комнаты с паролем, лобби, чат, игра, переподключение.
 import express from 'express';
+import compression from 'compression';
 import http from 'node:http';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -61,6 +62,38 @@ const cleanDelay = v => (DELAYS.includes(Number(v)) ? Number(v) : DELAYS[0]);
 const cleanWin = v => (WIN_LEVELS.includes(Number(v)) ? Number(v) : WIN_LEVELS[0]);
 const cleanName = (n, fb = 'Игрок') => (String(n || '').replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, 20) || fb);
 
+// ───────────────────────── голосовой чат ─────────────────────────
+// Звук идёт напрямую между браузерами (WebRTC), сервер только передаёт приглашения и следит за правами.
+// Состояние живёт в памяти: после перезапуска сервера участники просто подключаются заново.
+const VOICE_MAX = 10;
+const voice = new Map();        // код комнаты → Map(сокет → участник)
+const voiceBans = new Map();    // код комнаты → Map(ключ → имя): кого хозяин выгнал из голосового чата
+const voiceForced = new Map();  // код комнаты → Set(ключ): кому хозяин выключил микрофон
+const bag = (m, id, make) => { let v = m.get(id); if (!v) m.set(id, v = make()); return v; };
+// убрать сокет из голосового чата его комнаты и предупредить остальных
+function voiceLeave(sock) {
+  const id = sock.data.voiceRoom;
+  if (!id) return;
+  sock.data.voiceRoom = null;
+  sock.leave('voice:' + id);
+  const vm = voice.get(id);
+  if (vm?.delete(sock.id)) {
+    io.to('voice:' + id).emit('voice:peer-left', { id: sock.id });
+    if (!vm.size) voice.delete(id);
+    const r = rooms.get(id);
+    if (r) broadcastRoom(r);
+  }
+}
+const watchBans = new Map(); // код комнаты → Set(номер браузера): кого хозяин попросил не смотреть
+function voiceInfo(r) {
+  const vm = voice.get(r.id);
+  return {
+    peers: vm ? [...vm.values()].map(p => ({ id: p.id, name: p.name, color: p.color, memberId: p.memberId, spectator: p.spectator, muted: p.muted, forced: p.forced })) : [],
+    bans: [...(voiceBans.get(r.id) || new Map())].map(([key, name]) => ({ key, name })),
+    max: VOICE_MAX,
+  };
+}
+
 // зрители — просто сокеты в комнате socket.io «watch:КОД»: место за столом они не занимают
 const watchCount = r => io.sockets.adapter.rooms.get('watch:' + r.id)?.size || 0;
 
@@ -75,7 +108,7 @@ function roomSummary(r) {
 function lobbyInfo(r, meId) {
   return {
     id: r.id, name: r.name, locked: !!r.pass, hostId: r.hostId, maxPlayers: r.maxPlayers,
-    settings: r.settings, status: roomSummary(r).status, me: meId, spectator: !meId, watchers: watchCount(r),
+    settings: r.settings, status: roomSummary(r).status, me: meId, spectator: !meId, watchers: watchCount(r), voice: voiceInfo(r),
     members: r.members.filter(m => !m.left).map((m, i) => ({
       id: m.id, name: m.name, isBot: m.isBot, connected: m.isBot || m.connected, ready: m.ready, color: m.color, avatar: m.avatar,
       autopilot: !!m.autopilot,
@@ -100,6 +133,9 @@ function broadcastRoom(r) {
 function dropRoom(r, reason = 'Комната закрылась') {
   io.to('watch:' + r.id).emit('watch:end', { reason });
   io.in('watch:' + r.id).socketsLeave('watch:' + r.id);
+  io.to('voice:' + r.id).emit('voice:kicked', { reason });
+  io.in('voice:' + r.id).socketsLeave('voice:' + r.id);
+  voice.delete(r.id); voiceBans.delete(r.id); voiceForced.delete(r.id); watchBans.delete(r.id);
   rooms.delete(r.id); dirty = true; pushLobby();
 }
 
@@ -208,6 +244,8 @@ function runRoom(r) {
 // ───────────────────────── HTTP ─────────────────────────
 const app = express();
 app.disable('x-powered-by');
+// текст (код, стили, библиотека 3D) отдаём сжатым — модели и звуки уже сжаты сами
+app.use(compression({ filter: (req, res) => !/\.(glb|mp3|png|woff2?)$/.test(req.path) && compression.filter(req, res) }));
 app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Referrer-Policy', 'same-origin');
@@ -217,7 +255,7 @@ app.use((req, res, next) => {
 // чтобы после обновления игры ни у кого не смешались старые и новые файлы. Шрифты кэшируются надолго.
 const fresh = { etag: true, lastModified: true, setHeaders(res, file) {
   // шрифты и звуки (папка звуков с номером версии) кэшируются надолго, остальное перепроверяется
-  res.setHeader('Cache-Control', /\.(woff2?|ttf|mp3)$/.test(file) ? 'public, max-age=2592000, immutable' : 'no-cache');
+  res.setHeader('Cache-Control', /\.(woff2?|ttf|mp3|glb)$/.test(file) ? 'public, max-age=2592000, immutable' : 'no-cache');
 } };
 app.use('/shared', express.static(path.join(ROOT, 'shared'), fresh));
 app.use(express.static(path.join(ROOT, 'public'), { ...fresh, extensions: ['html'] }));
@@ -243,6 +281,7 @@ io.on('connection', socket => {
   };
 
   function attach(r, m) {
+    leaveVoice();
     unwatch();
     if (socket.data.roomId && socket.data.roomId !== r.id) detach();
     if (m.socketId && m.socketId !== socket.id) io.sockets.sockets.get(m.socketId)?.emit('kicked', { reason: 'Вы открыли игру в другой вкладке' });
@@ -252,6 +291,7 @@ io.on('connection', socket => {
     socket.join('room:' + r.id);
   }
   function detach() {
+    leaveVoice();
     const { r, m } = ctx();
     if (m && m.socketId === socket.id) { m.connected = false; m.socketId = null; m.lastSeen = now(); }
     if (r) { socket.leave('room:' + r.id); broadcastRoom(r); }
@@ -264,6 +304,7 @@ io.on('connection', socket => {
   function unwatch() {
     const id = socket.data.watchId;
     if (!id) return;
+    leaveVoice();
     socket.leave('watch:' + id);
     socket.data.watchId = null;
     const r = rooms.get(id);
@@ -279,14 +320,107 @@ io.on('connection', socket => {
     badPw = badPw.filter(x => t - x < 60000);
     if (badPw.length >= 6) return cb({ ok: false, error: 'Слишком много попыток. Подождите минуту.' });
     if (!checkPassword(p.password, r.pass)) { badPw.push(t); return cb({ ok: false, error: 'Неверный пароль', needPassword: true }); }
+    if (p.cid && watchBans.get(r.id)?.has(String(p.cid))) return cb({ ok: false, error: 'Хозяин комнаты попросил вас не смотреть эту игру' });
     if (socket.data.watchId !== r.id) unwatch();
     socket.data.watchId = r.id;
     socket.data.watchName = cleanName(p.name, 'Зритель');
+    socket.data.cid = /^[a-z0-9]{8,32}$/.test(String(p.cid || '')) ? String(p.cid) : null;
     socket.leave('lobby');
     socket.join('watch:' + r.id);
     cb({ ok: true, roomId: r.id });
     broadcastRoom(r);
   });
+  // ───── голосовой чат ─────
+  // где сейчас сокет: игрок за столом или зритель; ключ нужен, чтобы запреты хозяина переживали переподключение
+  function seat() {
+    const { r, m } = ctx();
+    if (r && m) return { room: r, m, key: 'm:' + m.id };
+    const w = rooms.get(socket.data.watchId);
+    return w ? { room: w, m: null, key: 's:' + (socket.data.cid || socket.id) } : {};
+  }
+  const leaveVoice = () => voiceLeave(socket);
+  let sigBucket = 400, sigLast = now();
+  socket.on('voice:join', (p = {}, cb) => {
+    cb = cbOf(cb);
+    if (limited()) return cb({ ok: false, error: 'Слишком часто' });
+    const { room, m, key } = seat();
+    if (!room) return cb({ ok: false, error: 'Сначала зайдите в комнату' });
+    if (voiceBans.get(room.id)?.has(key)) return cb({ ok: false, error: 'Хозяин комнаты не пускает вас в голосовой чат' });
+    const vm = bag(voice, room.id, () => new Map());
+    if (vm.size >= VOICE_MAX && !vm.has(socket.id)) return cb({ ok: false, error: `В голосовом чате уже ${VOICE_MAX} человек` });
+    if (socket.data.voiceRoom && socket.data.voiceRoom !== room.id) leaveVoice();
+    const forced = !!voiceForced.get(room.id)?.has(key);
+    vm.set(socket.id, { id: socket.id, key, name: m ? m.name : (socket.data.watchName || 'Зритель'), color: m ? m.color : '#a9b2c3', memberId: m?.id || null, spectator: !m, muted: forced || !!p.muted, forced });
+    socket.data.voiceRoom = room.id;
+    socket.join('voice:' + room.id);
+    // новичок сам зовёт тех, кто уже в чате: так у каждой пары ровно один зачинщик
+    cb({ ok: true, me: socket.id, peers: [...vm.keys()].filter(id => id !== socket.id), forced });
+    broadcastRoom(room);
+  });
+  socket.on('voice:leave', (_, cb) => { leaveVoice(); cbOf(cb)({ ok: true }); });
+  socket.on('voice:signal', (p = {}) => {
+    const t = now(); sigBucket = Math.min(400, sigBucket + (t - sigLast) / 25); sigLast = t;
+    if (sigBucket < 1) return; sigBucket -= 1;
+    const vm = voice.get(socket.data.voiceRoom);
+    const to = String(p.to || '');
+    if (!vm?.has(socket.id) || !vm.has(to) || !p.data || typeof p.data !== 'object') return;
+    io.to(to).emit('voice:signal', { from: socket.id, data: p.data });
+  });
+  socket.on('voice:mute', (p = {}, cb) => {
+    cb = cbOf(cb);
+    const vm = voice.get(socket.data.voiceRoom);
+    const me = vm?.get(socket.id);
+    if (!me) return cb({ ok: false });
+    if (me.forced && !p.muted) return cb({ ok: false, error: 'Хозяин комнаты выключил вам микрофон' });
+    me.muted = !!p.muted;
+    cb({ ok: true });
+    const r = rooms.get(socket.data.voiceRoom); if (r) broadcastRoom(r);
+  });
+  // хозяин: выключить микрофон, вернуть его, выгнать из голосового чата и пустить обратно
+  const hostVoice = (cb, fn) => hostOnly(cb, (r, me) => {
+    const vm = voice.get(r.id) || new Map();
+    return fn(r, me, vm);
+  });
+  socket.on('voice:force', (p = {}, cb) => hostVoice(cb, (r, me, vm) => {
+    const t = vm.get(String(p.id || ''));
+    if (!t) return 'Этого участника нет в голосовом чате';
+    if (t.memberId === me.id) return 'Свой микрофон выключайте кнопкой у себя';
+    const set = bag(voiceForced, r.id, () => new Set());
+    if (p.on) { set.add(t.key); t.forced = true; t.muted = true; } else { set.delete(t.key); t.forced = false; }
+    io.to(t.id).emit('voice:forced', { on: !!p.on });
+    sysChat(r, p.on ? `Хозяин выключил микрофон: ${t.name}.` : `Хозяин вернул микрофон: ${t.name}.`);
+  }));
+  socket.on('voice:kick', (p = {}, cb) => hostVoice(cb, (r, me, vm) => {
+    const t = vm.get(String(p.id || ''));
+    if (!t) return 'Этого участника нет в голосовом чате';
+    if (t.memberId === me.id) return 'Себя выгнать нельзя';
+    bag(voiceBans, r.id, () => new Map()).set(t.key, t.name);
+    const sock = io.sockets.sockets.get(t.id);
+    vm.delete(t.id);
+    if (sock) { sock.leave('voice:' + r.id); sock.data.voiceRoom = null; sock.emit('voice:kicked', { reason: 'Хозяин убрал вас из голосового чата' }); }
+    io.to('voice:' + r.id).emit('voice:peer-left', { id: t.id });
+    sysChat(r, `Хозяин убрал из голосового чата: ${t.name}.`);
+  }));
+  socket.on('voice:unban', (p = {}, cb) => hostVoice(cb, r => {
+    const bans = voiceBans.get(r.id);
+    const name = bans?.get(String(p.key || ''));
+    if (!name) return 'Такого запрета нет';
+    bans.delete(String(p.key));
+    sysChat(r, `Хозяин снова пускает в голосовой чат: ${name}.`);
+  }));
+  // хозяин может попросить зрителя уйти
+  socket.on('room:kickWatcher', (p = {}, cb) => hostOnly(cb, r => {
+    const sock = io.sockets.sockets.get(String(p.id || ''));
+    if (!sock || sock.data.watchId !== r.id) return 'Этого зрителя уже нет';
+    if (sock.data.cid) bag(watchBans, r.id, () => new Set()).add(sock.data.cid);
+    voiceLeave(sock);
+    sock.leave('watch:' + r.id);
+    sock.data.watchId = null;
+    sock.join('lobby');
+    sock.emit('watch:end', { reason: 'Хозяин комнаты попросил вас уйти' });
+    sysChat(r, `Хозяин попросил уйти зрителя ${sock.data.watchName || ''}.`.replace(' .', '.'));
+  }));
+
   socket.on('room:unwatch', (_, cb) => {
     unwatch();
     socket.join('lobby');
@@ -489,7 +623,7 @@ io.on('connection', socket => {
 
   socket.on('ping:me', () => { const { m } = ctx(); if (m) m.lastSeen = now(); });
 
-  socket.on('disconnect', () => { detach(); unwatch(); });
+  socket.on('disconnect', () => { leaveVoice(); detach(); unwatch(); });
 });
 
 // ───────────────────────── таймеры ─────────────────────────

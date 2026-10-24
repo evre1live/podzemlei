@@ -1,6 +1,6 @@
 // «Под Землёй» — игровой движок. Чистые функции над JSON-состоянием.
 // Сервер хранит состояние, вызывает act()/tick() и рассылает view() каждому игроку.
-import { def, allUids, RACE_NAMES, CLASS_NAMES, ruleText, BOSS_MULT, BOSS_MIN_LEVEL } from './cards.js';
+import { def, allUids, RACE_NAMES, CLASS_NAMES, ruleText, BOSS_MULT, BOSS_MIN_LEVEL, BOSS_FLOOR } from './cards.js';
 
 export const WIN_LEVEL = 10;
 // до какого уровня идёт партия: 10 по умолчанию, в лобби можно выбрать 15 или 20
@@ -410,8 +410,11 @@ export function participants(s) {
 const isParticipant = (s, pid) => participants(s).includes(pid);
 function matchVs(p, vs) { return (vs.cls && hasClass(p, vs.cls)) || (vs.race && hasRace(p, vs.race)); }
 
+// в бою есть монстр, против которого считается только уровень героя
+export const levelOnlyFight = s => !!s.combat?.monsters.some(m => def(m.uid).levelOnly);
 export function heroStrength(s, p) {
   const c = s.combat;
+  if (c && levelOnlyFight(s)) return p.level;
   let v = p.level + itemBonus(p, s) + passiveBonus(s, p) + p.nextCombat;
   if (c) {
     v += (c.rage[p.id] || 0) + (c.turnUndead[p.id] || 0);
@@ -423,7 +426,7 @@ export function monsterBaseLevel(s, d) {
   return d.mirror != null ? Math.max(...s.players.map(x => x.level)) + d.mirror : d.level;
 }
 export function bossPower(s, p) {
-  return p ? Math.max(2, BOSS_MULT * heroStrength(s, p)) : 2;
+  return Math.max(BOSS_FLOOR, p ? BOSS_MULT * heroStrength(s, p) : 0);
 }
 export function monsterStrength(s, m) {
   const d = def(m.uid);
@@ -455,7 +458,7 @@ export function combatNumbers(s) {
   if (!c) return null;
   const parts = participants(s).map(id => P(s, id));
   const heroes = parts.reduce((a, p) => a + heroStrength(s, p), 0)
-    + c.mods.filter(m => m.side === 'player').reduce((a, m) => a + m.n, 0);
+    + (levelOnlyFight(s) ? 0 : c.mods.filter(m => m.side === 'player').reduce((a, m) => a + m.n, 0));
   const perMonster = c.monsters.map(m => monsterStrength(s, m));
   const monsters = perMonster.reduce((a, b) => a + b, 0)
     + c.mods.filter(m => m.side === 'monster').reduce((a, m) => a + m.n, 0);
@@ -491,7 +494,7 @@ function startCombat(s, p, monsterUid, rng = Math.random) {
   const m0 = s.combat.monsters[0];
   if (d.boss) m0.power = bossPower(s, p);
   log(s, `${p.name} встречает ${q(d.name)} (ур. ${monsterBaseLevel(s, d)}). Бой!`, 'combat');
-  if (d.boss) log(s, `👹 Это босс! Его сила вдвое больше силы ${p.name}: ${m0.power}. ${p.level < BOSS_MIN_LEVEL ? `За героями ниже ${BOSS_MIN_LEVEL}-го уровня он не гонится.` : 'Не одолеешь и не убежишь — −5 уровней и смерть.'}`, 'bad');
+  if (d.boss) log(s, `👹 Это босс! Его сила — ${m0.power}: ${m0.power > BOSS_FLOOR ? `вдвое больше силы ${p.name}` : `слабее ${BOSS_FLOOR} боссы не бывают`}. ${p.level < BOSS_MIN_LEVEL ? `За героями ниже ${BOSS_MIN_LEVEL}-го уровня он не гонится.` : 'Не одолеешь и не убежишь — −5 уровней и смерть.'}`, 'bad');
   fx(s, { kind: 'combat', pid: p.id, card: monsterUid, ...(d.boss ? { power: m0.power } : {}) });
   if (d.ambush) {
     log(s, d.ambush.text, 'bad');
@@ -518,7 +521,7 @@ function removeMonster(s, idx) {
 
 // сколько лишних карт клада помощник берёт сверху обещанного
 function helperExtra(s, h) {
-  if (!h) return 0;
+  if (!h || s.combat?.forced) return 0;
   return (hasRace(h, 'goblin') ? 1 : 0) + (locationOf(s)?.helperBonus || 0);
 }
 
@@ -568,7 +571,7 @@ function resolveVictory(s, rng) {
   if (h && hasRace(h, 'elf')) setLevel(s, h, h.level + c.monsters.length, { canWin: true });
   const r = shareTreasure(s, n.treasures, rng, n.helperShare);
   fx(s, { kind: 'victory', pid: f.id, helper: c.helper || null, cards: c.monsters.map(m => m.uid), levels: n.levels, treasures: r.total });
-  log(s, `⚔️ ${f.name}${h ? ' и ' + h.name : ''} побеждают ${names}! ${f.name} получает +${n.levels} ур. и ${r.total - r.share} клада${h && r.share ? `, ${h.name} — ${r.share}` : ''}.`, 'good');
+  log(s, `⚔️ ${f.name}${h ? ' и ' + h.name : ''} ${h ? 'побеждают' : 'побеждает'} ${names}! ${f.name} получает +${n.levels} ур. и ${r.total - r.share} клада${h && r.share ? `, ${h.name} — ${r.share}` : ''}.`, 'good');
   endCombat(s);
   const winners = [f, h].filter(x => x && x.level >= winLevel(s));
   if (winners.length) {
@@ -662,12 +665,26 @@ H.kick = {
   },
 };
 
+// монстр наугад из колоды проходов, а если там пусто — из сброса
+function randomMonster(s, rng) {
+  for (const pile of [s.decks.door, s.discard.door]) {
+    const list = pile.filter(u => def(u).type === 'monster');
+    if (list.length) { const u = pick(list, rng); without(pile, u); return u; }
+  }
+  return null;
+}
 H.lookForTrouble = {
-  check(s, p, a) {
+  check(s, p) {
     return manageErr(s, p) || (s.turn.step !== 'post' ? 'Искать неприятности можно после выбитой двери без монстра' : null)
-      || (!p.hand.includes(a.uid) || def(a.uid).type !== 'monster' ? 'Нужен монстр из руки' : null);
+      || (![...s.decks.door, ...s.discard.door].some(u => def(u).type === 'monster') ? 'Монстры в колоде кончились' : null);
   },
-  run(s, p, a, rng) { without(p.hand, a.uid); s.reveal = { uid: a.uid, by: p.id, seq: ++s.revealSeq }; startCombat(s, p, a.uid, rng); },
+  run(s, p, a, rng) {
+    const uid = randomMonster(s, rng);
+    s.reveal = { uid, by: p.id, seq: ++s.revealSeq };
+    fx(s, { kind: 'reveal', pid: p.id, card: uid });
+    log(s, `${p.name} ищет неприятности — и находит!`, 'combat');
+    startCombat(s, p, uid, rng);
+  },
 };
 
 H.loot = {
@@ -729,7 +746,7 @@ function playCheck(s, p, a) {
     case 'item': return manageErr(s, p);
     case 'location': return manageErr(s, p);
     case 'event': return manageErr(s, p);
-    case 'buff': return null;
+    case 'buff': return c && isParticipant(s, p.id) && levelOnlyFight(s) ? 'Против этого монстра считается только уровень — зелье пропадёт зря' : null;
     case 'hoard': return manageErr(s, p) || (s.turn.hoardPlayed ? 'Схрон можно открыть только один раз за ход' : null);
     case 'levelup': return p.level >= winLevel(s) - 1 ? 'Последний уровень — только убийством монстра' : null;
     case 'curse': {
@@ -750,12 +767,22 @@ function playCheck(s, p, a) {
     case 'oneshot':
       if (d.effect === 'ward') return 'Срабатывает сам, когда на вас насылают проклятие';
       if (!c) return 'Только во время боя';
+      if (d.effect === 'enslave') {
+        if (c.fighter !== p.id) return 'Только в своём бою';
+        if (c.helper) return 'Помощник уже есть';
+        if (c.monsters.some(m => def(m.uid).noHelp)) return 'Против этого монстра никого не позвать';
+        const t = P(s, a.target);
+        if (!t || t === p) return 'Выберите, кого заставить помогать';
+        if (t.dead) return 'Мёртвые не помогают';
+        return null;
+      }
+      if (d.effect === 'bonus' && a.side === 'player' && levelOnlyFight(s)) return 'Против этого монстра считается только уровень';
       if (d.effect === 'bonus') return a.side === 'player' || a.side === 'monster' ? null : 'Выберите сторону';
       if (d.effect === 'escape' || d.effect === 'escapeBonus') return isParticipant(s, p.id) ? null : 'Только участник боя';
       if (d.effect === 'remove') return Number.isInteger(a.monster) && c.monsters[a.monster] ? null : 'Выберите монстра';
       return 'Нельзя';
     case 'monster':
-      return 'Монстра играют через «Искать неприятности» или карту «Из темноты вылезло…»';
+      return 'Монстра из руки подбрасывают в чужой бой картой «Из темноты вылезло…»';
     default: return 'Эту карту нельзя сыграть';
   }
 }
@@ -839,6 +866,11 @@ H.playCard = {
           fx(s, { kind: 'vanish', pid: p.id, how: 'smoke', cards: c.monsters.map(m => m.uid) });
           log(s, `${p.name} бросает ${q(d.name)} — герои растворяются в дыму без наград.`, 'combat');
           endCombat(s);
+        } else if (d.effect === 'enslave') {
+          const t = P(s, a.target);
+          c.helper = t.id; c.helpOffer = 0; c.helpReq = null; c.forced = true;
+          fx(s, { kind: 'helper', pid: t.id, to: p.id, forced: true });
+          log(s, `${p.name} играет ${q(d.name)}: ${t.name} обязан помогать в бою — и без доли в кладе.`, 'combat');
         } else if (d.effect === 'remove') {
           const m = removeMonster(s, a.monster);
           fx(s, { kind: 'vanish', pid: p.id, how: 'stone', cards: [m.uid] });
@@ -1026,6 +1058,8 @@ H.ability = {
     if (p.dead) return 'Вы мертвы';
     const c = s.combat;
     const cards = a.cards || [];
+    // способности, которые прибавляют силу, против «только уровня» бесполезны
+    if (['rage', 'turn', 'mutagen'].includes(a.name) && c && isParticipant(s, p.id) && levelOnlyFight(s)) return 'Против этого монстра считается только уровень';
     switch (a.name) {
       case 'rage': {
         if (!hasClass(p, 'warrior')) return 'Только воин';
@@ -1227,11 +1261,8 @@ export function playOptions(s, pid, uid) {
   const out = [];
   const tryA = a => { if (!check(s, pid, a)) out.push(a); };
   const d = def(uid);
-  if (d.type === 'monster') {
-    tryA({ type: 'lookForTrouble', uid });
-    return out;
-  }
-  if (d.type === 'curse') { s.players.forEach(x => tryA({ type: 'playCard', uid, target: x.id })); return out; }
+  if (d.type === 'monster') return out; // монстр из руки идёт в бой только с картой «Из темноты вылезло…»
+  if (d.type === 'curse' || (d.type === 'oneshot' && d.effect === 'enslave')) { s.players.forEach(x => tryA({ type: 'playCard', uid, target: x.id })); return out; }
   if (d.type === 'enhancer' || (d.type === 'oneshot' && d.effect === 'remove')) {
     (s.combat?.monsters || []).forEach((m, i) => tryA({ type: 'playCard', uid, monster: i }));
     return out;
@@ -1257,7 +1288,7 @@ export function hints(s, pid) {
   const h = {
     kick: ok({ type: 'kick' }),
     loot: ok({ type: 'loot' }),
-    lookForTrouble: myTurn(s, p) && !s.combat && s.turn.step === 'post',
+    lookForTrouble: ok({ type: 'lookForTrouble' }),
     endTurn: myTurn(s, p) && !s.combat && s.turn.step === 'charity',
     mustGive: Math.max(0, p.hand.length - handLimit(p, s)),
     giveToLowest: (() => { const o = s.players.filter(x => x !== p && !x.dead); return o.length && p.level > Math.min(...o.map(x => x.level)); })(),

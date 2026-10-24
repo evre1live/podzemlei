@@ -8,6 +8,7 @@
     "test": "node test/rules.js && node test/sim.js 1000 && node test/fuzz.js 300 && node test/net.js"
   },
   "dependencies": {
+    "compression": "^1.8.1",
     "express": "^5.3.0",
     "socket.io": "^4.8.4"
   },
