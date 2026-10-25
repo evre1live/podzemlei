@@ -24,7 +24,7 @@ export const AV_LABELS = {
 export function avatarDefs() {
   return `<radialGradient id="cr-bg" cx="50%" cy="38%" r="70%"><stop offset="0" stop-color="#fff" stop-opacity=".16"/><stop offset="1" stop-color="#000" stop-opacity=".55"/></radialGradient>`
     + `<radialGradient id="cr-shade" cx="38%" cy="28%" r="85%"><stop offset="0" stop-color="#fff" stop-opacity=".28"/><stop offset=".5" stop-color="#fff" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".45"/></radialGradient>`
-    + `<linearGradient id="cr-rim" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f6e2a4"/><stop offset=".45" stop-color="#c99a45"/><stop offset=".55" stop-color="#7d5a22"/><stop offset="1" stop-color="#d9ad5c"/></linearGradient>`;
+    + `<linearGradient id="cr-rim" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f4f2ee"/><stop offset=".45" stop-color="#a9a6a0"/><stop offset=".55" stop-color="#55535a"/><stop offset="1" stop-color="#b9b6b0"/></linearGradient>`;
 }
 
 const SHIELD = 'M50 16 L80 24 C80 54 71 73 50 88 C29 73 20 54 20 24 Z';
@@ -46,7 +46,7 @@ export function avatarSVG(a, seatColor = '#d9ad5c', cls = '') {
   if (c2 === c1) c2 = v.shirt === 5 ? TINCT[3] : TINCT[5];
   const bg = BGC[v.bg] || seatColor || '#5a4318';
   const icon = ICONS[CHARGES[v.hat] || CHARGES[0]] || '';
-  // знак на светлом поле — чернёный, на тёмном — золотой
+  // знак на светлом поле — чернёный, на тёмном — серебряный (на золотом поле — тоже чернёный)
   const light = v.shirt === 5 || v.shirt === 6;
   const k = 'cr' + (uid++);
   return `<svg class="${cls}" viewBox="0 0 100 100" aria-hidden="true"><defs><clipPath id="${k}"><path d="${SHIELD}"/></clipPath></defs>`
@@ -54,7 +54,7 @@ export function avatarSVG(a, seatColor = '#d9ad5c', cls = '') {
     + `<circle cx="50" cy="52" r="44" fill="none" stroke="#000" stroke-opacity=".35" stroke-width="1"/>`
     + `<path d="${SHIELD}" transform="translate(0 2.5)" fill="#000" opacity=".55"/>`
     + `<g clip-path="url(#${k})"><rect width="100" height="100" fill="${c1}"/>${division(v.glasses, c2)}`
-    + `<g transform="translate(31 33) scale(.0742)" fill="${light ? '#1c1612' : 'url(#gold-emb)'}" stroke="#000" stroke-opacity=".55" stroke-width="10"><path d="${icon}"/></g>`
+    + `<g transform="translate(31 33) scale(.0742)" fill="${light ? '#1c1612' : 'url(#silver-emb)'}" stroke="#000" stroke-opacity=".55" stroke-width="10"><path d="${icon}"/></g>`
     + `<rect width="100" height="100" fill="url(#cr-shade)"/></g>`
     + `<path d="${SHIELD}" fill="none" stroke="url(#cr-rim)" stroke-width="3.4" stroke-linejoin="round"/>`
     + `<path d="${SHIELD}" fill="none" stroke="#000" stroke-opacity=".7" stroke-width=".8"/>`

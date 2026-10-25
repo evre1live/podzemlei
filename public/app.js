@@ -172,7 +172,7 @@ mount.home = () => {
       <div class="panel">
         <h2>Новая комната</h2>
         <form class="form" id="createForm" autocomplete="off">
-          <div class="hero-row"><button type="button" class="hero-ava" id="homeAva" data-act="avatar" aria-label="Настроить герб героя">${avatarSVG(S.avatar, '#f5b83d')}</button>
+          <div class="hero-row"><button type="button" class="hero-ava" id="homeAva" data-act="avatar" aria-label="Настроить герб героя">${avatarSVG(S.avatar, '#3a3a42')}</button>
             <div><div class="muted" style="font-size:14px;margin-bottom:6px">Ваш герой</div><button type="button" class="btn small" data-act="avatar">Настроить герб</button></div></div>
           <label>Ваше имя<input type="text" id="nameInput" maxlength="20" placeholder="Например, Джамшид" required></label>
           <label>Название комнаты<input type="text" name="rname" maxlength="20" placeholder="Пятничный подвал"></label>
@@ -541,14 +541,14 @@ function oppHTML(p) {
 const SHIELD = side => {
   const [a, b, c] = side === 'mon' ? ['#c2412f', '#6e160e', '#2a0503'] : ['#4f9a84', '#1f5545', '#081d17'];
   return `<svg viewBox="0 0 100 116" aria-hidden="true"><defs>
-    <linearGradient id="sh-rim-${side}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f6e2a4"/><stop offset=".45" stop-color="#c99a45"/><stop offset=".55" stop-color="#7d5a22"/><stop offset="1" stop-color="#d9ad5c"/></linearGradient>
+    <linearGradient id="sh-rim-${side}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f4f2ee"/><stop offset=".45" stop-color="#a9a6a0"/><stop offset=".55" stop-color="#55535a"/><stop offset="1" stop-color="#b9b6b0"/></linearGradient>
     <radialGradient id="sh-en-${side}" cx="42%" cy="30%" r="80%"><stop offset="0" stop-color="${a}"/><stop offset=".6" stop-color="${b}"/><stop offset="1" stop-color="${c}"/></radialGradient></defs>
     <path d="M50 3 L95 17 C95 64 81 93 50 113 C19 93 5 64 5 17 Z" fill="#050403"/>
     <path d="M50 6 L92 19 C92 63 79 90 50 109 C21 90 8 63 8 19 Z" fill="url(#sh-rim-${side})"/>
     <path d="M50 13 L85 24 C85 61 74 84 50 101 C26 84 15 61 15 24 Z" fill="url(#sh-en-${side})" stroke="#050403" stroke-width="1.6"/>
     <path d="M50 13 L85 24 C85 40 83 52 79 62 C64 48 40 34 15 30 L15 24 Z" fill="#fff" opacity=".07"/>
     <path d="M50 18 L80 27" stroke="#fff" stroke-opacity=".22" stroke-width="1.4" fill="none"/>
-    ${[[50, 9.5], [12, 21], [88, 21], [50, 105]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="2.2" fill="#f2d898" stroke="#3a2608" stroke-width=".8"/>`).join('')}
+    ${[[50, 9.5], [12, 21], [88, 21], [50, 105]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="2.2" fill="#e8e6e2" stroke="#202024" stroke-width=".8"/>`).join('')}
   </svg>`;
 };
 
@@ -688,7 +688,7 @@ function fightHTML() {
     </div>`).join('');
   let center;
   if (c.winAt) {
-    center = `<div class="countdown" data-until="${c.winAt}" data-total="${g.opts.winDelayMs}"><svg viewBox="0 0 74 74"><circle cx="37" cy="37" r="32" fill="rgba(0,0,0,.55)" stroke="rgba(217,173,92,.18)" stroke-width="5"/><circle class="ring" cx="37" cy="37" r="32" fill="none" stroke="#d9ad5c" stroke-width="5" stroke-linecap="round" stroke-dasharray="201" stroke-dashoffset="0"/></svg><b>…</b></div>`;
+    center = `<div class="countdown" data-until="${c.winAt}" data-total="${g.opts.winDelayMs}"><svg viewBox="0 0 74 74"><circle cx="37" cy="37" r="32" fill="rgba(0,0,0,.55)" stroke="rgba(255,255,255,.12)" stroke-width="5"/><circle class="ring" cx="37" cy="37" r="32" fill="none" stroke="#e8e4dc" stroke-width="5" stroke-linecap="round" stroke-dasharray="201" stroke-dashoffset="0"/></svg><b>…</b></div>`;
   } else center = `<span class="vs-emblem">${SWORDS}<span class="vs-word">против</span></span>`;
   const flip = prev && prev.win !== n.winning ? ' flip' : '';
   const verdict = n.winning ? `<span class="verdict win${flip}">Герои сильнее${n.warrior && n.heroes === n.monsters ? ' (ничья — за воином)' : ''}</span>` : `<span class="verdict lose${flip}">Монстры сильнее</span>`;
@@ -1620,7 +1620,7 @@ const AV_TABS = [
 ];
 // вариант внешности для превью и для клика: пол меняет ещё бороду и причёску
 const avWith = (cfg, k, i) => (k === 'gender' ? withGender(cfg, i) : { ...cfg, [k]: i });
-const seatColor = () => S.room?.members.find(m => m.id === S.room.me)?.color || '#f5b83d';
+const seatColor = () => S.room?.members.find(m => m.id === S.room.me)?.color || '#3a3a42';
 function openAvatarEditor() {
   S.ui.avEdit = { cfg: cleanAvatar(S.avatar && typeof S.avatar === 'object' ? S.avatar : avatarFromSeed(Number(S.avatar) || 0)), tab: S.ui.avEdit?.tab || 'shield' };
   drawAvatarEditor();
@@ -1657,7 +1657,7 @@ async function saveAvatar() {
   S.avatar = cleanAvatar(S.ui.avEdit.cfg);
   LS.set('avatar', S.avatar);
   closeOverlay();
-  const home = $('#homeAva'); if (home) home.innerHTML = avatarSVG(S.avatar, '#f5b83d');
+  const home = $('#homeAva'); if (home) home.innerHTML = avatarSVG(S.avatar, '#3a3a42');
   if (S.room) { const r = await call('me:avatar', { avatar: S.avatar }); if (!r.ok) toast(r.error); else toast('Герб обновлён', true); }
   else toast('Герб сохранён', true);
 }

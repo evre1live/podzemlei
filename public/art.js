@@ -315,16 +315,16 @@ export function cardBackSVG(deck) {
   const tr = deck === 'treasure';
   const id = tr ? 'back_treasure' : 'back_door';
   const art = CARD_IMG.has(id) ? `<image href="${cardImgUrl(id)}" x="0" y="0" width="60" height="84" preserveAspectRatio="xMidYMid slice"/>` : '';
-  const c1 = tr ? '#5a4318' : '#22262c', c2 = tr ? '#1e1508' : '#0b0c0f', gem = tr ? '#e2b13c' : '#5b8fd0';
+  const c1 = tr ? '#4a3a24' : '#2a2c32', c2 = tr ? '#16110a' : '#0b0c0f', gem = tr ? '#d9a83a' : '#5b8fd0';
   const path = ICON_PATH(tr ? 'open-treasure-chest' : 'dungeon-gate');
   return `<svg viewBox="0 0 60 84" preserveAspectRatio="none" aria-hidden="true">
     <defs><radialGradient id="bk-${deck}" cx="50%" cy="42%" r="70%"><stop offset="0" stop-color="${c1}"/><stop offset="1" stop-color="${c2}"/></radialGradient></defs>
     <rect width="60" height="84" fill="url(#bk-${deck})"/>${art}
-    <rect x="2.5" y="2.5" width="55" height="79" rx="3" fill="none" stroke="#d8b26a" stroke-opacity=".75" stroke-width=".8"/>
+    <rect x="2.5" y="2.5" width="55" height="79" rx="3" fill="none" stroke="#c9c6c0" stroke-opacity=".55" stroke-width=".8"/>
     <rect x="4.5" y="4.5" width="51" height="75" rx="2" fill="none" stroke="#000" stroke-opacity=".6" stroke-width=".8"/>
-    ${art ? '' : `<path d="M30 14 L33 20 L30 26 L27 20Z M30 58 L33 64 L30 70 L27 64Z" fill="#d8b26a" opacity=".7"/>
-    <circle cx="30" cy="42" r="13" fill="#0b0908" stroke="#d8b26a" stroke-width="1.2"/><circle cx="30" cy="42" r="15.2" fill="none" stroke="#d8b26a" stroke-opacity=".4" stroke-width=".6"/>
-    <g transform="translate(22.5 34.5) scale(.0293)" fill="#e2c27e">${path}</g>`}
+    ${art ? '' : `<path d="M30 14 L33 20 L30 26 L27 20Z M30 58 L33 64 L30 70 L27 64Z" fill="#c9c6c0" opacity=".55"/>
+    <circle cx="30" cy="42" r="13" fill="#0c0c0e" stroke="#c9c6c0" stroke-opacity=".8" stroke-width="1.1"/>
+    <g transform="translate(22.5 34.5) scale(.0293)" fill="${tr ? '#e2c27e' : '#dcd9d3'}">${path}</g>`}
     ${[[6, 6], [54, 6], [6, 78], [54, 78]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="1.6" fill="${gem}" stroke="#000" stroke-width=".5"/>`).join('')}
   </svg>`;
 }

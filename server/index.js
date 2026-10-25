@@ -57,7 +57,7 @@ const newId = () => crypto.randomBytes(6).toString('hex');
 const newToken = () => crypto.randomBytes(24).toString('hex');
 const BOT_NAMES = ['Кротыч', 'Диггер Петя', 'Шахтёрка Зоя', 'Сталактитыч', 'Гоша из подвала', 'Тётя Вагонетка', 'Дед Фонарь', 'Крыса Лариса'];
 const BOT_WOMEN = new Set(['Шахтёрка Зоя', 'Тётя Вагонетка', 'Крыса Лариса']);
-const COLORS = ['#b5432f', '#c9993a', '#4f8f5c', '#3f7fb0', '#8a5cb0', '#b0587f']; // цвета мест: приглушённые геральдические
+const COLORS = ['#b5432f', '#c4773a', '#4f8f5c', '#3f7fb0', '#8a5cb0', '#b0587f']; // цвета мест: приглушённые геральдические
 
 const DELAYS = [10000, 20000, 30000];
 const cleanDelay = v => (DELAYS.includes(Number(v)) ? Number(v) : DELAYS[0]);
