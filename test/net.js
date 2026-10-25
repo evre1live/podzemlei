@@ -56,6 +56,15 @@ ok('в списке комнат замок, хэш пароля не утека
   assert.equal(after.rooms.some(x => x.id === rc.roomId), false);
   C.close();
   ok('ушёл последний человек — комната с одними ботами удалена');
+  const E = await client();
+  const re = await E.call('room:create', { name: 'Брошенная', playerName: 'Ева', maxPlayers: 3 });
+  assert.ok((await E.call('room:addBot')).ok);
+  assert.ok((await E.call('room:start')).ok);
+  assert.ok((await E.call('room:leave')).ok);
+  const after2 = await L.call('lobby:watch');
+  assert.equal(after2.rooms.some(x => x.id === re.roomId), false);
+  E.close();
+  ok('последний человек вышел посреди партии — комната не висит в списке');
 }
 {
   const D = await client();

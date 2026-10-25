@@ -470,6 +470,7 @@ io.on('connection', socket => {
           if (r.game && r.game.phase === 'playing' && !P(r.game, m.id)) return cb({ ok: false, error: 'Игра уже идёт' });
           m.left = false; sysChat(r, `${m.name} возвращается.`);
         }
+        m.quit = false;
         attach(r, m);
         cb({ ok: true, roomId: r.id, memberId: m.id, token: m.token });
         return broadcastRoom(r);
@@ -504,7 +505,12 @@ io.on('connection', socket => {
         }
         // ушёл последний живой человек — комната с одними ботами никому не нужна
         if (!activeMembers(r).some(x => !x.isBot)) dropRoom(r);
-      } else sysChat(r, `${m.name} выходит из игры — за него ходит автопилот.`);
+      } else {
+        m.quit = true;
+        sysChat(r, `${m.name} выходит из игры — за него ходит автопилот.`);
+        // за столом не осталось ни одного человека — доигрывать партию одним ботам незачем, а в списке она бы висела часами
+        if (!r.members.some(x => !x.isBot && !x.left && !x.quit)) dropRoom(r);
+      }
     }
     detach();
     socket.join('lobby');
