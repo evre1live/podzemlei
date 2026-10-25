@@ -278,15 +278,16 @@ export const fx = {
   ambient(el, kind) { // короткий всплеск атмосферы локации
     const c = center(el);
     const spec = {
-      loc_water: { shape: 'drop', colors: ['#9ff0f5', '#bff7fa'], g: 400, vy: [0, 40], y: -0.5 },
-      loc_mushroom: { shape: 'dot', colors: ['#a6f2b7', '#d9ffe6', '#c78bff'], g: -30, vy: [-50, -10], y: 0.3, add: true },
-      loc_boiler: { shape: 'spark', colors: ['#ffb347', '#ff8a3d', '#ffd27a'], g: -80, vy: [-160, -60], y: 0.45, add: true },
-      loc_vault: { shape: 'coin', colors: ['#f5c14e'], g: 600, vy: [-260, -120], y: 0.2 },
-      loc_dark: { shape: 'glow', colors: ['rgba(255,243,107,.35)'], g: 0, vy: [-6, 6], y: 0 },
-      loc_echo: { shape: 'note', colors: ['#d9b3ff', '#f6e7c1'], g: -20, vy: [-60, -20], y: 0.2 },
-      loc_rats: { shape: 'dot', colors: ['#ff5a3d'], g: 0, vy: [-10, 10], y: 0 },
-      loc_market: { shape: 'confetti', colors: PAL.confetti, g: 300, vy: [-260, -100], y: 0.1 },
-      loc_station: { shape: 'smoke', colors: ['rgba(185,166,255,.3)', 'rgba(255,212,121,.25)'], g: -10, vy: [-30, -5], y: 0.2 },
+      loc_tavern: { shape: 'spark', colors: ['#ffb347', '#ffd27a', '#ff8a3d'], g: -60, vy: [-140, -50], y: 0.4, add: true },
+      loc_dungeon: { shape: 'coin', colors: ['#f5c14e'], g: 600, vy: [-260, -120], y: 0.2 },
+      loc_glade: { shape: 'dot', colors: ['#fff36b', '#d6f59a', '#a6e8ff'], g: -30, vy: [-50, -10], y: 0.3, add: true },
+      loc_forge: { shape: 'spark', colors: ['#ffb347', '#ff8a3d', '#ffd27a'], g: -80, vy: [-180, -60], y: 0.45, add: true },
+      loc_ice: { shape: 'dot', colors: ['#ffffff', '#d8f0ff'], g: 60, vy: [-20, 30], y: -0.4 },
+      loc_graveyard: { shape: 'smoke', colors: ['rgba(120,255,180,.3)', 'rgba(200,150,255,.25)'], g: -10, vy: [-30, -5], y: 0.2 },
+      loc_sky: { shape: 'spark', colors: ['#e8f0ff', '#b9c8ff', '#fff8c8'], g: -20, vy: [-90, -20], y: 0.2, add: true },
+      loc_cove: { shape: 'drop', colors: ['#9ff0f5', '#bff7fa'], g: 400, vy: [-120, -20], y: 0.3 },
+      loc_library: { shape: 'dot', colors: ['#c78bff', '#e9d8ff', '#fff3b0'], g: -30, vy: [-60, -20], y: 0.3, add: true },
+      loc_oasis: { shape: 'coin', colors: ['#f5c14e'], g: 500, vy: [-240, -100], y: 0.2 },
     }[kind] || { shape: 'dot', colors: PAL.gold, g: -30, vy: [-60, -20], y: 0.3, add: true };
     emit(30, c, () => ({ x: c.x + rnd(-c.w / 2, c.w / 2), y: c.y + c.h * spec.y + rnd(-c.h * 0.3, c.h * 0.3), vx: rnd(-30, 30), vy: rnd(...spec.vy), g: spec.g, size: spec.shape === 'glow' ? rnd(6, 12) : spec.shape === 'smoke' ? rnd(10, 18) : rnd(2.5, 5), grow: spec.shape === 'smoke' ? 14 : 0, vr: rnd(-6, 6), color: pick(spec.colors), shape: spec.shape, add: spec.add, life: rnd(1, 2), fadeIn: true, delay: rnd(0, 0.6), wob: 2 }));
   },

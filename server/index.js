@@ -253,7 +253,7 @@ function runRoom(r) {
 const app = express();
 app.disable('x-powered-by');
 // код, стили и страницы отдаём сжатыми — звуки, картинки и шрифты уже сжаты сами
-app.use(compression({ filter: (req, res) => !/\.(mp3|png|woff2?)$/.test(req.path) && compression.filter(req, res) }));
+app.use(compression({ filter: (req, res) => !/\.(mp3|png|webp|jpe?g|woff2?)$/.test(req.path) && compression.filter(req, res) }));
 app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Referrer-Policy', 'same-origin');
@@ -262,8 +262,8 @@ app.use((req, res, next) => {
 // Код и стили браузер перепроверяет при каждой загрузке (дёшево: ответ 304 по ETag),
 // чтобы после обновления игры ни у кого не смешались старые и новые файлы. Шрифты кэшируются надолго.
 const fresh = { etag: true, lastModified: true, setHeaders(res, file) {
-  // шрифты и звуки (папка звуков с номером версии) кэшируются надолго, остальное перепроверяется
-  res.setHeader('Cache-Control', /\.(woff2?|ttf|mp3)$/.test(file) ? 'public, max-age=2592000, immutable' : 'no-cache');
+  // шрифты, звуки и картинки локаций (папки с номером версии) кэшируются надолго, остальное перепроверяется
+  res.setHeader('Cache-Control', /\.(woff2?|ttf|mp3|webp)$/.test(file) ? 'public, max-age=2592000, immutable' : 'no-cache');
 } };
 app.use('/shared', express.static(path.join(ROOT, 'shared'), fresh));
 app.use(express.static(path.join(ROOT, 'public'), { ...fresh, extensions: ['html'] }));

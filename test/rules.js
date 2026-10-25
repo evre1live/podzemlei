@@ -160,23 +160,32 @@ t('нельзя звать на помощь, если монстр не тер�
 
 t('локации меняют силу, побег, продажу и проклятия', () => {
   const s = fresh(); const p = P(s, 'p0');
-  p.hand.push(take(s, 'loc_flooded#0'));
-  A(s, 'p0', { type: 'playCard', uid: 'loc_flooded#0' });
-  assert.equal(s.location, 'loc_flooded#0');
+  p.hand.push(take(s, 'loc_cove#0'));
+  A(s, 'p0', { type: 'playCard', uid: 'loc_cove#0' });
+  assert.equal(s.location, 'loc_cove#0');
   fight(s, 'm_duck#0'); // водная, ур. 4
-  assert.equal(combatNumbers(s).monsters, 7);
-  assert.equal(view(s, 'p0').players[0].runBonus, -1);
+  assert.equal(combatNumbers(s).monsters, 6);
+  assert.equal(view(s, 'p0').players[0].runBonus, 2);
   s.combat = null; s.turn.step = 'pre';
-  p.hand.push(take(s, 'loc_market#0')); A(s, 'p0', { type: 'playCard', uid: 'loc_market#0' });
-  assert.ok(s.discard.door.includes('loc_flooded#0'));
+  p.hand.push(take(s, 'loc_oasis#0')); A(s, 'p0', { type: 'playCard', uid: 'loc_oasis#0' });
+  assert.ok(s.discard.door.includes('loc_cove#0'));
   p.hand.push(take(s, 'i_tokens#0'), take(s, 'i_boots#0')); // 400 + 200 = 600 < 700
   assert.equal(saleValue(s, p, ['i_tokens#0', 'i_boots#0']).levels, 0);
   p.hand.push(take(s, 'i_ladle#0')); // +100 = 700
   assert.equal(saleValue(s, p, ['i_tokens#0', 'i_boots#0', 'i_ladle#0']).levels, 1);
-  p.hand.push(take(s, 'loc_boiler#0')); A(s, 'p0', { type: 'playCard', uid: 'loc_boiler#0' });
   P(s, 'p1').level = 5; p.hand.push(take(s, 'k_tax#0'));
   A(s, 'p0', { type: 'playCard', uid: 'k_tax#0', target: 'p1' });
-  assert.equal(P(s, 'p1').level, 5);
+  assert.equal(P(s, 'p1').level, 5, 'у оазиса проклятия не действуют');
+  // ледяная цитадель: огненные слабее, на льду скользко
+  s.turn.step = 'pre'; p.hand.push(take(s, 'loc_ice#0')); A(s, 'p0', { type: 'playCard', uid: 'loc_ice#0' });
+  assert.equal(view(s, 'p0').players[0].runBonus, -1);
+  // кузня: гномам +2, огненным +4, лишний клад
+  p.hand.push(take(s, 'loc_forge#0')); A(s, 'p0', { type: 'playCard', uid: 'loc_forge#0' });
+  p.races.push(take(s, 'r_dwarf#0'));
+  fight(s, 'm_salamander#0');
+  assert.equal(combatNumbers(s).heroes, 1 + 2);
+  assert.equal(combatNumbers(s).monsters, def('m_salamander#0').level + 4);
+  assert.equal(combatNumbers(s).treasures, def('m_salamander#0').treasures + 1);
 });
 
 t('зеркальный двойник сильнее лидера на 2, «Стайный» удваивает', () => {
@@ -361,15 +370,15 @@ t('Золотой Дракон: +7, не крадётся и не улетает
   assert.ok(p.equipped.includes('p_golddragon#0'));
 });
 
-t('новые локации: кристаллы, гроза, таверна', () => {
+t('локации: библиотека, небесная цитадель, таверна', () => {
   const s = fresh(); const p = P(s, 'p0'); const h = P(s, 'p1');
-  p.hand.push(take(s, 'loc_crystal#0'));
-  A(s, 'p0', { type: 'playCard', uid: 'loc_crystal#0' });
+  p.hand.push(take(s, 'loc_library#0'));
+  A(s, 'p0', { type: 'playCard', uid: 'loc_library#0' });
   fight(s, 'm_mosquito#0');
   assert.equal(combatNumbers(s).heroes, 3);
   s.combat = null; s.turn.step = 'pre';
-  p.hand.push(take(s, 'loc_storm#0'));
-  A(s, 'p0', { type: 'playCard', uid: 'loc_storm#0' });
+  p.hand.push(take(s, 'loc_sky#0'));
+  A(s, 'p0', { type: 'playCard', uid: 'loc_sky#0' });
   fight(s, 'm_slime#0');
   assert.equal(combatNumbers(s).levels, 2);
   assert.equal(combatNumbers(s).monsters, 3);
@@ -471,7 +480,7 @@ t('боссы: уровень 666, сила вдвое больше силы г�
   assert.deepEqual(bosses.map(d => [d.boss, d.level, d.noPursue]), [[true, 666, 8], [true, 666, 8], [true, 666, 8]]);
   const s = fresh(); const p = P(s, 'p0'); p.level = 9;
   for (const u of ['i_jackhammer#0', 'p_golddragon#0']) { p.hand.push(take(s, u)); A(s, 'p0', { type: 'playCard', uid: u }); } // сила 9 + 5 + 7 = 21
-  s.location = take(s, 'loc_storm#0'); // монстрам +2 — боссу всё равно
+  s.location = take(s, 'loc_sky#0'); // монстрам +2 — боссу всё равно
   fight(s, 'm_lucifer#0');
   assert.equal(combatNumbers(s).heroes, 21);
   assert.equal(combatNumbers(s).monsters, 42);
@@ -843,10 +852,10 @@ t('бот-призрак мешает тому, кто вот-вот побед�
 
 t('бот выкладывает выгодную локацию', () => {
   const s = fresh(); const p = P(s, 'p0'); p.isBot = true;
-  p.hand.push(take(s, 'loc_crystal#0')); // всем героям +2
+  p.hand.push(take(s, 'loc_library#0')); // всем героям +2
   s.turn.step = 'post';
   const a = botDecide(s, 'p0', { rng, now: 1000 });
-  assert.deepEqual(a, { type: 'playCard', uid: 'loc_crystal#0' });
+  assert.deepEqual(a, { type: 'playCard', uid: 'loc_library#0' });
 });
 
 console.log(`Правила: ${n} проверок пройдено.`);

@@ -53,7 +53,6 @@ export function injectDefs() {
   g += `<radialGradient id="vig" cx="50%" cy="45%" r="70%"><stop offset=".55" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".38"/></radialGradient>`;
   g += `<radialGradient id="glow" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#fff" stop-opacity=".85"/><stop offset=".4" stop-color="#fff" stop-opacity=".25"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>`;
   g += `<linearGradient id="beam" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fff6c8" stop-opacity=".9"/><stop offset="1" stop-color="#fff6c8" stop-opacity="0"/></linearGradient>`;
-  for (const [k, [a, b]] of Object.entries(LOC_BG)) g += `<radialGradient id="lb-${k}" cx="50%" cy="42%" r="78%"><stop offset="0" stop-color="${a}"/><stop offset="1" stop-color="${b}"/></radialGradient>`;
   g += avatarDefs();
   g += monsterDefs(Object.values(DEFS));
   const box = document.createElement('div');
@@ -205,110 +204,17 @@ const ICONS = {
   badge: `<rect x="11" y="9" width="42" height="48" rx="6" fill="${W}" ${st}/><rect x="25" y="4" width="14" height="9" rx="2" fill="${S}" ${st2}/><path d="M19 32 h26 M19 40 h26 M19 48 h15" stroke="${INK}" stroke-width="2"/><text x="32" y="26" font-size="12" text-anchor="middle" font-family="sans-serif" font-weight="800" fill="${fR}">×2</text>`,
 };
 
-// ───────────── сцены локаций 160×120 ─────────────
-const LOC_BG = {
-  loc_water: ['#2c6a76', '#0d2028'], loc_mushroom: ['#24513f', '#0b1a14'], loc_station: ['#4a4f63', '#16171f'],
-  loc_vault: ['#6a5326', '#1d1509'], loc_boiler: ['#8f3218', '#220b08'], loc_market: ['#6b3f5e', '#1e0f1a'],
-  loc_rats: ['#4f3d33', '#171110'], loc_dark: ['#1f1a26', '#050407'], loc_echo: ['#4a4566', '#131120'],
-  loc_lake: ['#2c4f7a', '#0b1424'], loc_crystal: ['#4a3a7a', '#120c26'], loc_lava: ['#8a2a10', '#1e0706'],
-  loc_ice: ['#7fb6d9', '#1a3550'], loc_storm: ['#3d4a66', '#0d1220'], loc_temple: ['#7a5a2a', '#1e1408'],
-  loc_tavern: ['#7a4a26', '#20120a'], loc_garden: ['#2a5a3a', '#08180e'], loc_lair: ['#6a4a12', '#140c04'],
-};
-const LOCS = {
-  loc_water: `<path d="M-4 120 V60 Q-4 6 80 6 Q164 6 164 60 V120Z" fill="#183c46" opacity=".55"/><path d="M14 120 V64 Q14 22 80 22 Q146 22 146 64 V120" fill="none" stroke="#0c2128" stroke-width="10"/><g stroke="#0c2128" stroke-width="2" opacity=".6"><path d="M20 60 h12 M128 60 h12 M24 40 h10 M126 40 h10"/></g>
-    <path d="M0 84 Q20 78 40 84 T80 84 T120 84 T160 84 V120 H0Z" fill="#3a8fa0"/><path d="M0 84 Q20 78 40 84 T80 84 T120 84 T160 84" fill="none" stroke="#9ff0f5" stroke-width="2.6"/>
-    <path d="M10 98 q14 -5 28 0 M62 104 q14 -5 28 0 M112 96 q14 -5 28 0" stroke="#bff7fa" stroke-width="2" fill="none" opacity=".7"/>
-    <g transform="translate(98 66) rotate(-12)"><path d="M0 0 h10 v12 h10 q6 0 6 6 v2 H0Z" fill="${G}" ${st2}/></g>
-    <g fill="#bff7fa"><path d="M40 30 q4 6 0 8 q-4 -2 0 -8z"/><path d="M116 38 q3 5 0 7 q-3 -2 0 -7z"/><circle cx="60" cy="74" r="2"/><circle cx="70" cy="66" r="1.4"/></g>`,
-  loc_mushroom: `<g opacity=".5" fill="#a6f2b7"><circle cx="20" cy="20" r="2"/><circle cx="140" cy="16" r="1.6"/><circle cx="90" cy="10" r="1.4"/><circle cx="64" cy="40" r="1.8"/><circle cx="120" cy="50" r="2.2"/></g>
-    <path d="M0 104 Q40 96 80 102 T160 100 V120 H0Z" fill="#0f2a1e"/>
-    <ellipse cx="44" cy="58" rx="40" ry="26" fill="#7dffb0" opacity=".12"/>
-    <path d="M36 110 Q34 76 40 62 H52 Q56 76 54 110Z" fill="#f3e6c8" ${st}/><path d="M10 64 C10 26 82 26 82 64 Q46 72 10 64Z" fill="#5fe39a" ${st}/><g fill="#d9ffe6" ${st2}><circle cx="30" cy="46" r="5"/><circle cx="56" cy="40" r="6"/><circle cx="70" cy="54" r="3.4"/></g>
-    <path d="M110 110 Q108 92 112 84 H120 Q124 92 122 110Z" fill="#f3e6c8" ${st2}/><path d="M94 86 C94 62 138 62 138 86 Q116 92 94 86Z" fill="#c78bff" ${st}/><g fill="#f1e2ff"><circle cx="108" cy="76" r="3"/><circle cx="124" cy="72" r="3.6"/></g>
-    <path d="M140 112 v-8 q0 -6 6 -6 q6 0 6 6 v8Z" fill="#ffd36b" ${st2}/><path d="M78 112 v-6 q0 -5 5 -5 q5 0 5 5 v6Z" fill="#7fd1ff" ${st2}/>`,
-  loc_station: `<g stroke="rgba(255,255,255,.07)" stroke-width="1">${Array.from({ length: 10 }, (_, i) => `<path d="M${i * 16} 0 V74"/>`).join('')}${Array.from({ length: 6 }, (_, i) => `<path d="M0 ${8 + i * 12} H160"/>`).join('')}</g>
-    <rect x="0" y="52" width="160" height="8" fill="#d2502f" opacity=".7"/><rect x="40" y="12" width="80" height="22" rx="4" fill="#20314f" ${st2}/><text x="80" y="28" text-anchor="middle" font-family="Underdog, sans-serif" font-size="13" fill="#f6e7c1">Глубинная</text>
-    <circle cx="18" cy="14" r="10" fill="url(#glow)" opacity=".8"/><path d="M18 0 v8" stroke="${INK}" stroke-width="2"/><circle cx="18" cy="12" r="4" fill="#fff3b0" ${st2}/>
-    <rect x="0" y="74" width="160" height="12" fill="#8b8494" ${st2}/><path d="M0 86 H160 V120 H0Z" fill="#141218"/><path d="M0 100 H160 M0 112 H160" stroke="#9aa3ad" stroke-width="3"/><g fill="#5a3a2a"><rect x="10" y="96" width="8" height="20"/><rect x="50" y="96" width="8" height="20"/><rect x="90" y="96" width="8" height="20"/><rect x="130" y="96" width="8" height="20"/></g>
-    <rect x="108" y="58" width="36" height="6" rx="2" fill="${Br}" ${st2}/><path d="M112 64 v10 M140 64 v10" stroke="${INK}" stroke-width="3"/>
-    <path d="M60 40 Q60 70 74 70 L68 62 Q66 50 60 40Z" fill="#b9a6ff" opacity=".25"/>`,
-  loc_vault: `<circle cx="80" cy="56" r="52" fill="url(#glow)" opacity=".18"/><circle cx="80" cy="56" r="44" fill="${S}" ${st}/><circle cx="80" cy="56" r="34" fill="#7a828d" ${st2}/><g fill="${INK}">${Array.from({ length: 12 }, (_, i) => { const a = i * Math.PI / 6; return `<circle cx="${(80 + Math.cos(a) * 39).toFixed(1)}" cy="${(56 + Math.sin(a) * 39).toFixed(1)}" r="2.4"/>`; }).join('')}</g>
-    <circle cx="80" cy="56" r="10" fill="${GD}" ${st2}/><path d="M80 34 v44 M58 56 h44 M64 40 l32 32 M96 40 l-32 32" stroke="${INK}" stroke-width="4" stroke-linecap="round"/><path d="M80 34 v44 M58 56 h44 M64 40 l32 32 M96 40 l-32 32" stroke="${fS}" stroke-width="2" stroke-linecap="round"/><circle cx="80" cy="56" r="6" fill="${GD}" ${st2}/>
-    <g ${st2}><ellipse cx="18" cy="110" rx="12" ry="5" fill="#a8680c"/><ellipse cx="18" cy="104" rx="12" ry="5" fill="#f2c14e"/><ellipse cx="18" cy="98" rx="12" ry="5" fill="#ffe08a"/><ellipse cx="142" cy="110" rx="12" ry="5" fill="#a8680c"/><ellipse cx="142" cy="104" rx="12" ry="5" fill="#ffe08a"/></g><rect x="120" y="76" width="22" height="14" rx="2" fill="${GD}" ${st2} transform="rotate(-8 131 83)"/>`,
-  loc_boiler: `<path d="M0 0 h160 v120 h-160z" fill="#ff7a3a" opacity=".06"/><path d="M0 22 H50 M110 22 H160 M14 0 V40 M146 0 V60" stroke="${INK}" stroke-width="10"/><path d="M0 22 H50 M110 22 H160 M14 0 V40 M146 0 V60" stroke="#a5582f" stroke-width="6"/>
-    <rect x="44" y="20" width="72" height="84" rx="30" fill="${RD}" ${st}/><path d="M44 50 h72 M44 76 h72" stroke="${INK}" stroke-width="3"/><g fill="${INK}"><circle cx="52" cy="50" r="2"/><circle cx="108" cy="50" r="2"/><circle cx="52" cy="76" r="2"/><circle cx="108" cy="76" r="2"/></g>
-    <circle cx="80" cy="36" r="10" fill="${W}" ${st2}/><path d="M80 36 l6 -5" stroke="${fR}" stroke-width="2.4" stroke-linecap="round"/><rect x="64" y="84" width="32" height="16" rx="3" fill="#2a0e08" ${st2}/><path d="M68 98 q4 -10 8 0 q4 -12 8 0 q4 -8 8 0" fill="#ffb347"/>
-    <g fill="#f3eee4" opacity=".7"><circle cx="128" cy="14" r="7"/><circle cx="138" cy="8" r="5"/><circle cx="30" cy="40" r="5"/></g><path d="M0 108 H160 V120 H0z" fill="#1c0a06"/>`,
-  loc_market: `<path d="M0 18 Q40 30 80 18 T160 18" stroke="${INK}" stroke-width="1.6" fill="none"/><g>${[12, 36, 60, 84, 108, 132, 152].map((x, i) => `<circle cx="${x}" cy="${20 + Math.sin(i) * 4}" r="4" fill="${['#ffd36b', '#ff8f8f', '#7fd1ff', '#a6f2b7'][i % 4]}" ${st2}/>`).join('')}</g>
-    <rect x="8" y="52" width="66" height="44" fill="${Br}" ${st}/><path d="M4 52 L12 32 H70 L78 52Z" fill="${RD}" ${st}/><path d="M24 32 L20 52 M41 32 V52 M58 32 L62 52" stroke="#fff" stroke-width="4"/><g ${st2}><circle cx="24" cy="62" r="6" fill="${GD}"/><circle cx="40" cy="64" r="5" fill="${G}"/><rect x="50" y="58" width="14" height="10" fill="${S}"/></g>
-    <rect x="88" y="56" width="64" height="40" fill="${Br}" ${st}/><path d="M84 56 L92 38 H148 L156 56Z" fill="${B}" ${st}/><path d="M104 38 L100 56 M120 38 V56 M136 38 L140 56" stroke="#fff" stroke-width="4"/><g ${st2}><path d="M98 70 h16 l-2 10 h-12z" fill="${W}"/><circle cx="130" cy="72" r="7" fill="${PK}"/></g>
-    <path d="M0 96 H160 V120 H0z" fill="#2a1622"/><text x="120" y="112" text-anchor="middle" font-family="Underdog, sans-serif" font-size="11" fill="#ffd36b">всё по 100!</text>`,
-  loc_rats: `<path d="M0 100 Q40 92 80 98 T160 96 V120 H0Z" fill="#241a16"/>${[[24, 40], [64, 26], [112, 36], [140, 70], [36, 78], [94, 74]].map(([x, y], i) => `<ellipse cx="${x}" cy="${y}" rx="${14 - (i % 3) * 2}" ry="${10 - (i % 3) * 2}" fill="#0c0806" ${st2}/><circle cx="${x - 4}" cy="${y}" r="2.2" fill="#ff5a3d"/><circle cx="${x + 4}" cy="${y}" r="2.2" fill="#ff5a3d"/>`).join('')}
-    <path d="M62 112 L98 112 L92 96 Z" fill="#ffd36b" ${st}/><circle cx="84" cy="106" r="2.4" fill="#c99a2e"/><circle cx="74" cy="108" r="1.6" fill="#c99a2e"/>
-    <path d="M108 104 q14 -6 22 2" stroke="#e7a5a5" stroke-width="2.6" fill="none" stroke-linecap="round"/>`,
-  loc_dark: `<circle cx="80" cy="84" r="34" fill="url(#glow)" opacity=".35"/><rect x="76" y="78" width="8" height="20" rx="2" fill="${W}" ${st2}/><path d="M80 78 q-5 -8 0 -16 q5 8 0 16z" fill="#ffd36b" ${st2}/><ellipse cx="80" cy="100" rx="16" ry="4" fill="#3a2a18" ${st2}/>
-    ${[[30, 36], [126, 30], [44, 70], [138, 66], [96, 18]].map(([x, y], i) => `<g opacity="${0.5 + (i % 3) * 0.2}"><ellipse cx="${x - 5}" cy="${y}" rx="3.4" ry="${i % 2 ? 2.2 : 3}" fill="#fff36b"/><ellipse cx="${x + 5}" cy="${y}" rx="3.4" ry="${i % 2 ? 2.2 : 3}" fill="#fff36b"/></g>`).join('')}`,
-  loc_echo: `<path d="M0 0 H160 V14 L150 40 L140 14 L124 30 L114 8 L98 46 L88 10 L70 26 L60 6 L44 38 L32 10 L20 28 L10 8 L0 22Z" fill="#2a2640" ${st2}/><path d="M0 120 L14 96 L24 104 L40 84 L54 120Z M110 120 L124 90 L136 100 L148 86 L160 120Z" fill="#2a2640" ${st2}/>
-    <path d="M54 62 q-10 10 0 20 M44 54 q-18 18 0 36 M106 62 q10 10 0 20 M116 54 q18 18 0 36" stroke="#d9b3ff" stroke-width="3" fill="none" stroke-linecap="round"/>
-    <text x="80" y="78" text-anchor="middle" font-family="Underdog, sans-serif" font-size="18" fill="#f6e7c1">о-о-о</text><text x="80" y="96" text-anchor="middle" font-family="Underdog, sans-serif" font-size="11" fill="#d9b3ff" opacity=".7">о-о…</text>`,
-};
-Object.assign(LOCS, {
-  loc_lake: `<path d="M0 0 H160 V14 L148 34 L138 12 L120 26 L108 6 L94 30 L84 8 L66 20 L54 4 L40 26 L28 8 L14 22 L0 10Z" fill="#0d1a2e"/>
-    <path d="M76 0 L84 0 L120 70 L40 70Z" fill="#cfe8ff" opacity=".12"/><ellipse cx="80" cy="6" rx="10" ry="4" fill="#e6f4ff" opacity=".5"/>
-    <path d="M0 66 H160 V120 H0Z" fill="#163a5c"/><path d="M0 66 H160" stroke="#8fc6ff" stroke-width="2" opacity=".7"/>
-    <path d="M76 66 L84 66 L100 120 L60 120Z" fill="#cfe8ff" opacity=".16"/>
-    <path d="M12 80 q14 -4 28 0 M100 86 q14 -4 28 0 M40 100 q14 -4 28 0 M110 104 q14 -4 28 0" stroke="#bfe4ff" stroke-width="1.6" fill="none" opacity=".6"/>
-    <path d="M28 72 q20 -10 40 0 l-4 6 h-32z" fill="#3a2418" ${st2}/><path d="M48 62 v12" stroke="${INK}" stroke-width="2"/><path d="M48 62 l12 6 l-12 2z" fill="#efe6d4" ${st2}/>
-    <path d="M14 66 L22 86 L30 66 M126 66 L132 80 L138 66" fill="#0d1a2e" opacity=".5"/>`,
-  loc_crystal: `<path d="M0 0 H160 V12 L148 28 L136 10 L120 22 L106 4 L92 24 L78 6 L62 20 L48 4 L34 22 L18 8 L0 18Z" fill="#160f2e"/>
-    <path d="M70 0 L90 0 L110 120 L50 120Z" fill="#e6d4ff" opacity=".08"/>
-    ${[[24, 104, 46, 14, '#7fe8ff'], [40, 110, 30, 10, '#c78bff'], [120, 104, 52, 16, '#ff9ad9'], [138, 110, 32, 10, '#7fe8ff'], [80, 112, 24, 9, '#fff3b0'], [104, 112, 28, 10, '#c78bff']].map(([x, y, h, w, c]) => `<path d="M${x - w / 2} ${y} L${x - w / 2} ${y - h * 0.75} L${x} ${y - h} L${x + w / 2} ${y - h * 0.75} L${x + w / 2} ${y}Z" fill="${c}" ${st2}/><path d="M${x} ${y - h} L${x} ${y} L${x + w / 2} ${y} L${x + w / 2} ${y - h * 0.75}Z" fill="#231a26" opacity=".25"/><path d="M${x - w / 4} ${y - h * 0.7} v${h * 0.5}" stroke="#fff" stroke-width="1.6" opacity=".7"/>`).join('')}
-    <path d="M0 112 H160 V120 H0Z" fill="#160f2e"/><g fill="#fff"><path d="M60 40 l1.5 3 l3 1.5 l-3 1.5 l-1.5 3 l-1.5 -3 l-3 -1.5 l3 -1.5z"/><circle cx="100" cy="50" r="1.6"/><circle cx="30" cy="40" r="1.2"/><circle cx="130" cy="36" r="1.4"/></g>`,
-  loc_lava: `<path d="M0 0 H160 V16 L146 30 L134 10 L118 26 L104 6 L90 28 L76 8 L60 22 L46 6 L32 24 L16 8 L0 20Z" fill="#1a0604"/>
-    <path d="M0 62 Q40 52 80 64 T160 58 V82 Q120 92 80 84 T0 88Z" fill="#ff6a1a"/><path d="M0 66 Q40 58 80 68 T160 63 V78 Q120 86 80 79 T0 82Z" fill="#ffc04a"/>
-    <path d="M20 70 q10 -3 20 0 M90 74 q12 -3 24 0" stroke="#fff3b0" stroke-width="2" fill="none" opacity=".8"/>
-    <path d="M0 84 Q30 80 60 90 L80 120 H0Z M160 82 Q130 80 104 92 L90 120 H160Z" fill="#2a0c08" ${st2}/>
-    <path d="M0 58 Q40 46 80 58 T160 52" stroke="#ff8a3d" stroke-width="6" fill="none" opacity=".25"/>
-    <g fill="#ffd27a"><circle cx="30" cy="44" r="1.8"/><circle cx="70" cy="36" r="1.4"/><circle cx="120" cy="40" r="2"/><circle cx="140" cy="26" r="1.4"/></g>`,
-  loc_ice: `<path d="M0 0 H160 V8 ${Array.from({ length: 16 }, (_, i) => `L${i * 10 + 5} ${10 + (i * 37) % 26} L${i * 10 + 10} 8`).join(' ')} L160 8 V0Z" fill="#e6f6ff" ${st2}/>
-    <path d="M0 92 Q40 84 80 92 T160 88 V120 H0Z" fill="#cfeaff" ${st2}/><path d="M10 100 h40 M90 104 h50" stroke="#fff" stroke-width="2" opacity=".7"/>
-    <path d="M24 92 L34 56 L44 92Z M112 90 L124 50 L136 90Z" fill="#a9d8f5" ${st2}/><path d="M34 60 v26 M124 56 v28" stroke="#fff" stroke-width="1.6" opacity=".8"/>
-    <g fill="#fff">${[[20, 30], [50, 44], [80, 28], [100, 60], [140, 36], [66, 70], [30, 70], [150, 70]].map(([x, y]) => `<path d="M${x} ${y - 3} v6 M${x - 3} ${y} h6 M${x - 2} ${y - 2} l4 4 M${x + 2} ${y - 2} l-4 4" stroke="#fff" stroke-width="1.2"/>`).join('')}</g>`,
-  loc_storm: `<path d="M0 0 H160 V40 H0Z" fill="#1a2236"/><g fill="#3a4560"><ellipse cx="30" cy="20" rx="30" ry="12"/><ellipse cx="80" cy="14" rx="34" ry="12"/><ellipse cx="130" cy="22" rx="32" ry="12"/></g>
-    <path d="M86 18 L76 46 L88 46 L78 76 L102 38 L90 38 L98 18Z" fill="#fff6a8" ${st2}/>
-    <path d="M0 30 L0 120 H34 L40 90 L28 60 L36 40 L20 30Z M160 30 L160 120 H124 L118 92 L130 64 L122 42 L140 30Z" fill="#141826" ${st2}/>
-    <g stroke="#a9c8ff" stroke-width="1.4" opacity=".55">${Array.from({ length: 14 }, (_, i) => `<path d="M${10 + i * 11} ${40 + (i * 29) % 40} l-4 12"/>`).join('')}</g>
-    <path d="M40 120 Q80 100 120 120Z" fill="#2a3450"/>`,
-  loc_temple: `<path d="M64 0 L96 0 L120 120 L40 120Z" fill="#ffe8a0" opacity=".16"/>
-    ${[18, 52, 108, 142].map(x => `<rect x="${x - 8}" y="20" width="16" height="84" fill="#c9b48a" ${st2}/><rect x="${x - 11}" y="14" width="22" height="8" fill="#e0cfa6" ${st2}/><path d="M${x - 4} 24 v76 M${x + 4} 24 v76" stroke="#a8916a" stroke-width="1.4"/>`).join('')}
-    <rect x="58" y="86" width="44" height="18" fill="#a8916a" ${st2}/><rect x="54" y="80" width="52" height="8" fill="#c9b48a" ${st2}/>
-    <circle cx="80" cy="70" r="9" fill="#fff3b0" ${st2}/><circle cx="80" cy="70" r="16" fill="url(#glow)" opacity=".6"/>
-    <g fill="#ffd56a" opacity=".85"><text x="34" y="60" font-size="10" font-family="serif">ᚱ</text><text x="122" y="54" font-size="10" font-family="serif">ᚷ</text><text x="80" y="40" font-size="9" font-family="serif" text-anchor="middle">ᛟ</text></g>
-    <path d="M0 104 H160 V120 H0Z" fill="#5a4220"/>`,
-  loc_tavern: `<path d="M0 0 H160 V120 H0Z" fill="#5a341a" opacity=".5"/>${Array.from({ length: 8 }, (_, i) => `<path d="M${i * 20} 0 V96" stroke="#3a2010" stroke-width="2"/>`).join('')}
-    <rect x="112" y="40" width="40" height="50" rx="4" fill="#2a1408" ${st2}/><path d="M116 88 q6 -16 12 0 q6 -20 12 0 q4 -12 8 0Z" fill="#ff8a3d"/><path d="M120 86 q4 -8 8 0 q4 -10 8 0Z" fill="#ffd27a"/>
-    <path d="M40 0 v18" stroke="${INK}" stroke-width="2"/><rect x="33" y="18" width="14" height="18" rx="3" fill="#fff3b0" ${st2}/><circle cx="40" cy="27" r="14" fill="url(#glow)" opacity=".7"/>
-    <rect x="6" y="80" width="100" height="8" rx="2" fill="#8a5a3c" ${st2}/><path d="M14 88 v22 M96 88 v22" stroke="${INK}" stroke-width="4"/>
-    <path d="M30 80 v-12 h10 v12Z" fill="#e8c88a" ${st2}/><path d="M40 70 q5 0 5 5 q0 4 -5 4" fill="none" ${st2}/><path d="M30 68 q5 -5 10 0" fill="#fff" ${st2}/>
-    <path d="M60 80 v-10 h9 v10Z" fill="#e8c88a" ${st2}/><ellipse cx="22" cy="104" rx="14" ry="16" fill="#8a5a3c" ${st2}/><path d="M9 98 h26 M9 110 h26" stroke="#3a2010" stroke-width="2"/>
-    <path d="M0 110 H160 V120 H0Z" fill="#2a1408"/>`,
-  loc_garden: `<path d="M0 0 H160 V12 L146 26 L130 8 L116 22 L100 6 L86 24 L70 6 L56 20 L40 4 L26 22 L10 8 L0 16Z" fill="#06120a"/>
-    ${[[20, 96, '#ff9ad9'], [44, 104, '#fff3b0'], [74, 98, '#7fe8ff'], [104, 102, '#ff9ad9'], [130, 96, '#c78bff'], [150, 104, '#fff3b0']].map(([x, y, c]) => `<path d="M${x} 120 V${y}" stroke="#3e9c5f" stroke-width="3"/><path d="M${x} ${y + 8} q-8 -6 -10 2 M${x} ${y + 12} q8 -6 10 2" stroke="#3e9c5f" stroke-width="2.4" fill="none"/>${[0, 72, 144, 216, 288].map(a => `<ellipse cx="${x}" cy="${y - 5}" rx="3.4" ry="5" transform="rotate(${a} ${x} ${y})" fill="${c}" ${st2}/>`).join('')}<circle cx="${x}" cy="${y}" r="3" fill="#f5b83d"/><circle cx="${x}" cy="${y}" r="12" fill="${c}" opacity=".18"/>`).join('')}
-    <g fill="#fff36b">${[[30, 40], [60, 30], [90, 50], [120, 34], [140, 60], [50, 66], [100, 76], [16, 66]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="2"/><circle cx="${x}" cy="${y}" r="6" opacity=".25"/>`).join('')}</g>`,
-  loc_lair: `<ellipse cx="96" cy="44" rx="30" ry="14" fill="#1a0e04"/><ellipse cx="96" cy="44" rx="24" ry="11" fill="#ffcf4a" ${st2}/><ellipse cx="96" cy="44" rx="3.4" ry="10" fill="${INK}"/><circle cx="90" cy="40" r="2.4" fill="#fff" opacity=".8"/>
-    <path d="M0 120 L0 92 Q20 70 44 84 Q60 66 82 82 Q104 64 124 84 Q142 72 160 88 V120Z" fill="#f2c14e" ${st2}/><path d="M0 104 Q40 90 80 102 T160 100 V120 H0Z" fill="#c8922c"/>
-    <g ${st2}>${[[24, 88], [52, 80], [76, 92], [108, 82], [136, 90], [40, 100], [96, 104], [124, 106]].map(([x, y]) => `<ellipse cx="${x}" cy="${y}" rx="6" ry="3" fill="#ffe08a"/>`).join('')}</g>
-    <rect x="58" y="70" width="18" height="12" rx="2" fill="#8a5a3c" ${st2}/><path d="M58 74 h18" stroke="#f2c14e" stroke-width="2"/>
-    <path d="M20 40 q10 -10 20 -4 q10 -12 22 -2" stroke="#6a5a4a" stroke-width="6" fill="none" opacity=".35" stroke-linecap="round"/>
-    <g fill="#fff"><path d="M40 70 l1 2 l2 1 l-2 1 l-1 2 l-1 -2 l-2 -1 l2 -1z"/><path d="M130 76 l1 2 l2 1 l-2 1 l-1 2 l-1 -2 l-2 -1 l2 -1z"/></g>`,
-});
+// ───────────── локации: живописные сцены ─────────────
+// Картинки лежат в /loc/v1: <ключ>.webp — фон стола, <ключ>-card.webp — кадр для карты.
+export const LOC_IMG = new Set(['loc_tavern', 'loc_dungeon', 'loc_glade', 'loc_forge', 'loc_ice', 'loc_graveyard', 'loc_sky', 'loc_cove', 'loc_library', 'loc_oasis']);
+export const locImg = (key, card = true) => `/loc/v1/${LOC_IMG.has(key) ? key : 'loc_tavern'}${card ? '-card' : ''}.webp`;
 export function locationSVG(key) {
-  return `<svg viewBox="0 0 160 120" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><rect width="160" height="120" fill="url(#lb-${LOC_BG[key] ? key : 'loc_dark'})"/>${LOCS[key] || ''}</svg>`;
+  return `<svg viewBox="0 0 160 120" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><image href="${locImg(key)}" width="160" height="120" preserveAspectRatio="xMidYMid slice"/></svg>`;
 }
 
 // ───────────── иконки и арт карт ─────────────
 export function iconSVG(name, cls = '') {
-  if (LOCS[name]) return locationSVG(name).replace('<svg ', `<svg class="${cls}" `);
+  if (LOC_IMG.has(name)) return locationSVG(name).replace('<svg ', `<svg class="${cls}" `);
   return `<svg class="${cls}" viewBox="0 0 64 64" aria-hidden="true">${ICONS[name] || ICONS.question}</svg>`;
 }
 

@@ -1157,3 +1157,9 @@ body.has-world { background: #120e22; }
 .g-contract b { color: var(--brass); }
 .g-contract p { margin: 2px 0; }
 .g-contract small { color: var(--lamp); font-weight: 700; }
+
+/* живописные локации: картинка-фон во весь экран, поверх — лёгкая анимация */
+.w-img { position: absolute; inset: 0; background-size: cover; background-position: center; }
+.w-img::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(10,8,20,.14), rgba(10,8,20,.3)); }
+.w-late { inset: 0; }
+.w-late > * { animation-delay: -4.6s !important; }
