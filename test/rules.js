@@ -1171,4 +1171,69 @@ t('боты: приручают сильного зверя, берут спут
   assert.equal(a.type, 'trap'); assert.equal(A(s, 'p0', a).ok, true);
 });
 
+t('поединок: сила против силы, соседи подкидывают бонусы, проигравший отдаёт лучшую вещь', () => {
+  const s = fresh(); const p = P(s, 'p0'), q = P(s, 'p1'), r = P(s, 'p2');
+  p.level = 3; q.level = 2;
+  q.equipped.push(take(s, 'i_pick#0'), take(s, 'i_slippers#0'));
+  p.hand.push(take(s, 'd_duel#0'));
+  assert.deepEqual(view(s, 'p0').hints.cards['d_duel#0'].map(a => a.target), ['p1', 'p2']);
+  assert.equal(A(s, 'p0', { type: 'playCard', uid: 'd_duel#0', target: 'p1' }).ok, true);
+  assert.ok(s.duel); assert.equal(A(s, 'p0', { type: 'kick' }).ok, false); // пока идёт поединок — ни шагу
+  const n0 = view(s, 'p2').duel.numbers;
+  assert.equal(n0.from, 3); assert.equal(n0.to, 2 + 3 + 1);
+  // третий подкидывает бонус вызвавшему: 3 + 4 = 7 > 6
+  r.hand.push(take(s, 'o_firecracker#0'));
+  assert.deepEqual(view(s, 'p2').hints.cards['o_firecracker#0'].map(a => a.side), ['from', 'to']);
+  assert.equal(A(s, 'p2', { type: 'playCard', uid: 'o_firecracker#0', side: 'from' }, 2000).ok, true);
+  assert.equal(s.duel.winAt, 2000 + 5000); // вмешались — отсчёт заново
+  assert.equal(tick(s, { rng, now: 3000 }), false);
+  assert.equal(tick(s, { rng, now: 8000 }), true);
+  assert.equal(s.duel, null);
+  assert.ok(p.carried.includes('i_pick#0')); // кирка (+3) — лучшая вещь вызванного
+  assert.ok(s.discard.door.includes('d_duel#0')); assert.ok(s.discard.treasure.includes('o_firecracker#0'));
+});
+
+t('поединок: равенство — за вызванным; все сказали «не мешаю» — решается сразу', () => {
+  const s = fresh(); const p = P(s, 'p0'), q = P(s, 'p1');
+  p.level = 3; p.equipped.push(take(s, 'i_slippers#0')); q.level = 3 + (def('i_slippers').bonus || 0);
+  p.hand.push(take(s, 'd_duel#0'));
+  A(s, 'p0', { type: 'playCard', uid: 'd_duel#0', target: 'p1' });
+  assert.equal(view(s, 'p0').duel.numbers.winner, 'p1');
+  for (const id of ['p0', 'p1', 'p2']) assert.equal(A(s, id, { type: 'pass' }).ok, true);
+  assert.equal(s.duel, null);
+  assert.ok(q.carried.includes('i_slippers#0'));
+});
+
+t('подземный рынок: открывается с новой глубиной, покупка вещами, одна за ход, сворачивается через круг', () => {
+  const s = fresh(); const p = P(s, 'p0');
+  s.round = 2; s.turn = { idx: 2, pid: 'p2', step: 'charity', n: 9 }; // следующий ход начинает 4-й круг для трёх игроков — глубина 1
+  A(s, 'p2', { type: 'endTurn' });
+  assert.equal(s.depth, 1); assert.ok(s.market); assert.equal(s.market.cards.length, 3);
+  const [u] = s.market.cards;
+  const price = view(s, 'p0').market.prices[u];
+  p.carried.push(take(s, 'i_jackhammer#0'), take(s, 'i_diver#0'));
+  assert.equal(view(s, 'p0').hints.buy, true);
+  assert.match(A(s, 'p0', { type: 'buy', uid: u, pay: ['i_ladle#0'] }).error, /уплату|не берут|Выберите/);
+  const pay = def('i_jackhammer').value >= price ? ['i_jackhammer#0'] : ['i_jackhammer#0', 'i_diver#0'];
+  assert.equal(A(s, 'p0', { type: 'buy', uid: u, pay }).ok, true);
+  assert.ok(p.hand.includes(u));
+  assert.match(A(s, 'p0', { type: 'buy', uid: s.market.cards[0], pay: ['i_diver#0'] }).error || '', /одна покупка|Такой карты/);
+  // через круг рынок сворачивается
+  for (let i = 0; i < 3; i++) { s.turn.step = 'charity'; A(s, s.turn.pid, { type: 'endTurn' }); }
+  assert.equal(s.market, null);
+});
+
+t('боты: вызывают слабого на поединок и подкидывают бонус, когда проигрывают', () => {
+  let s = fresh(); let p = P(s, 'p0'), q = P(s, 'p1');
+  p.level = 7; q.level = 1; q.equipped.push(take(s, 'i_pick#0')); // 7 против 4
+  P(s, 'p2').level = 8;
+  p.hand.push(take(s, 'd_duel#0'));
+  assert.deepEqual(botDecide(s, 'p0', { rng, now: 1000 }), { type: 'playCard', uid: 'd_duel#0', target: 'p1' });
+  A(s, 'p0', { type: 'playCard', uid: 'd_duel#0', target: 'p1' });
+  q.hand.push(take(s, 'o_kvass#0'));
+  assert.deepEqual(botDecide(s, 'p1', { rng, now: 1000 }), { type: 'pass' }); // квасу (+2) не перебить 3 — бережёт карту
+  q.hand.push(take(s, 'o_shawarma#0'));
+  assert.deepEqual(botDecide(s, 'p1', { rng, now: 1000 }), { type: 'playCard', uid: 'o_shawarma#0', side: 'to' });
+});
+
 console.log(`Правила: ${n} проверок пройдено.`);

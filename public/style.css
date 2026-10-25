@@ -353,6 +353,14 @@ label { display: grid; gap: 6px; font-size: 14px; color: var(--muted); }
 .card.t-hoard { --m1: #b8955e; --m2: #5e4824; --m3: #1c150a; --gem: #e6b63a; --gemhi: #fff3c0; --acc: #b8955e; }
 .card.t-ally { --m1: #6f8fb3; --m2: #2b4160; --m3: #0b1220; --gem: #4f8fe0; --gemhi: #d2e6ff; --acc: #6f97c8; }
 .card.t-trap { --m1: #9c8a5c; --m2: #4d3f1d; --m3: #171106; --gem: #c9a227; --gemhi: #fff0b0; --acc: #b09040; }
+.card.t-duel { --m1: #b0626a; --m2: #5a2228; --m3: #1c0a0c; --gem: #e0404f; --gemhi: #ffc9cf; --acc: #c45a64; }
+.market-pill { font-size: 13px; font-weight: 700; padding: 3px 10px; border-radius: 99px; background: linear-gradient(180deg, rgba(200,150,60,.4), rgba(120,80,20,.5)); border: 1.5px solid #d9a83a; color: #fff0c8; white-space: nowrap; display: inline-flex; align-items: center; gap: 5px; cursor: pointer; }
+.market-pill .gi { width: 15px; height: 15px; }
+.market { display: flex; flex-wrap: wrap; gap: 14px; justify-content: center; margin: 10px 0 4px; }
+.market .lot { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.market .lot .price { font-family: var(--display); font-size: 16px; color: var(--lamp); }
+.duel-prize { font-size: 12.5px; color: var(--text-2); text-align: center; max-width: 16em; }
+.duel-prize b { color: var(--text); font-weight: 600; }
 .card.weak { --gem: #4aa3d8; --gemhi: #d4efff; }
 /* камни по углам и золотые уголки поверх рамки */
 .card .c-orn {

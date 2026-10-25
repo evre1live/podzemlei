@@ -1,9 +1,9 @@
 // Простой ИИ для ботов «Под Землёй». Возвращает одно действие или null.
-import { def, TROUBLE_BONUS, MUTAGEN_BONUS, LULLABY_PENALTY, LULLABY_MAX, DISTILL_COST, tameBonus, TRAP_FAIL_LEVELS } from './cards.js';
+import { def, TROUBLE_BONUS, MUTAGEN_BONUS, LULLABY_PENALTY, LULLABY_MAX, DISTILL_COST, tameBonus, TRAP_FAIL_LEVELS, marketPrice } from './cards.js';
 import {
   P, check, combatNumbers, playOptions, handLimit, hasClass, hasRace, cardWorth,
   equipError, participants, heroStrength, levelOnlyFight, winLevel, luxLevel, saleValue, monsterBaseLevel, powerOf, locationOf,
-  isGhost, grudgeOf, trapNeed,
+  isGhost, grudgeOf, trapNeed, duelNumbers, duelStrength, duelPrize,
 } from './engine.js';
 import { GHOST_BONUS } from './cards.js';
 
@@ -67,6 +67,7 @@ export function botDecide(s, pid, { rng = Math.random, now = Date.now() } = {}) 
     const yes = tradeWorth(s, p, offer) && ok({ type: 'answerTrade', id: offer.id, accept: true });
     return { type: 'answerTrade', id: offer.id, accept: yes };
   }
+  if (s.duel && !c) return p.dead ? null : duelMove(s, p);
   if (p.dead) return s.turn.pid === pid && !c && s.turn.step === 'charity' ? { type: 'endTurn', give: [] } : null;
   if (c && isGhost(p) && !participants(s).includes(pid)) { const g = ghostMove(s, p); if (g) return g; }
 
@@ -276,6 +277,16 @@ function turnMove(s, p, rng) {
       const a = { type: 'ability', name: 'distill', cards: byWorth(p.hand).slice(0, DISTILL_COST) };
       if (ok(a)) return a;
     }
+    // рынок: покупаем, если отдаём барахло дешевле того, что берём
+    if (s.market && !s.turn.bought) { const a = marketBuy(s, p); if (a && ok(a)) return a; }
+    // вызвать на поединок того, у кого есть что забрать и кто заметно слабее
+    const duelCard = p.hand.find(u => def(u).type === 'duel');
+    if (duelCard && step !== 'charity') {
+      const mine = duelStrength(s, p);
+      const t = s.players.filter(x => x.id !== id && !x.dead && duelPrize(x) && mine >= duelStrength(s, x) + 3)
+        .sort((a, b) => cardWorth(duelPrize(b)) - cardWorth(duelPrize(a)))[0];
+      if (t && ok({ type: 'playCard', uid: duelCard, target: t.id })) return { type: 'playCard', uid: duelCard, target: t.id };
+    }
     // проклясть лидера или подложить ему ловушку
     const curse = p.hand.find(u => def(u).type === 'curse' || def(u).type === 'trap');
     if (curse && step === 'pre') {
@@ -333,6 +344,54 @@ function turnMove(s, p, rng) {
   return null;
 }
 
+// поединок: дуэлянт добавляет бонус, если проигрывает; сосед подыгрывает тому, кто против лидера или обидчика
+function duelMove(s, p) {
+  const d = s.duel, n = duelNumbers(s);
+  const pass = () => (!check(s, p.id, { type: 'pass' }) ? { type: 'pass' } : null);
+  const alch = hasClass(p, 'alchemist') ? 2 : 0;
+  const bonus = p.hand.filter(u => def(u).type === 'oneshot' && def(u).effect === 'bonus').sort((a, b) => def(a).bonus - def(b).bonus);
+  // сколько не хватает стороне, чтобы победить (при равенстве побеждает вызванный)
+  const gapFor = side => (side === 'from' ? n.to - n.from + 1 : n.from - n.to);
+  const boost = side => {
+    const gap = gapFor(side);
+    if (gap <= 0) return null;
+    const fit = bonus.find(u => def(u).bonus + alch >= gap);
+    return fit && !check(s, p.id, { type: 'playCard', uid: fit, side }) ? { type: 'playCard', uid: fit, side } : null;
+  };
+  const mine = p.id === d.from ? 'from' : p.id === d.to ? 'to' : null;
+  if (mine) {
+    if (n.winner !== p.id) {
+      const a = boost(mine);
+      if (a) return a;
+      const buff = p.hand.filter(u => def(u).type === 'buff').sort((a, b) => def(a).bonus - def(b).bonus).find(u => def(u).bonus >= gapFor(mine));
+      if (buff && !check(s, p.id, { type: 'playCard', uid: buff })) return { type: 'playCard', uid: buff };
+    }
+    return pass();
+  }
+  const W = P(s, n.winner);
+  const top = leader(s, null);
+  const threat = (W.level >= winLevel(s) - 3 && W.level >= top.level) || (persona(p) === 'vengeful' && grudgeOf(s, p.id, W.id) > 0);
+  if (threat && persona(p) !== 'cautious') {
+    const a = boost(n.winner === d.from ? 'to' : 'from');
+    if (a) return a;
+  }
+  return pass();
+}
+// подземный рынок: самая ценная карта, за которую можно отдать барахло из запаса и руки
+function marketBuy(s, p) {
+  const pool = byWorth([...p.carried, ...p.hand.filter(u => def(u).type === 'item')]).filter(u => def(u).value && def(u).rarity !== 'legendary');
+  const offers = [...s.market.cards].sort((a, b) => cardWorth(b) - cardWorth(a));
+  for (const u of offers) {
+    const price = marketPrice(def(u));
+    const pay = [];
+    let sum = 0;
+    for (const x of pool) { if (sum >= price) break; pay.push(x); sum += def(x).value; }
+    if (sum < price) continue;
+    const give = pay.reduce((a, x) => a + cardWorth(x), 0);
+    if (cardWorth(u) >= give * 0.8) return { type: 'buy', uid: u, pay };
+  }
+  return null;
+}
 // чего стоит питомец героя: зверь или вещь в слоте питомца
 function petScore(p) {
   if (p.beast) return tameBonus(def(p.beast));

@@ -4,7 +4,7 @@ import { botDecide } from '../shared/bot.js';
 import { allUids, def } from '../shared/cards.js';
 
 function mulberry32(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
-const TYPES = ['kick', 'loot', 'lookForTrouble', 'endTurn', 'playCard', 'equip', 'unequip', 'autoEquip', 'discardInPlay', 'sell', 'gift', 'askHelp', 'answerHelp', 'cancelHelp', 'fight', 'runAway', 'ability', 'haunt', 'offerTrade', 'answerTrade', 'cancelTrade', 'bribe', 'trap', 'tame', '__proto__', 'toString', 'constructor', 'nope'];
+const TYPES = ['kick', 'loot', 'lookForTrouble', 'endTurn', 'playCard', 'equip', 'unequip', 'autoEquip', 'discardInPlay', 'sell', 'gift', 'askHelp', 'answerHelp', 'cancelHelp', 'fight', 'runAway', 'ability', 'haunt', 'offerTrade', 'answerTrade', 'cancelTrade', 'bribe', 'trap', 'tame', 'buy', 'pass', '__proto__', 'toString', 'constructor', 'nope'];
 const ABIL = ['rage', 'turn', 'levitate', 'charm', 'backstab', 'steal', 'lullaby', 'distill', 'mutagen', 'lure', 'x'];
 const ALL = [...allUids('door'), ...allUids('treasure')];
 const junk = rng => [null, 1, -1, 'x', {}, [], [1], ['a#0'], NaN, '__proto__', 99999][Math.floor(rng() * 11)];
@@ -14,6 +14,8 @@ function count(s) {
   for (const p of s.players) all.push(...p.hand, ...p.equipped, ...p.carried, ...p.races, ...p.classes, ...[p.halfbreed, p.supermunch, p.ally, p.beast].filter(Boolean));
   if (s.trap) all.push(s.trap.uid);
   if (s.tame) all.push(s.tame.uid);
+  if (s.duel) all.push(s.duel.card, ...s.duel.used);
+  if (s.market) all.push(...s.market.cards);
   if (s.combat) { for (const m of s.combat.monsters) all.push(m.uid, ...m.enh); all.push(...s.combat.used); }
   if (s.location) all.push(s.location);
   if (s.rig) all.push(...s.rig.queue);
@@ -38,7 +40,9 @@ for (let g = 0; g < N; g++) {
       a = { type: TYPES[Math.floor(rng() * TYPES.length)], uid: pickU(), target: ids[Math.floor(rng() * ids.length)], to: ids[Math.floor(rng() * ids.length)],
         side: rng() < 0.5 ? 'player' : 'monster', monster: Math.floor(rng() * 3) - (rng() < 0.1 ? 5 : 0), with: pickU(), uids: [pickU(), pickU()], give: [pickU()],
         cards: [pickU()], name: ABIL[Math.floor(rng() * ABIL.length)], item: pickU(), offer: Math.floor(rng() * 4), accept: rng() < 0.5,
-        want: rng() < 0.5 ? [pickU()] : [], id: Math.floor(rng() * 6), disarm: rng() < 0.5 ? true : junk(rng) };
+        want: rng() < 0.5 ? [pickU()] : [], id: Math.floor(rng() * 6), disarm: rng() < 0.5 ? true : junk(rng), pay: [pickU(), pickU()] };
+      if (rng() < 0.2) a.side = ['from', 'to'][Math.floor(rng() * 2)];
+      if (rng() < 0.1 && s.market) a.uid = s.market.cards[0];
       if (rng() < 0.3) { const k = Object.keys(a)[Math.floor(rng() * 12)]; a[k] = junk(rng); }
     }
     // иногда — честное предложение обмена, чтобы проверить перенос вещей

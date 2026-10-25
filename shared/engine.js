@@ -2,7 +2,7 @@
 // Сервер хранит состояние, вызывает act()/tick() и рассылает view() каждому игроку.
 import { def, allUids, RACE_NAMES, CLASS_NAMES, ruleText, BOSS_MULT, BOSS_MIN_LEVEL, BOSS_FLOOR, TROUBLE_BONUS, WITCHER_BONUS, MUTAGEN_BONUS, LULLABY_PENALTY, LULLABY_MAX, DISTILL_COST,
   DEPTH, DEPTH_TREASURE_EVERY, DEATH_LEVELS, GHOST_BONUS, CONTRACTS, CONTRACT_DEFS, SETS, rewardText,
-  TAME_MARGIN, tameBonus, TRAP_ROLL, TRAP_SKILL, TRAP_FAIL_LEVELS } from './cards.js';
+  TAME_MARGIN, tameBonus, TRAP_ROLL, TRAP_SKILL, TRAP_FAIL_LEVELS, MARKET_SIZE, marketPrice } from './cards.js';
 
 export const WIN_LEVEL = 10;
 // до какого уровня идёт партия: 10 по умолчанию, в лобби можно выбрать 15 или 20
@@ -38,7 +38,7 @@ export function createGame(seats, opts = {}, rng = Math.random) {
     discard: { door: [], treasure: [] },
     turn: { idx: 0, pid: null, step: 'pre', n: 0, halflingSold: false },
     combat: null, reveal: null, winners: [], location: null,
-    round: 0, depth: 0, trades: [], tradeSeq: 0, grudges: {}, trap: null, tame: null,
+    round: 0, depth: 0, trades: [], tradeSeq: 0, grudges: {}, trap: null, tame: null, duel: null, market: null,
   };
   setupRig(s, rng);
   for (const p of s.players) {
@@ -426,12 +426,65 @@ export const depthEvery = s => depthRule(s).every;
 export const depthMax = s => depthRule(s).max;
 export const depthBonus = s => s.depth || 0;
 export const depthTreasure = s => Math.floor((s.depth || 0) / DEPTH_TREASURE_EVERY);
-function newRound(s) {
+function newRound(s, rng) {
   s.round = (s.round || 0) + 1;
+  if (s.market && s.round > s.market.until) closeMarket(s);
   if (s.round % depthEvery(s) || (s.depth || 0) >= depthMax(s)) return;
   s.depth = (s.depth || 0) + 1;
   fx(s, { kind: 'depth', depth: s.depth, treasure: depthTreasure(s) });
   log(s, `⛏ Подземелье уходит глубже: глубина ${s.depth}${s.depth >= depthMax(s) ? ' — это дно' : ''}, монстры +${depthBonus(s)}${depthTreasure(s) ? `, за победу +${depthTreasure(s)} клада` : ''}.`, 'event');
+  openMarket(s, rng);
+}
+
+// ───────────────────────── подземный рынок ─────────────────────────
+// С каждой новой глубиной на круг открывается рынок: несколько карт клада в открытую, платят вещами.
+function openMarket(s, rng) {
+  const cards = [];
+  for (let tries = 0; cards.length < MARKET_SIZE && tries < MARKET_SIZE + 6; tries++) {
+    const u = draw(s, 'treasure', rng);
+    if (!u) break;
+    if (isLegend(u)) { s.decks.treasure.unshift(u); continue; } // легендарки на рынок не выносят
+    cards.push(u);
+  }
+  if (!cards.length) return;
+  s.market = { cards, until: s.round };
+  fx(s, { kind: 'market', cards: [...cards] });
+  log(s, `🛒 На новой глубине открылся подземный рынок: ${cards.map(u => q(def(u).name)).join(', ')}. До конца круга, платят вещами.`, 'event');
+}
+function closeMarket(s) {
+  for (const u of s.market.cards) toDiscard(s, u);
+  if (s.market.cards.length) log(s, 'Подземный рынок свернулся до следующей глубины.', 'info');
+  s.market = null;
+}
+// чем платить: карты с ценой — из руки или со стола, кроме легендарных
+const payable = (p, u) => (p.hand.includes(u) || inPlayItems(p).includes(u)) && !!def(u).value && !isLegend(u);
+
+// ───────────────────────── поединок ─────────────────────────
+// Сила в поединке: уровень, вещи, расовые и классовые бонусы и «в следующем бою».
+export const duelStrength = (s, p) => powerOf(s, p) + (p.nextCombat || 0);
+export function duelNumbers(s) {
+  const d = s.duel;
+  if (!d) return null;
+  const A = P(s, d.from), B = P(s, d.to);
+  const mod = side => d.mods.filter(m => m.side === side).reduce((a, m) => a + m.n, 0);
+  const a = duelStrength(s, A) + mod('from'), b = duelStrength(s, B) + mod('to');
+  // при равенстве побеждает вызванный, а воин-зачинщик — и при равенстве
+  const fromWins = a > b || (a === b && hasClass(A, 'warrior') && !hasClass(B, 'warrior'));
+  return { from: a, to: b, winner: fromWins ? A.id : B.id };
+}
+// что отдаст проигравший: самую полезную вещь со стола (легендарки не отдаются)
+const prizeScore = u => (def(u).bonus || 0) * 100 + (def(u).runBonus || 0) * 40 + (def(u).value || 0) / 10;
+export const duelPrize = p => [...p.equipped, ...p.carried].filter(u => !def(u).noSteal && !isLegend(u)).sort((a, b) => prizeScore(b) - prizeScore(a))[0] || null;
+function resolveDuel(s) {
+  const d = s.duel, n = duelNumbers(s);
+  const W = P(s, n.winner), L = P(s, n.winner === d.from ? d.to : d.from);
+  s.duel = null;
+  toDiscard(s, d.card); d.used.forEach(u => toDiscard(s, u));
+  W.nextCombat = 0; L.nextCombat = 0;
+  const prize = duelPrize(L);
+  if (prize) { removeItem(L, prize); W.carried.push(prize); normalize(s, L); }
+  fx(s, { kind: 'duelEnd', pid: W.id, loser: L.id, card: prize });
+  log(s, `⚔ Поединок: ${W.name} одолевает ${L.name} (${n[W.id === d.from ? 'from' : 'to']} против ${n[L.id === d.from ? 'from' : 'to']})${prize ? ` и забирает ${q(def(prize).name)}` : ', но забрать у проигравшего нечего'}.`, W.id === d.from ? 'good' : 'combat');
 }
 
 // ───────────────────────── контракты ─────────────────────────
@@ -490,7 +543,7 @@ export const grudgeOf = (s, victimId, byId) => s.grudges?.[victimId]?.[byId] || 
 function beginTurn(s, idx, rng) {
   const p = s.players[idx];
   s.turn = { idx, pid: p.id, step: 'pre', n: (s.turn?.n || 0) + 1, halflingSold: false, hoardPlayed: false, distilled: false, haunted: [] };
-  if (s.turn.n > 1 && (s.turn.n - 1) % s.players.length === 0) newRound(s);
+  if (s.turn.n > 1 && (s.turn.n - 1) % s.players.length === 0) newRound(s, rng);
   s.reveal = null;
   for (const x of s.players) x.dead = false;
   // зверь, которого так и не приручили, уходит в темноту
@@ -868,6 +921,7 @@ function cheapest(list) { return [...list].sort((a, b) => cardWorth(a) - cardWor
 const myTurn = (s, p) => s.turn.pid === p.id;
 const manageErr = (s, p) => (!myTurn(s, p) ? 'Сейчас не ваш ход'
   : s.combat ? 'Нельзя во время боя'
+  : s.duel ? 'Идёт поединок'
   : p.dead ? 'Вы мертвы до начала следующего хода' : null);
 const allInHand = (p, cards) => Array.isArray(cards) && cards.length > 0
   && new Set(cards).size === cards.length && cards.every(u => p.hand.includes(u));
@@ -943,6 +997,7 @@ H.endTurn = {
   check(s, p, a) {
     if (!myTurn(s, p)) return 'Сейчас не ваш ход';
     if (s.combat) return 'Нельзя во время боя';
+    if (s.duel) return 'Идёт поединок';
     if (s.turn.step !== 'charity') return s.turn.step === 'pre' ? 'Сначала выбейте дверь' : 'Сначала ищите неприятности или обшарьте комнату';
     const excess = Math.max(0, p.hand.length - handLimit(p, s));
     const g = a.give || [];
@@ -988,6 +1043,14 @@ function playCheck(s, p, a) {
     case 'supermunch': return manageErr(s, p) || (p.supermunch ? 'Уже есть' : null);
     case 'item': return manageErr(s, p);
     case 'ally': return manageErr(s, p);
+    case 'duel': {
+      const e = manageErr(s, p); if (e) return e;
+      if (s.turn.step === 'trap') return 'Сначала разберитесь с ловушкой';
+      const t = P(s, a.target);
+      if (!t || t === p) return 'Кого вызвать?';
+      if (t.dead) return 'Мёртвых на поединок не вызывают';
+      return null;
+    }
     case 'location': return manageErr(s, p);
     case 'event': return manageErr(s, p);
     case 'buff': return c && isParticipant(s, p.id) && levelOnlyFight(s) ? 'Против этого монстра считается только уровень — зелье пропадёт зря' : null;
@@ -1011,6 +1074,7 @@ function playCheck(s, p, a) {
       return null;
     case 'oneshot':
       if (d.effect === 'ward') return 'Срабатывает сам, когда на вас насылают проклятие';
+      if (!c && s.duel && d.effect === 'bonus') return a.side === 'from' || a.side === 'to' ? null : 'Выберите, за кого в поединке';
       if (!c) return 'Только во время боя';
       if (d.effect === 'enslave') {
         if (c.fighter !== p.id) return 'Только в своём бою';
@@ -1067,6 +1131,16 @@ H.playCard = {
         log(s, `${p.name} берёт в спутники ${q(d.name)}.`, 'good');
         break;
       case 'trap': grudge(s, a.target, p.id); trapOn(s, P(s, a.target), a.uid, rng, p); break;
+      case 'duel': {
+        const t = P(s, a.target);
+        s.duel = { from: p.id, to: t.id, card: a.uid, mods: [], used: [], passed: [], winStart: s.now, winAt: s.now + (s.opts.winDelayMs || 0) };
+        grudge(s, t.id, p.id);
+        const n = duelNumbers(s);
+        fx(s, { kind: 'duel', pid: p.id, to: t.id });
+        log(s, `⚔ ${p.name} вызывает ${t.name} на поединок: сила ${n.from} против ${n.to}. Остальные могут подкинуть бонусы.`, 'combat');
+        if ((s.opts.winDelayMs || 0) <= 0) resolveDuel(s);
+        break;
+      }
       case 'location': setLocation(s, p, a.uid); break;
       case 'event': resolveEvent(s, p, a.uid, rng); break;
       case 'buff':
@@ -1108,6 +1182,18 @@ H.playCard = {
         fx(s, { kind: 'wandering', pid: p.id, card: a.with, ...(wm.power ? { power: wm.power } : {}) });
         break;
       case 'oneshot':
+        if (!c && s.duel) {
+          // бонус в поединок: за вызвавшего (from) или за вызванного (to)
+          const n = d.bonus + (hasClass(p, 'alchemist') ? 2 : 0);
+          s.duel.used.push(a.uid);
+          s.duel.mods.push({ side: a.side, n, by: p.id, uid: a.uid });
+          const helped = s.duel[a.side], other = s.duel[a.side === 'from' ? 'to' : 'from'];
+          if (p.id !== helped && p.id !== other) grudge(s, other, p.id);
+          contractEvent(s, p, 'oneshot', {}, rng);
+          fx(s, { kind: 'duelMod', pid: p.id, side: a.side, n });
+          log(s, `${p.name} использует ${q(d.name)}: +${n} за ${P(s, helped).name}.`, 'combat');
+          break;
+        }
         c.used.push(a.uid);
         contractEvent(s, p, 'oneshot', {}, rng);
         if (d.effect === 'bonus') {
@@ -1365,6 +1451,30 @@ H.trap = {
   },
 };
 
+// подземный рынок: купить карту, заплатив вещами не дешевле её цены
+H.buy = {
+  check(s, p, a) {
+    const e = manageErr(s, p); if (e) return e;
+    if (!s.market?.cards.includes(a.uid)) return 'Такой карты на рынке нет';
+    if (s.turn.bought) return 'На рынке — одна покупка за ход';
+    const pay = a.pay || [];
+    if (!pay.length || new Set(pay).size !== pay.length) return 'Выберите, чем платить';
+    for (const u of pay) if (!payable(p, u)) return `${q(def(u).name)} в уплату не берут`;
+    const sum = pay.reduce((t, u) => t + def(u).value, 0), price = marketPrice(def(a.uid));
+    return sum < price ? `Нужно ${price} голдов, набрано ${sum}` : null;
+  },
+  run(s, p, a) {
+    for (const u of a.pay) { if (!without(p.hand, u)) removeItem(p, u); toDiscard(s, u); }
+    normalize(s, p);
+    without(s.market.cards, a.uid);
+    p.hand.push(a.uid);
+    s.turn.bought = true;
+    if (!s.market.cards.length) s.market = null;
+    fx(s, { kind: 'buy', pid: p.id, card: a.uid });
+    log(s, `🛒 ${p.name} покупает на рынке ${q(def(a.uid).name)}, отдав ${a.pay.map(u => q(def(u).name)).join(', ')}.`, 'good');
+  },
+};
+
 // приручить зверя, побеждённого в этот ход: он занимает место питомца
 H.tame = {
   check(s, p) { return manageErr(s, p) || (s.tame?.pid !== p.id ? 'Приручать некого' : null); },
@@ -1438,6 +1548,10 @@ H.fight = {
 // «Не мешаю»: сосед по столу отказывается вмешиваться. Когда отказались все живые, бой заканчивается сразу.
 H.pass = {
   check(s, p) {
+    if (s.duel && !s.combat) {
+      if (p.dead) return 'Вы мертвы';
+      return s.duel.passed.includes(p.id) ? 'Вы уже сказали, что не мешаете' : null;
+    }
     const c = s.combat;
     if (!c || !c.winAt) return 'Сейчас нечему мешать';
     if (isParticipant(s, p.id)) return 'Вы сами в этом бою';
@@ -1445,6 +1559,12 @@ H.pass = {
     return null;
   },
   run(s, p) {
+    if (s.duel && !s.combat) {
+      // все живые сказали «не мешаю» (и сами дуэлянты) — поединок решается сразу
+      s.duel.passed.push(p.id);
+      if (s.players.filter(x => !x.dead && !x.needsRevive).every(x => s.duel.passed.includes(x.id))) resolveDuel(s);
+      return;
+    }
     s.combat.passed = [...(s.combat.passed || []), p.id];
     log(s, `${p.name} не вмешивается.`, 'info');
   },
@@ -1661,7 +1781,7 @@ H.ability = {
 // ───────────────────────── публичный API ─────────────────────────
 function badShape(a) {
   if (!a || typeof a !== 'object' || typeof a.type !== 'string') return true;
-  for (const k of ['cards', 'uids', 'give']) {
+  for (const k of ['cards', 'uids', 'give', 'pay']) {
     if (a[k] !== undefined && (!Array.isArray(a[k]) || a[k].length > 40 || a[k].some(x => typeof x !== 'string'))) return true;
   }
   for (const k of ['uid', 'target', 'with', 'to', 'item', 'name']) {
@@ -1686,15 +1806,18 @@ export function act(s, pid, a, { rng = Math.random, now = Date.now() } = {}) {
   s.now = now;
   const err = check(s, pid, a);
   if (err) return { ok: false, error: err };
-  const hadCombat = !!s.combat;
+  const hadCombat = !!s.combat, hadDuel = !!s.duel;
   H[a.type].run(s, P(s, pid), a, rng);
   if (hadCombat && s.combat && a.type !== 'fight' && a.type !== 'pass') { s.combat.winAt = null; s.combat.passed = []; }
+  // в поединок вмешались — отсчёт начинается заново
+  if (hadDuel && s.duel && a.type !== 'pass') { s.duel.winStart = s.now; s.duel.winAt = s.now + (s.opts.winDelayMs || 0); s.duel.passed = []; }
   s.version++;
   return { ok: true };
 }
 
 export function tick(s, { rng = Math.random, now = Date.now() } = {}) {
   s.now = now;
+  if (s.phase === 'playing' && s.duel && now >= s.duel.winAt) { resolveDuel(s); s.version++; return true; }
   const c = s.combat;
   if (s.phase !== 'playing' || !c || !c.winAt || now < c.winAt) return false;
   if (combatNumbers(s).winning) resolveVictory(s, rng);
@@ -1709,14 +1832,13 @@ export function playOptions(s, pid, uid) {
   const tryA = a => { if (!check(s, pid, a)) out.push(a); };
   const d = def(uid);
   if (d.type === 'monster') return out; // монстр из руки идёт в бой только с картой «Из темноты вылезло…»
-  if (d.type === 'curse' || d.type === 'trap' || (d.type === 'oneshot' && d.effect === 'enslave')) { s.players.forEach(x => tryA({ type: 'playCard', uid, target: x.id })); return out; }
+  if (d.type === 'curse' || d.type === 'trap' || d.type === 'duel' || (d.type === 'oneshot' && d.effect === 'enslave')) { s.players.forEach(x => tryA({ type: 'playCard', uid, target: x.id })); return out; }
   if (d.type === 'enhancer' || (d.type === 'oneshot' && d.effect === 'remove')) {
     (s.combat?.monsters || []).forEach((m, i) => tryA({ type: 'playCard', uid, monster: i }));
     return out;
   }
   if (d.type === 'oneshot' && d.effect === 'bonus') {
-    tryA({ type: 'playCard', uid, side: 'player' });
-    tryA({ type: 'playCard', uid, side: 'monster' });
+    for (const side of s.duel && !s.combat ? ['from', 'to'] : ['player', 'monster']) tryA({ type: 'playCard', uid, side });
     return out;
   }
   if (d.type === 'wandering') {
@@ -1751,6 +1873,7 @@ export function hints(s, pid) {
     autoEquip: ok({ type: 'autoEquip' }),
     bribe: s.combat?.fighter === pid && s.combat.monsters.some(m => def(m.uid).bribe) ? inPlayItems(p).filter(u => ok({ type: 'bribe', item: u })) : [],
     tame: ok({ type: 'tame' }) ? s.tame.uid : null,
+    buy: !!s.market && !manageErr(s, p) && !s.turn.bought,
     trap: ok({ type: 'trap' }) ? { uid: s.trap.uid, need: trapNeed(p) } : null,
     manage: !manageErr(s, p),
     haunt: { player: ok({ type: 'haunt', side: 'player' }), monster: ok({ type: 'haunt', side: 'monster' }) },
@@ -1791,6 +1914,9 @@ export function view(s, pid) {
     phase: s.phase, version: s.version, turn: { ...s.turn }, winners: [...s.winners],
     reveal: s.reveal, opts: { winDelayMs: s.opts.winDelayMs, winLevel: winLevel(s) }, location: s.location,
     trap: s.trap ? { ...s.trap } : null, tame: s.tame ? { ...s.tame } : null,
+    market: s.market ? { cards: [...s.market.cards], until: s.market.until, prices: Object.fromEntries(s.market.cards.map(u => [u, marketPrice(def(u))])) } : null,
+    duel: s.duel ? { from: s.duel.from, to: s.duel.to, card: s.duel.card, mods: s.duel.mods.map(m => ({ ...m })), passed: [...s.duel.passed], winAt: s.duel.winAt, winStart: s.duel.winStart,
+      numbers: duelNumbers(s), prize: { from: duelPrize(P(s, s.duel.from)), to: duelPrize(P(s, s.duel.to)) } } : null,
     log: s.log.slice(-80), fx: s.fx.slice(-20),
     decks: { door: s.decks.door.length, treasure: s.decks.treasure.length },
     depth: { level: s.depth || 0, bonus: depthBonus(s), treasure: depthTreasure(s), round: s.round || 0, every: depthEvery(s), max: depthMax(s),

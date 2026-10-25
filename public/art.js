@@ -272,7 +272,7 @@ const ICON_OF = {
   i_rollers: 'running-shoe', i_valenki: 'boots', i_waders: 'rubber-boot', i_samovar: 'flame', i_turnshield: 'security-gate', i_kladenets: 'broadsword',
   p_raven: 'all-seeing-eye', p_owl: 'paw-print',
   t_tripwire: 'tripwire', t_pit: 'spiky-pit', t_net: 'fishing-net', t_gas: 'poison-gas', t_rocks: 'falling-rocks', t_plate: 'mantrap',
-  a_porter: 'backpack', a_guide: 'walking-scout', a_merc: 'swordman',
+  a_porter: 'backpack', a_guide: 'walking-scout', a_merc: 'swordman', d_duel: 'gauntlet',
   k_draft: 'whirlwind', k_cavein: 'stone-pile', k_puddle: 'water-drop', k_rust: 'rusty-sword', k_rusthands: 'rusty-sword', k_tax: 'coins', k_fever: 'heart-minus', k_amnesia: 'brain',
   k_fired: 'cross-mark', k_pickpocket: 'robber-hand', k_klepto: 'robber-hand', k_flu: 'snowflake-1', k_backpack: 'knapsack', k_jinx: 'evil-eyes',
   e_seasoned: 'upgrade', e_armored: 'armor-upgrade', e_hungry: 'sharp-smile', e_pack: 'two-shadows', e_rabid: 'fanged-skull', e_morning: 'alarm-clock', e_baby: 'egg-clutch',
@@ -295,7 +295,7 @@ const ICON_OF = {
 };
 const ICON_OF_TYPE = { monster: 'claw-slashes', curse: 'cursed-star', enhancer: 'upgrade', wandering: 'evil-eyes', event: 'sunbeams', location: 'stone-tower', item: 'broadsword',
   oneshot: 'fizzing-flask', buff: 'standing-potion', levelup: 'upgrade', hoard: 'open-treasure-chest', race: 'person', class: 'crossed-swords', halfbreed: 'yin-yang', supermunch: 'double-face-mask',
-  ally: 'person', trap: 'wolf-trap' };
+  ally: 'person', trap: 'wolf-trap', duel: 'gauntlet' };
 export function cardIcon(d) {
   return ICON_OF[d.id] || (d.boss ? 'horned-skull' : d.tags?.includes('undead') ? 'skull-crossed-bones' : ICON_OF_TYPE[d.type] || 'cursed-star');
 }
@@ -346,7 +346,7 @@ export { avatarSVG };
 const TYPE_LABEL = {
   monster: 'Монстр', curse: 'Проклятие', race: 'Раса', class: 'Класс', halfbreed: 'Особое', supermunch: 'Особое',
   enhancer: 'Усилитель', wandering: 'Бродячий', item: 'Вещь', oneshot: 'Разовая', levelup: 'Уровень', hoard: 'Клад',
-  location: 'Локация', event: 'Событие', buff: 'Зелье', ally: 'Спутник', trap: 'Ловушка',
+  location: 'Локация', event: 'Событие', buff: 'Зелье', ally: 'Спутник', trap: 'Ловушка', duel: 'Вызов',
 };
 const SLOT_LABEL = SLOT_NAMES;
 

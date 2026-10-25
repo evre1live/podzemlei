@@ -193,6 +193,8 @@ function load() {
     for (const r of data) {
       r.members.forEach(m => { m.socketId = null; m.connected = false; m.lastSeen = now(); });
       if (r.game?.combat) r.game.combat.winAt = null;
+      // поединок после перезапуска досчитывается заново
+      if (r.game?.duel) { r.game.duel.winStart = now(); r.game.duel.winAt = Math.max(r.game.duel.winAt || 0, now() + (r.game.opts?.winDelayMs || 10000)); r.game.duel.passed = []; }
       r.settings = { ...(r.settings || {}), winDelayMs: cleanDelay(r.settings?.winDelayMs), winLevel: cleanWin(r.settings?.winLevel) };
       rooms.set(r.id, r);
     }
