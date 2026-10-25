@@ -210,7 +210,7 @@ const ICONS = {
 
 // ───────────── локации: живописные сцены ─────────────
 // Картинки лежат в /loc/v1: <ключ>.webp — фон стола, <ключ>-card.webp — кадр для карты.
-export const LOC_IMG = new Set(['loc_tavern', 'loc_dungeon', 'loc_glade', 'loc_forge', 'loc_ice', 'loc_graveyard', 'loc_sky', 'loc_cove', 'loc_library', 'loc_oasis']);
+export const LOC_IMG = new Set(['loc_tavern', 'loc_dungeon', 'loc_glade', 'loc_forge', 'loc_ice', 'loc_graveyard', 'loc_sky', 'loc_cove', 'loc_library', 'loc_oasis', 'loc_flooded', 'loc_grove', 'loc_koschei']);
 export const locImg = (key, card = true) => `/loc/v1/${LOC_IMG.has(key) ? key : 'loc_tavern'}${card ? '-card' : ''}.webp`;
 export function locationSVG(key) {
   // у новой локации без картины — гравированный знак на тёмной патине
