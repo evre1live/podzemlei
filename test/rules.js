@@ -1017,4 +1017,158 @@ t('боссы Морена и Чернобог: стужа снимает луч
   assert.equal(a.hand.length, 1); assert.equal(b.hand.length, 0); assert.equal(c.hand.length, 0);
 });
 
+// кубик под контролем: 0.99 — шестёрка, 0 — единица
+const dice = (s, pid, a, v) => act(s, pid, a, { rng: () => v, now: 1000 });
+
+t('приручение: зверь, побитый с перевесом 10+, становится питомцем до конца хода', () => {
+  const s = fresh(); const p = P(s, 'p0');
+  p.level = 5; p.nextCombat = 10; // 15 против крота-бухгалтера (3)
+  p.equipped.push(take(s, 'p_hamster#0'));
+  s.decks.door.push(take(s, 'm_mole#0')); A(s, 'p0', { type: 'kick' });
+  A(s, 'p0', { type: 'fight' }); tick(s, { rng, now: 999999 });
+  assert.equal(s.tame?.uid, 'm_mole#0');
+  assert.equal(view(s, 'p0').hints.tame, 'm_mole#0');
+  assert.equal(A(s, 'p1', { type: 'tame' }).ok, false);
+  const before = view(s, 'p0').players[0].power;
+  assert.equal(A(s, 'p0', { type: 'tame' }).ok, true);
+  assert.equal(p.beast, 'm_mole#0'); assert.equal(s.tame, null);
+  assert.ok(p.carried.includes('p_hamster#0')); // хомяк уступил место
+  assert.equal(view(s, 'p0').players[0].power, before - 2 + 1);
+  assert.match(A(s, 'p0', { type: 'equip', uid: 'p_hamster#0' }).error, /приручённым/);
+});
+
+t('приручение: слабая победа или не зверь — нельзя; неприрученный уходит в начале следующего хода', () => {
+  let s = fresh(); let p = P(s, 'p0');
+  p.level = 5; // 5 против 3: перевес мал
+  s.decks.door.push(take(s, 'm_mole#0')); A(s, 'p0', { type: 'kick' });
+  A(s, 'p0', { type: 'fight' }); tick(s, { rng, now: 999999 });
+  assert.equal(s.tame, null); assert.ok(s.discard.door.includes('m_mole#0'));
+  s = fresh(); p = P(s, 'p0'); p.level = 5; p.nextCombat = 10;
+  s.decks.door.push(take(s, 'm_mosquito#0')); A(s, 'p0', { type: 'kick' }); // насекомое, не зверь
+  A(s, 'p0', { type: 'fight' }); tick(s, { rng, now: 999999 });
+  assert.equal(s.tame, null);
+  s = fresh(); p = P(s, 'p0'); p.level = 5; p.nextCombat = 10;
+  s.decks.door.push(take(s, 'm_duck#0')); A(s, 'p0', { type: 'kick' });
+  A(s, 'p0', { type: 'fight' }); tick(s, { rng, now: 999999 });
+  assert.equal(s.tame?.uid, 'm_duck#0');
+  assert.equal(A(s, 'p0', { type: 'endTurn' }).ok, true);
+  assert.equal(s.tame, null); assert.ok(s.discard.door.includes('m_duck#0'));
+});
+
+t('приручённый зверь спасает от расплаты, как питомец', () => {
+  const s = fresh(); const p = P(s, 'p0');
+  p.beast = take(s, 'm_croc#0');
+  s.decks.door.push(take(s, 'm_minotaur#0')); A(s, 'p0', { type: 'kick' });
+  assert.equal(dice(s, 'p0', { type: 'runAway' }, 0).ok, true);
+  assert.equal(p.beast, null); assert.ok(s.discard.door.includes('m_croc#0'));
+  assert.equal(p.level, 1);
+});
+
+t('спутники: носильщик, проводник, наёмник с платой', () => {
+  const s = fresh(); const p = P(s, 'p0');
+  p.hand.push(take(s, 'a_porter#0'));
+  assert.equal(A(s, 'p0', { type: 'playCard', uid: 'a_porter#0' }).ok, true);
+  assert.equal(view(s, 'p0').players[0].handLimit, 7);
+  p.equipped.push(take(s, 'i_jackhammer#0'));
+  p.carried.push(take(s, 'i_trolley#0'));
+  assert.equal(A(s, 'p0', { type: 'equip', uid: 'i_trolley#0' }).ok, true); // вторая большая вещь
+  // новый спутник прогоняет носильщика — вторая большая вещь снимается
+  p.hand.push(take(s, 'a_guide#0'));
+  const run0 = view(s, 'p0').players[0].runBonus;
+  assert.equal(A(s, 'p0', { type: 'playCard', uid: 'a_guide#0' }).ok, true);
+  assert.ok(s.discard.treasure.includes('a_porter#0'));
+  assert.equal(p.equipped.filter(u => def(u).big).length, 1);
+  assert.equal(view(s, 'p0').players[0].runBonus, run0 + 2);
+  // наёмник: +3, в начале хода берёт карту ценой от 200, а без платы уходит
+  p.hand.push(take(s, 'a_merc#0'));
+  const pow = view(s, 'p0').players[0].power;
+  assert.equal(A(s, 'p0', { type: 'playCard', uid: 'a_merc#0' }).ok, true);
+  assert.equal(view(s, 'p0').players[0].power, pow + 3);
+  p.hand.push(take(s, 'o_kvass#0'), take(s, 'o_cola#0'));
+  s.turn.step = 'charity'; A(s, 'p0', { type: 'endTurn' });
+  s.turn.step = 'charity'; A(s, 'p1', { type: 'endTurn' });
+  s.turn.step = 'charity'; A(s, 'p2', { type: 'endTurn' });
+  assert.equal(s.turn.pid, 'p0');
+  assert.deepEqual(p.hand, ['o_kvass#0']); assert.equal(p.ally, 'a_merc#0');
+  for (const u of p.carried) s.discard.treasure.push(u); p.carried = []; // квас дешевле 200 — платить нечем
+  s.turn.step = 'charity'; A(s, 'p0', { type: 'endTurn' });
+  s.turn.step = 'charity'; A(s, 'p1', { type: 'endTurn' });
+  s.turn.step = 'charity'; A(s, 'p2', { type: 'endTurn' });
+  assert.equal(p.ally, null); assert.ok(s.discard.treasure.includes('a_merc#0'));
+});
+
+t('плут сманивает чужого спутника на 4+', () => {
+  const s = fresh(); const p = P(s, 'p0'), q = P(s, 'p1');
+  p.classes.push(take(s, 'c_rogue#0'));
+  q.ally = take(s, 'a_guide#0');
+  p.hand.push(take(s, 'o_kvass#0'), take(s, 'o_cola#0'));
+  assert.deepEqual(view(s, 'p0').hints.abilities.lure, [{ target: 'p1', item: 'a_guide#0' }]);
+  assert.equal(dice(s, 'p0', { type: 'ability', name: 'lure', target: 'p1', item: 'a_guide#0', cards: ['o_kvass#0'] }, 0).ok, true);
+  assert.equal(q.ally, 'a_guide#0'); assert.equal(p.level, 1);
+  assert.equal(dice(s, 'p0', { type: 'ability', name: 'lure', target: 'p1', item: 'a_guide#0', cards: ['o_cola#0'] }, 0.99).ok, true);
+  assert.equal(q.ally, null); assert.equal(p.ally, 'a_guide#0');
+});
+
+t('ловушка за дверью: обезвредить, сорваться или принять расплату', () => {
+  let s = fresh(); let p = P(s, 'p0');
+  s.decks.door.push(take(s, 't_pit#0')); A(s, 'p0', { type: 'kick' });
+  assert.equal(s.turn.step, 'trap');
+  assert.deepEqual(view(s, 'p0').hints.trap, { uid: 't_pit#0', need: 4 });
+  assert.equal(A(s, 'p0', { type: 'loot' }).ok, false);
+  assert.equal(dice(s, 'p0', { type: 'trap', disarm: true }, 0.99).ok, true);
+  assert.ok(p.hand.includes('t_pit#0')); assert.equal(s.turn.step, 'post'); assert.equal(s.trap, null);
+  // сорвалась: расплата и ещё уровень
+  s = fresh(); p = P(s, 'p0'); p.level = 5;
+  s.decks.door.push(take(s, 't_pit#0')); A(s, 'p0', { type: 'kick' });
+  dice(s, 'p0', { type: 'trap', disarm: true }, 0);
+  assert.equal(p.level, 3); assert.ok(s.discard.door.includes('t_pit#0'));
+  // приняли расплату
+  s = fresh(); p = P(s, 'p0'); p.level = 5;
+  s.decks.door.push(take(s, 't_pit#0')); A(s, 'p0', { type: 'kick' });
+  A(s, 'p0', { type: 'trap', disarm: false });
+  assert.equal(p.level, 4);
+  // механику легче: 2+
+  s = fresh(); p = P(s, 'p0'); p.classes.push(take(s, 'c_engineer#0'));
+  s.decks.door.push(take(s, 't_net#0')); A(s, 'p0', { type: 'kick' });
+  assert.equal(view(s, 'p0').hints.trap.need, 2);
+  // противогаз: газовая ловушка не срабатывает и достаётся герою
+  s = fresh(); p = P(s, 'p0'); p.equipped.push(take(s, 'i_gasmask#0'));
+  s.decks.door.push(take(s, 't_gas#0')); A(s, 'p0', { type: 'kick' });
+  assert.equal(s.turn.step, 'post'); assert.ok(p.hand.includes('t_gas#0'));
+});
+
+t('ловушку из руки подкладывают сопернику: он бросает кубик сам', () => {
+  const s = fresh(); const p = P(s, 'p0'), q = P(s, 'p1');
+  q.equipped.push(take(s, 'i_boots#0'));
+  p.hand.push(take(s, 't_tripwire#0'));
+  assert.deepEqual(view(s, 'p0').hints.cards['t_tripwire#0'].map(x => x.target), ['p1', 'p2']);
+  assert.equal(dice(s, 'p0', { type: 'playCard', uid: 't_tripwire#0', target: 'p1' }, 0).ok, true);
+  assert.deepEqual(q.equipped, []);
+  q.equipped.push(take(s, 'i_runners#0'));
+  p.hand.push(take(s, 't_rocks#0'));
+  dice(s, 'p0', { type: 'playCard', uid: 't_rocks#0', target: 'p1' }, 0.99); // шестёрка — заметил
+  assert.deepEqual(q.equipped, ['i_runners#0']);
+});
+
+t('смерть: спутник уходит к мародёрам', () => {
+  const s = fresh(); const p = P(s, 'p0');
+  p.ally = take(s, 'a_porter#0');
+  s.decks.door.push(take(s, 'm_dragon#0')); p.level = 6; A(s, 'p0', { type: 'kick' });
+  assert.equal(dice(s, 'p0', { type: 'runAway' }, 0).ok, true);
+  assert.equal(p.needsRevive, true); assert.equal(p.ally, null);
+  assert.ok(['p1', 'p2'].some(id => P(s, id).hand.includes('a_porter#0')));
+});
+
+t('боты: приручают сильного зверя, берут спутника, решают с ловушкой', () => {
+  let s = fresh(); let p = P(s, 'p0');
+  s.tame = { pid: 'p0', uid: take(s, 'm_croc#0') }; s.turn.step = 'charity';
+  assert.deepEqual(botDecide(s, 'p0', { rng, now: 1000 }), { type: 'tame' });
+  s = fresh(); p = P(s, 'p0'); p.hand.push(take(s, 'a_guide#0')); s.turn.step = 'pre';
+  assert.deepEqual(botDecide(s, 'p0', { rng, now: 1000 }), { type: 'playCard', uid: 'a_guide#0' });
+  s = fresh(); p = P(s, 'p0'); p.level = 6;
+  s.decks.door.push(take(s, 't_pit#0')); A(s, 'p0', { type: 'kick' });
+  const a = botDecide(s, 'p0', { rng, now: 1000 });
+  assert.equal(a.type, 'trap'); assert.equal(A(s, 'p0', a).ok, true);
+});
+
 console.log(`Правила: ${n} проверок пройдено.`);

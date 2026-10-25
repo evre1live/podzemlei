@@ -1,9 +1,9 @@
 // Простой ИИ для ботов «Под Землёй». Возвращает одно действие или null.
-import { def, TROUBLE_BONUS, MUTAGEN_BONUS, LULLABY_PENALTY, LULLABY_MAX, DISTILL_COST } from './cards.js';
+import { def, TROUBLE_BONUS, MUTAGEN_BONUS, LULLABY_PENALTY, LULLABY_MAX, DISTILL_COST, tameBonus, TRAP_FAIL_LEVELS } from './cards.js';
 import {
   P, check, combatNumbers, playOptions, handLimit, hasClass, hasRace, cardWorth,
   equipError, participants, heroStrength, levelOnlyFight, winLevel, luxLevel, saleValue, monsterBaseLevel, powerOf, locationOf,
-  isGhost, grudgeOf,
+  isGhost, grudgeOf, trapNeed,
 } from './engine.js';
 import { GHOST_BONUS } from './cards.js';
 
@@ -170,7 +170,7 @@ function fighterMove(s, p, rng, now) {
   if (feed && cardWorth(feed) < 900) return { type: 'bribe', item: feed };
   const smoke = p.hand.find(u => def(u).effect === 'escape');
   const trapped = c.monsters.some(m => def(m.uid).escape === false || m.enh.some(u => def(u).noEscape));
-  const hasPet = p.equipped.some(u => def(u).slot === 'pet');
+  const hasPet = p.equipped.some(u => def(u).slot === 'pet') || !!p.beast;
   if (smoke && (danger || (trapped && !hasPet))) return { type: 'playCard', uid: smoke };
   const rope = p.hand.find(u => def(u).effect === 'escapeBonus');
   if (rope && danger && !trapped && !c.escape[p.id]) return { type: 'playCard', uid: rope };
@@ -234,6 +234,9 @@ function turnMove(s, p, rng) {
   const id = p.id;
   const ok = a => !check(s, id, a);
   const step = s.turn.step;
+  if (step === 'trap') return { type: 'trap', disarm: disarmWorth(s, p) };
+  // приручить зверя, если он сильнее нынешнего питомца
+  if (s.tame?.pid === id && ok({ type: 'tame' }) && tameBonus(def(s.tame.uid)) > petScore(p)) return { type: 'tame' };
 
   if (step === 'charity' || step === 'pre' || step === 'post') {
     // выложить расу/класс
@@ -248,6 +251,9 @@ function turnMove(s, p, rng) {
       if ((d.type === 'item' || d.type === 'hoard') && ok({ type: 'playCard', uid: u })) return { type: 'playCard', uid: u };
       if (d.type === 'levelup' && ok({ type: 'playCard', uid: u })) return { type: 'playCard', uid: u };
     }
+    // спутник: берём, если он лучше нынешнего
+    const allies = p.hand.filter(u => def(u).type === 'ally' && ok({ type: 'playCard', uid: u })).map(u => ({ u, v: allyScore(p, def(u), u) })).sort((a, b) => b.v - a.v);
+    if (allies[0] && allies[0].v > (p.ally ? allyScore(p, def(p.ally), p.ally) : 0)) return { type: 'playCard', uid: allies[0].u };
     if (greedyBonus(p) > curBonus(p) && ok({ type: 'autoEquip' })) return { type: 'autoEquip' };
     // локация: выкладываем, если она нам выгоднее той, что лежит на столе
     const cur = s.location ? locScore(p, def(s.location)) : 0;
@@ -270,8 +276,8 @@ function turnMove(s, p, rng) {
       const a = { type: 'ability', name: 'distill', cards: byWorth(p.hand).slice(0, DISTILL_COST) };
       if (ok(a)) return a;
     }
-    // проклясть лидера
-    const curse = p.hand.find(u => def(u).type === 'curse');
+    // проклясть лидера или подложить ему ловушку
+    const curse = p.hand.find(u => def(u).type === 'curse' || def(u).type === 'trap');
     if (curse && step === 'pre') {
       const foe = persona(p) === 'vengeful' ? worstEnemy(s, p) : null;
       if (foe && !foe.dead && ok({ type: 'playCard', uid: curse, target: foe.id })) return { type: 'playCard', uid: curse, target: foe.id };
@@ -295,6 +301,21 @@ function turnMove(s, p, rng) {
         if (ok(a)) return a;
       }
     }
+    // плут сманивает чужого спутника или зверя, если тот лучше своего
+    if (hasClass(p, 'rogue') && step === 'pre' && p.hand.length > 3 && rng() < 0.3) {
+      const cheap = byWorth(p.hand)[0];
+      for (const x of s.players) {
+        if (x.id === id) continue;
+        if (x.ally && allyScore(p, def(x.ally), x.ally) > (p.ally ? allyScore(p, def(p.ally), p.ally) : 0) + 0.5) {
+          const a = { type: 'ability', name: 'lure', target: x.id, item: x.ally, cards: [cheap] };
+          if (ok(a)) return a;
+        }
+        if (x.beast && tameBonus(def(x.beast)) >= petScore(p) + 2) {
+          const a = { type: 'ability', name: 'lure', target: x.id, item: x.beast, cards: [cheap] };
+          if (ok(a)) return a;
+        }
+      }
+    }
   }
   if (step === 'pre') return { type: 'kick' };
   if (step === 'post') {
@@ -310,6 +331,43 @@ function turnMove(s, p, rng) {
     return { type: 'endTurn', give: byWorth(p.hand).slice(0, excess) };
   }
   return null;
+}
+
+// чего стоит питомец героя: зверь или вещь в слоте питомца
+function petScore(p) {
+  if (p.beast) return tameBonus(def(p.beast));
+  const pet = p.equipped.find(u => def(u).slot === 'pet');
+  return pet ? (def(pet).bonus || 0) + (def(pet).runBonus || 0) * 0.5 + (def(pet).peek ? 0.5 : 0) : 0;
+}
+// чего стоит спутник; наёмника берём, только если есть чем платить
+function allyScore(p, d, uid) {
+  if (d.fee) {
+    const spare = [...p.hand, ...p.carried].filter(u => u !== uid && (def(u).value || 0) >= d.fee && def(u).type !== 'ally').length;
+    if (spare < 2) return -1;
+  }
+  return (d.bonus || 0) + (d.runBonus || 0) * 0.6 + (d.handBonus || 0) * 0.4 + (d.bigBonus || 0) * 0.5;
+}
+// во что обойдётся расплата ловушки (в условных очках: уровень — 3, бонус вещи — 1)
+function trapCost(p, fxList) {
+  let v = 0;
+  for (const f of fxList) {
+    if (f.k === 'levels') v += 3 * Math.min(f.n, p.level - 1);
+    else if (f.k === 'slot') v += p.equipped.filter(u => def(u).slot === f.slot).reduce((a, u) => a + (def(u).bonus || 0) + 0.5, 0);
+    else if (f.k === 'smallItem') v += [...p.equipped, ...p.carried].some(u => !def(u).big) ? 1.5 : 0;
+    else if (f.k === 'cards') v += Math.min(f.n, p.hand.length) * 0.8;
+    else if (f.k === 'nextCombat') v += Math.abs(f.n) * 0.4;
+    else if (f.k === 'nextEscape') v += Math.abs(f.n) * 0.5;
+    else v += 2;
+  }
+  return v;
+}
+// рискнуть и обезвредить ловушку или спокойно принять расплату
+function disarmWorth(s, p) {
+  const d = def(s.trap.uid);
+  const ch = (7 - trapNeed(p)) / 6;
+  const accept = trapCost(p, d.fx);
+  const fail = trapCost(p, [...d.fx, { k: 'levels', n: TRAP_FAIL_LEVELS }]) * (persona(p) === 'cautious' ? 1.3 : 1);
+  return (1 - ch) * fail - ch * 1 < accept;
 }
 
 // насколько локация хороша для этого героя

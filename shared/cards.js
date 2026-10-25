@@ -2,8 +2,8 @@
 // Все названия, тексты и шутки придуманы для этой игры.
 // Поля:
 //  deck: 'door' (Проходы) | 'treasure' (Клад)
-//  type: monster | curse | race | class | halfbreed | supermunch | enhancer | wandering | location | event
-//        item | oneshot | buff | levelup | hoard
+//  type: monster | curse | race | class | halfbreed | supermunch | enhancer | wandering | location | event | trap
+//        item | oneshot | buff | levelup | hoard | ally
 //  copies: сколько экземпляров в колоде
 //  rarity: common | rare | epic | legendary — влияет на рамку и блеск карты
 //  noSteal — вещь нельзя украсть (плут, клептоман); petSave:false — питомец не жертвует собой
@@ -36,6 +36,13 @@ export const MUTAGEN_BONUS = 6;  // мутаген, раз за партию
 export const LULLABY_PENALTY = 2; // колыбельная барда: монстры слабее на столько
 export const LULLABY_MAX = 1;     // и не чаще раза за бой
 export const DISTILL_COST = 3;    // перегонка алхимика: столько карт сбросить
+// Приручение: зверя, побеждённого с таким перевесом, можно оставить себе питомцем
+export const TAME_MARGIN = 10;
+export const tameBonus = d => Math.max(1, Math.ceil((d.level || 0) / 4));
+// Ловушки: обезвредить — выбросить на кубике столько; плуту и механику бросок легче
+export const TRAP_ROLL = 4;
+export const TRAP_SKILL = 2;
+export const TRAP_FAIL_LEVELS = 1; // сорвалась при обезвреживании — ещё и уровень долой
 
 // Глубина: каждые every кругов подземелье уходит глубже, и все монстры, кроме боссов, получают +1 к силе за каждую глубину.
 // Глубже max не спускаемся: иначе монстры со временем становятся непобедимыми и партия не кончается.
@@ -529,6 +536,23 @@ export const CARD_DEFS = [
   { id: 'ev_luxtax', deck: 'door', type: 'event', event: 'luxtax', name: 'Налог на роскошь', copies: 1, art: 'paper',
     text: 'Все игроки {lux}-го уровня и выше теряют уровень.' },
 
+  // ───────────── ЛОВУШКИ ─────────────
+  // Выбил дверь — попался. Обезвредить: кубик 4+ (плуту и механику +2) — ловушка уходит в руку, её можно подложить сопернику.
+  // Сорвалась при обезвреживании — расплата и ещё −1 уровень. Можно и не рисковать: просто принять расплату.
+  // Подложенную ловушку соперник обезвреживает тем же броском, без лишнего штрафа и без трофея.
+  { id: 't_tripwire', deck: 'door', type: 'trap', name: 'Растяжка', copies: 1, art: 'tripwire', fx: [{ k: 'slot', slot: 'feet' }],
+    text: 'Расплата: теряешь обувку.' },
+  { id: 't_pit', deck: 'door', type: 'trap', name: 'Волчья яма', copies: 1, art: 'pit', fx: [{ k: 'levels', n: 1 }],
+    text: 'Расплата: теряешь уровень.' },
+  { id: 't_net', deck: 'door', type: 'trap', name: 'Сеть под сводом', copies: 1, art: 'net', fx: [{ k: 'nextCombat', n: -3 }, { k: 'nextEscape', n: -1 }],
+    text: 'Расплата: запутался — −3 в следующем бою и −1 к побегу.' },
+  { id: 't_gas', deck: 'door', type: 'trap', name: 'Газовый карман', copies: 1, art: 'gas', tags: ['gas'], fx: [{ k: 'cards', n: 2 }],
+    text: 'Расплата: сбрось 2 случайные карты с руки. Противогаз и канарейка спасают.' },
+  { id: 't_rocks', deck: 'door', type: 'trap', name: 'Сыпучий свод', copies: 1, art: 'rocks', fx: [{ k: 'slot', slot: 'head' }],
+    text: 'Расплата: камнем по голове — теряешь головняк.' },
+  { id: 't_plate', deck: 'door', type: 'trap', name: 'Нажимная плита', copies: 1, art: 'plate', fx: [{ k: 'smallItem' }],
+    text: 'Расплата: из стены вылетает лезвие — теряешь мелкую вещь.' },
+
   // ───────────── КЛАД: ВЕЩИ ─────────────
   // slot: head | armor | feet | hand | none | pet ; hands: 1|2|3 ; big ; tags: ['light','water'] ; vsTag ; clsBonus
   // immune: [метки] — расплата и засады таких монстров не действуют; calm: [метки] — такие монстры не гонятся
@@ -542,10 +566,10 @@ export const CARD_DEFS = [
   { id: 'i_hardlamp', deck: 'treasure', type: 'item', name: 'Каска с прожектором', slot: 'head', bonus: 2, value: 500, art: 'hardlamp', tags: ['light'], rarity: 'rare',
     text: 'Источник света.' },
   { id: 'i_barrel', deck: 'treasure', type: 'item', name: 'Шлем-бочонок', slot: 'head', bonus: 2, value: 400, art: 'barrel' },
-  { id: 'i_gasmask', deck: 'treasure', type: 'item', name: 'Противогаз', slot: 'head', bonus: 2, value: 400, art: 'gasmask', immune: ['fungus'],
-    text: 'Грибы и их споры тебе не страшны: засады и расплата грибных монстров не действуют.' },
+  { id: 'i_gasmask', deck: 'treasure', type: 'item', name: 'Противогаз', slot: 'head', bonus: 2, value: 400, art: 'gasmask', immune: ['fungus', 'gas'],
+    text: 'Грибы, споры и газ тебе не страшны: засады и расплата грибных монстров и газовые ловушки не действуют.' },
   { id: 'i_canary', deck: 'treasure', type: 'item', name: 'Каска с канарейкой', slot: 'head', bonus: 1, value: 400, art: 'canary', noAmbush: true,
-    text: 'Канарейка чует неладное: засады монстров на тебя не срабатывают.' },
+    text: 'Канарейка чует неладное: засады монстров и газовые ловушки на тебя не срабатывают.' },
   { id: 'i_ushanka', deck: 'treasure', type: 'item', name: 'Ушанка-невидимка', slot: 'head', bonus: 1, value: 400, art: 'ushanka', runBonus: 2,
     text: 'Опустил уши — и тебя не видно. +2 к побегу.' },
   { id: 'i_crown', deck: 'treasure', type: 'item', name: 'Корона из пробок', slot: 'head', bonus: 3, value: 600, art: 'crown', rarity: 'rare',
@@ -659,6 +683,16 @@ export const CARD_DEFS = [
   { id: 'p_cat', deck: 'treasure', type: 'item', slot: 'pet', name: 'Кот-диггер', bonus: 2, value: 400, art: 'pet_cat', rarity: 'rare',
     vsTag: { tag: 'rat', n: 3 }, text: 'Питомец. Против крыс ещё +3. Спасёт от одной расплаты.' },
 
+  // ───────────── КЛАД: СПУТНИКИ ─────────────
+  // Спутник один: новый прогоняет старого. Играется в свой ход вне боя. Плут может сманить чужого.
+  // handBonus — к пределу руки, bigBonus — ещё большие вещи, runBonus — к побегу, bonus — к силе, fee — плата в начале хода.
+  { id: 'a_porter', deck: 'treasure', type: 'ally', name: 'Носильщик Савелий', value: 300, art: 'porter', handBonus: 2, bigBonus: 1,
+    text: 'Спутник. +2 к пределу руки и ещё одна большая вещь.' },
+  { id: 'a_guide', deck: 'treasure', type: 'ally', name: 'Проводник Митрич', value: 300, art: 'guide', runBonus: 2,
+    text: 'Спутник. Знает все лазы: +2 к побегу.' },
+  { id: 'a_merc', deck: 'treasure', type: 'ally', name: 'Наёмник Кондрат', value: 400, art: 'merc', bonus: 3, fee: 200, rarity: 'rare',
+    text: 'Спутник. +3 к силе. В начале твоего хода плати: сбрось из руки или с запасных вещей карту ценой от 200 голдов, иначе он уходит.' },
+
   // ───────────── КЛАД: РАЗОВЫЕ ─────────────
   { id: 'o_pickles', deck: 'treasure', type: 'oneshot', effect: 'bonus', bonus: 3, value: 100, copies: 2, art: 'jar',
     name: 'Банка маринованных грибов', text: 'Разовая. В любом бою: +3 любой стороне.' },
@@ -734,4 +768,4 @@ export const RACE_NAMES = { elf: 'Эльф', dwarf: 'Гном', halfling: 'По�
 export const CLASS_NAMES = { warrior: 'Воин', mage: 'Маг', cleric: 'Жрец', rogue: 'Плут', bard: 'Бард', alchemist: 'Алхимик', engineer: 'Механик', witcher: 'Ведьмак' };
 export const SLOT_NAMES = { head: 'Головняк', armor: 'Броник', feet: 'Обувка', hand: 'В руки', none: 'Прочее', pet: 'Питомец' };
 export const TAG_NAMES = { undead: 'нежить', rat: 'крыса', fungus: 'гриб', water: 'водный', fire: 'огненный', insect: 'насекомое', metro: 'житель метро', rock: 'каменный',
-  beast: 'зверь', machine: 'механизм' };
+  beast: 'зверь', machine: 'механизм', gas: 'газ' };

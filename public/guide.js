@@ -1,6 +1,7 @@
 // «Под Землёй» — справочник карт: все карты колоды с полным описанием, разбивкой по категориям, поиском и сортировкой.
 // Используется и отдельной страницей /guide, и окном прямо в игре.
-import { CARD_DEFS, RACE_NAMES, CLASS_NAMES, SLOT_NAMES, TAG_NAMES, ruleText, BOSS_MIN_LEVEL, BOSS_FLOOR, TROUBLE_BONUS, CONTRACTS, rewardText } from '/shared/cards.js';
+import { CARD_DEFS, RACE_NAMES, CLASS_NAMES, SLOT_NAMES, TAG_NAMES, ruleText, BOSS_MIN_LEVEL, BOSS_FLOOR, TROUBLE_BONUS, CONTRACTS, rewardText,
+  TAME_MARGIN, tameBonus, TRAP_ROLL, TRAP_SKILL, TRAP_FAIL_LEVELS } from '/shared/cards.js';
 import { esc, cardHTML } from '/art.js';
 import { ico } from '/icons.js';
 
@@ -9,6 +10,7 @@ export const GUIDE_CATS = [
   { id: 'monster', label: 'Монстры', test: d => d.type === 'monster' && !d.boss, note: 'Выходят из колоды проходов или по кнопке «Искать неприятности» (такой монстр разбужен: +' + TROUBLE_BONUS + ' к силе). Сила монстра — его уровень плюс поправки; победа даёт уровни и клад, проваленный побег — расплату. Метка «только уровень» — против него считается лишь уровень героя; «без помощи» — звать на помощь нельзя.' },
   { id: 'boss', label: 'Боссы', test: d => d.boss, note: `Уровень 666, сила — вдвое больше силы героя, против которого босс вышел, но не меньше ${BOSS_FLOOR}. За героями ниже ${BOSS_MIN_LEVEL}-го уровня не гонятся.` },
   { id: 'curse', label: 'Проклятия', test: d => d.type === 'curse', note: 'Срабатывают сразу: на того, кто выбил дверь, или на жертву, которую выберет игрок.' },
+  { id: 'trap', label: 'Ловушки', test: d => d.type === 'trap', note: `Выбил дверь — попался: обезвредить на ${TRAP_ROLL}+ (плуту и механику +${TRAP_SKILL}) — ловушка твоя, сорвалась — расплата и ещё −${TRAP_FAIL_LEVELS} ур.; или просто принять расплату. Из руки ловушку подкладывают сопернику: он бросает кубик сам.` },
   { id: 'enhancer', label: 'Усилители', test: d => d.type === 'enhancer' || d.type === 'wandering', note: 'Играются на монстра во время боя. «Из темноты вылезло…» добавляет в чужой бой монстра из руки.' },
   { id: 'race', label: 'Расы', test: d => d.type === 'race', note: 'Без расы герой — человек. Раса даёт постоянную способность.' },
   { id: 'class', label: 'Классы', test: d => d.type === 'class', note: 'Класс даёт способности — их кнопки появляются у вас на столе.' },
@@ -16,7 +18,8 @@ export const GUIDE_CATS = [
   { id: 'location', label: 'Локации', test: d => d.type === 'location', note: 'Лежит на столе и меняет правила для всех, пока её не сменит другая локация.' },
   { id: 'event', label: 'События', test: d => d.type === 'event', note: 'Срабатывают сразу для всего стола.' },
   { id: 'item', label: 'Вещи', test: d => d.type === 'item' && d.slot !== 'pet', note: 'Надетые вещи прибавляют силу. Продаются: каждые 1000 голдов — уровень.' },
-  { id: 'pet', label: 'Питомцы', test: d => d.type === 'item' && d.slot === 'pet', note: 'Один питомец на героя. Если побег не удался, питомец бросается на монстра и спасает от расплаты.' },
+  { id: 'pet', label: 'Питомцы', test: d => d.type === 'item' && d.slot === 'pet', note: `Один питомец на героя. Если побег не удался, питомец бросается на монстра и спасает от расплаты. Зверя, побеждённого с перевесом ${TAME_MARGIN}+, можно приручить — он тоже становится питомцем.` },
+  { id: 'ally', label: 'Спутники', test: d => d.type === 'ally', note: 'Один спутник на героя: новый прогоняет прежнего. Плут может сманить чужого спутника.' },
   { id: 'oneshot', label: 'Разовые', test: d => d.type === 'oneshot', note: 'Играются в бою и уходят в сброс.' },
   { id: 'buff', label: 'Зелья', test: d => d.type === 'buff', note: 'Играются на себя в любой момент: бонус к силе в этом или следующем бою.' },
   { id: 'level', label: 'Уровни и схроны', test: d => d.type === 'levelup' || d.type === 'hoard', note: 'Дают уровень или карты клада. Последний уровень берётся только победой над монстром.' },
@@ -70,6 +73,19 @@ function facts(d) {
     if (d.noHelp) f.push(['Помощь', 'звать нельзя']);
     if (d.levelOnly) f.push(['Бой', 'только уровнем: вещи, зелья, способности и разовые карты героям не помогают']);
     if (d.soloBonus) f.push(['Против одиночки', sign(d.soloBonus)]);
+    if (d.tags?.includes('beast') && !d.boss && !d.split) f.push(['Приручить', `при победе с перевесом ${TAME_MARGIN}+: питомец ${sign(tameBonus(d))}`]);
+  }
+  if (d.type === 'ally') {
+    if (d.bonus) f.push(['Сила', sign(d.bonus)]);
+    if (d.runBonus) f.push(['Побег', sign(d.runBonus)]);
+    if (d.handBonus) f.push(['Рука', `${sign(d.handBonus)} к пределу`]);
+    if (d.bigBonus) f.push(['Большие вещи', `ещё ${d.bigBonus}`]);
+    if (d.fee) f.push(['Плата', `карта ценой от ${d.fee} голдов в начале каждого хода`]);
+    if (d.value) f.push(['Цена', `${d.value} голдов`]);
+  }
+  if (d.type === 'trap') {
+    f.push(['Обезвредить', `${TRAP_ROLL}+ на кубике, плуту и механику ${TRAP_ROLL - TRAP_SKILL}+`]);
+    if (d.tags?.includes('gas')) f.push(['Защита', 'противогаз или каска с канарейкой']);
   }
   if (d.type === 'item') {
     f.push(['Место', SLOT_NAMES[d.slot] + (d.hands ? `, ${d.hands} ${plural(d.hands, 'рука', 'руки', 'рук')}` : '')]);

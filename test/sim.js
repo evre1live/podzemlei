@@ -8,7 +8,9 @@ const TOTAL = allUids('door').length + allUids('treasure').length;
 
 function countCards(s) {
   const all = [...s.decks.door, ...s.decks.treasure, ...s.discard.door, ...s.discard.treasure];
-  for (const p of s.players) all.push(...p.hand, ...p.equipped, ...p.carried, ...p.races, ...p.classes, ...[p.halfbreed, p.supermunch].filter(Boolean));
+  for (const p of s.players) all.push(...p.hand, ...p.equipped, ...p.carried, ...p.races, ...p.classes, ...[p.halfbreed, p.supermunch, p.ally, p.beast].filter(Boolean));
+  if (s.trap) all.push(s.trap.uid);
+  if (s.tame) all.push(s.tame.uid);
   if (s.combat) { for (const m of s.combat.monsters) all.push(m.uid, ...m.enh); all.push(...s.combat.used); }
   if (s.location) all.push(s.location);
   if (s.rig) all.push(...s.rig.queue);
@@ -26,11 +28,20 @@ function scan(s) {
     if (/удирает от «(Люцифер|Аид|Анубис|Морена|Чернобог)»/.test(l.text)) stats.bossEscaped++;
     if (/побежда(ют|ет) .*«(Люцифер|Аид|Анубис|Морена|Чернобог)»/.test(l.text)) stats.bossKilled++;
     if (/не убежал от «(Люцифер|Аид|Анубис|Морена|Чернобог)»/.test(l.text)) stats.bossCaught++;
+    if (l.text.includes(' приручает ')) stats.tamed++;
+    if (l.text.includes(' берёт в спутники ')) stats.allies++;
+    if (l.text.startsWith('Платить нечем')) stats.mercLeft++;
+    if (l.text.includes(' прячет её в карман')) stats.trapsDisarmed++;
+    if (l.text.includes(' срабатывает прямо в руках')) stats.trapsFailed++;
+    if (l.text.includes(' принимает расплату ')) stats.trapsTaken++;
+    if (l.text.includes(' подкладывает ')) stats.trapsPlanted++;
+    if (l.text.includes(' сманивает ')) stats.lures++;
   }
   s._seen = s.logSeq;
 }
 let ended = 0, stuck = 0, turnsTotal = 0, actions = 0, maxTurns = 0, errs = 0;
-const stats = { deaths: 0, wins: {} , help: 0, interfere: 0, steals: 0, bossMeet: 0, bossCalm: 0, bossEscaped: 0, bossKilled: 0, bossCaught: 0 };
+const stats = { deaths: 0, wins: {} , help: 0, interfere: 0, steals: 0, bossMeet: 0, bossCalm: 0, bossEscaped: 0, bossKilled: 0, bossCaught: 0,
+  tamed: 0, allies: 0, mercLeft: 0, trapsDisarmed: 0, trapsFailed: 0, trapsTaken: 0, trapsPlanted: 0, lures: 0 };
 for (let g = 0; g < N; g++) {
   const rng = mulberry32(g + 1);
   const n = 3 + (g % 4);

@@ -1,6 +1,6 @@
 // «Под Землёй» — клиент.
 import { def, RACE_NAMES, CLASS_NAMES, SETS, setRuleVars, ruleText, BOSS_FLOOR, TROUBLE_BONUS, LULLABY_PENALTY, MUTAGEN_BONUS, DISTILL_COST,
-  PERSONAS, GHOST_BONUS, DEATH_LEVELS, DEPTH, DEPTH_TREASURE_EVERY, TRADE_TIMEOUT_MS } from '/shared/cards.js';
+  PERSONAS, GHOST_BONUS, DEATH_LEVELS, DEPTH, DEPTH_TREASURE_EVERY, TRADE_TIMEOUT_MS, TAME_MARGIN, tameBonus, TRAP_FAIL_LEVELS } from '/shared/cards.js';
 import { esc, cardHTML, chipHTML, avatarSVG, iconSVG, cardBackSVG, locationSVG, cardIcon } from '/art.js';
 import { fx } from '/fx.js';
 import { sfx } from '/sfx.js';
@@ -581,19 +581,27 @@ function renderStage() {
       if (g.peek) text += ` <span class="peek-note">${ico('all-seeing-eye')}Ворон подсмотрел: за дверью <button class="linkish" data-uid="${esc(g.peek)}" data-zone="view">${esc(def(g.peek).name)}</button></span>`;
     }
     else if (step === 'post') { title = 'За дверью никого'; text = `Можно поискать неприятности — выйдет случайный монстр из колоды, разбуженный (+${TROUBLE_BONUS} к силе) — или обшарить комнату и взять карту втёмную.`; }
-    else { title = 'Ход почти закончен'; text = h.mustGive ? `В руке на ${cardsWord(h.mustGive)} больше нормы — лишнее уйдёт ${h.giveToLowest ? 'самому слабому игроку' : 'в сброс'}.` : 'Наведите порядок в вещах и передайте ход.'; }
+    else if (step === 'trap' && h.trap) {
+      const d = def(h.trap.uid);
+      title = 'Ловушка!';
+      text = `Обезвредить: ${h.trap.need}+ на кубике — и ловушка ваша, её можно подложить сопернику. Сорвётся — расплата и ещё −${TRAP_FAIL_LEVELS} ур. Не рисковать — ${esc(d.text.replace(/^Расплата:\s*/, '').replace(/\.$/, ''))}.`;
+    }
+    else {
+      title = 'Ход почти закончен'; text = h.mustGive ? `В руке на ${cardsWord(h.mustGive)} больше нормы — лишнее уйдёт ${h.giveToLowest ? 'самому слабому игроку' : 'в сброс'}.` : 'Наведите порядок в вещах и передайте ход.';
+      if (h.tame) text += ` ${esc(def(h.tame).name)} признал вашу силу — приручите его до конца хода (питомец +${tameBonus(def(h.tame))}).`;
+    }
   } else if (tp) {
     title = `Ходит ${esc(tp.name)}`;
-    text = step === 'pre' ? 'Готовится выбить дверь.' : step === 'post' ? 'Решает: драться с монстром из руки или обшарить комнату.' : 'Заканчивает ход.';
+    text = step === 'pre' ? 'Готовится выбить дверь.' : step === 'post' ? 'Решает: драться с монстром из руки или обшарить комнату.' : step === 'trap' ? 'Попал в ловушку и решает, рискнуть ли её обезвредить.' : 'Заканчивает ход.';
   }
-  const rv = g.reveal;
+  const rv = g.tame && g.tame.pid === g.turn.pid ? { uid: g.tame.uid, seq: S.ui.lastReveal } : g.reveal;
   let reveal = '';
   if (rv && g.phase === 'playing') {
     const fresh = rv.seq !== S.ui.lastReveal;
     S.ui.lastReveal = rv.seq;
     reveal = `<div class="reveal-slot ${fresh && !cine.on ? 'reveal-in' : ''}">${cardHTML(rv.uid, { size: 'md', attrs: 'data-zone="view"' })}</div>`;
   }
-  el.innerHTML = decks + `<div class="stage-inner"><div class="stage-msg"><h2>${title}</h2><p class="muted" style="margin:0">${text}</p></div>${reveal}<div class="act-bar">${actionButtons()}</div></div>`;
+  el.innerHTML = decks + `<div class="stage-inner${reveal ? ' with-reveal' : ''}"><div class="stage-msg"><h2>${title}</h2><p class="muted" style="margin:0">${text}</p></div>${reveal}<div class="act-bar">${actionButtons()}</div></div>`;
   if (reveal.includes('reveal-in')) requestAnimationFrame(() => { const r = $('#stage .reveal-in'); if (r) { fx.dust(r, { n: 18 }); fx.burst(r, { n: 16, speed: 200, g: 200 }); } });
   afterStage();
 }
@@ -642,6 +650,11 @@ function actionButtons() {
   if (!h || g.phase !== 'playing') return '';
   const b = [];
   if (h.kick) b.push(`<button class="btn primary big" data-act="kick">Выбить дверь</button>`);
+  if (h.trap) {
+    b.push(`<button class="btn primary big" data-act="disarm" title="Кубик ${h.trap.need}+: ловушка ваша; иначе расплата и −${TRAP_FAIL_LEVELS} ур.">Обезвредить (${h.trap.need}+)</button>`);
+    b.push(`<button class="btn" data-act="takeTrap">Принять расплату</button>`);
+  }
+  if (h.tame) b.push(`<button class="btn hero" data-act="tame" title="Зверь займёт место питомца; питомец-вещь уйдёт в запас">${ico('heavy-collar')}Приручить: +${tameBonus(def(h.tame))}</button>`);
   if (h.lookForTrouble) b.push(`<button class="btn danger" data-act="trouble" title="Бой со случайным монстром из колоды: он разбужен (+${TROUBLE_BONUS} к силе), можно нарваться и на босса">Искать неприятности</button>`);
   if (h.loot) b.push(`<button class="btn" data-act="loot">Обшарить комнату</button>`);
   if (h.endTurn) b.push(`<button class="btn primary big" data-act="endTurn">${h.mustGive ? `Отдать ${cardsWord(h.mustGive)} и закончить ход` : 'Закончить ход'}</button>`);
@@ -755,6 +768,12 @@ requestAnimationFrame(tickCountdowns);
 
 // ───────────────────────── мой стол ─────────────────────────
 const SLOT_ORDER = [['head', 'Головняк'], ['armor', 'Броник'], ['feet', 'Обувка'], ['hand', 'В руках'], ['pet', 'Питомец'], ['none', 'Прочее']];
+// приручённый зверь и спутник: отдельные места на столе героя
+const beastChip = (u, zone = 'ally') => `<button class="chip tamed" data-uid="${esc(u)}" data-zone="${zone}" title="Приручённый зверь: спасёт от одной расплаты">${ico('heavy-collar', 'chip-ico')}<span class="chip-name">${esc(def(u).name)}</span><b>+${tameBonus(def(u))}</b></button>`;
+const allyChip = (u, zone = 'ally') => { const d = def(u); const v = d.bonus ? `+${d.bonus}` : d.runBonus ? `бег +${d.runBonus}` : d.handBonus ? `рука +${d.handBonus}` : ''; return `<button class="chip ally" data-uid="${esc(u)}" data-zone="${zone}" title="${esc(d.text)}">${ico(cardIcon(d), 'chip-ico')}<span class="chip-name">${esc(d.name)}</span>${v ? `<b>${v}</b>` : ''}</button>`; };
+const hasPetSlot = p => p.beast || p.equipped.some(u => def(u).slot === 'pet');
+const slotItems = (p, key, chip, zone) => p.equipped.filter(u => def(u).slot === key).map(chip).join('') + (key === 'pet' && p.beast ? beastChip(p.beast, zone) : '');
+const allySlot = (p, zone) => (p.ally ? `<div class="slot"><small>Спутник</small>${allyChip(p.ally, zone)}</div>` : '');
 // комплекты снаряжения: собранные и начатые (надета хоть одна вещь)
 function setsHTML(p) {
   const have = new Set(p.equipped.map(u => def(u).id));
@@ -774,11 +793,12 @@ const ABIL = {
   charm: { cls: 'mage', label: 'Чары', tip: 'Сбросьте всю руку (от 3 карт) и усыпите монстра' },
   backstab: { cls: 'rogue', label: 'Удар в спину', tip: 'Сбросьте карту: участник боя получает −2' },
   steal: { cls: 'rogue', label: 'Кража', tip: 'Сбросьте карту и бросьте кубик: 4+ — вещь ваша' },
+  lure: { cls: 'rogue', label: 'Сманить', tip: 'Сбросьте карту и бросьте кубик: 4+ — чужой спутник или приручённый зверь уходит к вам' },
   lullaby: { cls: 'bard', label: 'Колыбельная', tip: `Сбросьте карту: монстры −${LULLABY_PENALTY} в этом бою (раз за бой)`, need: 1 },
   distill: { cls: 'alchemist', label: 'Перегонка', tip: `Сбросьте ${DISTILL_COST} карты и возьмите карту клада (раз в ход)`, need: DISTILL_COST },
   mutagen: { cls: 'witcher', label: 'Мутаген', tip: `Один раз за партию: сбросьте 2 карты в бою — ещё +${MUTAGEN_BONUS} к силе`, need: 2 },
 };
-const abilNeed = name => ABIL[name]?.need || (name === 'backstab' || name === 'steal' ? 1 : 0);
+const abilNeed = name => ABIL[name]?.need || (name === 'backstab' || name === 'steal' || name === 'lure' ? 1 : 0);
 
 function renderMine() {
   const p = me();
@@ -794,8 +814,9 @@ function renderMine() {
   if (!p.classes.length) traits.push(`<span class="trait none">Без класса</span>`);
   [p.halfbreed, p.supermunch].filter(Boolean).forEach(u => traits.push(`<button class="trait" data-uid="${u}" data-zone="trait">${iconSVG(def(u).art)}${esc(def(u).name)}</button>`));
 
-  const slot = key => p.equipped.filter(u => def(u).slot === key).map(u => chipHTML(u, { cls: picked.has(u) ? 'picked' : '' })).join('');
-  const slots = SLOT_ORDER.filter(([k]) => k !== 'pet' || p.equipped.some(u => def(u).slot === 'pet')).map(([k, label]) => `<div class="slot"><small>${k === 'hand' && p.handsLimit > 2 ? `${label} (${p.handsLimit})` : label}</small>${slot(k)}</div>`).join('')
+  const slot = key => slotItems(p, key, u => chipHTML(u, { cls: picked.has(u) ? 'picked' : '' }), 'ally');
+  const slots = SLOT_ORDER.filter(([k]) => k !== 'pet' || hasPetSlot(p)).map(([k, label]) => `<div class="slot"><small>${k === 'hand' && p.handsLimit > 2 ? `${label} (${p.handsLimit})` : label}</small>${slot(k)}</div>`).join('')
+    + allySlot(p, 'ally')
     + `<div class="slot"><small>Не надето</small>${p.carried.map(u => chipHTML(u, { cls: 'off' + (picked.has(u) ? ' picked' : '') })).join('')}</div>`;
 
   const abil = Object.entries(ABIL).filter(([k, a]) => p.classes.some(u => def(u).cls === a.cls)).map(([k, a]) => {
@@ -848,8 +869,9 @@ function renderWatcher() {
   const trait = u => `<button class="trait" data-uid="${u}" data-zone="view">${iconSVG(def(u).art)}${esc(def(u).name)}</button>`;
   const traits = [...p.races.map(trait), ...(p.races.length ? [] : ['<span class="trait none">Человек</span>']),
     ...p.classes.map(trait), ...(p.classes.length ? [] : ['<span class="trait none">Без класса</span>']), ...[p.halfbreed, p.supermunch].filter(Boolean).map(trait)];
-  const slot = key => p.equipped.filter(u => def(u).slot === key).map(u => chipHTML(u)).join('');
-  const slots = SLOT_ORDER.filter(([k]) => k !== 'pet' || p.equipped.some(u => def(u).slot === 'pet')).map(([k, label]) => `<div class="slot"><small>${label}</small>${slot(k)}</div>`).join('')
+  const slot = key => slotItems(p, key, u => chipHTML(u), 'view');
+  const slots = SLOT_ORDER.filter(([k]) => k !== 'pet' || hasPetSlot(p)).map(([k, label]) => `<div class="slot"><small>${label}</small>${slot(k)}</div>`).join('')
+    + allySlot(p, 'view')
     + `<div class="slot"><small>Не надето</small>${p.carried.map(u => chipHTML(u, { cls: 'off' })).join('')}</div>`;
   const run = 5 - p.runBonus;
   const now = g.turn.pid === p.id && g.phase === 'playing';
@@ -911,7 +933,7 @@ function modeAccepts(uid, zone) {
   const m = S.ui.mode;
   if (!m) return false;
   if (m.kind === 'give' || m.kind === 'ability') return zone === 'hand';
-  if (m.kind === 'sell') return !!def(uid).value && (zone === 'hand' ? ['item', 'oneshot', 'buff'].includes(def(uid).type) : true);
+  if (m.kind === 'sell') return !!def(uid).value && (zone === 'hand' ? ['item', 'oneshot', 'buff', 'ally'].includes(def(uid).type) : zone === 'table');
   return false;
 }
 // та же арифметика, что в движке (saleValue): гоблин +200 за вещь, полурослик удваивает самую дорогую, курс зависит от локации
@@ -938,7 +960,7 @@ function modeBarHTML() {
     const a = ABIL[m.name];
     const fixed = abilNeed(m.name);
     const ok = fixed ? n === fixed : n >= 1 && n <= m.max;
-    const what = m.name === 'steal' ? `, цель: «${esc(def(m.item).name)}» у ${esc(pname(m.target))}` : m.name === 'backstab' ? `, цель: ${esc(pname(m.target))}` : '';
+    const what = m.name === 'steal' || m.name === 'lure' ? `, цель: «${esc(def(m.item).name)}» у ${esc(pname(m.target))}` : m.name === 'backstab' ? `, цель: ${esc(pname(m.target))}` : '';
     return `<div class="modebar"><span><b>${a.label}</b>${what}. ${fixed === 1 ? 'Выберите карту для сброса.' : fixed ? `Выберите ${cardsWord(fixed)} для сброса: выбрано ${n}.` : `Выберите от 1 до ${m.max} карт для сброса: выбрано ${n}.`}</span><button class="btn primary small" data-act="modeOk" ${ok ? '' : 'disabled'}>Применить</button><button class="btn ghost small" data-act="modeCancel">Отмена</button></div>`;
   }
   return '';
@@ -982,7 +1004,7 @@ function closeOverlay() { layer.innerHTML = ''; S.ui.overlay = null; popOpts = [
 
 function optLabel(a) {
   const d = def(a.uid);
-  if (a.target) return d.effect === 'enslave' ? `Заставить помогать: ${pname(a.target)}` : `Наслать на ${pname(a.target)}`;
+  if (a.target) return d.effect === 'enslave' ? `Заставить помогать: ${pname(a.target)}` : d.type === 'trap' ? `Подложить: ${pname(a.target)}` : `Наслать на ${pname(a.target)}`;
   if (a.side) return a.side === 'player' ? `Героям +${d.bonus}` : `Монстрам +${d.bonus}`;
   if (Number.isInteger(a.monster)) return `${d.type === 'enhancer' ? 'Усилить' : 'Окаменить'} «${def(S.game.combat.monsters[a.monster].uid).name}»`;
   if (a.with) return `Выпустить «${def(a.with).name}» (ур. ${def(a.with).level})`;
@@ -990,6 +1012,7 @@ function optLabel(a) {
     case 'race': return me().races.length && !me().halfbreed ? `Стать: ${d.name} (вместо нынешней расы)` : `Стать: ${d.name}`;
     case 'class': return me().classes.length && !me().supermunch ? `Взять класс: ${d.name} (вместо нынешнего)` : `Взять класс: ${d.name}`;
     case 'item': return 'Выложить на стол';
+    case 'ally': return me().ally ? `Взять в спутники (вместо «${def(me().ally).name}»)` : 'Взять в спутники';
     case 'levelup': return 'Получить уровень';
     case 'hoard': return 'Открыть схрон';
     case 'oneshot': return d.effect === 'escape' ? 'Бросить шашку и сбежать' : d.effect === 'escapeBonus' ? `Закинуть верёвку: побег +${d.bonus}` : 'Сыграть';
@@ -1003,6 +1026,8 @@ function whenText(d) {
   switch (d.type) {
     case 'monster': return 'Монстра можно позвать на бой в свой ход, если за дверью никого не было, или подбросить в чужой бой картой «Из темноты вылезло…».';
     case 'curse': return 'Насылается на любого игрока в любой момент.';
+    case 'trap': return 'Подложите любому игроку в любой момент: он бросает кубик (4+, плуту и механику 2+). Не обезвредил — получает расплату.';
+    case 'ally': return 'Берётся в свой ход вне боя. Спутник один: новый прогоняет прежнего.';
     case 'race': case 'class': case 'halfbreed': case 'supermunch': case 'item': case 'hoard': return 'Играется в свой ход, когда нет боя.';
     case 'enhancer': return 'Играется на монстра в любом бою.';
     case 'wandering': return 'Играется в любом бою вместе с монстром из руки.';
@@ -1038,6 +1063,10 @@ function openCardPop(uid, zone) {
     if (h.manage) popOpts.push({ label: 'Сбросить', action: { type: 'discardInPlay', uid }, cls: 'ghost' });
   }
   if (zone === 'trait' && p && h.manage) popOpts.push({ label: 'Сбросить', action: { type: 'discardInPlay', uid }, cls: 'ghost' });
+  if (zone === 'ally' && p && (p.ally === uid || p.beast === uid)) {
+    if (p.beast === uid) groups.push(`<p class="why">Приручённый зверь: +${tameBonus(d)} к силе, занимает место питомца и спасёт от одной расплаты.</p>`);
+    if (h.manage) popOpts.push({ label: 'Отпустить', action: { type: 'discardInPlay', uid }, cls: 'ghost' });
+  }
   showOverlay(`<div class="pop" role="dialog" aria-label="${esc(d.name)}">
     ${cardHTML(uid, { size: 'lg', tab: false })}
     <div class="pop-actions">
@@ -1054,12 +1083,13 @@ function openOppPop(pid) {
   const mine = me();
   popOpts = [];
   if (mine) {
-    for (const u of mine.hand) for (const a of h.cards?.[u] || []) if (a.target === pid) popOpts.push({ label: def(u).effect === 'enslave' ? `«${def(u).name}»: пусть помогает` : `Наслать «${def(u).name}»`, action: a, cls: 'danger' });
+    for (const u of mine.hand) for (const a of h.cards?.[u] || []) if (a.target === pid) popOpts.push({ label: def(u).effect === 'enslave' ? `«${def(u).name}»: пусть помогает` : def(u).type === 'trap' ? `Подложить «${def(u).name}»` : `Наслать «${def(u).name}»`, action: a, cls: 'danger' });
+    for (const s of h.abilities?.lure || []) if (s.target === pid) popOpts.push({ label: `Сманить «${def(s.item).name}»`, fn: () => startMode({ kind: 'ability', name: 'lure', target: pid, item: s.item, picked: [], max: 1 }), cls: 'ghost' });
     for (const s of h.abilities?.steal || []) if (s.target === pid) popOpts.push({ label: `Стащить «${def(s.item).name}»`, fn: () => startMode({ kind: 'ability', name: 'steal', target: pid, item: s.item, picked: [], max: 1 }), cls: 'ghost' });
     for (const t of h.abilities?.backstab || []) if (t === pid) popOpts.push({ label: 'Ударить в спину (−2)', fn: () => startMode({ kind: 'ability', name: 'backstab', target: pid, picked: [], max: 1 }), cls: 'danger' });
   }
   if (mine && h.tradeTargets?.includes(pid)) popOpts.push({ label: 'Предложить обмен', fn: () => openTrade(pid), cls: 'hero' });
-  const items = [...p.equipped.map(u => chipHTML(u)), ...p.carried.map(u => chipHTML(u, { cls: 'off' }))].join('') || '<p class="muted">Вещей нет.</p>';
+  const items = [...p.equipped.map(u => chipHTML(u)), ...(p.beast ? [beastChip(p.beast, 'view')] : []), ...(p.ally ? [allyChip(p.ally, 'view')] : []), ...p.carried.map(u => chipHTML(u, { cls: 'off' }))].join('') || '<p class="muted">Вещей нет.</p>';
   showOverlay(`<div class="modal" role="dialog" aria-label="${esc(p.name)}">
     <div class="row"><span class="me-ava" style="--seat:${p.color}">${avatarSVG(gAva(p), p.color)}</span><div><h2>${esc(p.name)}</h2><div class="me-stats"><span class="lvl">${p.level}</span><span class="pow">${ico('crossed-swords')}${p.power}</span><span class="badge">${esc(raceText(p))}, ${esc(classText(p))}</span><span class="handcount"><i></i>${p.handCount}</span></div></div></div>
     <div class="opp-items" data-zone-view>${items}</div>
@@ -1225,6 +1255,28 @@ function extraFx(fresh) {
       case 'tradeNo':
         if (f.to === S.room.me) toast(`${pname(f.pid)} отказывается от обмена`);
         break;
+      case 'trap':
+        sfx.play('clang');
+        fx.dust(ava, { n: 14, rocks: 4 }); fx.float(ava, 'Ловушка!', 'bad'); fx.shake(ava?.closest('.opp') || ava);
+        break;
+      case 'trapOk':
+        sfx.play('diceOk'); fx.sparkle(ava, { n: 12 }); fx.float(ava, 'Обезврежено', 'good');
+        break;
+      case 'tamable':
+        if (f.pid === S.room.me) fx.banner('Зверь покорён', `${def(f.card).name} признал вашу силу: приручите его до конца хода`, 'win');
+        break;
+      case 'tame':
+        sfx.play('pet'); fx.hearts(ava); fx.float(ava, `Питомец +${tameBonus(def(f.card))}`, 'good');
+        break;
+      case 'ally':
+        sfx.play('buff'); fx.sparkle(ava, { n: 14, colors: ['#d2e6ff', '#6f97c8', '#fff'] }); fx.float(ava, def(f.card).name.split(' ')[0], 'good');
+        break;
+      case 'allyGone':
+        sfx.play('poof'); fx.smoke(ava, { sparks: false }); fx.float(ava, 'Наёмник ушёл', 'bad');
+        break;
+      case 'lure':
+        sfx.play('dash'); fx.float(avaOf(f.from), 'Сманили!', 'bad'); fx.float(ava, def(f.card).name.split(' ')[0], 'good');
+        break;
     }
   }
 }
@@ -1250,11 +1302,15 @@ const RULES = `<div class="modal rules" role="dialog" aria-label="Как игр�
   <h2>Как играть</h2>
   <p>Каждый начинает человеком первого уровня с 4 картами проходов и 4 картами клада. Побеждает тот, кто первым дойдёт до <b>10-го уровня</b>; для долгой партии хозяин в лобби может выбрать 15 или 20. Последний уровень берётся только победой над монстром.</p>
   <h3>Ход</h3>
-  <p>1. Разложите расу, класс и вещи. 2. <b>Выбейте дверь</b>: монстр — бой, проклятие — сработает на вас, остальное уходит в руку. 3. Если монстра не было — ищите неприятности (выйдет случайный монстр из колоды, разбуженный: +${TROUBLE_BONUS} к силе) или обшарьте комнату. 4. Лишние карты сверх пяти отдаются самому слабому.</p>
+  <p>1. Разложите расу, класс и вещи. 2. <b>Выбейте дверь</b>: монстр — бой, проклятие — сработает на вас, ловушка — обезвредить или принять расплату, остальное уходит в руку. 3. Если монстра не было — ищите неприятности (выйдет случайный монстр из колоды, разбуженный: +${TROUBLE_BONUS} к силе) или обшарьте комнату. 4. Лишние карты сверх пяти отдаются самому слабому.</p>
   <h3>Бой</h3>
   <p>Ваша сила — уровень плюс надетые вещи. Если она больше силы монстров, жмите «Добить!». У остальных есть несколько секунд, чтобы помешать: усилить монстра, подбросить ещё одного, ударить в спину. За победу — уровень и клад. Не хватает сил — зовите на помощь, пообещав часть клада, или бегите: побег удаётся на 5–6 кубика. Карта «Ты мой раб» заставляет любого игрока вступить в ваш бой: отказаться он не может, а клада ему не положено. Не убежали — получите расплату с карты монстра.</p>
   <h3>Вещи и уровни</h3>
-  <p>Один головняк, один броник, одна обувка, две руки и одна большая вещь (гномам — сколько угодно, механикам — три руки). Можно завести одного питомца: он даёт бонус и один раз спасает от расплаты. Вещи можно продать: каждые 1000 голдов — уровень.</p>
+  <p>Один головняк, один броник, одна обувка, две руки и одна большая вещь (гномам — сколько угодно, механикам — три руки). Можно завести одного питомца: он даёт бонус и один раз спасает от расплаты. Вещи можно продать: каждые 1000 голдов — уровень. Собрали все вещи комплекта — получаете бонус сверху: Легендарный (Доспехи Бога, Шлем Ареса и Меч Экскалибур) даёт ещё +10.</p>
+  <h3>Спутники и приручение</h3>
+  <p>Спутник — карта клада, он один: Носильщик даёт +2 к пределу руки и ещё одну большую вещь, Проводник — +2 к побегу, Наёмник — +3 к силе, но в начале каждого вашего хода берёт плату: карту ценой от 200 голдов из руки или запаса, иначе уходит. Победили зверя с перевесом ${TAME_MARGIN} и больше — до конца хода его можно приручить: он займёт место питомца и даст силу по своему уровню. Плут может сманить чужого спутника или зверя: сбросить карту и выбросить 4+.</p>
+  <h3>Ловушки</h3>
+  <p>Ловушка за дверью срабатывает на того, кто её открыл. Можно рискнуть и обезвредить — на кубике 4+ (плуту и механику 2+): тогда ловушка ваша и её можно подложить сопернику. Сорвалась — расплата и ещё −1 уровень. Можно не рисковать и просто принять расплату. Подложенную ловушку соперник обезвреживает тем же броском, но без лишнего штрафа. Противогаз и каска с канарейкой спасают от газа.</p>
   <h3>Расы и классы</h3>
   <p>Расы: эльф, гном, полурослик, орк, гоблин и кротолюд. Классы: воин, маг, жрец, плут, бард, алхимик, механик и ведьмак. У каждого свои способности — они написаны на картах, а кнопки способностей появляются у вас на столе.</p>
   <h3>Глубина</h3>
@@ -1270,7 +1326,7 @@ const RULES = `<div class="modal rules" role="dialog" aria-label="Как игр�
   <h3>Особые монстры</h3>
   <p>Одни нападают из засады, едва вы открыли дверь, другие не терпят помощников (метка «без помощи»), от третьих не убежать. Против монстров с меткой «только уровень» — Лихо, Горгоны, Циклопа и Кощея — считается один уровень героя: вещи, зелья, способности и разовые бонусы не помогают. Зеркальный двойник всегда сильнее лидера партии. Читайте карту, прежде чем драться.</p>
   <h3>Боссы</h3>
-  <p>В колоде три босса — Люцифер, Аид и Анубис. Уровень у них 666, а сила — вдвое больше силы героя, против которого босс вышел, но не меньше ${BOSS_FLOOR}. Усилители и чары на них не действуют, зато помощник, зелья и разовые карты помогают как обычно: вдвоём босса можно одолеть и получить 5 кладов и 2 уровня. За героями ниже 9-го уровня боссы не гонятся, а тех, кто постарше, при неудачном побеге убивают и отбрасывают на 5 уровней.</p>
+  <p>В колоде пять боссов — Люцифер, Аид, Анубис, Морена и Чернобог. Морена при появлении морозит у каждого лучшую надетую вещь, Чернобог отнимает по карте у всех, кроме бойца. Уровень у боссов 666, а сила — вдвое больше силы героя, против которого босс вышел, но не меньше ${BOSS_FLOOR}. Усилители и чары на них не действуют, зато помощник, зелья и разовые карты помогают как обычно: вдвоём босса можно одолеть и получить 5 кладов и 2 уровня. За героями ниже 9-го уровня боссы не гонятся, а тех, кто постарше, при неудачном побеге убивают и отбрасывают на 5 уровней.</p>
   <h3>Смерть и призраки</h3>
   <p>Погибший теряет вещи, руку и ${DEATH_LEVELS} уровень (ниже первого не опустится), но сохраняет расу и класс. В свой следующий ход он возвращается с новыми картами. А пока ждёт — он призрак: раз за ход может подкинуть +${GHOST_BONUS} героям или монстрам в чужом бою.</p>
   <div class="row"><button class="btn primary" data-act="closeOverlay">Понятно</button><button class="btn ghost" data-act="guide">Справочник карт</button></div>
@@ -1609,8 +1665,10 @@ document.addEventListener('click', async e => {
       return;
     }
     case 'clearPassword': { const r = await call('room:settings', { password: '' }); if (!r.ok) toast(r.error); return; }
-    case 'kick': case 'loot': case 'fight': case 'runAway': case 'autoEquip': case 'cancelHelp': case 'pass':
+    case 'kick': case 'loot': case 'fight': case 'runAway': case 'autoEquip': case 'cancelHelp': case 'pass': case 'tame':
       return act({ type: a });
+    case 'disarm': return act({ type: 'trap', disarm: true });
+    case 'takeTrap': return act({ type: 'trap', disarm: false });
     case 'bribe': {
       // какую вещь бросить монстру: любую со стола, кроме легендарных
       const list = hints().bribe || [];
@@ -1904,6 +1962,10 @@ function startAbility(name) {
     if (ts.length === 1) return startMode({ kind: 'ability', name, target: ts[0], picked: [], max: 1 });
     popOpts = ts.map(id => ({ label: `Ударить ${pname(id)}`, fn: () => startMode({ kind: 'ability', name, target: id, picked: [], max: 1 }), cls: 'danger' }));
     return showOverlay(`<div class="modal" role="dialog" aria-label="Удар в спину"><h2>Кого ударить в спину?</h2><div class="pop-actions">${popOpts.map((o, i) => `<button class="btn ${o.cls}" data-popopt="${i}">${esc(o.label)}</button>`).join('')}</div><button class="btn ghost" data-act="closeOverlay">Отмена</button></div>`);
+  }
+  if (name === 'lure') {
+    popOpts = (h.abilities.lure || []).map(s => ({ label: `${pname(s.target)}: «${def(s.item).name}»`, fn: () => startMode({ kind: 'ability', name, target: s.target, item: s.item, picked: [], max: 1 }), cls: 'ghost' }));
+    return showOverlay(`<div class="modal" role="dialog" aria-label="Сманить"><h2>Кого сманить?</h2><p class="muted" style="margin:0">Сбросите карту и бросите кубик: на 4–6 спутник или зверь уходит к вам (ваш прежний уйдёт), иначе потеряете уровень.</p><div class="pop-actions">${popOpts.map((o, i) => `<button class="btn ${o.cls}" data-popopt="${i}">${esc(o.label)}</button>`).join('')}</div><button class="btn ghost" data-act="closeOverlay">Отмена</button></div>`);
   }
   if (name === 'steal') {
     popOpts = (h.abilities.steal || []).map(s => ({ label: `${pname(s.target)}: «${def(s.item).name}» (${def(s.item).value} г)`, fn: () => startMode({ kind: 'ability', name, target: s.target, item: s.item, picked: [], max: 1 }), cls: 'ghost' }));

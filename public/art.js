@@ -271,6 +271,8 @@ const ICON_OF = {
   i_gasmask: 'gas-mask', i_canary: 'mining-helmet', i_ushanka: 'crested-helmet', i_ratcloak: 'cloak', i_firesuit: 'fire-extinguisher', i_trays: 'breastplate',
   i_rollers: 'running-shoe', i_valenki: 'boots', i_waders: 'rubber-boot', i_samovar: 'flame', i_turnshield: 'security-gate', i_kladenets: 'broadsword',
   p_raven: 'all-seeing-eye', p_owl: 'paw-print',
+  t_tripwire: 'tripwire', t_pit: 'spiky-pit', t_net: 'fishing-net', t_gas: 'poison-gas', t_rocks: 'falling-rocks', t_plate: 'mantrap',
+  a_porter: 'backpack', a_guide: 'walking-scout', a_merc: 'swordman',
   k_draft: 'whirlwind', k_cavein: 'stone-pile', k_puddle: 'water-drop', k_rust: 'rusty-sword', k_rusthands: 'rusty-sword', k_tax: 'coins', k_fever: 'heart-minus', k_amnesia: 'brain',
   k_fired: 'cross-mark', k_pickpocket: 'robber-hand', k_klepto: 'robber-hand', k_flu: 'snowflake-1', k_backpack: 'knapsack', k_jinx: 'evil-eyes',
   e_seasoned: 'upgrade', e_armored: 'armor-upgrade', e_hungry: 'sharp-smile', e_pack: 'two-shadows', e_rabid: 'fanged-skull', e_morning: 'alarm-clock', e_baby: 'egg-clutch',
@@ -292,7 +294,8 @@ const ICON_OF = {
   c_witcher: 'crossed-sabres', x_halfbreed: 'yin-yang', x_super: 'double-face-mask',
 };
 const ICON_OF_TYPE = { monster: 'claw-slashes', curse: 'cursed-star', enhancer: 'upgrade', wandering: 'evil-eyes', event: 'sunbeams', location: 'stone-tower', item: 'broadsword',
-  oneshot: 'fizzing-flask', buff: 'standing-potion', levelup: 'upgrade', hoard: 'open-treasure-chest', race: 'person', class: 'crossed-swords', halfbreed: 'yin-yang', supermunch: 'double-face-mask' };
+  oneshot: 'fizzing-flask', buff: 'standing-potion', levelup: 'upgrade', hoard: 'open-treasure-chest', race: 'person', class: 'crossed-swords', halfbreed: 'yin-yang', supermunch: 'double-face-mask',
+  ally: 'person', trap: 'wolf-trap' };
 export function cardIcon(d) {
   return ICON_OF[d.id] || (d.boss ? 'horned-skull' : d.tags?.includes('undead') ? 'skull-crossed-bones' : ICON_OF_TYPE[d.type] || 'cursed-star');
 }
@@ -343,7 +346,7 @@ export { avatarSVG };
 const TYPE_LABEL = {
   monster: 'Монстр', curse: 'Проклятие', race: 'Раса', class: 'Класс', halfbreed: 'Особое', supermunch: 'Особое',
   enhancer: 'Усилитель', wandering: 'Бродячий', item: 'Вещь', oneshot: 'Разовая', levelup: 'Уровень', hoard: 'Клад',
-  location: 'Локация', event: 'Событие', buff: 'Зелье',
+  location: 'Локация', event: 'Событие', buff: 'Зелье', ally: 'Спутник', trap: 'Ловушка',
 };
 const SLOT_LABEL = SLOT_NAMES;
 
@@ -377,7 +380,9 @@ export function cornerOf(d) {
   if (d.boss) return { cls: 'lv hell', v: d.level, t: 'Уровень босса — 666, а сила — вдвое больше силы героя' };
   if (d.type === 'monster') return d.mirror != null ? { cls: 'lv', v: '?', t: 'Сила зависит от лидера' } : { cls: 'lv', v: d.level, t: 'Уровень монстра' };
   if (d.type === 'oneshot' && d.effect === 'escapeBonus') return { cls: 'run', v: '+' + d.bonus, t: 'К побегу' };
-  if ((d.type === 'item' || d.type === 'oneshot' || d.type === 'buff') && d.bonus) return { cls: 'bonus', v: '+' + d.bonus, t: 'Бонус к силе' };
+  if ((d.type === 'item' || d.type === 'oneshot' || d.type === 'buff' || d.type === 'ally') && d.bonus) return { cls: 'bonus', v: '+' + d.bonus, t: 'Бонус к силе' };
+  if (d.type === 'ally' && d.runBonus) return { cls: 'run', v: '+' + d.runBonus, t: 'К побегу' };
+  if (d.type === 'ally' && d.handBonus) return { cls: 'bonus', v: '+' + d.handBonus, t: 'К пределу руки' };
   if (d.type === 'enhancer') return d.double ? { cls: 'lv', v: '×2', t: 'Удваивает монстра' } : { cls: d.bonus > 0 ? 'lv' : 'bonus', v: (d.bonus > 0 ? '+' : '') + d.bonus, t: 'Сила монстра' };
   return null;
 }
