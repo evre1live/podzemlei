@@ -458,15 +458,24 @@ t('по умолчанию и при мусоре в настройках — 10
   assert.equal(s.phase, 'ended');
 });
 
-t('внешность: пол, телосложение и 10 видов одежды; старые аватары не ломаются', () => {
-  assert.equal(AVATAR_PARTS.gender, 2); assert.equal(AVATAR_PARTS.body, 4); assert.equal(AVATAR_PARTS.outfit, 10); assert.equal(AVATAR_PARTS.hair, 20);
-  const a = cleanAvatar({ skin: 2, hair: 3, gender: 1, body: 3, outfit: 9 });
-  assert.deepEqual([a.gender, a.body, a.outfit], [1, 3, 9]);
-  const old = cleanAvatar({ skin: 2, hair: 3 });
-  assert.deepEqual([old.gender, old.body, old.outfit], [0, 0, 0]);
-  const junk = cleanAvatar({ gender: 5, body: -1, outfit: 'кожанка' });
-  assert.deepEqual([junk.gender, junk.body, junk.outfit], [0, 0, 0]);
-  for (let i = 0; i < 300; i++) { const r = avatarFromSeed(i); if (r.gender) assert.equal(r.facial, 0); }
+t('внешность: раса, пол, одежда, уборы и украшения; старые аватары не ломаются', () => {
+  assert.deepEqual([AVATAR_PARTS.gender, AVATAR_PARTS.race, AVATAR_PARTS.body, AVATAR_PARTS.hair, AVATAR_PARTS.hat, AVATAR_PARTS.outfit, AVATAR_PARTS.jewel], [2, 7, 3, 16, 13, 13, 10]);
+  const a = cleanAvatar({ skin: 2, hair: 3, gender: 1, race: 6, body: 2, outfit: 12, jewel: 9 });
+  assert.deepEqual([a.gender, a.race, a.body, a.outfit, a.jewel], [1, 6, 2, 12, 9]);
+  // аватар из прошлой версии: лишние поля отбрасываются, недостающие — 0, вышедшие за пределы — 0
+  const old = cleanAvatar({ skin: 2, hair: 19, glasses: 3, body: 3, outfit: 9 });
+  assert.deepEqual([old.race, old.hair, old.body, old.outfit, old.jewel, old.glasses], [0, 0, 0, 9, 0, undefined]);
+  const junk = cleanAvatar({ gender: 5, race: -1, outfit: 'кожанка', jewel: 1.5 });
+  assert.deepEqual([junk.gender, junk.race, junk.outfit, junk.jewel], [0, 0, 0, 0]);
+  const races = new Set();
+  for (let i = 0; i < 400; i++) {
+    const r = avatarFromSeed(i);
+    assert.deepEqual(cleanAvatar(r), r);
+    races.add(r.race);
+    if (r.gender) assert.equal(r.facial, 0);
+    if (r.race === 2 && !r.gender) assert.ok(r.facial >= 4, 'гномы с бородой');
+  }
+  assert.equal(races.size, 7);
   const w = withGender({ ...old, hair: 1, facial: 4 }, 1);
   assert.equal(w.facial, 0); assert.notEqual(w.hair, 1);
 });

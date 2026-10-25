@@ -6,8 +6,8 @@ import { fx } from '/fx.js';
 import { sfx } from '/sfx.js';
 import { setWorld } from '/world.js';
 import { cine, growlKind } from '/cine.js';
-import { AVATAR_PARTS, avatarFromSeed, cleanAvatar, withGender } from '/shared/avatar.js';
-import { AV_LABELS, TINCT, BGC } from '/art-avatar.js';
+import { AVATAR_PARTS, avatarFromSeed, cleanAvatar, withGender, MOLE } from '/shared/avatar.js';
+import { AV_LABELS, BGC, EYEC, HAIRC, CLOTH, HAT_COLORED, skinPalette } from '/art-avatar.js';
 import { createVoice } from '/voice.js';
 import { ico } from '/icons.js';
 
@@ -172,8 +172,8 @@ mount.home = () => {
       <div class="panel">
         <h2>Новая комната</h2>
         <form class="form" id="createForm" autocomplete="off">
-          <div class="hero-row"><button type="button" class="hero-ava" id="homeAva" data-act="avatar" aria-label="Настроить герб героя">${avatarSVG(S.avatar, '#3a3a42')}</button>
-            <div><div class="muted" style="font-size:14px;margin-bottom:6px">Ваш герой</div><button type="button" class="btn small" data-act="avatar">Настроить герб</button></div></div>
+          <div class="hero-row"><button type="button" class="hero-ava" id="homeAva" data-act="avatar" aria-label="Настроить облик героя">${avatarSVG(S.avatar, '#3a3a42')}</button>
+            <div><div class="muted" style="font-size:14px;margin-bottom:6px">Ваш герой</div><button type="button" class="btn small" data-act="avatar">Настроить облик</button></div></div>
           <label>Ваше имя<input type="text" id="nameInput" maxlength="20" placeholder="Например, Джамшид" required></label>
           <label>Название комнаты<input type="text" name="rname" maxlength="20" placeholder="Пятничный подвал"></label>
           <label>Пароль, чтобы зашли только свои<input type="password" name="password" maxlength="64" placeholder="Можно оставить пустым"></label>
@@ -365,7 +365,7 @@ update.lobby = () => {
   const seats = r.members.map(m => `
     <div class="seat ${m.id === r.me ? 'me' : ''}" style="--seat:${m.color}" data-vmember="${m.id}">
       ${isHost && m.id !== r.me ? `<button class="btn ghost small kick" data-kick="${m.id}" title="Убрать из-за стола" aria-label="Убрать ${esc(m.name)}">${ico('cross-mark')}</button>` : ''}
-      ${m.id === r.me ? `<button class="ava ava-edit" data-act="avatar" aria-label="Настроить герб" title="Настроить герб">${avatarSVG(m.avatar, m.color)}<i>${ico('quill-ink')}</i></button>` : `<div class="ava">${avatarSVG(m.avatar, m.color)}</div>`}
+      ${m.id === r.me ? `<button class="ava ava-edit" data-act="avatar" aria-label="Настроить облик" title="Настроить облик">${avatarSVG(m.avatar, m.color)}<i>${ico('quill-ink')}</i></button>` : `<div class="ava">${avatarSVG(m.avatar, m.color)}</div>`}
       <div class="sname">${esc(m.name)}</div>
       <div class="stag">${m.id === r.hostId ? 'хозяин' : m.isBot ? 'бот' : m.connected ? 'готов' : 'нет связи'}${m.id === r.me ? ', это вы' : ''}</div>
     </div>`);
@@ -1561,7 +1561,7 @@ document.addEventListener('click', async e => {
           <button class="btn ghost" data-act="closeOverlay">Вернуться к столу</button></div>`);
       }
       return showOverlay(`<div class="modal" role="dialog" aria-label="Меню"><h2>Меню</h2>
-        <button class="btn" data-act="avatar">Герб героя</button>
+        <button class="btn" data-act="avatar">Облик героя</button>
         <button class="btn" data-act="copy">Скопировать приглашение</button>
         <button class="btn" data-act="copyWatch">Ссылка для зрителей</button>
         <button class="btn" data-act="guide">Справочник карт</button>
@@ -1613,41 +1613,80 @@ document.addEventListener('click', async e => {
 });
 
 // ───────────────────────── внешность героя ─────────────────────────
+const mole = cfg => cfg.race === MOLE;
+// ряды редактора: pick — выбор из картинок (view — какую часть портрета показывать), colors — образцы цвета
 const AV_TABS = [
-  { id: 'shield', label: 'Щит', rows: [['shirt', 'Цвет поля', TINCT], ['glasses', 'Деление щита', null, true], ['hatColor', 'Второй цвет', TINCT]] },
-  { id: 'charge', label: 'Знак', rows: [['hat', 'Гербовый знак', null, true]] },
-  { id: 'bg', label: 'Фон', rows: [['bg', 'Цвет фона', BGC]] },
+  { id: 'base', label: 'Основа', rows: [
+    { k: 'gender', t: 'Пол', pick: true },
+    { k: 'race', t: 'Раса', pick: true },
+    { k: 'body', t: 'Телосложение', pick: true },
+    { k: 'skin', t: cfg => (mole(cfg) ? 'Мех' : 'Кожа'), colors: cfg => skinPalette(cfg.race) },
+    { k: 'bg', t: 'Фон', colors: () => BGC },
+  ] },
+  { id: 'face', label: 'Лицо', rows: [
+    { k: 'eyes', t: 'Глаза', colors: () => EYEC, hide: mole },
+    { k: 'brows', t: 'Взгляд', pick: true, view: 'face', hide: mole },
+    { k: 'mouth', t: 'Рот', pick: true, view: 'face' },
+    { k: 'extra', t: 'Приметы', pick: true, view: 'face' },
+  ] },
+  { id: 'hair', label: 'Волосы', note: cfg => (mole(cfg) ? 'У кротолюдов вместо волос мех — его цвет выбирается на вкладке «Основа».' : ''), rows: [
+    { k: 'hair', t: 'Причёска', pick: true, view: 'head', hide: mole },
+    { k: 'hairColor', t: 'Цвет волос и бровей', colors: () => HAIRC, hide: mole },
+    { k: 'facial', t: 'Борода и усы', pick: true, view: 'head', hide: mole },
+  ] },
+  { id: 'wear', label: 'Одежда', rows: [
+    { k: 'outfit', t: 'Верхняя одежда', pick: true },
+    { k: 'shirt', t: 'Цвет одежды', colors: () => CLOTH },
+  ] },
+  { id: 'hat', label: 'Убор', rows: [
+    { k: 'hat', t: 'Головной убор', pick: true, view: 'head' },
+    { k: 'hatColor', t: 'Цвет ткани', colors: () => CLOTH, hide: cfg => !HAT_COLORED.has(cfg.hat) },
+  ] },
+  { id: 'more', label: 'Украшения', rows: [
+    { k: 'jewel', t: 'Украшения', pick: true },
+  ] },
 ];
 // вариант внешности для превью и для клика: пол меняет ещё бороду и причёску
 const avWith = (cfg, k, i) => (k === 'gender' ? withGender(cfg, i) : { ...cfg, [k]: i });
 const seatColor = () => S.room?.members.find(m => m.id === S.room.me)?.color || '#3a3a42';
 function openAvatarEditor() {
-  S.ui.avEdit = { cfg: cleanAvatar(S.avatar && typeof S.avatar === 'object' ? S.avatar : avatarFromSeed(Number(S.avatar) || 0)), tab: S.ui.avEdit?.tab || 'shield' };
+  S.ui.avEdit = { cfg: cleanAvatar(S.avatar && typeof S.avatar === 'object' ? S.avatar : avatarFromSeed(Number(S.avatar) || 0)), tab: S.ui.avEdit?.tab || 'base' };
   drawAvatarEditor();
+}
+function avRow(r, cfg, sc) {
+  const { k, pick, view = 'full' } = r, n = AVATAR_PARTS[k], names = AV_LABELS[k] || [];
+  const title = typeof r.t === 'function' ? r.t(cfg) : r.t;
+  if (pick) return `<div class="av-row"><div class="av-title">${title}: <b>${esc(names[cfg[k]] || '')}</b></div><div class="av-grid labeled">${Array.from({ length: n }, (_, i) =>
+    `<button class="av-pick${cfg[k] === i ? ' on' : ''}" data-av-k="${k}" data-av-v="${i}" aria-pressed="${cfg[k] === i}"><span class="c">${avatarSVG(avWith(cfg, k, i), sc, '', view)}</span><small>${esc(names[i] || '')}</small></button>`).join('')}</div></div>`;
+  const colors = r.colors(cfg);
+  const items = Array.from({ length: n }, (_, i) => {
+    const seat = k === 'bg' && i === 0, name = seat ? 'Цвет вашего места' : names[i] || `${title} ${i + 1}`;
+    return `<button class="av-sw${cfg[k] === i ? ' on' : ''}" data-av-k="${k}" data-av-v="${i}" style="--c:${colors[i] || sc}" aria-pressed="${cfg[k] === i}" aria-label="${esc(name)}" title="${esc(name)}">${seat ? '<i>место</i>' : ''}</button>`;
+  }).join('');
+  return `<div class="av-row"><div class="av-title">${title}${names[cfg[k]] ? `: <b>${esc(k === 'bg' && !cfg[k] ? 'цвет места' : names[cfg[k]])}</b>` : ''}</div><div class="av-swatches">${items}</div></div>`;
 }
 function drawAvatarEditor() {
   const E = S.ui.avEdit, cfg = E.cfg, sc = seatColor();
   const tab = AV_TABS.find(t => t.id === E.tab) || AV_TABS[0];
-  const row = ([k, title, colors, labeled]) => {
-    const n = AVATAR_PARTS[k];
-    const lab = i => esc(AV_LABELS[k]?.[i] || title);
-    if (labeled) return `<div class="av-row"><div class="av-title">${title}: <b>${lab(cfg[k])}</b></div><div class="av-grid labeled">${Array.from({ length: n }, (_, i) =>
-      `<button class="av-pick${cfg[k] === i ? ' on' : ''}" data-av-k="${k}" data-av-v="${i}" aria-pressed="${cfg[k] === i}"><span class="c">${avatarSVG(avWith(cfg, k, i), sc)}</span><small>${lab(i)}</small></button>`).join('')}</div></div>`;
-    const items = Array.from({ length: n }, (_, i) => colors
-      ? `<button class="av-sw${cfg[k] === i ? ' on' : ''}" data-av-k="${k}" data-av-v="${i}" style="--c:${colors[i] || sc}" aria-pressed="${cfg[k] === i}" aria-label="${title} ${i + 1}" title="${k === 'bg' && i === 0 ? 'Цвет вашего места' : ''}">${k === 'bg' && i === 0 ? '<i>место</i>' : ''}</button>`
-      : `<button class="av-opt${cfg[k] === i ? ' on' : ''}" data-av-k="${k}" data-av-v="${i}" aria-pressed="${cfg[k] === i}" title="${esc(AV_LABELS[k]?.[i] || '')}" aria-label="${lab(i)}">${avatarSVG(avWith(cfg, k, i), sc)}</button>`).join('');
-    return `<div class="av-row"><div class="av-title">${title}${!colors && AV_LABELS[k] ? `: <b>${esc(AV_LABELS[k][cfg[k]])}</b>` : ''}</div><div class="${colors ? 'av-swatches' : 'av-grid'}">${items}</div></div>`;
-  };
-  showOverlay(`<div class="modal av-modal" role="dialog" aria-label="Герб героя" id="avModal">
-    <h2>Герб героя</h2>
+  const note = tab.note?.(cfg);
+  const rows = tab.rows.filter(r => !r.hide?.(cfg)).map(r => avRow(r, cfg, sc)).join('') + (note ? `<p class="muted av-note">${esc(note)}</p>` : '');
+  // при выборе варианта перерисовываем только содержимое, чтобы список не прыгал наверх
+  const box = $('#avModal');
+  if (box && box.dataset.avtab === tab.id) {
+    box.querySelector('.av-preview').innerHTML = avatarSVG(cfg, sc);
+    box.querySelector('.av-rows').innerHTML = rows;
+    return;
+  }
+  showOverlay(`<div class="modal av-modal" role="dialog" aria-label="Облик героя" id="avModal" data-avtab="${tab.id}">
+    <h2>Облик героя</h2>
     <div class="av-body">
       <div class="av-side">
         <div class="av-preview" style="--seat:${sc}">${avatarSVG(cfg, sc)}</div>
-        <button class="btn small" data-act="avatarRandom">Случайно</button>
+        <button class="btn small" data-act="avatarRandom">${ico('rolling-dices')}Случайно</button>
       </div>
       <div class="av-main">
         <div class="tabs av-tabs" role="tablist">${AV_TABS.map(t => `<button role="tab" data-av-tab="${t.id}" aria-selected="${t.id === tab.id}">${t.label}</button>`).join('')}</div>
-        <div class="av-rows">${tab.rows.map(row).join('')}</div>
+        <div class="av-rows">${rows}</div>
       </div>
     </div>
     <div class="row" style="justify-content:flex-end"><button class="btn ghost" data-act="closeOverlay">Отмена</button><button class="btn primary" data-act="avatarSave">Сохранить</button></div>
@@ -1658,8 +1697,8 @@ async function saveAvatar() {
   LS.set('avatar', S.avatar);
   closeOverlay();
   const home = $('#homeAva'); if (home) home.innerHTML = avatarSVG(S.avatar, '#3a3a42');
-  if (S.room) { const r = await call('me:avatar', { avatar: S.avatar }); if (!r.ok) toast(r.error); else toast('Герб обновлён', true); }
-  else toast('Герб сохранён', true);
+  if (S.room) { const r = await call('me:avatar', { avatar: S.avatar }); if (!r.ok) toast(r.error); else toast('Облик обновлён', true); }
+  else toast('Облик сохранён', true);
 }
 
 // ───────────────────────── голосовой чат ─────────────────────────
