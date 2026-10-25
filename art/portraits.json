@@ -1,0 +1,185 @@
+{
+ "note": "Листы портретов и рамок: 3×2 панели, слева направо, сверху вниз.",
+ "grid": [
+  3,
+  2
+ ],
+ "sheets": [
+  {
+   "n": 1,
+   "ids": [
+    "p_human_m_1",
+    "p_human_m_2",
+    "p_human_m_3",
+    "p_human_m_4",
+    "p_human_m_5",
+    "p_human_m_6"
+   ]
+  },
+  {
+   "n": 2,
+   "ids": [
+    "p_human_f_1",
+    "p_human_f_2",
+    "p_human_f_3",
+    "p_human_f_4",
+    "p_human_f_5",
+    "p_human_f_6"
+   ]
+  },
+  {
+   "n": 3,
+   "ids": [
+    "p_elf_m_1",
+    "p_elf_m_2",
+    "p_elf_m_3",
+    "p_elf_m_4",
+    "p_elf_m_5",
+    "p_elf_m_6"
+   ]
+  },
+  {
+   "n": 4,
+   "ids": [
+    "p_elf_f_1",
+    "p_elf_f_2",
+    "p_elf_f_3",
+    "p_elf_f_4",
+    "p_elf_f_5",
+    "p_elf_f_6"
+   ]
+  },
+  {
+   "n": 5,
+   "ids": [
+    "p_dwarf_m_1",
+    "p_dwarf_m_2",
+    "p_dwarf_m_3",
+    "p_dwarf_m_4",
+    "p_dwarf_m_5",
+    "p_dwarf_m_6"
+   ]
+  },
+  {
+   "n": 6,
+   "ids": [
+    "p_dwarf_f_1",
+    "p_dwarf_f_2",
+    "p_dwarf_f_3",
+    "p_dwarf_f_4",
+    "p_dwarf_f_5",
+    "p_dwarf_f_6"
+   ]
+  },
+  {
+   "n": 7,
+   "ids": [
+    "p_halfling_m_1",
+    "p_halfling_m_2",
+    "p_halfling_m_3",
+    "p_halfling_m_4",
+    "p_halfling_m_5",
+    "p_halfling_m_6"
+   ]
+  },
+  {
+   "n": 8,
+   "ids": [
+    "p_halfling_f_1",
+    "p_halfling_f_2",
+    "p_halfling_f_3",
+    "p_halfling_f_4",
+    "p_halfling_f_5",
+    "p_halfling_f_6"
+   ]
+  },
+  {
+   "n": 9,
+   "ids": [
+    "p_orc_m_1",
+    "p_orc_m_2",
+    "p_orc_m_3",
+    "p_orc_m_4",
+    "p_orc_m_5",
+    "p_orc_m_6"
+   ]
+  },
+  {
+   "n": 10,
+   "ids": [
+    "p_orc_f_1",
+    "p_orc_f_2",
+    "p_orc_f_3",
+    "p_orc_f_4",
+    "p_orc_f_5",
+    "p_orc_f_6"
+   ]
+  },
+  {
+   "n": 11,
+   "ids": [
+    "p_goblin_m_1",
+    "p_goblin_m_2",
+    "p_goblin_m_3",
+    "p_goblin_m_4",
+    "p_goblin_m_5",
+    "p_goblin_m_6"
+   ]
+  },
+  {
+   "n": 12,
+   "ids": [
+    "p_goblin_f_1",
+    "p_goblin_f_2",
+    "p_goblin_f_3",
+    "p_goblin_f_4",
+    "p_goblin_f_5",
+    "p_goblin_f_6"
+   ]
+  },
+  {
+   "n": 13,
+   "ids": [
+    "p_mole_m_1",
+    "p_mole_m_2",
+    "p_mole_m_3",
+    "p_mole_m_4",
+    "p_mole_m_5",
+    "p_mole_m_6"
+   ]
+  },
+  {
+   "n": 14,
+   "ids": [
+    "p_mole_f_1",
+    "p_mole_f_2",
+    "p_mole_f_3",
+    "p_mole_f_4",
+    "p_mole_f_5",
+    "p_mole_f_6"
+   ]
+  },
+  {
+   "n": 15,
+   "ids": [
+    "frame_iron",
+    "frame_bronze",
+    "frame_silver",
+    "frame_gold",
+    "frame_bone",
+    "frame_wood"
+   ]
+  },
+  {
+   "n": 16,
+   "ids": [
+    "frame_copper",
+    "frame_obsidian",
+    "frame_frost",
+    "frame_roots",
+    "frame_chain",
+    "frame_dragon"
+   ]
+  }
+ ]
+}
