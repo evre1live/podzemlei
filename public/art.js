@@ -265,6 +265,12 @@ const ICON_OF = {
   m_kolobok: 'bread', m_kikimora: 'frog', m_likho: 'eyeball', m_mimic: 'mimic-chest', m_medusa: 'medusa-head', m_leshy: 'holy-oak', m_cyclops: 'cyclops', m_solovey: 'whistle',
   m_koschei: 'crowned-skull', m_griffin: 'griffin-symbol', m_vodyanoy: 'frog', m_genie: 'magic-lamp', m_babayaga: 'witch-flight', m_basilisk: 'snake-tongue', m_cerberus: 'wolf-head',
   m_manticore: 'scorpion-tail', m_hydra: 'hydra', m_kraken: 'kraken-tentacle', m_lucifer: 'daemon-skull', m_hades: 'horned-skull', m_anubis: 'anubis',
+  m_rusteater: 'rusty-sword', m_viy: 'eyeball', m_chudo: 'hydra', m_ghosttrain: 'subway-train', m_ratking: 'rat', m_swarm: 'fly', m_mimicdoor: 'door',
+  m_midnight: 'floating-ghost', m_bannik: 'water-drop', m_morena: 'snowflake-1', m_chernobog: 'daemon-skull',
+  i_ares: 'crested-helmet', i_excalibur: 'broadsword', i_overalls: 'breastplate', i_kingmail: 'breastplate', i_kingcrown: 'crown', i_kinghammer: 'war-pick',
+  i_gasmask: 'gas-mask', i_canary: 'mining-helmet', i_ushanka: 'crested-helmet', i_ratcloak: 'cloak', i_firesuit: 'fire-extinguisher', i_trays: 'breastplate',
+  i_rollers: 'running-shoe', i_valenki: 'boots', i_waders: 'rubber-boot', i_samovar: 'flame', i_turnshield: 'security-gate', i_kladenets: 'broadsword',
+  p_raven: 'all-seeing-eye', p_owl: 'paw-print',
   k_draft: 'whirlwind', k_cavein: 'stone-pile', k_puddle: 'water-drop', k_rust: 'rusty-sword', k_rusthands: 'rusty-sword', k_tax: 'coins', k_fever: 'heart-minus', k_amnesia: 'brain',
   k_fired: 'cross-mark', k_pickpocket: 'robber-hand', k_klepto: 'robber-hand', k_flu: 'snowflake-1', k_backpack: 'knapsack', k_jinx: 'evil-eyes',
   e_seasoned: 'upgrade', e_armored: 'armor-upgrade', e_hungry: 'sharp-smile', e_pack: 'two-shadows', e_rabid: 'fanged-skull', e_morning: 'alarm-clock', e_baby: 'egg-clutch',
@@ -302,7 +308,7 @@ export function cardArt(d, uid = null) {
 // значок категории для медальона (у карт с эмблемой вместо рисунка — чтобы не повторять большой знак)
 export function kindIcon(d) {
   if (d.boss) return 'horned-skull';
-  if (d.type === 'monster') { const t = d.tags || []; return t.includes('undead') ? 'skull-crossed-bones' : t.includes('rat') ? 'rat' : t.includes('fungus') ? 'mushroom-gills' : t.includes('insect') ? 'beetle-shell' : t.includes('water') ? 'wave-crest' : t.includes('fire') ? 'flame' : t.includes('rock') ? 'stone-block' : t.includes('metro') ? 'subway-train' : 'claw-slashes'; }
+  if (d.type === 'monster') { const t = d.tags || []; return t.includes('undead') ? 'skull-crossed-bones' : t.includes('rat') ? 'rat' : t.includes('fungus') ? 'mushroom-gills' : t.includes('insect') ? 'beetle-shell' : t.includes('water') ? 'wave-crest' : t.includes('fire') ? 'flame' : t.includes('rock') ? 'stone-block' : t.includes('metro') ? 'subway-train' : t.includes('machine') ? 'vintage-robot' : t.includes('beast') ? 'wolf-head' : 'claw-slashes'; }
   if (d.type === 'item') return { head: 'crested-helmet', armor: 'breastplate', feet: 'boots', hand: 'broadsword', pet: 'paw-print' }[d.slot] || 'diamond-ring';
   if (d.type === 'race') return 'person';
   if (d.type === 'class') return 'crossed-swords';

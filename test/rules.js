@@ -953,4 +953,68 @@ t('новые шмотки: противогаз, канарейка, крыси
   assert.equal(view(s, 'p1').peek, null);
 });
 
+t('новые монстры: ржавник, вий, чудо-юдо, поезд-призрак, крысиный король, рой, полуночница, банник', () => {
+  const fight = (s, uid) => { s.decks.door.push(take(s, uid)); s.turn.step = 'pre'; s.combat = null; assert.equal(A(s, 'p0', { type: 'kick' }).ok, true); };
+  // ржавник: откупиться вещью — бой окончен без наград
+  let s = fresh(); let p = P(s, 'p0'); p.equipped.push(take(s, 'i_ladle#0'));
+  fight(s, 'm_rusteater#0');
+  assert.deepEqual(view(s, 'p0').hints.bribe, ['i_ladle#0']);
+  assert.equal(A(s, 'p0', { type: 'bribe', item: 'i_ladle#0' }).ok, true);
+  assert.equal(s.combat, null); assert.equal(p.level, 1); assert.equal(p.equipped.length, 0);
+  // вий: одному +6, с помощником — нет
+  s = fresh(); p = P(s, 'p0'); fight(s, 'm_viy#0');
+  assert.equal(combatNumbers(s).monsters, 15 + 6);
+  A(s, 'p0', { type: 'askHelp', to: 'p1', offer: 0 }); A(s, 'p1', { type: 'answerHelp', accept: true });
+  assert.equal(combatNumbers(s).monsters, 15);
+  // чудо-юдо: помощник срубает голову
+  s = fresh(); fight(s, 'm_chudo#0');
+  assert.equal(combatNumbers(s).monsters, 15);
+  A(s, 'p0', { type: 'askHelp', to: 'p1', offer: 0 }); A(s, 'p1', { type: 'answerHelp', accept: true });
+  assert.equal(combatNumbers(s).monsters, 10);
+  // поезд-призрак: на 5 с бонусами не убежать, на 6 — да; механик его тормозит
+  s = fresh(); p = P(s, 'p0'); p.equipped.push(take(s, 'i_runners#0')); fight(s, 'm_ghosttrain#0');
+  act(s, 'p0', { type: 'runAway' }, { rng: () => 0.7, now: 1000 }); // выпало 5
+  assert.equal(p.level, 1); assert.ok(s.log.some(l => l.text.includes('не убежал от «Поезд-призрак»')));
+  s = fresh(); p = P(s, 'p0'); p.classes.push(take(s, 'c_engineer#0')); fight(s, 'm_ghosttrain#0');
+  assert.equal(combatNumbers(s).monsters, 12 - 6);
+  assert.equal(combatNumbers(s).heroes, 1 + 3, 'механик против механизма +3');
+  // крысиный король: +2 за игрока, крысоловка — сдаётся
+  s = fresh(4); fight(s, 'm_ratking#0');
+  assert.equal(combatNumbers(s).monsters, 4 + 8);
+  P(s, 'p0').equipped.push(take(s, 'i_trap#0'));
+  assert.equal(combatNumbers(s).monsters, 0);
+  // рой: после победы ждёт за следующей дверью слабее, после двух делений рассеивается
+  s = fresh(); p = P(s, 'p0'); p.level = 3; p.nextCombat = 10; fight(s, 'm_swarm#0');
+  A(s, 'p0', { type: 'fight' }); tick(s, { rng, now: 999999 });
+  assert.equal(s.decks.door.at(-1), 'm_swarm#0');
+  assert.equal(s.splits['m_swarm#0'], 1);
+  s.turn.step = 'pre'; p.nextCombat = 10; A(s, 'p0', { type: 'kick' });
+  assert.equal(combatNumbers(s).monsters, 10 - 4);
+  A(s, 'p0', { type: 'fight' }); tick(s, { rng, now: 999999 });
+  s.turn.step = 'pre'; p.nextCombat = 10; A(s, 'p0', { type: 'kick' });
+  assert.equal(combatNumbers(s).monsters, 10 - 8);
+  A(s, 'p0', { type: 'fight' }); tick(s, { rng, now: 999999 });
+  assert.ok(s.discard.door.includes('m_swarm#0')); assert.equal(s.splits['m_swarm#0'], undefined);
+  // полуночница: чётный круг +5, нечётный −3
+  s = fresh(); s.round = 2; fight(s, 'm_midnight#0');
+  assert.equal(combatNumbers(s).monsters, 9 + 5);
+  s.round = 3; assert.equal(combatNumbers(s).monsters, 9 - 3);
+  // банник: в таверне сила 0
+  s = fresh(); p = P(s, 'p0'); p.hand.push(take(s, 'loc_tavern#0')); A(s, 'p0', { type: 'playCard', uid: 'loc_tavern#0' });
+  fight(s, 'm_bannik#0');
+  assert.equal(combatNumbers(s).monsters, def('loc_tavern').monsterAll || 0);
+});
+
+t('боссы Морена и Чернобог: стужа снимает лучшую вещь у всех, тьма отнимает по карте', () => {
+  let s = fresh(); const p = P(s, 'p0'), q = P(s, 'p1');
+  p.level = 9; p.equipped.push(take(s, 'i_jackhammer#0')); q.equipped.push(take(s, 'i_shovel#0'), take(s, 'i_crowbar#0'));
+  s.decks.door.push(take(s, 'm_morena#0')); A(s, 'p0', { type: 'kick' });
+  assert.deepEqual(p.equipped, []); assert.ok(p.carried.includes('i_jackhammer#0'));
+  assert.equal(q.equipped.length, 1);
+  s = fresh(); const a = P(s, 'p0'), b = P(s, 'p1'), c = P(s, 'p2');
+  a.hand.push(take(s, 'o_kvass#0')); b.hand.push(take(s, 'o_kvass#1')); c.hand.push(take(s, 'o_cola#0'));
+  s.decks.door.push(take(s, 'm_chernobog#0')); A(s, 'p0', { type: 'kick' });
+  assert.equal(a.hand.length, 1); assert.equal(b.hand.length, 0); assert.equal(c.hand.length, 0);
+});
+
 console.log(`Правила: ${n} проверок пройдено.`);

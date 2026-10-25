@@ -22,10 +22,10 @@ function scan(s) {
     if (l.id <= (s._seen || 0)) continue;
     if (l.text.includes('погибает')) stats.deaths++;
     if (l.text.startsWith('👹')) stats.bossMeet++;
-    if (/(Люцифер|Аид|Анубис)» не стал гнаться/.test(l.text)) stats.bossCalm++;
-    if (/удирает от «(Люцифер|Аид|Анубис)»/.test(l.text)) stats.bossEscaped++;
-    if (/побежда(ют|ет) .*«(Люцифер|Аид|Анубис)»/.test(l.text)) stats.bossKilled++;
-    if (/не убежал от «(Люцифер|Аид|Анубис)»/.test(l.text)) stats.bossCaught++;
+    if (/(Люцифер|Аид|Анубис|Морена|Чернобог)» не стал гнаться/.test(l.text)) stats.bossCalm++;
+    if (/удирает от «(Люцифер|Аид|Анубис|Морена|Чернобог)»/.test(l.text)) stats.bossEscaped++;
+    if (/побежда(ют|ет) .*«(Люцифер|Аид|Анубис|Морена|Чернобог)»/.test(l.text)) stats.bossKilled++;
+    if (/не убежал от «(Люцифер|Аид|Анубис|Морена|Чернобог)»/.test(l.text)) stats.bossCaught++;
   }
   s._seen = s.logSeq;
 }

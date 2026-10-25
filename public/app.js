@@ -709,6 +709,7 @@ function fightHTML() {
     if (c.winAt) b.push(`<span class="hint">Остальные ещё могут помешать</span>`);
     if (h.askHelp && h.helpTargets?.length) b.push(`<button class="btn hero" data-act="askHelp">Позвать на помощь</button>`);
     else if (h.noHelp && !c.helper && !n.winning) b.push(`<span class="hint">Этот монстр не терпит помощников</span>`);
+    if (h.bribe?.length) b.push(`<button class="btn" data-act="bribe" title="Монстр уползёт жевать вещь — бой без наград">Бросить вещь</button>`);
     if (h.runAway) b.push(`<button class="btn danger" data-act="runAway">Бежать</button>`);
   } else {
     const canMeddle = Object.values(h.cards || {}).some(o => o.some(a => a.side || Number.isInteger(a.monster) || a.with));
@@ -1610,6 +1611,15 @@ document.addEventListener('click', async e => {
     case 'clearPassword': { const r = await call('room:settings', { password: '' }); if (!r.ok) toast(r.error); return; }
     case 'kick': case 'loot': case 'fight': case 'runAway': case 'autoEquip': case 'cancelHelp': case 'pass':
       return act({ type: a });
+    case 'bribe': {
+      // какую вещь бросить монстру: любую со стола, кроме легендарных
+      const list = hints().bribe || [];
+      popOpts = list.map(u => ({ label: `Бросить «${def(u).name}»`, action: { type: 'bribe', item: u }, cls: 'ghost' }));
+      return showOverlay(`<div class="modal" role="dialog" aria-label="Чем откупиться"><h2>Чем откупиться</h2>
+        <p class="muted" style="margin:0">Монстр уползёт жевать вещь, бой закончится без наград.</p>
+        <div class="pop-actions">${popOpts.map((o, i) => `<button class="btn ${o.cls}" data-popopt="${i}">${esc(o.label)}</button>`).join('')}</div>
+        <button class="btn ghost" data-act="closeOverlay">Отмена</button></div>`);
+    }
     case 'endTurn': {
       const h = hints();
       if (h.mustGive) { S.ui.mode = { kind: 'give', need: h.mustGive, picked: [] }; return render(); }

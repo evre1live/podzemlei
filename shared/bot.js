@@ -165,6 +165,9 @@ function fighterMove(s, p, rng, now) {
       if (!check(s, p.id, a)) return a;
     }
   }
+  // Ржавника проще задобрить самой дешёвой вещью, чем рисковать лучшей
+  const feed = [...p.equipped, ...p.carried].filter(u => !check(s, p.id, { type: 'bribe', item: u })).sort((a, b) => cardWorth(a) - cardWorth(b))[0];
+  if (feed && cardWorth(feed) < 900) return { type: 'bribe', item: feed };
   const smoke = p.hand.find(u => def(u).effect === 'escape');
   const trapped = c.monsters.some(m => def(m.uid).escape === false || m.enh.some(u => def(u).noEscape));
   const hasPet = p.equipped.some(u => def(u).slot === 'pet');

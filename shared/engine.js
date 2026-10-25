@@ -95,7 +95,7 @@ function drawT(s, p, rng) {
   }
   return draw(s, 'treasure', rng);
 }
-function toDiscard(s, uid) { if (uid) s.discard[def(uid).deck].push(uid); }
+function toDiscard(s, uid) { if (!uid) return; s.discard[def(uid).deck].push(uid); if (s.splits?.[uid]) delete s.splits[uid]; }
 
 // ───────────────────────── свойства героя ─────────────────────────
 export const raceKeys = p => p.races.map(u => def(u).race);
@@ -510,6 +510,7 @@ export function heroStrength(s, p) {
   const c = s.combat;
   if (c && levelOnlyFight(s)) return p.level;
   let v = p.level + itemBonus(p, s) + passiveBonus(s, p) + p.nextCombat;
+  if (c && hasClass(p, 'engineer') && combatHasTag(s, 'machine')) v += ENGINEER_VS_MACHINE;
   if (c) {
     v += (c.rage[p.id] || 0) + (c.turnUndead[p.id] || 0);
     v -= c.backstabs.filter(b => b.on === p.id).length * 2;
@@ -526,10 +527,15 @@ export function monsterStrength(s, m) {
   const d = def(m.uid);
   // сила босса запоминается, когда он выходит в бой: вдвое больше силы героя; усилители и локации её не меняют
   if (d.boss) return m.power ?? bossPower(s, P(s, s.combat?.fighter));
-  let base = monsterBaseLevel(s, d);
+  const parts = participants(s).map(id => P(s, id));
+  // крысиный король сдаётся при виде крысоловки, банник в таверне парится
+  if (d.slainBy && parts.some(p => p.equipped.some(u => def(u).id === d.slainBy))) return 0;
+  if (d.sleepsIn && s.location && def(s.location).id === d.sleepsIn) return 0;
+  let base = monsterBaseLevel(s, d) + (d.perPlayer || 0) * s.players.length - SPLIT_STEP * (s.splits?.[m.uid] || 0);
   if (m.enh.some(u => def(u).double)) base *= 2;
   let v = base + m.enh.reduce((a, u) => a + (def(u).bonus || 0), 0);
-  const parts = participants(s).map(id => P(s, id));
+  if (d.helperCut && s.combat?.helper) v -= d.helperCut;
+  if (d.roundMod) v += (s.round || 0) % 2 === 0 ? d.roundMod.even : d.roundMod.odd;
   for (const vs of d.vs || []) if (parts.some(p => matchVs(p, vs))) v += vs.n;
   for (const w of d.vsItem || []) if (parts.some(p => hasItemTag(p, w.tag))) v += w.n;
   for (const p of parts) for (const u of p.equipped) { const fm = def(u).foeMod; if (fm && (d.tags || []).includes(fm.tag)) v += fm.n; }
@@ -593,6 +599,7 @@ function startCombat(s, p, monsterUid, rng = Math.random) {
   log(s, `${p.name} встречает ${q(d.name)} (ур. ${monsterBaseLevel(s, d)}). Бой!`, 'combat');
   if (d.boss) log(s, `👹 Это босс! Его сила — ${m0.power}: ${m0.power > BOSS_FLOOR ? `вдвое больше силы ${p.name}` : `слабее ${BOSS_FLOOR} боссы не бывают`}. ${p.level < BOSS_MIN_LEVEL ? `За героями ниже ${BOSS_MIN_LEVEL}-го уровня он не гонится.` : 'Не одолеешь и не убежишь — −5 уровней и смерть.'}`, 'bad');
   fx(s, { kind: 'combat', pid: p.id, card: monsterUid, ...(d.boss ? { power: m0.power } : {}) });
+  if (d.onAppear) bossAppear(s, d, p, rng);
   if (d.ambush) {
     const guard = itemFlag(p, 'noAmbush') ? 'Канарейка заранее подняла тревогу' : monTags(monsterUid).some(t => itemList(p, 'immune').includes(t)) ? 'Противогаз не пропустил споры' : null;
     if (guard) log(s, `${guard} — засада ${q(d.name)} не удалась.`, 'good');
@@ -604,9 +611,29 @@ function startCombat(s, p, monsterUid, rng = Math.random) {
   }
 }
 
+// особые боссы при появлении: Морена морозит лучшую вещь каждого, Чернобог отнимает по карте у всех, кроме бойца
+function bossAppear(s, d, fighter, rng) {
+  if (d.onAppear === 'freeze') {
+    const hit = [];
+    for (const x of s.players) {
+      const best = [...x.equipped].sort((a, b) => (def(b).bonus || 0) - (def(a).bonus || 0))[0];
+      if (best) { without(x.equipped, best); x.carried.push(best); hit.push(`${x.name} — ${q(def(best).name)}`); }
+    }
+    log(s, `❄ ${q(d.name)} дышит стужей: ${hit.length ? 'примерзло и снято: ' + hit.join(', ') : 'снимать нечего'}.`, 'bad');
+  }
+  if (d.onAppear === 'grab') {
+    const hit = [];
+    for (const x of s.players) {
+      if (x === fighter || !x.hand.length) continue;
+      const u = pick(x.hand, rng); without(x.hand, u); toDiscard(s, u); hit.push(x.name);
+    }
+    log(s, `${q(d.name)} тянет руки из тьмы: ${hit.length ? 'по карте теряют ' + hit.join(', ') : 'отнимать не у кого'}.`, 'bad');
+  }
+}
+
 function endCombat(s) {
   const c = s.combat;
-  for (const m of c.monsters) { toDiscard(s, m.uid); m.enh.forEach(u => toDiscard(s, u)); }
+  for (const m of c.monsters) { toDiscard(s, m.uid); m.enh.forEach(u => toDiscard(s, u)); if (s.splits) delete s.splits[m.uid]; }
   c.used.forEach(u => toDiscard(s, u));
   for (const pid of participants(s)) { const p = P(s, pid); if (p) { p.nextCombat = 0; p.nextEscape = 0; } }
   s.combat = null;
@@ -674,6 +701,16 @@ function resolveVictory(s, rng) {
   fx(s, { kind: 'victory', pid: f.id, helper: c.helper || null, cards: c.monsters.map(m => m.uid), levels: n.levels, treasures: r.total });
   log(s, `⚔️ ${f.name}${h ? ' и ' + h.name : ''} ${h ? 'побеждают' : 'побеждает'} ${names}! ${f.name} получает +${n.levels} ур. и ${r.total - r.share} клада${h && r.share ? `, ${h.name} — ${r.share}` : ''}.`, 'good');
   for (const m of c.monsters) contractEvent(s, f, 'kill', { uid: m.uid }, rng);
+  // рой не погибает, а разлетается и ждёт за следующей дверью — слабее
+  for (const m of [...c.monsters]) {
+    const d = def(m.uid), gen = (s.splits?.[m.uid] || 0) + 1;
+    if (!d.split || gen > d.split) continue;
+    c.monsters = c.monsters.filter(x => x !== m);
+    m.enh.forEach(u => toDiscard(s, u));
+    (s.splits ||= {})[m.uid] = gen;
+    s.decks.door.push(m.uid);
+    log(s, `${q(d.name)} разлетается — рой поменьше (−${SPLIT_STEP * gen}) ждёт за следующей дверью.`, 'event');
+  }
   if (!h) contractEvent(s, f, 'killSolo', {}, rng);
   if (c.trouble) contractEvent(s, f, 'troubleWin', {}, rng);
   if (h) contractEvent(s, h, 'helpWin', {}, rng);
@@ -708,13 +745,15 @@ function resolveEscape(s, rng) {
       let r = 0, ok = false;
       if (noEsc) log(s, `От ${q(d.name)} не убежать!`, 'bad');
       else {
+        // от поезда-призрака спасает только шестёрка: бонусы к побегу не помогают
+        const pass = x => (d.escapeOn ? x >= d.escapeOn : x + bonus >= 5);
         r = d6(rng);
-        ok = r + bonus >= 5;
-        fx(s, { kind: 'dice', pid, value: r, bonus, ok, label: `Побег от ${q(d.name)}` });
+        ok = pass(r);
+        fx(s, { kind: 'dice', pid, value: r, bonus: d.escapeOn ? 0 : bonus, ok, label: `Побег от ${q(d.name)}` });
         if (!ok && hasRace(p, 'halfling') && p.hand.length) {
           const u = cheapest(p.hand);
           without(p.hand, u); toDiscard(s, u);
-          r = d6(rng); ok = r + bonus >= 5;
+          r = d6(rng); ok = pass(r);
           fx(s, { kind: 'dice', pid, value: r, bonus, ok, label: 'Полурослик перебрасывает' });
           log(s, `${p.name} сбрасывает карту и перебрасывает.`, 'info');
         }
@@ -973,6 +1012,7 @@ H.playCard = {
         const wm = { uid: a.with, enh: [] };
         if (def(a.with).boss) wm.power = bossPower(s, P(s, c.fighter));
         c.monsters.push(wm);
+        if (def(a.with).onAppear) bossAppear(s, def(a.with), P(s, c.fighter), rng);
         grudge(s, c.fighter, p.id);
         log(s, `${p.name}: из темноты вылезает ${q(def(a.with).name)} (${wm.power ? `босс, сила ${wm.power}` : `ур. ${def(a.with).level}`})!`, 'combat');
         fx(s, { kind: 'wandering', pid: p.id, card: a.with, ...(wm.power ? { power: wm.power } : {}) });
@@ -1160,6 +1200,8 @@ H.cancelTrade = {
 // ───────────────────────── призрак ─────────────────────────
 // Погибший до своего хода — призрак: раз за ход может подкинуть ±2 в чужой бой.
 export const isGhost = p => !!p?.needsRevive;
+export const SPLIT_STEP = 4;          // рой после каждого деления слабее на столько
+export const ENGINEER_VS_MACHINE = 3; // механик против механизмов
 H.haunt = {
   check(s, p, a) {
     if (!isGhost(p)) return 'Подкидывать из-за грани может только погибший, пока ждёт своего хода';
@@ -1178,6 +1220,27 @@ H.haunt = {
     if (a.side === 'monster') grudge(s, c.fighter, p.id);
     fx(s, { kind: 'haunt', pid: p.id, side: a.side, n: GHOST_BONUS });
     log(s, `👻 Призрак ${p.name} подкидывает +${GHOST_BONUS} ${a.side === 'player' ? 'героям' : 'монстрам'}.`, 'combat');
+  },
+};
+
+// Ржавник: брось ему вещь — уползёт жевать, бой без наград
+H.bribe = {
+  check(s, p, a) {
+    const c = s.combat;
+    if (!c || c.fighter !== p.id) return 'Откупиться может тот, кто дерётся';
+    if (!c.monsters.some(m => def(m.uid).bribe)) return 'Этого монстра вещью не задобрить';
+    if (!a.item || !inPlayItems(p).includes(a.item)) return 'Выберите свою вещь со стола';
+    if (def(a.item).noSteal) return 'Легендарную вещь не отдают';
+    return null;
+  },
+  run(s, p, a, rng) {
+    const c = s.combat;
+    removeItem(p, a.item); toDiscard(s, a.item); normalize(s, p);
+    const idx = c.monsters.findIndex(m => def(m.uid).bribe);
+    const m = removeMonster(s, idx);
+    fx(s, { kind: 'vanish', pid: p.id, how: 'smoke', cards: [m.uid] });
+    log(s, `${p.name} бросает ${q(def(a.item).name)} — ${q(def(m.uid).name)} уползает жевать.`, 'combat');
+    if (!c.monsters.length) afterMonstersGone(s, rng);
   },
 };
 
@@ -1516,6 +1579,7 @@ export function hints(s, pid) {
     cancelHelp: ok({ type: 'cancelHelp' }),
     answerHelp: s.combat?.helpReq?.to === pid,
     autoEquip: ok({ type: 'autoEquip' }),
+    bribe: s.combat?.fighter === pid && s.combat.monsters.some(m => def(m.uid).bribe) ? inPlayItems(p).filter(u => ok({ type: 'bribe', item: u })) : [],
     manage: !manageErr(s, p),
     haunt: { player: ok({ type: 'haunt', side: 'player' }), monster: ok({ type: 'haunt', side: 'monster' }) },
     trade: !p.dead && !isParticipant(s, p.id),
@@ -1572,7 +1636,7 @@ export function view(s, pid) {
     combat: c ? {
       fighter: c.fighter, helper: c.helper, helpOffer: c.helpOffer, helpReq: c.helpReq,
       monsters: c.monsters.map(m => ({ uid: m.uid, enh: [...m.enh], strength: monsterStrength(s, m), treasure: monsterTreasure(s, m),
-        level: monsterBaseLevel(s, def(m.uid)), noEscape: def(m.uid).escape === false || m.enh.some(u => def(u).noEscape) })),
+        level: monsterBaseLevel(s, def(m.uid)) - SPLIT_STEP * (s.splits?.[m.uid] || 0), noEscape: def(m.uid).escape === false || m.enh.some(u => def(u).noEscape) })),
       mods: c.mods, backstabs: c.backstabs, rage: c.rage, turnUndead: c.turnUndead, escape: c.escape,
       winAt: c.winAt, winStart: c.winStart || null, passed: [...(c.passed || [])], numbers: combatNumbers(s),
       heroStrengths: Object.fromEntries(participants(s).map(id => [id, heroStrength(s, P(s, id))])),
