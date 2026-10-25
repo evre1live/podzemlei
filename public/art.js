@@ -213,6 +213,8 @@ const ICONS = {
 export const LOC_IMG = new Set(['loc_tavern', 'loc_dungeon', 'loc_glade', 'loc_forge', 'loc_ice', 'loc_graveyard', 'loc_sky', 'loc_cove', 'loc_library', 'loc_oasis']);
 export const locImg = (key, card = true) => `/loc/v1/${LOC_IMG.has(key) ? key : 'loc_tavern'}${card ? '-card' : ''}.webp`;
 export function locationSVG(key) {
+  // у новой локации без картины — гравированный знак на тёмной патине
+  if (!LOC_IMG.has(key)) return `<svg viewBox="0 0 160 120" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><defs><radialGradient id="lg-${key}" cx="50%" cy="45%" r="70%"><stop offset="0" stop-color="#2c4a40"/><stop offset="1" stop-color="#0a1411"/></radialGradient></defs><rect width="160" height="120" fill="url(#lg-${key})"/><g transform="translate(52 32) scale(.109)" fill="#cfe9dd" opacity=".9">${ICON_PATH(ICON_OF[key] || 'stone-tower')}</g></svg>`;
   return `<svg viewBox="0 0 160 120" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><image href="${locImg(key)}" width="160" height="120" preserveAspectRatio="xMidYMid slice"/></svg>`;
 }
 
@@ -273,6 +275,7 @@ const ICON_OF = {
   p_raven: 'all-seeing-eye', p_owl: 'paw-print',
   t_tripwire: 'tripwire', t_pit: 'spiky-pit', t_net: 'fishing-net', t_gas: 'poison-gas', t_rocks: 'falling-rocks', t_plate: 'mantrap',
   a_porter: 'backpack', a_guide: 'walking-scout', a_merc: 'swordman', d_duel: 'gauntlet',
+  ev_shift: 'cycle', ev_union: 'vote', ev_flood: 'big-wave', loc_flooded: 'flood', loc_grove: 'mushroom-house', loc_koschei: 'crowned-skull',
   k_draft: 'whirlwind', k_cavein: 'stone-pile', k_puddle: 'water-drop', k_rust: 'rusty-sword', k_rusthands: 'rusty-sword', k_tax: 'coins', k_fever: 'heart-minus', k_amnesia: 'brain',
   k_fired: 'cross-mark', k_pickpocket: 'robber-hand', k_klepto: 'robber-hand', k_flu: 'snowflake-1', k_backpack: 'knapsack', k_jinx: 'evil-eyes',
   e_seasoned: 'upgrade', e_armored: 'armor-upgrade', e_hungry: 'sharp-smile', e_pack: 'two-shadows', e_rabid: 'fanged-skull', e_morning: 'alarm-clock', e_baby: 'egg-clutch',
@@ -304,7 +307,7 @@ export const hasCardImg = id => CARD_IMG.has(id);
 export const cardImgUrl = id => `/cards/v1/${id}.webp?v=${CARD_IMG.get(id)}`;
 export function cardArt(d, uid = null) {
   if (CARD_IMG.has(d.id)) return `<img class="c-img" src="${cardImgUrl(d.id)}" alt="" loading="lazy" decoding="async" draggable="false">`;
-  if (d.type === 'location') return locationSVG(d.art);
+  if (d.type === 'location' && LOC_IMG.has(d.art)) return locationSVG(d.art);
   // пока нет живописи — гравированная золотая эмблема на тёмном фоне в цвете категории
   return `<div class="emb">${ico(cardIcon(d), 'emb-ico')}</div>`;
 }
@@ -395,7 +398,7 @@ export function cardHTML(uid, o = {}) {
   if (d.boss) cls.push('boss');
   if (d.type === 'item' && d.slot === 'pet') cls.push('pet');
   if (d.type === 'enhancer' && d.bonus < 0) cls.push('weak');
-  if (CARD_IMG.has(d.id) || d.type === 'location') cls.push('painted');
+  if (CARD_IMG.has(d.id) || (d.type === 'location' && LOC_IMG.has(d.art))) cls.push('painted');
   if (o.selected) cls.push('selected');
   if (o.playable) cls.push('playable');
   if (o.dim) cls.push('dim');
@@ -414,7 +417,7 @@ export function cardHTML(uid, o = {}) {
   const big = o.size === 'lg';
   return `<div class="${cls.join(' ')}" data-uid="${esc(uid)}" ${o.attrs || ''} tabindex="${o.tab === false ? -1 : 0}" role="button" aria-label="${esc(d.name)}">
     <div class="c-name ${nameClass(d.name)}"><span>${esc(d.name)}</span></div>
-    <div class="c-art"><div class="c-pic">${cardArt(d, uid)}</div>${corner}<i class="c-medal" title="${esc(label)}">${ico(CARD_IMG.has(d.id) || d.type === 'location' ? cardIcon(d) : kindIcon(d))}</i></div>
+    <div class="c-art"><div class="c-pic">${cardArt(d, uid)}</div>${corner}<i class="c-medal" title="${esc(label)}">${ico(CARD_IMG.has(d.id) || (d.type === 'location' && LOC_IMG.has(d.art)) ? cardIcon(d) : kindIcon(d))}</i></div>
     <div class="c-text">${cardText(d)}</div>
     <div class="c-foot"><span class="fl">${fl}</span><b class="fc">${esc(label)}</b><span class="fr">${fr}</span></div>
     <i class="c-orn" aria-hidden="true"></i>

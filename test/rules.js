@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { createGame, act, tick, view, combatNumbers, P, saleValue, fillText } from '../shared/engine.js';
 import { botDecide } from '../shared/bot.js';
-import { def } from '../shared/cards.js';
+import { def, dailyOf } from '../shared/cards.js';
 import { AVATAR_PARTS, cleanAvatar, avatarFromSeed, portraitId, pickCode, avatarInGame, gameRaces } from '../shared/avatar.js';
 
 let seed = 7; const rng = () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
@@ -1234,6 +1234,63 @@ t('боты: вызывают слабого на поединок и подки
   assert.deepEqual(botDecide(s, 'p1', { rng, now: 1000 }), { type: 'pass' }); // квасу (+2) не перебить 3 — бережёт карту
   q.hand.push(take(s, 'o_shawarma#0'));
   assert.deepEqual(botDecide(s, 'p1', { rng, now: 1000 }), { type: 'playCard', uid: 'o_shawarma#0', side: 'to' });
+});
+
+t('события: пересменка, профсоюзное собрание, затопление', () => {
+  let s = fresh(); const [a, b, c] = s.players;
+  a.hand.push(take(s, 'o_kvass#0')); b.hand.push(take(s, 'o_cola#0'), take(s, 'b_energy#0'));
+  a.hand.push(take(s, 'ev_shift#0'));
+  assert.equal(A(s, 'p0', { type: 'playCard', uid: 'ev_shift#0' }).ok, true);
+  assert.deepEqual(b.hand, ['o_kvass#0']); assert.deepEqual(c.hand, ['o_cola#0', 'b_energy#0']); assert.deepEqual(a.hand, []);
+  s = fresh(); let [x, y, z] = s.players;
+  x.level = 5; y.level = 2; z.level = 2;
+  x.hand.push(take(s, 'ev_union#0')); A(s, 'p0', { type: 'playCard', uid: 'ev_union#0' });
+  assert.equal(x.level, 4);
+  s = fresh(); [x, y, z] = s.players;
+  x.level = 5; y.level = 5; z.level = 2;
+  x.hand.push(take(s, 'ev_union#0')); A(s, 'p0', { type: 'playCard', uid: 'ev_union#0' });
+  assert.equal(x.level, 5); assert.equal(y.level, 5);
+  s = fresh(); [x, y] = s.players;
+  x.equipped.push(take(s, 'i_boots#0')); y.equipped.push(take(s, 'i_slippers#0'));
+  x.hand.push(take(s, 'ev_flood#0')); A(s, 'p0', { type: 'playCard', uid: 'ev_flood#0' });
+  assert.deepEqual(x.equipped, ['i_boots#0']); assert.deepEqual(y.equipped, []);
+});
+
+t('новые локации: затопленная станция, грибная роща, логово Кощея', () => {
+  const s = fresh(); const p = P(s, 'p0'), q = P(s, 'p1');
+  p.equipped.push(take(s, 'i_boots#0'));
+  const pw = view(s, 'p0').players.map(x => x.power), run = view(s, 'p0').players.map(x => x.runBonus);
+  p.hand.push(take(s, 'loc_flooded#0')); A(s, 'p0', { type: 'playCard', uid: 'loc_flooded#0' });
+  let v = view(s, 'p0').players;
+  assert.equal(v[0].power, pw[0] + 2); assert.equal(v[1].power, pw[1]);
+  assert.equal(v[0].runBonus, run[0] - 1);
+  p.hand.push(take(s, 'loc_grove#0')); A(s, 'p0', { type: 'playCard', uid: 'loc_grove#0' });
+  assert.equal(view(s, 'p0').players[0].handLimit, 6);
+  p.hand.push(take(s, 'loc_koschei#0')); A(s, 'p0', { type: 'playCard', uid: 'loc_koschei#0' });
+  assert.equal(view(s, 'p0').sale.rate, 800);
+});
+
+t('быстрая партия до 5-го: по 6 карт каждой колоды на старте', () => {
+  const s = createGame([{ id: 'a', name: 'А' }, { id: 'b', name: 'Б' }], { winLevel: 5 }, rng);
+  assert.equal(s.opts.winLevel, 5);
+  for (const p of s.players) assert.equal(p.hand.length, 12);
+  assert.ok(view(s, 'a').depth.every > 0);
+});
+
+t('испытание дня: одна колода на всех и условие дня', () => {
+  const seat = [{ id: 'a', name: 'А' }, { id: 'b', name: 'Б' }, { id: 'c', name: 'В' }];
+  const dateFor = id => { for (let d = 1; d < 400; d++) { const x = `2027-01-${String(d).padStart(3, '0')}`; if (dailyOf(x).id === id) return x; } throw new Error(id); };
+  const mk = (date, seed = 5) => { let a = seed; const r = () => { a = (a * 16807) % 2147483647; return (a - 1) / 2147483646; }; return createGame(seat, { daily: date }, r); };
+  // одна дата — одна колода (при одном и том же генераторе)
+  assert.deepEqual(mk('2027-01-001').decks.door, mk('2027-01-001').decks.door);
+  assert.equal(mk(dateFor('deep')).depth, 1);
+  assert.ok(mk(dateFor('rich')).players.every(p => p.hand.length === 10));
+  assert.equal(def(mk(dateFor('loc')).location).type, 'location');
+  assert.ok(mk(dateFor('veteran')).players.every(p => p.level === 2));
+  assert.equal(mk(dateFor('fair')).market.cards.length, 3);
+  const b = mk(dateFor('beasts'));
+  assert.equal(view(b, 'a').opts.dailyId, 'beasts');
+  assert.equal(createGame(seat, {}, rng).opts.daily, undefined);
 });
 
 console.log(`Правила: ${n} проверок пройдено.`);

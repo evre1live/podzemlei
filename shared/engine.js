@@ -2,14 +2,16 @@
 // Сервер хранит состояние, вызывает act()/tick() и рассылает view() каждому игроку.
 import { def, allUids, RACE_NAMES, CLASS_NAMES, ruleText, BOSS_MULT, BOSS_MIN_LEVEL, BOSS_FLOOR, TROUBLE_BONUS, WITCHER_BONUS, MUTAGEN_BONUS, LULLABY_PENALTY, LULLABY_MAX, DISTILL_COST,
   DEPTH, DEPTH_TREASURE_EVERY, DEATH_LEVELS, GHOST_BONUS, CONTRACTS, CONTRACT_DEFS, SETS, rewardText,
-  TAME_MARGIN, tameBonus, TRAP_ROLL, TRAP_SKILL, TRAP_FAIL_LEVELS, MARKET_SIZE, marketPrice } from './cards.js';
+  TAME_MARGIN, tameBonus, TRAP_ROLL, TRAP_SKILL, TRAP_FAIL_LEVELS, MARKET_SIZE, marketPrice, dailyOf } from './cards.js';
 
 export const WIN_LEVEL = 10;
 // до какого уровня идёт партия: 10 по умолчанию, в лобби можно выбрать 15 или 20
-export const WIN_LEVELS = [10, 15, 20];
+export const WIN_LEVELS = [5, 10, 15, 20];
 export const luxLevel = s => Math.round(winLevel(s) * 0.7);
 export const fillText = (s, t) => ruleText(t, { win: winLevel(s), lux: luxLevel(s) });
 export const winLevel = s => (WIN_LEVELS.includes(s?.opts?.winLevel) ? s.opts.winLevel : WIN_LEVEL);
+// в быстрой партии (до 5-го) все начинают с картами побольше — чтобы было чем драться за последний уровень
+export const startCards = s => (winLevel(s) <= 5 ? 6 : 4);
 const d6 = rng => 1 + Math.floor(rng() * 6);
 
 function shuffle(arr, rng) {
@@ -41,14 +43,34 @@ export function createGame(seats, opts = {}, rng = Math.random) {
     round: 0, depth: 0, trades: [], tradeSeq: 0, grudges: {}, trap: null, tame: null, duel: null, market: null,
   };
   setupRig(s, rng);
-  for (const p of s.players) {
-    for (let i = 0; i < 4; i++) { give(p, draw(s, 'door', rng)); give(p, draw(s, 'treasure', rng)); }
-  }
   if (!WIN_LEVELS.includes(s.opts.winLevel)) s.opts.winLevel = WIN_LEVEL;
+  for (const p of s.players) {
+    for (let i = 0; i < startCards(s); i++) { give(p, draw(s, 'door', rng)); give(p, draw(s, 'treasure', rng)); }
+  }
   for (const p of s.players) p.contract = newContract(s, p, rng);
   log(s, `Партия началась. Первым дошедший до ${s.opts.winLevel}-го уровня побеждает.`, 'sys');
+  if (typeof s.opts.daily === 'string') applyDaily(s, rng); else delete s.opts.daily;
   beginTurn(s, Math.floor(rng() * s.players.length), rng);
   return s;
+}
+
+// ───────────────────────── испытание дня ─────────────────────────
+export const tameMargin = s => (s.opts?.dailyId === 'beasts' ? 5 : TAME_MARGIN);
+function applyDaily(s, rng) {
+  const d = dailyOf(s.opts.daily);
+  s.opts.dailyId = d.id;
+  log(s, `📅 Испытание дня ${s.opts.daily}: «${d.name}». ${d.text} Колода сегодня у всех одна.`, 'sys');
+  switch (d.id) {
+    case 'deep': s.depth = 1; break;
+    case 'rich': for (const p of s.players) { give(p, drawT(s, p, rng)); give(p, drawT(s, p, rng)); } break;
+    case 'loc': {
+      const locs = s.decks.door.filter(u => def(u).type === 'location');
+      if (locs.length) { const u = pick(locs, rng); without(s.decks.door, u); s.location = u; log(s, `Партия начинается в локации ${q(def(u).name)}: ${fillText(s, def(u).text)}`, 'event'); }
+      break;
+    }
+    case 'veteran': for (const p of s.players) p.level = 2; break;
+    case 'fair': openMarket(s, rng); break;
+  }
 }
 
 // ───────────────────────── утилиты ─────────────────────────
@@ -191,6 +213,7 @@ export function passiveBonus(s, p) {
     v += L.heroAll || 0;
     for (const m of L.heroMod || []) if ((m.cls && hasClass(p, m.cls)) || (m.race && hasRace(p, m.race))) v += m.n;
     if (L.lightBonus && hasItemTag(p, 'light')) v += L.lightBonus;
+    if (L.itemTag && hasItemTag(p, L.itemTag.tag)) v += L.itemTag.n;
   }
   for (const u of p.equipped) { const lb = def(u).locBonus; if (lb && s?.location && def(s.location).id === lb.loc) v += lb.n; }
   return v;
@@ -415,6 +438,28 @@ function resolveEvent(s, p, uid, rng) {
     case 'luxtax':
       for (const x of alive) if (x.level >= luxLevel(s)) { setLevel(s, x, x.level - 1); log(s, `${x.name} платит налог: −1 уровень.`, 'bad'); }
       break;
+    case 'shift': {
+      // вся рука уходит соседу слева
+      const hands = alive.map(x => x.hand);
+      alive.forEach((x, i) => { x.hand = hands[(i - 1 + alive.length) % alive.length]; });
+      break;
+    }
+    case 'union': {
+      const top = Math.max(...alive.map(x => x.level));
+      const leaders = alive.filter(x => x.level === top), votes = alive.length - leaders.length;
+      if (votes * 2 > alive.length) {
+        for (const x of leaders) setLevel(s, x, x.level - 1);
+        log(s, `За — ${votes} из ${alive.length}: ${leaders.map(x => x.name).join(', ')} ${leaders.length > 1 ? 'теряют' : 'теряет'} уровень.`, 'bad');
+      } else log(s, `За — ${votes} из ${alive.length}: большинства нет, лидеры остаются при своих.`, 'info');
+      break;
+    }
+    case 'flood':
+      for (const x of alive) {
+        const shoes = x.equipped.filter(u => def(u).slot === 'feet' && !(def(u).tags || []).includes('water'));
+        for (const u of shoes) { without(x.equipped, u); toDiscard(s, u); }
+        if (shoes.length) log(s, `${x.name} теряет ${shoes.map(u => q(def(u).name)).join(', ')}.`, 'bad');
+      }
+      break;
   }
   toDiscard(s, uid);
 }
@@ -449,7 +494,7 @@ function openMarket(s, rng) {
   if (!cards.length) return;
   s.market = { cards, until: s.round };
   fx(s, { kind: 'market', cards: [...cards] });
-  log(s, `🛒 На новой глубине открылся подземный рынок: ${cards.map(u => q(def(u).name)).join(', ')}. До конца круга, платят вещами.`, 'event');
+  log(s, `🛒 Открылся подземный рынок: ${cards.map(u => q(def(u).name)).join(', ')}. До конца круга, платят вещами.`, 'event');
 }
 function closeMarket(s) {
   for (const u of s.market.cards) toDiscard(s, u);
@@ -828,7 +873,7 @@ function resolveVictory(s, rng) {
   if (h) contractEvent(s, h, 'helpWin', {}, rng);
   // зверя, побеждённого с большим перевесом, можно приручить до конца хода
   const margin = n.heroes - n.monsters;
-  const wild = margin >= TAME_MARGIN ? c.monsters.filter(m => canTame(m.uid)).sort((a, b) => def(b.uid).level - def(a.uid).level)[0] : null;
+  const wild = margin >= tameMargin(s) ? c.monsters.filter(m => canTame(m.uid)).sort((a, b) => def(b.uid).level - def(a.uid).level)[0] : null;
   if (wild) {
     c.monsters = c.monsters.filter(x => x !== wild);
     wild.enh.forEach(u => toDiscard(s, u));
@@ -1912,7 +1957,7 @@ export function view(s, pid) {
   const c = s.combat;
   return {
     phase: s.phase, version: s.version, turn: { ...s.turn }, winners: [...s.winners],
-    reveal: s.reveal, opts: { winDelayMs: s.opts.winDelayMs, winLevel: winLevel(s) }, location: s.location,
+    reveal: s.reveal, opts: { winDelayMs: s.opts.winDelayMs, winLevel: winLevel(s), daily: s.opts.daily || null, dailyId: s.opts.dailyId || null }, location: s.location,
     trap: s.trap ? { ...s.trap } : null, tame: s.tame ? { ...s.tame } : null,
     market: s.market ? { cards: [...s.market.cards], until: s.market.until, prices: Object.fromEntries(s.market.cards.map(u => [u, marketPrice(def(u))])) } : null,
     duel: s.duel ? { from: s.duel.from, to: s.duel.to, card: s.duel.card, mods: s.duel.mods.map(m => ({ ...m })), passed: [...s.duel.passed], winAt: s.duel.winAt, winStart: s.duel.winStart,

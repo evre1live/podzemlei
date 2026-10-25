@@ -1,6 +1,6 @@
 // «Под Землёй» — клиент.
 import { def, RACE_NAMES, CLASS_NAMES, SETS, setRuleVars, ruleText, BOSS_FLOOR, TROUBLE_BONUS, LULLABY_PENALTY, MUTAGEN_BONUS, DISTILL_COST,
-  PERSONAS, GHOST_BONUS, DEATH_LEVELS, DEPTH, DEPTH_TREASURE_EVERY, TRADE_TIMEOUT_MS, TAME_MARGIN, tameBonus, TRAP_FAIL_LEVELS, MARKET_SIZE } from '/shared/cards.js';
+  PERSONAS, GHOST_BONUS, DEATH_LEVELS, DEPTH, DEPTH_TREASURE_EVERY, TRADE_TIMEOUT_MS, TAME_MARGIN, tameBonus, TRAP_FAIL_LEVELS, MARKET_SIZE, dailyOf, dailyDate } from '/shared/cards.js';
 import { esc, cardHTML, chipHTML, avatarSVG, iconSVG, cardBackSVG, locationSVG, cardIcon } from '/art.js';
 import { fx } from '/fx.js';
 import { sfx } from '/sfx.js';
@@ -65,6 +65,14 @@ const gAva = p => avatarInGame(p.avatar, raceKeysOf(p));
 const pname = id => pl(id)?.name || S.room?.members.find(m => m.id === id)?.name || '—';
 const hints = () => S.game?.hints || {};
 const winLvl = () => S.game?.opts?.winLevel || S.room?.settings?.winLevel || 10;
+// испытание дня: одна колода на всех и условие дня (по московской дате)
+const dailyNote = on => { const d = dailyOf(dailyDate()); return on ? `Сегодня — «${d.name}»: ${d.text} Колода сегодня у всех одна.` : `Каждый день одна колода на всех и особое условие. Сегодня — «${d.name}».`; };
+const WIN_NOTE = {
+  5: 'Быстрая партия: примерно вдвое короче обычной, на старте у всех по 6 карт каждой колоды.',
+  10: 'Обычная партия.',
+  15: 'Длинная партия: примерно в полтора раза дольше обычной.',
+  20: 'Очень длинная партия: почти вдвое дольше обычной.',
+};
 const serverNow = () => Date.now() + S.skew;
 const plural = (n, a, b, c) => { const m = n % 10, h = n % 100; return m === 1 && h !== 11 ? a : m >= 2 && m <= 4 && (h < 10 || h >= 20) ? b : c; };
 const cardsWord = n => `${n} ${plural(n, 'карту', 'карты', 'карт')}`;
@@ -380,14 +388,17 @@ update.lobby = () => {
     <div class="settings">
       <h3>Настройки</h3>
       <div><div class="muted" style="font-size:14px;margin-bottom:6px">До какого уровня играем</div>
-        <div class="seg" role="group" aria-label="Уровень победы">${[10, 15, 20].map(v => `<button type="button" data-win="${v}" aria-pressed="${(r.settings.winLevel || 10) === v}">${v}</button>`).join('')}</div>
-        <div class="muted" style="font-size:13px;margin-top:6px">${(r.settings.winLevel || 10) === 10 ? 'Обычная партия.' : (r.settings.winLevel === 15 ? 'Длинная партия: примерно в полтора раза дольше обычной.' : 'Очень длинная партия: почти вдвое дольше обычной.')}</div></div>
+        <div class="seg" role="group" aria-label="Уровень победы">${[5, 10, 15, 20].map(v => `<button type="button" data-win="${v}" aria-pressed="${(r.settings.winLevel || 10) === v}">${v === 5 ? `${ico('stopwatch')}5` : v}</button>`).join('')}</div>
+        <div class="muted" style="font-size:13px;margin-top:6px">${WIN_NOTE[r.settings.winLevel || 10] || WIN_NOTE[10]}</div></div>
+      <div><div class="muted" style="font-size:14px;margin-bottom:6px">Испытание дня</div>
+        <div class="seg" role="group" aria-label="Испытание дня"><button type="button" data-daily="0" aria-pressed="${!r.settings.daily}">Обычная</button><button type="button" data-daily="1" aria-pressed="${!!r.settings.daily}">${ico('calendar')}Испытание дня</button></div>
+        <div class="muted" style="font-size:13px;margin-top:6px">${dailyNote(!!r.settings.daily)}</div></div>
       <div><div class="muted" style="font-size:14px;margin-bottom:6px">Сколько секунд даётся, чтобы помешать добить монстра</div>
         <div class="seg" role="group">${[10000, 20000, 30000].map(v => `<button type="button" data-delay="${v}" aria-pressed="${r.settings.winDelayMs === v}">${v / 1000} с</button>`).join('')}</div></div>
       <div><div class="muted" style="font-size:14px;margin-bottom:6px">Мест за столом</div>
         <div class="seg" role="group">${[2, 3, 4, 5, 6].map(v => `<button type="button" data-max="${v}" aria-pressed="${r.maxPlayers === v}">${v}</button>`).join('')}</div></div>
       <div class="row"><button class="btn small" data-act="setPassword">${r.locked ? 'Сменить пароль' : 'Поставить пароль'}</button>${r.locked ? '<button class="btn ghost small" data-act="clearPassword">Убрать пароль</button>' : ''}</div>
-    </div>` : `<p class="muted" style="margin-top:24px">Играем до ${r.settings.winLevel || 10}-го уровня. Настройки и старт — у хозяина комнаты. ${r.locked ? 'Комната закрыта паролем.' : ''}</p>`;
+    </div>` : `<p class="muted" style="margin-top:24px">Играем до ${r.settings.winLevel || 10}-го уровня.${r.settings.daily ? ' ' + dailyNote(true) : ''} Настройки и старт — у хозяина комнаты. ${r.locked ? 'Комната закрыта паролем.' : ''}</p>`;
   const enough = r.members.length >= 2;
   if (r.spectator) {
     const free = r.status === 'lobby' && r.members.length < r.maxPlayers;
@@ -436,6 +447,7 @@ mount.game = () => {
         <span class="goal-pill" id="goalpill" title="Уровень победы"></span>
         <span id="depthpill"></span>
         <span id="marketpill"></span>
+        <span id="dailypill"></span>
         <span id="locpill" class="locpill"></span>
         <span id="watchpill"></span>
         <span class="spacer"></span>
@@ -494,6 +506,8 @@ update.game = () => {
   $('#turninfo').textContent = g.phase === 'ended' ? 'Партия окончена' : tp ? (tp.id === r.me ? 'Ваш ход' : `Ходит ${tp.name}`) : '';
   $('#goalpill').textContent = `Цель: ${winLvl()} ур.`;
   $('#depthpill').innerHTML = depthPill(g.depth);
+  const dl = g.opts?.daily ? dailyOf(g.opts.daily) : null;
+  $('#dailypill').innerHTML = dl ? `<span class="daily-pill" title="${esc(`Испытание дня ${g.opts.daily}: ${dl.text} Колода сегодня у всех одна.`)}">${ico('calendar')}${esc(dl.name)}</span>` : '';
   $('#marketpill').innerHTML = g.market && g.phase === 'playing' ? `<button class="market-pill" data-act="market" title="Подземный рынок: карты клада в открытую до конца круга, платят вещами">${ico('shop')}Рынок · ${g.market.cards.length}</button>` : '';
   const wn = r.watchers || 0;
   $('#watchpill').innerHTML = r.spectator ? `<span class="watch-pill on" title="Вы видите стол, бои и летопись, но не чужие карты на руках">${EYE}Вы зритель${wn > 1 ? ` · ещё ${wn - 1}` : ''}</span>`
@@ -667,8 +681,8 @@ function actionButtons() {
 
 const SWORDS = ico('crossed-swords');
 // в летописи эмодзи из движка заменяются гравированными значками
-const LOG_ICON = { '💀': 'skull-crossed-bones', '⛏': 'stairs', '📜': 'scroll-quill', '👹': 'horned-skull', '⚔️': 'crossed-swords', '⚔': 'crossed-swords', '🏆': 'trophy', '🤝': 'shaking-hands', '👻': 'ghost', '🛒': 'shop' };
-const logText = t => esc(t).replace(/💀|⛏|📜|👹|⚔️|⚔|🏆|🤝|👻|🛒/g, m => ico(LOG_ICON[m], 'li'));
+const LOG_ICON = { '💀': 'skull-crossed-bones', '⛏': 'stairs', '📜': 'scroll-quill', '👹': 'horned-skull', '⚔️': 'crossed-swords', '⚔': 'crossed-swords', '🏆': 'trophy', '🤝': 'shaking-hands', '👻': 'ghost', '🛒': 'shop', '📅': 'calendar' };
+const logText = t => esc(t).replace(/💀|⛏|📜|👹|⚔️|⚔|🏆|🤝|👻|🛒|📅/g, m => ico(LOG_ICON[m], 'li'));
 // пометки под монстром: босс, «не убежать», «без помощи»; босс подсказывает, тронет ли он участников боя
 function monFlags(m, c) {
   const d = def(m.uid), f = [];
@@ -839,6 +853,7 @@ function renderMine() {
   const p = me();
   const el = $('#mecard');
   if (!p) return renderWatcher();
+  if ((p.sets || []).includes('legend')) unlock('legend');
   const h = hints();
   const mode = S.ui.mode;
   const picked = new Set(mode?.picked || []);
@@ -1287,6 +1302,7 @@ function maybeTradePrompt() {
 }
 // всплывающие знаки новых механик — поверх обычных эффектов и заставок
 function extraFx(fresh) {
+  achFx(fresh);
   for (const f of fresh) {
     const ava = avaOf(f.pid);
     switch (f.kind) {
@@ -1359,12 +1375,55 @@ function extraFx(fresh) {
   }
 }
 
+// ───────────────────────── подвиги: рамки за достижения ─────────────────────────
+// Рамка (номер, как в AV_LABELS.frame) → подвиг, который её открывает; остальные рамки доступны сразу.
+// Подвиги хранятся в этом браузере.
+const FRAME_ACH = { 4: 'win', 8: 'boss', 9: 'duel', 10: 'tame', 11: 'contracts', 12: 'legend' };
+const ACH = {
+  win: ['Победите в партии', 'за победу в партии'],
+  boss: ['Одолейте босса', 'за победу над боссом'],
+  duel: ['Выиграйте поединок', 'за выигранный поединок'],
+  tame: ['Приручите зверя', 'за приручённого зверя'],
+  contracts: ['Выполните 5 контрактов', 'за пять выполненных контрактов'],
+  legend: ['Соберите Легендарный комплект', 'за Легендарный комплект'],
+};
+const achDone = () => LS.get('ach', {});
+const frameLocked = i => !!FRAME_ACH[i] && !achDone()[FRAME_ACH[i]];
+function unlock(key) {
+  if (spectating()) return;
+  const a = achDone();
+  if (a[key]) return;
+  a[key] = true; LS.set('ach', a);
+  const i = Object.keys(FRAME_ACH).find(k => FRAME_ACH[k] === key);
+  if (i) { setTimeout(() => { fx.banner('Новая рамка!', `«${AV_LABELS.frame[i]}» — ${ACH[key][1]}. Наденьте её в облике героя.`, 'legend'); sfx.play('legendary', { always: true }); }, 1800); }
+}
+function achFx(fresh) {
+  const me = S.room?.me;
+  if (!me || spectating()) return;
+  for (const f of fresh) {
+    if (f.kind === 'victory' && (f.pid === me || f.helper === me) && (f.cards || []).some(u => def(u).boss)) unlock('boss');
+    if (f.kind === 'tame' && f.pid === me) unlock('tame');
+    if (f.kind === 'duelEnd' && f.pid === me) unlock('duel');
+    if (f.kind === 'contract' && f.pid === me) { const a = achDone(); a.contractsN = (a.contractsN || 0) + 1; LS.set('ach', a); if (a.contractsN >= 5) unlock('contracts'); }
+  }
+}
+
 function maybeEndScreen() {
   const g = S.game;
   if (g.phase !== 'ended') return;
   if ($('#endScreen')) return;
   const w = g.winners.map(pl).filter(Boolean);
   const isHost = S.room.hostId === S.room.me;
+  const iWon = w.some(p => p.id === S.room.me);
+  if (iWon) unlock('win');
+  // испытание дня: запоминаем свой лучший результат за этот день
+  let daily = '';
+  if (g.opts?.daily && !spectating()) {
+    const rec = LS.get('daily', {});
+    const best = rec.date === g.opts.daily ? rec.turns : null;
+    if (iWon && (!best || g.turn.n < best)) LS.set('daily', { date: g.opts.daily, turns: g.turn.n });
+    daily = `<p class="daily-result">${ico('calendar')} Испытание дня «${esc(dailyOf(g.opts.daily).name)}»: ${iWon ? `победа за ${g.turn.n} ${plural(g.turn.n, 'ход', 'хода', 'ходов')}` : 'в этот раз без победы'}${best ? ` · ваш лучший сегодня — ${Math.min(best, iWon ? g.turn.n : best)}` : ''}</p>`;
+  }
   setTimeout(() => { fx.confetti({ n: 180 }); fx.sparkle($('#endScreen .crownbig'), { n: 22 }); }, 80);
   setTimeout(() => cine.gameOver(), 500);
   sfx.play(w.some(p => p.id === S.room.me) ? 'fanfare' : 'victory', { always: true });
@@ -1372,13 +1431,14 @@ function maybeEndScreen() {
     ${iconSVG('crown', 'crownbig')}
     <h2>${w.map(p => esc(p.name)).join(' и ')} ${w.length > 1 ? 'побеждают' : 'побеждает'}!</h2>
     <p class="muted" style="margin:0">${spectating() ? 'Партия окончена. Было что посмотреть.' : w.some(p => p.id === S.room.me) ? 'Подземелье покорено. Можно гордиться.' : 'В следующий раз подставляйте лидера раньше.'}</p>
+    ${daily}
     <div class="row" style="justify-content:center">${isHost ? '<button class="btn primary" data-act="toLobby">Новая партия</button>' : '<span class="muted">Новую партию запускает хозяин.</span>'}<button class="btn ghost" data-act="closeOverlay">Посмотреть стол</button></div>
   </div>`);
 }
 
 const RULES = `<div class="modal rules" role="dialog" aria-label="Как играть" style="max-width:640px">
   <h2>Как играть</h2>
-  <p>Каждый начинает человеком первого уровня с 4 картами проходов и 4 картами клада. Побеждает тот, кто первым дойдёт до <b>10-го уровня</b>; для долгой партии хозяин в лобби может выбрать 15 или 20. Последний уровень берётся только победой над монстром.</p>
+  <p>Каждый начинает человеком первого уровня с 4 картами проходов и 4 картами клада. Побеждает тот, кто первым дойдёт до <b>10-го уровня</b>; хозяин в лобби может выбрать быструю партию до 5-го (на старте по 6 карт каждой колоды) или долгую — до 15 или 20. Последний уровень берётся только победой над монстром.</p>
   <h3>Ход</h3>
   <p>1. Разложите расу, класс и вещи. 2. <b>Выбейте дверь</b>: монстр — бой, проклятие — сработает на вас, ловушка — обезвредить или принять расплату, остальное уходит в руку. 3. Если монстра не было — ищите неприятности (выйдет случайный монстр из колоды, разбуженный: +${TROUBLE_BONUS} к силе) или обшарьте комнату. 4. Лишние карты сверх пяти отдаются самому слабому.</p>
   <h3>Бой</h3>
@@ -1404,12 +1464,14 @@ const RULES = `<div class="modal rules" role="dialog" aria-label="Как игр�
   <h3>Характеры ботов</h3>
   <p>Осторожный помогает только наверняка и редко лезет в неприятности. Жадный рискует, торгуется за клад и делится скупо. Мстительный помнит, кто ему мешал или насылал проклятия, и отвечает тем же. Характер виден на фишке бота.</p>
   <h3>Локации и события</h3>
-  <p>Карта локации меняет правила для всех, пока кто-нибудь не сыграет другую, и переносит стол в новое место: в таверне держат больше карт, в Небесной цитадели за победу дают лишний уровень, у Оазиса джинна вещи дороже, а проклятия не действуют. События срабатывают сразу для всего стола. Зелья дают бонус в текущем или следующем бою.</p>
+  <p>Карта локации меняет правила для всех, пока кто-нибудь не сыграет другую, и переносит стол в новое место: в таверне держат больше карт, в Небесной цитадели за победу дают лишний уровень, у Оазиса джинна вещи дороже, а проклятия не действуют, на Затопленной станции бегут по пояс в воде, в Логове Кощея за победу дают лишний клад. События срабатывают сразу для всего стола: «Пересменка» передаёт всю руку соседу слева, «Профсоюзное собрание» снимает уровень с лидеров, если против них большинство, «Затопление» уносит обувь у всех, кто не в непромокаемой. Зелья дают бонус в текущем или следующем бою.</p>
   <h3>Особые монстры</h3>
   <p>Одни нападают из засады, едва вы открыли дверь, другие не терпят помощников (метка «без помощи»), от третьих не убежать. Против монстров с меткой «только уровень» — Лихо, Горгоны, Циклопа и Кощея — считается один уровень героя: вещи, зелья, способности и разовые бонусы не помогают. Зеркальный двойник всегда сильнее лидера партии. Читайте карту, прежде чем драться.</p>
   <h3>Боссы</h3>
   <p>В колоде пять боссов — Люцифер, Аид, Анубис, Морена и Чернобог. Морена при появлении морозит у каждого лучшую надетую вещь, Чернобог отнимает по карте у всех, кроме бойца. Уровень у боссов 666, а сила — вдвое больше силы героя, против которого босс вышел, но не меньше ${BOSS_FLOOR}. Усилители и чары на них не действуют, зато помощник, зелья и разовые карты помогают как обычно: вдвоём босса можно одолеть и получить 5 кладов и 2 уровня. За героями ниже 9-го уровня боссы не гонятся, а тех, кто постарше, при неудачном побеге убивают и отбрасывают на 5 уровней.</p>
-  <h3>Смерть и призраки</h3>
+  <h3>Испытание дня и рамки</h3>
+  <p>Хозяин в лобби может включить испытание дня: в этот день колода у всех одна и та же, а партию меняет условие дня — например, старт с глубины или сразу в локации. Ваш лучший результат за день запоминается. Шесть рамок медальона открываются подвигами: победой в партии, победой над боссом, выигранным поединком, приручённым зверем, пятью контрактами и Легендарным комплектом.</p>
+    <h3>Смерть и призраки</h3>
   <p>Погибший теряет вещи, руку и ${DEATH_LEVELS} уровень (ниже первого не опустится), но сохраняет расу и класс. В свой следующий ход он возвращается с новыми картами. А пока ждёт — он призрак: раз за ход может подкинуть +${GHOST_BONUS} героям или монстрам в чужом бою.</p>
   <div class="row"><button class="btn primary" data-act="closeOverlay">Понятно</button><button class="btn ghost" data-act="guide">Справочник карт</button></div>
 </div>`;
@@ -1626,6 +1688,8 @@ document.addEventListener('click', async e => {
   if (off) return S.ui.helpForm.setO(Number(off.dataset.offer));
   const kick = t.closest('[data-kick]');
   if (kick) { const r = await call('room:kick', { memberId: kick.dataset.kick }); if (!r.ok) toast(r.error); return; }
+  const dailyBtn = t.closest('[data-daily]');
+  if (dailyBtn) { const r = await call('room:settings', { daily: dailyBtn.dataset.daily === '1' }); if (!r.ok) toast(r.error); return; }
   const winBtn = t.closest('[data-win]');
   if (winBtn) { const r = await call('room:settings', { winLevel: Number(winBtn.dataset.win) }); if (!r.ok) toast(r.error); return; }
   const delay = t.closest('[data-delay]');
@@ -1635,6 +1699,7 @@ document.addEventListener('click', async e => {
   const tab = t.closest('[data-tab]');
   if (tab) return setTab(tab.dataset.tab);
   const avk = t.closest('[data-av-k]');
+  if (avk && avk.dataset.avK === 'frame' && frameLocked(Number(avk.dataset.avV)) && S.ui.avEdit.cfg.frame !== Number(avk.dataset.avV)) return toast(`Рамка «${AV_LABELS.frame[avk.dataset.avV]}» откроется: ${ACH[FRAME_ACH[avk.dataset.avV]][0].toLowerCase()}`);
   if (avk) { S.ui.avEdit.cfg = { ...S.ui.avEdit.cfg, [avk.dataset.avK]: Number(avk.dataset.avV) }; return drawAvatarEditor(); }
   const avp = t.closest('[data-av-pick]');
   if (avp) { const [r, g, l] = avp.dataset.avPick.split('.').map(Number); return avPick(r, g, l); }
@@ -1835,8 +1900,11 @@ function avGallery(cfg, races) {
 }
 function avFrames(cfg, races, sc) {
   const shown = avShown(cfg, races);
-  return `<div class="av-row"><div class="av-title">Рамка медальона: <b>${esc(AV_LABELS.frame[cfg.frame])}</b></div><div class="av-grid labeled">${AV_LABELS.frame.map((n, i) =>
-    `<button class="av-pick${cfg.frame === i ? ' on' : ''}" data-av-k="frame" data-av-v="${i}" aria-pressed="${cfg.frame === i}"><span class="c">${avatarSVG({ ...shown, frame: i }, sc)}</span><small>${esc(n)}</small></button>`).join('')}</div></div>`;
+  const done = achDone();
+  return `<div class="av-row"><div class="av-title">Рамка медальона: <b>${esc(AV_LABELS.frame[cfg.frame])}</b> <span class="muted">· рамки с замком открываются подвигами</span></div><div class="av-grid labeled">${AV_LABELS.frame.map((n, i) => {
+    const lock = FRAME_ACH[i] && !done[FRAME_ACH[i]] && cfg.frame !== i ? ACH[FRAME_ACH[i]][0] : '';
+    return `<button class="av-pick${cfg.frame === i ? ' on' : ''}${lock ? ' locked' : ''}" data-av-k="frame" data-av-v="${i}" aria-pressed="${cfg.frame === i}"${lock ? ` title="${esc(lock)}"` : ''}><span class="c">${avatarSVG({ ...shown, frame: i }, sc)}${lock ? `<i class="lock">${ico('padlock')}</i>` : ''}</span><small>${esc(n)}${lock ? `<em>${esc(lock)}</em>` : FRAME_ACH[i] ? `<em>${esc(ACH[FRAME_ACH[i]][1])}</em>` : ''}</small></button>`;
+  }).join('')}</div></div>`;
 }
 const avCaption = (cfg, races) => {
   const v = avShown(cfg, races);

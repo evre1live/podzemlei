@@ -266,8 +266,13 @@ function turnMove(s, p, rng) {
       const d = def(u);
       if (d.type !== 'event' || !ok({ type: 'playCard', uid: u })) continue;
       const lowest = p.level <= Math.min(...s.players.map(x => x.level));
+      const top = Math.max(...s.players.map(x => x.level));
+      const myShoes = p.equipped.filter(u => def(u).slot === 'feet');
       const good = d.event === 'fair' || d.event === 'quake' || d.event === 'draft'
         || (d.event === 'rollcall' && lowest)
+        || (d.event === 'union' && p.level < top)
+        || (d.event === 'flood' && myShoes.every(u => (def(u).tags || []).includes('water')))
+        || (d.event === 'shift' && p.hand.length <= 2)
         || (d.event === 'light' && (hasClass(p, 'cleric') || hasClass(p, 'bard')))
         || (d.event === 'luxtax' && p.level < luxLevel(s));
       if (good) return { type: 'playCard', uid: u };
@@ -434,6 +439,7 @@ function locScore(p, d) {
   let v = (d.heroAll || 0) - (d.monsterAll || 0);
   for (const m of d.heroMod || []) if ((m.cls && hasClass(p, m.cls)) || (m.race && hasRace(p, m.race))) v += m.n;
   if (d.lightBonus && p.equipped.some(u => (def(u).tags || []).includes('light'))) v += d.lightBonus;
+  if (d.itemTag && p.equipped.some(u => (def(u).tags || []).includes(d.itemTag.tag))) v += d.itemTag.n;
   v += (d.treasureBonus || 0) * 0.8 + (d.levelBonus || 0) * 2 + (d.handBonus ? 0.5 : 0) + (d.escapeAll || 0) * 0.5 + (d.helperBonus ? 0.3 : 0);
   if (d.saleRate && d.saleRate < 1000) v += 1;
   if (d.noCurses) v += 0.5;

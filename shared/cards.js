@@ -46,12 +46,24 @@ export const TRAP_FAIL_LEVELS = 1; // сорвалась при обезвреж
 // Подземный рынок: открывается, когда подземелье уходит глубже, и стоит до конца круга.
 // Платят вещами (по их цене), сдачи нет; одна покупка за ход.
 export const MARKET_SIZE = 3;
+// Испытание дня: в этот день у всех одна и та же колода и одно условие дня
+export const DAILY = [
+  { id: 'deep', name: 'Глубокий спуск', text: 'Партия начинается сразу с глубины 1: монстры +1.' },
+  { id: 'rich', name: 'Богатый старт', text: 'Каждому на старте ещё 2 карты клада.' },
+  { id: 'loc', name: 'С места в карьер', text: 'Партия начинается сразу в локации дня.' },
+  { id: 'veteran', name: 'Бывалые', text: 'Все начинают со 2-го уровня.' },
+  { id: 'fair', name: 'Ярмарочный день', text: 'Подземный рынок открыт с первого круга.' },
+  { id: 'beasts', name: 'Звериный день', text: 'Зверя можно приручить уже при перевесе 5.' },
+];
+export const dailyOf = date => { let h = 7; for (const ch of String(date)) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return DAILY[h % DAILY.length]; };
+// дата испытания — по Москве, чтобы день у всех игроков менялся в одну полночь
+export const dailyDate = (t = Date.now()) => new Date(t + 3 * 3600 * 1000).toISOString().slice(0, 10);
 export const marketPrice = d => (d.type === 'levelup' ? 1000 : d.type === 'hoard' ? 600 : Math.max(400, (d.value || 0) + 200));
 
 // Глубина: каждые every кругов подземелье уходит глубже, и все монстры, кроме боссов, получают +1 к силе за каждую глубину.
 // Глубже max не спускаемся: иначе монстры со временем становятся непобедимыми и партия не кончается.
 // В длинных партиях спуск глубже — иначе к середине партии монстры перестают пугать.
-export const DEPTH = { 10: { every: 3, max: 3 }, 15: { every: 1, max: 7 }, 20: { every: 1, max: 8 } };
+export const DEPTH = { 5: { every: 2, max: 2 }, 10: { every: 3, max: 3 }, 15: { every: 1, max: 7 }, 20: { every: 1, max: 8 } };
 export const DEPTH_TREASURE_EVERY = 3; // с каждой третьей глубины победа приносит ещё карту клада
 // Смерть стоит уровня, а погибший, пока ждёт своего хода, — призрак: раз за ход подкидывает ±2 в чужой бой.
 export const DEATH_LEVELS = 1;
@@ -524,6 +536,15 @@ export const CARD_DEFS = [
   { id: 'loc_oasis', deck: 'door', type: 'location', name: 'Оазис джинна', copies: 2, art: 'loc_oasis', rarity: 'rare',
     saleRate: 700, noCurses: true,
     text: 'Уровень за каждые 700 голдов, а не 1000. Проклятия не действуют.' },
+  { id: 'loc_flooded', deck: 'door', type: 'location', name: 'Затопленная станция', copies: 2, art: 'loc_flooded', rarity: 'rare',
+    escapeAll: -1, monsterTag: [{ tag: 'water', n: 3 }, { tag: 'metro', n: 2 }], itemTag: { tag: 'water', n: 2 },
+    text: 'Вода по пояс: всем −1 к побегу. Водные монстры +3, жители метро +2. В непромокаемом +2 к силе.' },
+  { id: 'loc_grove', deck: 'door', type: 'location', name: 'Грибная роща', copies: 2, art: 'loc_grove', rarity: 'rare',
+    handBonus: 1, monsterTag: [{ tag: 'fungus', n: 4 }], heroMod: [{ cls: 'alchemist', n: 2 }, { race: 'halfling', n: 1 }],
+    text: 'Грибов полно: в руке на карту больше. Грибные монстры +4. Алхимики +2, полурослики +1.' },
+  { id: 'loc_koschei', deck: 'door', type: 'location', name: 'Логово Кощея', copies: 2, art: 'loc_koschei', rarity: 'epic',
+    treasureBonus: 1, saleRate: 800, monsterTag: [{ tag: 'undead', n: 2 }],
+    text: 'Кощей чахнет над златом: за победу ещё карта клада, уровень за каждые 800 голдов. Нежить +2.' },
 
   // ───────────── СОБЫТИЯ ─────────────
   // Срабатывают сразу, если их вытащили, выбив дверь. Из руки играются в свой ход вне боя.
@@ -539,6 +560,12 @@ export const CARD_DEFS = [
     text: 'Отстающие с самым низким уровнем получают уровень.' },
   { id: 'ev_luxtax', deck: 'door', type: 'event', event: 'luxtax', name: 'Налог на роскошь', copies: 1, art: 'paper',
     text: 'Все игроки {lux}-го уровня и выше теряют уровень.' },
+  { id: 'ev_shift', deck: 'door', type: 'event', event: 'shift', name: 'Пересменка', copies: 1, art: 'ev_shift',
+    text: 'Все передают всю руку соседу слева.' },
+  { id: 'ev_union', deck: 'door', type: 'event', event: 'union', name: 'Профсоюзное собрание', copies: 1, art: 'ev_union',
+    text: 'Голосуют все, кто ниже лидера: если их больше половины стола, лидеры теряют уровень.' },
+  { id: 'ev_flood', deck: 'door', type: 'event', event: 'flood', name: 'Затопление', copies: 1, art: 'ev_flood',
+    text: 'Все, кто не в непромокаемой обувке, теряют обувку.' },
 
   // ───────────── ВЫЗОВ ─────────────
   // Дуэль героев: сила против силы (уровень, вещи, «в следующем бою»). Остальные могут подкинуть разовые бонусы любой стороне.
@@ -608,7 +635,8 @@ export const CARD_DEFS = [
     text: 'Гремит на всю штольню. −1 к побегу.' },
   { id: 'i_robe', deck: 'treasure', type: 'item', name: 'Мантия архивариуса', slot: 'armor', bonus: 3, value: 600, art: 'robe', rarity: 'rare',
     req: { cls: 'mage' }, text: 'Только для магов.' },
-  { id: 'i_boots', deck: 'treasure', type: 'item', name: 'Резиновые сапоги', slot: 'feet', bonus: 1, value: 200, art: 'boots' },
+  { id: 'i_boots', deck: 'treasure', type: 'item', name: 'Резиновые сапоги', slot: 'feet', bonus: 1, value: 200, art: 'boots', tags: ['water'],
+    text: 'Непромокаемые.' },
   { id: 'i_runners', deck: 'treasure', type: 'item', name: 'Кеды-драпалки', slot: 'feet', bonus: 0, value: 400, art: 'sneakers',
     runBonus: 2, text: '+2 к побегу.' },
   { id: 'i_slippers', deck: 'treasure', type: 'item', name: 'Тапки бесшумные', slot: 'feet', bonus: 1, value: 300, art: 'slippers',
@@ -617,8 +645,8 @@ export const CARD_DEFS = [
     text: '−1 к силе, зато +3 к побегу.' },
   { id: 'i_valenki', deck: 'treasure', type: 'item', name: 'Валенки', slot: 'feet', bonus: 1, value: 200, art: 'valenki', locBonus: { loc: 'loc_ice', n: 3 },
     text: 'В Ледяной цитадели ещё +3.' },
-  { id: 'i_waders', deck: 'treasure', type: 'item', name: 'Болотные сапоги', slot: 'feet', bonus: 1, value: 300, art: 'waders', foeMod: { tag: 'water', n: -3 },
-    text: 'Водные монстры против тебя −3.' },
+  { id: 'i_waders', deck: 'treasure', type: 'item', name: 'Болотные сапоги', slot: 'feet', bonus: 1, value: 300, art: 'waders', foeMod: { tag: 'water', n: -3 }, tags: ['water'],
+    text: 'Непромокаемые. Водные монстры против тебя −3.' },
   { id: 'i_shovel', deck: 'treasure', type: 'item', name: 'Совковая лопата', slot: 'hand', hands: 1, bonus: 2, value: 200, copies: 2, art: 'shovel' },
   { id: 'i_pick', deck: 'treasure', type: 'item', name: 'Кирка ударника', slot: 'hand', hands: 2, bonus: 3, value: 400, art: 'pick', set: 'miner',
     text: 'Комплект «Шахтёрский».' },

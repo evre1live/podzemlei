@@ -7,10 +7,10 @@ import fs from 'node:fs';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { Server } from 'socket.io';
-import { createGame, act, tick, view, P, WIN_LEVELS } from '../shared/engine.js';
+import { createGame, act, tick, view, P, WIN_LEVELS, WIN_LEVEL } from '../shared/engine.js';
 import { botDecide } from '../shared/bot.js';
 import { cleanAvatar, avatarFromSeed } from '../shared/avatar.js';
-import { PERSONAS, TRADE_TIMEOUT_MS } from '../shared/cards.js';
+import { PERSONAS, TRADE_TIMEOUT_MS, dailyDate, dailyOf } from '../shared/cards.js';
 const PERSONA_KEYS = Object.keys(PERSONAS);
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -34,6 +34,11 @@ const AFK_MS = Number(process.env.AFK_MS || 45000);
 const IDLE_TURN_MS = Number(process.env.IDLE_TURN_MS || 180000);
 
 const rng = () => crypto.randomInt(0, 2 ** 31) / 2 ** 31;
+// испытание дня: колода тасуется от даты — в этот день она у всех одна
+function seeded(str) {
+  let a = 7; for (const ch of String(str)) a = (Math.imul(a, 31) + ch.charCodeAt(0)) | 0;
+  return () => { a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+}
 const now = () => Date.now();
 
 // ───────────────────────── пароли ─────────────────────────
@@ -67,7 +72,7 @@ const COLORS = ['#b5432f', '#c4773a', '#4f8f5c', '#3f7fb0', '#8a5cb0', '#b0587f'
 
 const DELAYS = [10000, 20000, 30000];
 const cleanDelay = v => (DELAYS.includes(Number(v)) ? Number(v) : DELAYS[0]);
-const cleanWin = v => (WIN_LEVELS.includes(Number(v)) ? Number(v) : WIN_LEVELS[0]);
+const cleanWin = v => (WIN_LEVELS.includes(Number(v)) ? Number(v) : WIN_LEVEL);
 const cleanName = (n, fb = 'Игрок') => (String(n || '').replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, 20) || fb);
 
 // ───────────────────────── голосовой чат ─────────────────────────
@@ -195,7 +200,7 @@ function load() {
       if (r.game?.combat) r.game.combat.winAt = null;
       // поединок после перезапуска досчитывается заново
       if (r.game?.duel) { r.game.duel.winStart = now(); r.game.duel.winAt = Math.max(r.game.duel.winAt || 0, now() + (r.game.opts?.winDelayMs || 10000)); r.game.duel.passed = []; }
-      r.settings = { ...(r.settings || {}), winDelayMs: cleanDelay(r.settings?.winDelayMs), winLevel: cleanWin(r.settings?.winLevel) };
+      r.settings = { ...(r.settings || {}), winDelayMs: cleanDelay(r.settings?.winDelayMs), winLevel: cleanWin(r.settings?.winLevel), daily: !!r.settings?.daily };
       rooms.set(r.id, r);
     }
     console.log(`Восстановлено комнат: ${rooms.size}`);
@@ -453,7 +458,7 @@ io.on('connection', socket => {
     const r = {
       id: newCode(), name, pass: pw ? hashPassword(pw) : null, hidden: !!p.hidden, hostId: null,
       maxPlayers: Math.min(6, Math.max(2, Number(p.maxPlayers) || 6)),
-      settings: { winDelayMs: cleanDelay(p.winDelayMs), winLevel: cleanWin(p.winLevel) },
+      settings: { winDelayMs: cleanDelay(p.winDelayMs), winLevel: cleanWin(p.winLevel), daily: false },
       members: [], chat: [], game: null, createdAt: now(), lastActive: now(),
     };
     const m = addMember(r, { name: cleanName(p.playerName), avatar: p.avatar });
@@ -578,6 +583,10 @@ io.on('connection', socket => {
       r.settings.winLevel = Number(p.winLevel);
       sysChat(r, `Играем до ${r.settings.winLevel}-го уровня.`);
     }
+    if (typeof p.daily === 'boolean' && p.daily !== !!r.settings.daily) {
+      r.settings.daily = p.daily;
+      sysChat(r, p.daily ? `Играем испытание дня: «${dailyOf(dailyDate()).name}».` : 'Обычная партия, без испытания дня.');
+    }
     if (typeof p.password === 'string') {
       if (p.password.length > 64) return 'Пароль слишком длинный';
       r.pass = p.password ? hashPassword(p.password) : null;
@@ -590,7 +599,8 @@ io.on('connection', socket => {
     if (r.game && r.game.phase === 'playing') return 'Игра уже идёт';
     const seats = activeMembers(r);
     if (seats.length < 2) return 'Нужно минимум 2 участника (можно добавить ботов)';
-    r.game = createGame(seats.map(m => ({ id: m.id, name: m.name, isBot: m.isBot, persona: m.persona, color: m.color, avatar: m.avatar })), { winDelayMs: r.settings.winDelayMs, winLevel: cleanWin(r.settings.winLevel) }, rng);
+    const day = r.settings.daily ? dailyDate() : undefined;
+    r.game = createGame(seats.map(m => ({ id: m.id, name: m.name, isBot: m.isBot, persona: m.persona, color: m.color, avatar: m.avatar })), { winDelayMs: r.settings.winDelayMs, winLevel: cleanWin(r.settings.winLevel), daily: day }, day ? seeded(day) : rng);
     r.game.now = now();
     r.nextBotAt = now() + 1500;
     sysChat(r, 'Партия началась! Удачи под землёй.');

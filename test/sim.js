@@ -39,7 +39,7 @@ function scan(s) {
     if (l.text.includes(' подкладывает ')) stats.trapsPlanted++;
     if (l.text.includes(' сманивает ')) stats.lures++;
     if (l.text.startsWith('⚔ Поединок:')) { stats.duels++; if (l.kind === 'good') stats.duelsWonByChallenger++; }
-    if (l.text.startsWith('🛒 На новой глубине')) stats.markets++;
+    if (l.text.startsWith('🛒 Открылся')) stats.markets++;
     if (l.text.includes(' покупает на рынке ')) stats.buys++;
   }
   s._seen = s.logSeq;
@@ -51,7 +51,8 @@ const stats = { deaths: 0, wins: {} , help: 0, interfere: 0, steals: 0, bossMeet
 for (let g = 0; g < N; g++) {
   const rng = mulberry32(g + 1);
   const n = 3 + (g % 4);
-  const s = createGame(Array.from({ length: n }, (_, i) => ({ id: 'p' + i, name: 'Бот' + i, isBot: true })), { winDelayMs: 3000, winLevel: Number(process.env.WIN || 10) }, rng);
+  const daily = process.env.DAILY ? `2026-10-${String(1 + (g % 28)).padStart(2, '0')}` : undefined;
+  const s = createGame(Array.from({ length: n }, (_, i) => ({ id: 'p' + i, name: 'Бот' + i, isBot: true })), { winDelayMs: 3000, winLevel: Number(process.env.WIN || 10), daily }, rng);
   let now = 1000, guard = 0;
   while (s.phase === 'playing' && guard++ < 20000) {
     now += 500;
