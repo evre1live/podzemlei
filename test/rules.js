@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createGame, act, tick, view, combatNumbers, P, saleValue, fillText } from '../shared/engine.js';
 import { botDecide } from '../shared/bot.js';
 import { def } from '../shared/cards.js';
-import { AVATAR_PARTS, cleanAvatar, avatarFromSeed, withGender } from '../shared/avatar.js';
+import { AVATAR_PARTS, cleanAvatar, avatarFromSeed, withGender, portraitId } from '../shared/avatar.js';
 
 let seed = 7; const rng = () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
 function fresh(n = 3) {
@@ -458,26 +458,21 @@ t('по умолчанию и при мусоре в настройках — 10
   assert.equal(s.phase, 'ended');
 });
 
-t('внешность: раса, пол, одежда, уборы и украшения; старые аватары не ломаются', () => {
-  assert.deepEqual([AVATAR_PARTS.gender, AVATAR_PARTS.race, AVATAR_PARTS.body, AVATAR_PARTS.hair, AVATAR_PARTS.hat, AVATAR_PARTS.outfit, AVATAR_PARTS.jewel], [2, 7, 3, 16, 13, 13, 10]);
-  const a = cleanAvatar({ skin: 2, hair: 3, gender: 1, race: 6, body: 2, outfit: 12, jewel: 9 });
-  assert.deepEqual([a.gender, a.race, a.body, a.outfit, a.jewel], [1, 6, 2, 12, 9]);
-  // аватар из прошлой версии: лишние поля отбрасываются, недостающие — 0, вышедшие за пределы — 0
-  const old = cleanAvatar({ skin: 2, hair: 19, glasses: 3, body: 3, outfit: 9 });
-  assert.deepEqual([old.race, old.hair, old.body, old.outfit, old.jewel, old.glasses], [0, 0, 0, 9, 0, undefined]);
-  const junk = cleanAvatar({ gender: 5, race: -1, outfit: 'кожанка', jewel: 1.5 });
-  assert.deepEqual([junk.gender, junk.race, junk.outfit, junk.jewel], [0, 0, 0, 0]);
-  const races = new Set();
-  for (let i = 0; i < 400; i++) {
-    const r = avatarFromSeed(i);
-    assert.deepEqual(cleanAvatar(r), r);
-    races.add(r.race);
-    if (r.gender) assert.equal(r.facial, 0);
-    if (r.race === 2 && !r.gender) assert.ok(r.facial >= 4, 'гномы с бородой');
-  }
-  assert.equal(races.size, 7);
-  const w = withGender({ ...old, hair: 1, facial: 4 }, 1);
-  assert.equal(w.facial, 0); assert.notEqual(w.hair, 1);
+t('облик: пол, раса, образ и рамка; аватары прошлых версий не ломаются', () => {
+  assert.deepEqual(AVATAR_PARTS, { gender: 2, race: 7, look: 6, frame: 13 });
+  const a = cleanAvatar({ gender: 1, race: 6, look: 5, frame: 12 });
+  assert.deepEqual(a, { gender: 1, race: 6, look: 5, frame: 12 });
+  assert.equal(portraitId(a), 'p_mole_f_6');
+  assert.equal(portraitId(cleanAvatar({})), 'p_human_m_1');
+  // облик прошлой версии: пол и раса остаются, детали лица и одежды отбрасываются
+  const old = cleanAvatar({ gender: 1, race: 2, hair: 9, outfit: 12, jewel: 4, skin: 3 });
+  assert.deepEqual(old, { gender: 1, race: 2, look: 0, frame: 0 });
+  const junk = cleanAvatar({ gender: 5, race: -1, look: 'маг', frame: 1.5 });
+  assert.deepEqual(junk, { gender: 0, race: 0, look: 0, frame: 0 });
+  const seen = new Set();
+  for (let i = 0; i < 400; i++) { const r = avatarFromSeed(i); assert.deepEqual(cleanAvatar(r), r); seen.add(portraitId(r)); }
+  assert.ok(seen.size > 60, 'случайные облики разнообразны');
+  assert.deepEqual(withGender({ gender: 0, race: 4, look: 3, frame: 2 }, 1), { gender: 1, race: 4, look: 3, frame: 2 });
 });
 
 // кубик всегда показывает 1 или 6 — чтобы побег точно провалился или удался

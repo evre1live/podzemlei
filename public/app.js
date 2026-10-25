@@ -6,8 +6,8 @@ import { fx } from '/fx.js';
 import { sfx } from '/sfx.js';
 import { setWorld } from '/world.js';
 import { cine, growlKind } from '/cine.js';
-import { AVATAR_PARTS, avatarFromSeed, cleanAvatar, withGender, MOLE } from '/shared/avatar.js';
-import { AV_LABELS, BGC, EYEC, HAIRC, CLOTH, HAT_COLORED, skinPalette } from '/art-avatar.js';
+import { AVATAR_PARTS, avatarFromSeed, cleanAvatar, withGender } from '/shared/avatar.js';
+import { AV_LABELS, lookNote } from '/art-avatar.js';
 import { createVoice } from '/voice.js';
 import { ico } from '/icons.js';
 
@@ -1419,7 +1419,7 @@ function playDice() {
 document.addEventListener('click', async e => {
   const t = e.target;
   if (t.closest('[data-uid]')) sfx.play(S.ui.mode ? 'click' : 'flip');
-  else if (t.closest('.btn, .seg button, .tabs button, .opp, .pick, .room-row, .av-opt, .av-sw, .hero-ava')) sfx.play('click');
+  else if (t.closest('.btn, .seg button, .tabs button, .opp, .pick, .room-row, .av-pick, .hero-ava')) sfx.play('click');
   if (t.matches('[data-backdrop]')) {
     if ($('#helpPrompt') || $('#tradePrompt')) return; // на просьбу о помощи и обмен нужно ответить
     return closeOverlay();
@@ -1612,68 +1612,36 @@ document.addEventListener('click', async e => {
   }
 });
 
-// ───────────────────────── внешность героя ─────────────────────────
-const mole = cfg => cfg.race === MOLE;
-// ряды редактора: pick — выбор из картинок (view — какую часть портрета показывать), colors — образцы цвета
+// ───────────────────────── облик героя ─────────────────────────
+// Облик — готовый живописный портрет: пол, раса и образ, плюс рамка медальона
 const AV_TABS = [
-  { id: 'base', label: 'Основа', rows: [
-    { k: 'gender', t: 'Пол', pick: true },
-    { k: 'race', t: 'Раса', pick: true },
-    { k: 'body', t: 'Телосложение', pick: true },
-    { k: 'skin', t: cfg => (mole(cfg) ? 'Мех' : 'Кожа'), colors: cfg => skinPalette(cfg.race) },
-    { k: 'bg', t: 'Фон', colors: () => BGC },
-  ] },
-  { id: 'face', label: 'Лицо', rows: [
-    { k: 'eyes', t: 'Глаза', colors: () => EYEC, hide: mole },
-    { k: 'brows', t: 'Взгляд', pick: true, view: 'face', hide: mole },
-    { k: 'mouth', t: 'Рот', pick: true, view: 'face' },
-    { k: 'extra', t: 'Приметы', pick: true, view: 'face' },
-  ] },
-  { id: 'hair', label: 'Волосы', note: cfg => (mole(cfg) ? 'У кротолюдов вместо волос мех — его цвет выбирается на вкладке «Основа».' : ''), rows: [
-    { k: 'hair', t: 'Причёска', pick: true, view: 'head', hide: mole },
-    { k: 'hairColor', t: 'Цвет волос и бровей', colors: () => HAIRC, hide: mole },
-    { k: 'facial', t: 'Борода и усы', pick: true, view: 'head', hide: mole },
-  ] },
-  { id: 'wear', label: 'Одежда', rows: [
-    { k: 'outfit', t: 'Верхняя одежда', pick: true },
-    { k: 'shirt', t: 'Цвет одежды', colors: () => CLOTH },
-  ] },
-  { id: 'hat', label: 'Убор', rows: [
-    { k: 'hat', t: 'Головной убор', pick: true, view: 'head' },
-    { k: 'hatColor', t: 'Цвет ткани', colors: () => CLOTH, hide: cfg => !HAT_COLORED.has(cfg.hat) },
-  ] },
-  { id: 'more', label: 'Украшения', rows: [
-    { k: 'jewel', t: 'Украшения', pick: true },
-  ] },
+  { id: 'face', label: 'Портрет', rows: [{ k: 'gender', t: 'Пол' }, { k: 'race', t: 'Раса' }, { k: 'look', t: 'Образ' }] },  // пол — переключатель, остальное — портреты
+  { id: 'frame', label: 'Рамка', rows: [{ k: 'frame', t: 'Рамка медальона' }] },
 ];
-// вариант внешности для превью и для клика: пол меняет ещё бороду и причёску
 const avWith = (cfg, k, i) => (k === 'gender' ? withGender(cfg, i) : { ...cfg, [k]: i });
 const seatColor = () => S.room?.members.find(m => m.id === S.room.me)?.color || '#3a3a42';
 function openAvatarEditor() {
-  S.ui.avEdit = { cfg: cleanAvatar(S.avatar && typeof S.avatar === 'object' ? S.avatar : avatarFromSeed(Number(S.avatar) || 0)), tab: S.ui.avEdit?.tab || 'base' };
+  S.ui.avEdit = { cfg: cleanAvatar(S.avatar && typeof S.avatar === 'object' ? S.avatar : avatarFromSeed(Number(S.avatar) || 0)), tab: S.ui.avEdit?.tab || 'face' };
   drawAvatarEditor();
 }
-function avRow(r, cfg, sc) {
-  const { k, pick, view = 'full' } = r, n = AVATAR_PARTS[k], names = AV_LABELS[k] || [];
-  const title = typeof r.t === 'function' ? r.t(cfg) : r.t;
-  if (pick) return `<div class="av-row"><div class="av-title">${title}: <b>${esc(names[cfg[k]] || '')}</b></div><div class="av-grid labeled">${Array.from({ length: n }, (_, i) =>
-    `<button class="av-pick${cfg[k] === i ? ' on' : ''}" data-av-k="${k}" data-av-v="${i}" aria-pressed="${cfg[k] === i}"><span class="c">${avatarSVG(avWith(cfg, k, i), sc, '', view)}</span><small>${esc(names[i] || '')}</small></button>`).join('')}</div></div>`;
-  const colors = r.colors(cfg);
-  const items = Array.from({ length: n }, (_, i) => {
-    const seat = k === 'bg' && i === 0, name = seat ? 'Цвет вашего места' : names[i] || `${title} ${i + 1}`;
-    return `<button class="av-sw${cfg[k] === i ? ' on' : ''}" data-av-k="${k}" data-av-v="${i}" style="--c:${colors[i] || sc}" aria-pressed="${cfg[k] === i}" aria-label="${esc(name)}" title="${esc(name)}">${seat ? '<i>место</i>' : ''}</button>`;
-  }).join('');
-  return `<div class="av-row"><div class="av-title">${title}${names[cfg[k]] ? `: <b>${esc(k === 'bg' && !cfg[k] ? 'цвет места' : names[cfg[k]])}</b>` : ''}</div><div class="av-swatches">${items}</div></div>`;
+function avRow({ k, t }, cfg, sc) {
+  const names = AV_LABELS[k] || [];
+  if (k === 'gender') return `<div class="av-row"><div class="seg av-seg" role="group" aria-label="${t}">${names.map((n, i) => `<button type="button" data-av-k="gender" data-av-v="${i}" aria-pressed="${cfg.gender === i}">${n}</button>`).join('')}</div></div>`;
+  return `<div class="av-row"><div class="av-title">${t}: <b>${esc(names[cfg[k]] || '')}</b></div><div class="av-grid labeled${k === 'look' ? ' looks' : ''}">${Array.from({ length: AVATAR_PARTS[k] }, (_, i) => {
+    const v = avWith(cfg, k, i), note = k === 'look' ? lookNote(v) : '';
+    return `<button class="av-pick${cfg[k] === i ? ' on' : ''}" data-av-k="${k}" data-av-v="${i}" aria-pressed="${cfg[k] === i}"${note ? ` title="${esc(note)}"` : ''}><span class="c">${avatarSVG(v, sc)}</span><small>${esc(names[i] || '')}</small></button>`;
+  }).join('')}</div></div>`;
 }
+const avCaption = cfg => `<b>${esc(AV_LABELS.race[cfg.race])} · ${esc(AV_LABELS.look[cfg.look])}</b><span>${esc(lookNote(cfg))}</span>`;
 function drawAvatarEditor() {
   const E = S.ui.avEdit, cfg = E.cfg, sc = seatColor();
   const tab = AV_TABS.find(t => t.id === E.tab) || AV_TABS[0];
-  const note = tab.note?.(cfg);
-  const rows = tab.rows.filter(r => !r.hide?.(cfg)).map(r => avRow(r, cfg, sc)).join('') + (note ? `<p class="muted av-note">${esc(note)}</p>` : '');
+  const rows = tab.rows.map(r => avRow(r, cfg, sc)).join('');
   // при выборе варианта перерисовываем только содержимое, чтобы список не прыгал наверх
   const box = $('#avModal');
   if (box && box.dataset.avtab === tab.id) {
     box.querySelector('.av-preview').innerHTML = avatarSVG(cfg, sc);
+    box.querySelector('.av-caption').innerHTML = avCaption(cfg);
     box.querySelector('.av-rows').innerHTML = rows;
     return;
   }
@@ -1682,6 +1650,7 @@ function drawAvatarEditor() {
     <div class="av-body">
       <div class="av-side">
         <div class="av-preview" style="--seat:${sc}">${avatarSVG(cfg, sc)}</div>
+        <p class="av-caption">${avCaption(cfg)}</p>
         <button class="btn small" data-act="avatarRandom">${ico('rolling-dices')}Случайно</button>
       </div>
       <div class="av-main">

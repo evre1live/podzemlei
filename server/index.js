@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { Server } from 'socket.io';
 import { createGame, act, tick, view, P, WIN_LEVELS } from '../shared/engine.js';
 import { botDecide } from '../shared/bot.js';
-import { cleanAvatar, avatarFromSeed, withGender } from '../shared/avatar.js';
+import { cleanAvatar, avatarFromSeed } from '../shared/avatar.js';
 import { PERSONAS, TRADE_TIMEOUT_MS } from '../shared/cards.js';
 const PERSONA_KEYS = Object.keys(PERSONAS);
 
@@ -56,7 +56,13 @@ const newCode = () => { let c; do { c = Array.from({ length: 6 }, () => CODE_CHA
 const newId = () => crypto.randomBytes(6).toString('hex');
 const newToken = () => crypto.randomBytes(24).toString('hex');
 const BOT_NAMES = ['Кротыч', 'Диггер Петя', 'Шахтёрка Зоя', 'Сталактитыч', 'Гоша из подвала', 'Тётя Вагонетка', 'Дед Фонарь', 'Крыса Лариса'];
-const BOT_WOMEN = new Set(['Шахтёрка Зоя', 'Тётя Вагонетка', 'Крыса Лариса']);
+// у каждого бота свой портрет и рамка: раса, пол, образ (0 воин … 5 знать), рамка
+const BOT_LOOKS = {
+  'Кротыч': { race: 6, gender: 0, look: 4, frame: 10 }, 'Диггер Петя': { race: 0, gender: 0, look: 2, frame: 1 },
+  'Шахтёрка Зоя': { race: 2, gender: 1, look: 4, frame: 2 }, 'Сталактитыч': { race: 2, gender: 0, look: 1, frame: 9 },
+  'Гоша из подвала': { race: 5, gender: 0, look: 4, frame: 7 }, 'Тётя Вагонетка': { race: 3, gender: 1, look: 4, frame: 6 },
+  'Дед Фонарь': { race: 6, gender: 0, look: 3, frame: 11 }, 'Крыса Лариса': { race: 5, gender: 1, look: 2, frame: 5 },
+};
 const COLORS = ['#b5432f', '#c4773a', '#4f8f5c', '#3f7fb0', '#8a5cb0', '#b0587f']; // цвета мест: приглушённые геральдические
 
 const DELAYS = [10000, 20000, 30000];
@@ -549,7 +555,7 @@ io.on('connection', socket => {
     const name = BOT_NAMES.find(n => !used.has(n)) || 'Бот';
     // у ботов внешность под стать имени: Зоя и Лариса — женщины, Кротыч и Дед Фонарь — мужчины
     const persona = PERSONA_KEYS[crypto.randomInt(PERSONA_KEYS.length)];
-    addMember(r, { name, isBot: true, persona, avatar: withGender(avatarFromSeed(crypto.randomInt(100000)), BOT_WOMEN.has(name) ? 1 : 0) });
+    addMember(r, { name, isBot: true, persona, avatar: cleanAvatar(BOT_LOOKS[name] || avatarFromSeed(crypto.randomInt(100000))) });
     sysChat(r, `За стол садится бот ${name} — характер ${PERSONAS[persona]}.`);
   }));
 

@@ -68,12 +68,13 @@ ok('в списке комнат замок, хэш пароля не утека
 }
 {
   const D = await client();
-  const rd = await D.call('room:create', { name: 'Внешность', playerName: 'Даша', avatar: { hair: 5, hat: 99, eyes: '3', evil: '<script>' } });
+  const rd = await D.call('room:create', { name: 'Внешность', playerName: 'Даша', avatar: { race: 5, look: 99, gender: '1', evil: '<script>' } });
   await until(() => D.lastState?.room.members.length === 1, 3000, 'avatar room');
   let av = D.lastState.room.members[0].avatar;
-  assert.equal(av.hair, 5); assert.equal(av.hat, 0); assert.equal(av.eyes, 3); assert.equal(av.evil, undefined);
-  assert.ok((await D.call('me:avatar', { avatar: { ...av, hat: 4, bg: 2 } })).ok);
-  await until(() => D.lastState.room.members[0].avatar.hat === 4, 3000, 'avatar update');
+  assert.equal(av.race, 5); assert.equal(av.look, 0); assert.equal(av.gender, 1); assert.equal(av.evil, undefined);
+  assert.ok((await D.call('me:avatar', { avatar: { ...av, look: 4, frame: 2 } })).ok);
+  await until(() => D.lastState.room.members[0].avatar.frame === 2, 3000, 'avatar update');
+  assert.equal(D.lastState.room.members[0].avatar.look, 4);
   assert.equal((await D.call('room:settings', { winDelayMs: 5000 })).ok, true);
   assert.equal(D.lastState.room.settings.winDelayMs, 10000);
   await D.call('room:settings', { winDelayMs: 30000 });
@@ -84,6 +85,9 @@ ok('в списке комнат замок, хэш пароля не утека
   await D.call('room:settings', { winLevel: 20 });
   await until(() => D.lastState.room.settings.winLevel === 20, 3000, 'win 20');
   assert.ok((await D.call('room:addBot')).ok);
+  await until(() => D.lastState.room.members.length === 2, 3000, 'bot seated');
+  const botAv = D.lastState.room.members.find(m => m.isBot).avatar;
+  assert.deepEqual(Object.keys(botAv).sort(), ['frame', 'gender', 'look', 'race']);
   assert.ok((await D.call('room:start')).ok);
   await until(() => D.lastState?.game, 3000, 'game 20');
   assert.equal(D.lastState.game.opts.winLevel, 20);

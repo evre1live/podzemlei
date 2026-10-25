@@ -1,0 +1,14 @@
+{
+ "frame_iron": 0.805,
+ "frame_bronze": 0.743,
+ "frame_silver": 0.769,
+ "frame_gold": 0.77,
+ "frame_bone": 0.753,
+ "frame_wood": 0.728,
+ "frame_copper": 0.724,
+ "frame_obsidian": 0.73,
+ "frame_frost": 0.696,
+ "frame_roots": 0.657,
+ "frame_chain": 0.732,
+ "frame_dragon": 0.719
+}
