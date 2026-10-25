@@ -29,6 +29,13 @@ export const BOSS_LEVEL = 666;
 export const BOSS_MULT = 2;
 export const BOSS_MIN_LEVEL = 9;
 export const BOSS_FLOOR = 30; // слабого героя босс не трогает, но и лёгкой добычей не становится
+// Баланс классов и «неприятностей» (подобран по тысячам партий ботов)
+export const TROUBLE_BONUS = 4;  // монстр, которого искали сами, разбужен и злее на столько
+export const WITCHER_BONUS = 3;  // постоянный бонус ведьмака
+export const MUTAGEN_BONUS = 6;  // мутаген, раз за партию
+export const LULLABY_PENALTY = 2; // колыбельная барда: монстры слабее на столько
+export const LULLABY_MAX = 1;     // и не чаще раза за бой
+export const DISTILL_COST = 3;    // перегонка алхимика: столько карт сбросить
 const BOSS = (id, name, extra) => ({
   id, deck: 'door', type: 'monster', boss: true, name, level: BOSS_LEVEL, treasures: 5, levels: 2, copies: 1, rarity: 'epic',
   noPursue: BOSS_MIN_LEVEL - 1,
@@ -53,10 +60,10 @@ export const CARD_DEFS = [
   CLS('c_mage', 'mage', 'Маг', 3, 'Чары: сбрось всю руку (от 3 карт) и усыпи монстра — его клад твой, но без уровня. Левитация: до 3 карт, +1 к побегу за каждую.'),
   CLS('c_cleric', 'cleric', 'Жрец', 2, 'Изгнание: против нежити сбрось до 3 карт, +3 за каждую. Проклятие на тебя срывается на броске 5–6.'),
   CLS('c_rogue', 'rogue', 'Плут', 3, 'Удар в спину: сбрось карту — участник боя получает −2. Карманник: сбрось карту и выброси 4+, чтобы стащить мелкую вещь. Провал — минус уровень.'),
-  CLS('c_bard', 'bard', 'Бард', 2, 'Колыбельная: в любом бою сбрось карту — монстры −3 (до двух раз за бой). Слава: побеждая сам, берёт ещё карту клада.'),
-  CLS('c_alchemist', 'alchemist', 'Алхимик', 2, 'Мастер зелий: твои разовые карты дают на 2 больше. Перегонка: раз в ход вне боя сбрось 2 карты и возьми карту клада.'),
+  CLS('c_bard', 'bard', 'Бард', 2, 'Колыбельная: в любом бою сбрось карту — монстры −2 (раз за бой). Слава: побеждая сам, берёт ещё карту клада.'),
+  CLS('c_alchemist', 'alchemist', 'Алхимик', 2, 'Мастер зелий: твои разовые карты дают на 2 больше. Перегонка: раз в ход вне боя сбрось 3 карты и возьми карту клада.'),
   CLS('c_engineer', 'engineer', 'Механик', 2, 'Третья рука: можешь держать вещи на три руки. Наладчик: +1 к силе за каждую надетую большую вещь.'),
-  { ...CLS('c_witcher', 'witcher', 'Ведьмак', 2, '+5 к силе всегда. Мутаген: один раз за всю партию сбрось в бою 2 карты — ещё +10 к силе.'), rarity: 'epic', bg: 'dark' },
+  { ...CLS('c_witcher', 'witcher', 'Ведьмак', 2, '+3 к силе всегда. Мутаген: один раз за всю партию сбрось в бою 2 карты — ещё +6 к силе.'), rarity: 'epic', bg: 'dark' },
 
   { id: 'x_halfbreed', deck: 'door', type: 'halfbreed', name: 'Смешанная кровь', copies: 2, art: 'mix', rarity: 'rare',
     text: 'Можешь иметь две расы сразу и пользоваться обеими.' },
@@ -466,7 +473,7 @@ export const CARD_DEFS = [
   { id: 'i_tokens', deck: 'treasure', type: 'item', name: 'Кольчуга из жетонов', slot: 'armor', bonus: 2, value: 400, art: 'mail' },
   { id: 'i_diver', deck: 'treasure', type: 'item', name: 'Скафандр водолаза', slot: 'armor', bonus: 3, value: 600, big: true, art: 'diver', tags: ['water'],
     runBonus: -1, text: '−1 к побегу: в нём не побегаешь.' },
-  { id: 'i_godarmor', deck: 'treasure', type: 'item', name: 'Доспехи Бога', slot: 'armor', bonus: 15, value: 0, art: 'godarmor',
+  { id: 'i_godarmor', deck: 'treasure', type: 'item', name: 'Доспехи Бога', slot: 'armor', bonus: 10, value: 0, art: 'godarmor',
     rarity: 'legendary', noSteal: true, req: { race: 'human' },
     text: 'Легендарная броня. Носит только человек — герой без расы. Плут не может её украсть.' },
   { id: 'i_robe', deck: 'treasure', type: 'item', name: 'Мантия архивариуса', slot: 'armor', bonus: 3, value: 600, art: 'robe', rarity: 'rare',
@@ -528,7 +535,7 @@ export const CARD_DEFS = [
     text: 'Питомец и источник света. Спасёт от одной расплаты.' },
   { id: 'p_hamster', deck: 'treasure', type: 'item', slot: 'pet', name: 'Бойцовый хомяк', bonus: 2, value: 300, art: 'pet_hamster',
     text: 'Питомец. Спасёт от одной расплаты.' },
-  { id: 'p_golddragon', deck: 'treasure', type: 'item', slot: 'pet', name: 'Золотой Дракон', bonus: 10, value: 0, art: 'pet_dragon',
+  { id: 'p_golddragon', deck: 'treasure', type: 'item', slot: 'pet', name: 'Золотой Дракон', bonus: 7, value: 0, art: 'pet_dragon',
     rarity: 'legendary', noSteal: true, petSave: false,
     text: 'Легендарный питомец. Плут его не украдёт. Драконы не жертвуют собой: от расплаты не спасает, зато и не улетает.' },
   { id: 'p_cat', deck: 'treasure', type: 'item', slot: 'pet', name: 'Кот-диггер', bonus: 2, value: 400, art: 'pet_cat', rarity: 'rare',

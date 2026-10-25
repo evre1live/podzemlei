@@ -259,12 +259,15 @@ t('бард поёт колыбельную и берёт лишний клад;
   fight(s, 'm_gossip#0'); // 6
   p.hand.push(take(s, 'i_ladle#0'));
   A(s, 'p0', { type: 'ability', name: 'lullaby', cards: ['i_ladle#0'] });
-  assert.equal(combatNumbers(s).monsters, 3);
+  assert.equal(combatNumbers(s).monsters, 4);
   assert.equal(combatNumbers(s).treasures, 3);
+  // колыбельная — раз за бой
+  p.hand.push(take(s, 'i_boots#0'));
+  assert.match(A(s, 'p0', { type: 'ability', name: 'lullaby', cards: ['i_boots#0'] }).error, /раз за бой/);
   const al = P(s, 'p1'); al.classes.push(take(s, 'c_alchemist#0'));
   al.hand.push(take(s, 'o_kvass#0'));
   A(s, 'p1', { type: 'playCard', uid: 'o_kvass#0', side: 'monster' });
-  assert.equal(combatNumbers(s).monsters, 7);
+  assert.equal(combatNumbers(s).monsters, 8);
 });
 
 t('святая вода против нежити даёт +8, бафф действует в текущем бою', () => {
@@ -295,10 +298,11 @@ t('события: перекличка подтягивает слабых, н�
   assert.equal(P(s, 'p2').level, 7); assert.equal(P(s, 'p0').level, 3);
 });
 
-t('алхимик перегоняет две карты в клад раз в ход', () => {
+t('алхимик перегоняет три карты в клад раз в ход', () => {
   const s = fresh(); const p = P(s, 'p0'); p.classes.push(take(s, 'c_alchemist#0'));
-  p.hand.push(take(s, 'i_ladle#0'), take(s, 'i_boots#0'), take(s, 'i_helmet#0'), take(s, 'i_helmet#1'));
-  assert.equal(A(s, 'p0', { type: 'ability', name: 'distill', cards: ['i_ladle#0', 'i_boots#0'] }).ok, true);
+  p.hand.push(take(s, 'i_ladle#0'), take(s, 'i_boots#0'), take(s, 'i_helmet#0'), take(s, 'i_helmet#1'), take(s, 'i_flashlight#0'));
+  assert.match(A(s, 'p0', { type: 'ability', name: 'distill', cards: ['i_ladle#0', 'i_boots#0'] }).error, /3 карты/);
+  assert.equal(A(s, 'p0', { type: 'ability', name: 'distill', cards: ['i_ladle#0', 'i_boots#0', 'i_flashlight#0'] }).ok, true);
   assert.equal(p.hand.length, 3);
   assert.match(A(s, 'p0', { type: 'ability', name: 'distill', cards: ['i_helmet#0', 'i_helmet#1'] }).error, /раз в ход/);
 });
@@ -317,17 +321,17 @@ t('«Не мешаю»: отказ всех соседей не сбрасыва
   assert.deepEqual(s.combat.passed, []);
 });
 
-t('ведьмак: +5 всегда, мутаген +10 один раз за партию', () => {
+t('ведьмак: +3 всегда, мутаген +6 один раз за партию', () => {
   const s = fresh(); const p = P(s, 'p0'); p.classes.push(take(s, 'c_witcher#0'));
   fight(s, 'm_zhek#0'); // 12 ур
-  assert.equal(combatNumbers(s).heroes, 6);
+  assert.equal(combatNumbers(s).heroes, 4);
   p.hand.push(take(s, 'i_ladle#0'), take(s, 'i_boots#0'), take(s, 'i_helmet#0'), take(s, 'i_helmet#1'));
   assert.equal(A(s, 'p0', { type: 'ability', name: 'mutagen', cards: ['i_ladle#0', 'i_boots#0'] }).ok, true);
-  assert.equal(combatNumbers(s).heroes, 16);
+  assert.equal(combatNumbers(s).heroes, 10);
   assert.match(A(s, 'p0', { type: 'ability', name: 'mutagen', cards: ['i_helmet#0', 'i_helmet#1'] }).error, /раз за партию/);
 });
 
-t('Доспехи Бога: +15 только человеку, плут не крадёт', () => {
+t('Доспехи Бога: +10 только человеку, плут не крадёт', () => {
   const s = fresh(); const p = P(s, 'p0'); const r = P(s, 'p1');
   p.hand.push(take(s, 'i_godarmor#0'));
   A(s, 'p0', { type: 'playCard', uid: 'i_godarmor#0' });
@@ -345,12 +349,12 @@ t('Доспехи Бога: +15 только человеку, плут не к�
   assert.match(A(s, 'p1', { type: 'ability', name: 'steal', target: 'p0', item: 'i_godarmor#0', cards: ['i_ladle#0'] }).error, /не украсть/);
 });
 
-t('Золотой Дракон: +10, не крадётся и не улетает при расплате', () => {
+t('Золотой Дракон: +7, не крадётся и не улетает при расплате', () => {
   const s = fresh(); const p = P(s, 'p0'); p.level = 2;
   p.hand.push(take(s, 'p_golddragon#0'));
   A(s, 'p0', { type: 'playCard', uid: 'p_golddragon#0' });
   fight(s, 'm_endless#0'); // 12 ур, убежать нельзя
-  assert.equal(combatNumbers(s).heroes, 12);
+  assert.equal(combatNumbers(s).heroes, 9);
   s.combat.monsters[0].enh.push(take(s, 'e_hungry#0')); // +10: проигрываем
   A(s, 'p0', { type: 'runAway' });
   assert.ok(p.equipped.includes('p_golddragon#0'));
@@ -465,14 +469,14 @@ t('боссы: уровень 666, сила вдвое больше силы г�
   const bosses = ['m_lucifer', 'm_hades', 'm_anubis'].map(id => def(id + '#0'));
   assert.deepEqual(bosses.map(d => [d.boss, d.level, d.noPursue]), [[true, 666, 8], [true, 666, 8], [true, 666, 8]]);
   const s = fresh(); const p = P(s, 'p0'); p.level = 9;
-  for (const u of ['i_jackhammer#0', 'p_golddragon#0']) { p.hand.push(take(s, u)); A(s, 'p0', { type: 'playCard', uid: u }); } // сила 9 + 5 + 10 = 24
+  for (const u of ['i_jackhammer#0', 'p_golddragon#0']) { p.hand.push(take(s, u)); A(s, 'p0', { type: 'playCard', uid: u }); } // сила 9 + 5 + 7 = 21
   s.location = take(s, 'loc_storm#0'); // монстрам +2 — боссу всё равно
   fight(s, 'm_lucifer#0');
-  assert.equal(combatNumbers(s).heroes, 24);
-  assert.equal(combatNumbers(s).monsters, 48);
+  assert.equal(combatNumbers(s).heroes, 21);
+  assert.equal(combatNumbers(s).monsters, 42);
   // сила запомнилась при выходе: зелье героя её не поднимает
   p.hand.push(take(s, 'b_pies#0')); A(s, 'p0', { type: 'playCard', uid: 'b_pies#0' });
-  assert.equal(combatNumbers(s).heroes, 28); assert.equal(combatNumbers(s).monsters, 48);
+  assert.equal(combatNumbers(s).heroes, 25); assert.equal(combatNumbers(s).monsters, 42);
   const o = P(s, 'p1'); o.hand.push(take(s, 'e_hungry#0'), take(s, 'e_baby#0'));
   assert.match(A(s, 'p1', { type: 'playCard', uid: 'e_hungry#0', monster: 0 }).error, /усилители/);
   assert.match(A(s, 'p1', { type: 'playCard', uid: 'e_baby#0', monster: 0 }).error, /усилители/);
@@ -481,7 +485,7 @@ t('боссы: уровень 666, сила вдвое больше силы г�
   // колыбельная барда и разовые карты действуют как обычно
   o.classes.push(take(s, 'c_bard#0')); o.hand.push(take(s, 'i_ladle#0'));
   assert.equal(A(s, 'p1', { type: 'ability', name: 'lullaby', cards: ['i_ladle#0'] }).ok, true);
-  assert.equal(combatNumbers(s).monsters, 45);
+  assert.equal(combatNumbers(s).monsters, 40);
 });
 
 t('босс слабее 30 не бывает: лёгкой добычей для новичка он не станет', () => {
@@ -523,7 +527,7 @@ t('босса можно одолеть вдвоём: +2 уровня и 5 кл�
   const str = view(s, 'p0').players[0].power;
   fight(s, 'm_lucifer#0');
   assert.equal(combatNumbers(s).monsters, Math.max(30, 2 * str));
-  const h = P(s, 'p1'); h.level = 8; h.equipped.push(take(s, 'p_golddragon#0')); // 18
+  const h = P(s, 'p1'); h.level = 8; h.equipped.push(take(s, 'p_golddragon#0'), take(s, 'i_rail#0')); // 19
   assert.equal(A(s, 'p0', { type: 'askHelp', to: 'p1', offer: 2 }).ok, true);
   A(s, 'p1', { type: 'answerHelp', accept: true });
   assert.equal(combatNumbers(s).monsters, Math.max(30, 2 * str), 'помощник не делает босса сильнее');
@@ -569,6 +573,33 @@ t('«Искать неприятности»: бой со случайным м�
   assert.notEqual(s.combat.monsters[0].uid, handMon);
   assert.ok(p.hand.includes(handMon));
   assert.equal(s.decks.door.filter(u => def(u).type === 'monster').length, deckMons - 1);
+});
+
+t('«Искать неприятности»: монстр разбужен, +4 к силе; боссу бонус не нужен', () => {
+  const s = fresh(); const p = P(s, 'p0'); p.level = 3;
+  s.turn.step = 'post';
+  const m = s.decks.door.find(u => def(u).type === 'monster' && !def(u).boss && !def(u).mirror);
+  s.decks.door.splice(s.decks.door.indexOf(m), 1);
+  s.decks.door.push(m);
+  const pool = s.decks.door.filter(u => def(u).type === 'monster' && u !== m);
+  for (const u of pool) s.decks.door.splice(s.decks.door.indexOf(u), 1);
+  s.discard.door.push(...pool);
+  assert.equal(A(s, 'p0', { type: 'lookForTrouble' }).ok, true);
+  assert.equal(s.combat.monsters[0].uid, m);
+  assert.deepEqual(s.combat.mods.map(x => [x.side, x.n]), [['monster', 4]]);
+  assert.equal(combatNumbers(s).monsters, def(m).level + 4);
+  assert.ok(s.log.some(l => /Разбуженный монстр/.test(l.text)));
+  // обычная дверь монстра не будит
+  const s2 = fresh(); s2.decks.door.push(take(s2, 'm_roach#0'));
+  A(s2, 'p0', { type: 'kick' });
+  assert.equal(s2.combat.mods.length, 0);
+  // боссу прибавки нет
+  const s3 = fresh(); s3.turn.step = 'post';
+  for (const pile of [s3.decks.door, s3.discard.door]) for (let i = pile.length - 1; i >= 0; i--) if (def(pile[i]).type === 'monster' && pile[i] !== 'm_lucifer#0') pile.splice(i, 1);
+  s3.decks.door.push('m_lucifer#0');
+  if (!s3.decks.door.includes('m_lucifer#0')) throw new Error('нет босса в колоде');
+  A(s3, 'p0', { type: 'lookForTrouble' });
+  assert.equal(s3.combat.mods.length, 0);
 });
 
 t('«Искать неприятности»: только после двери и пока в колоде есть монстры', () => {

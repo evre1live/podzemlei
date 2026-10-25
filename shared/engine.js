@@ -1,6 +1,6 @@
 // «Под Землёй» — игровой движок. Чистые функции над JSON-состоянием.
 // Сервер хранит состояние, вызывает act()/tick() и рассылает view() каждому игроку.
-import { def, allUids, RACE_NAMES, CLASS_NAMES, ruleText, BOSS_MULT, BOSS_MIN_LEVEL, BOSS_FLOOR } from './cards.js';
+import { def, allUids, RACE_NAMES, CLASS_NAMES, ruleText, BOSS_MULT, BOSS_MIN_LEVEL, BOSS_FLOOR, TROUBLE_BONUS, WITCHER_BONUS, MUTAGEN_BONUS, LULLABY_PENALTY, LULLABY_MAX, DISTILL_COST } from './cards.js';
 
 export const WIN_LEVEL = 10;
 // до какого уровня идёт партия: 10 по умолчанию, в лобби можно выбрать 15 или 20
@@ -156,7 +156,7 @@ export function passiveBonus(s, p) {
   let v = 0;
   if (hasRace(p, 'orc') && !p.equipped.some(u => def(u).slot === 'head')) v += 2;
   if (hasClass(p, 'engineer')) v += p.equipped.filter(u => def(u).big).length;
-  if (hasClass(p, 'witcher')) v += 5;
+  if (hasClass(p, 'witcher')) v += WITCHER_BONUS;
   const L = locationOf(s);
   if (L) {
     v += L.heroAll || 0;
@@ -684,6 +684,11 @@ H.lookForTrouble = {
     fx(s, { kind: 'reveal', pid: p.id, card: uid });
     log(s, `${p.name} ищет неприятности — и находит!`, 'combat');
     startCombat(s, p, uid, rng);
+    // разбуженный монстр злее; боссов это не касается — их сила и так считается по герою
+    if (s.combat && !def(uid).boss) {
+      s.combat.mods.push({ side: 'monster', n: TROUBLE_BONUS, by: p.id, uid: null, label: 'Разбуженный монстр', anon: true });
+      log(s, `Разбуженный монстр злее: +${TROUBLE_BONUS} к силе.`, 'bad');
+    }
   },
 };
 
@@ -1116,7 +1121,7 @@ H.ability = {
       case 'lullaby': {
         if (!hasClass(p, 'bard')) return 'Только бард';
         if (!c) return 'Только во время боя';
-        if ((c.lullaby[p.id] || 0) >= 2) return 'Две колыбельные за бой — предел';
+        if ((c.lullaby[p.id] || 0) >= LULLABY_MAX) return 'Колыбельная — раз за бой';
         if (cards.length !== 1 || !allInHand(p, cards)) return 'Сбросьте одну карту';
         return null;
       }
@@ -1131,7 +1136,7 @@ H.ability = {
         if (!hasClass(p, 'alchemist')) return 'Только алхимик';
         const e = manageErr(s, p); if (e) return e;
         if (s.turn.distilled) return 'Перегонка — раз в ход';
-        if (cards.length !== 2 || !allInHand(p, cards)) return 'Сбросьте две карты';
+        if (cards.length !== DISTILL_COST || !allInHand(p, cards)) return `Сбросьте ${DISTILL_COST} карты`;
         return null;
       }
       default: return 'Неизвестная способность';
@@ -1179,20 +1184,20 @@ H.ability = {
       }
       case 'lullaby':
         c.lullaby[p.id] = (c.lullaby[p.id] || 0) + 1;
-        c.mods.push({ side: 'monster', n: -3, by: p.id, uid: null, label: 'Колыбельная' });
+        c.mods.push({ side: 'monster', n: -LULLABY_PENALTY, by: p.id, uid: null, label: 'Колыбельная' });
         fx(s, { kind: 'lullaby', pid: p.id });
-        log(s, `${p.name} поёт колыбельную: монстры −3.`, 'combat');
+        log(s, `${p.name} поёт колыбельную: монстры −${LULLABY_PENALTY}.`, 'combat');
         break;
       case 'mutagen':
         p.mutagenUsed = true;
-        c.mods.push({ side: 'player', n: 10, by: p.id, uid: null, label: 'Мутаген' });
+        c.mods.push({ side: 'player', n: MUTAGEN_BONUS, by: p.id, uid: null, label: 'Мутаген' });
         fx(s, { kind: 'mutagen', pid: p.id });
-        log(s, `${p.name} выпивает мутаген: глаза светятся, +10 к силе!`, 'combat');
+        log(s, `${p.name} выпивает мутаген: глаза светятся, +${MUTAGEN_BONUS} к силе!`, 'combat');
         break;
       case 'distill':
         s.turn.distilled = true;
         give(p, drawT(s, p, rng));
-        log(s, `${p.name} перегоняет две карты в карту клада.`, 'good');
+        log(s, `${p.name} перегоняет ${DISTILL_COST} карты в карту клада.`, 'good');
         break;
       case 'steal': {
         const t = P(s, a.target);
@@ -1316,7 +1321,7 @@ export function hints(s, pid) {
     h.abilities.charm = !!c && ok({ type: 'ability', name: 'charm', monster: 0 });
   }
   if (hasClass(p, 'bard')) h.abilities.lullaby = ok({ type: 'ability', name: 'lullaby', cards: one });
-  if (hasClass(p, 'alchemist')) h.abilities.distill = ok({ type: 'ability', name: 'distill', cards: p.hand.slice(0, 2) });
+  if (hasClass(p, 'alchemist')) h.abilities.distill = ok({ type: 'ability', name: 'distill', cards: p.hand.slice(0, DISTILL_COST) });
   if (hasClass(p, 'witcher')) h.abilities.mutagen = ok({ type: 'ability', name: 'mutagen', cards: p.hand.slice(0, 2) });
   if (hasClass(p, 'rogue')) {
     h.abilities.backstab = s.players.filter(x => ok({ type: 'ability', name: 'backstab', target: x.id, cards: one })).map(x => x.id);

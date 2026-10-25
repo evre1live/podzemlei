@@ -1,5 +1,5 @@
 // Простой ИИ для ботов «Под Землёй». Возвращает одно действие или null.
-import { def } from './cards.js';
+import { def, TROUBLE_BONUS, MUTAGEN_BONUS, LULLABY_PENALTY, LULLABY_MAX, DISTILL_COST } from './cards.js';
 import {
   P, check, combatNumbers, playOptions, handLimit, hasClass, hasRace, cardWorth,
   equipError, participants, heroStrength, levelOnlyFight, winLevel, luxLevel, saleValue, monsterBaseLevel, powerOf, locationOf,
@@ -70,15 +70,15 @@ function boostSelf(s, p, gap) {
   const cheap = byWorth(hand.filter(u => !isBoost(u) && def(u).type !== 'levelup'));
   const turnLeft = !onlyLevel && hasClass(p, 'cleric') && undead ? 3 - (c.turnCount[p.id] || 0) : 0;
   const rageLeft = !onlyLevel && hasClass(p, 'warrior') ? 3 - (c.rageCount[p.id] || 0) : 0;
-  const songLeft = hasClass(p, 'bard') ? 2 - (c.lullaby[p.id] || 0) : 0;
+  const songLeft = hasClass(p, 'bard') ? LULLABY_MAX - (c.lullaby[p.id] || 0) : 0;
   const mutagen = !onlyLevel && hasClass(p, 'witcher') && !p.mutagenUsed && cheap.length >= 2;
   const potential = bonusCards.reduce((a, u) => a + val(u), 0)
-    + Math.min(turnLeft, cheap.length) * 3 + Math.min(songLeft, cheap.length) * 3
-    + Math.min(rageLeft, Math.max(0, cheap.length - turnLeft)) + (mutagen ? 10 : 0);
+    + Math.min(turnLeft, cheap.length) * 3 + Math.min(songLeft, cheap.length) * LULLABY_PENALTY
+    + Math.min(rageLeft, Math.max(0, cheap.length - turnLeft)) + (mutagen ? MUTAGEN_BONUS : 0);
   if (potential < gap) return null;
   // мутаген — раз за партию: пьём, когда без него не хватает много
-  if (mutagen && gap > Math.max(3, potential - 10)) return { type: 'ability', name: 'mutagen', cards: cheap.slice(0, 2) };
-  if (songLeft > 0 && cheap.length && gap <= 3 * songLeft) return { type: 'ability', name: 'lullaby', cards: [cheap[0]] };
+  if (mutagen && gap > Math.max(3, potential - MUTAGEN_BONUS)) return { type: 'ability', name: 'mutagen', cards: cheap.slice(0, 2) };
+  if (songLeft > 0 && cheap.length && gap <= LULLABY_PENALTY * songLeft) return { type: 'ability', name: 'lullaby', cards: [cheap[0]] };
   if (turnLeft > 0 && cheap.length) {
     const k = Math.min(turnLeft, cheap.length, Math.ceil(gap / 3));
     return { type: 'ability', name: 'turn', cards: cheap.slice(0, k) };
@@ -231,7 +231,7 @@ function turnMove(s, p, rng) {
     }
     // алхимик перегоняет лишнее
     if (hasClass(p, 'alchemist') && !s.turn.distilled && p.hand.length >= handLimit(p, s)) {
-      const a = { type: 'ability', name: 'distill', cards: byWorth(p.hand).slice(0, 2) };
+      const a = { type: 'ability', name: 'distill', cards: byWorth(p.hand).slice(0, DISTILL_COST) };
       if (ok(a)) return a;
     }
     // проклясть лидера
@@ -263,7 +263,7 @@ function turnMove(s, p, rng) {
     // неприятности — это случайный монстр из колоды: идём, только если большинство монстров там нам по силам
     const power = powerOf(s, p) + (p.nextCombat || 0);
     const pool = s.decks.door.filter(u => def(u).type === 'monster');
-    const beatable = pool.filter(u => !def(u).boss && !def(u).levelOnly && monsterBaseLevel(s, def(u)) + 1 < power).length;
+    const beatable = pool.filter(u => !def(u).boss && !def(u).levelOnly && monsterBaseLevel(s, def(u)) + 1 + TROUBLE_BONUS < power).length;
     if (pool.length >= 4 && beatable / pool.length >= 0.65 && ok({ type: 'lookForTrouble' })) return { type: 'lookForTrouble' };
     return { type: 'loot' };
   }

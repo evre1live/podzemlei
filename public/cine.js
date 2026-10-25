@@ -8,7 +8,7 @@
 import { fx } from '/fx.js';
 import { sfx } from '/sfx.js';
 import { cardHTML, cardBackSVG, avatarSVG } from '/art.js';
-import { def, ruleText, BOSS_FLOOR } from '/shared/cards.js';
+import { def, ruleText, BOSS_FLOOR, LULLABY_PENALTY, MUTAGEN_BONUS } from '/shared/cards.js';
 import { sceneKind } from '/art-monsters.js';
 
 const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -638,7 +638,7 @@ S.lullaby = f => ({
     const from = api.avaOf(f.pid) || shieldEl('hero'), to = shieldEl('mon');
     fx.notes(from, to);
     sfx.play('lullaby');
-    k.at(650, () => { impact(k, to, '−3', true); const z = box(to); if (z) zzz(k, cen(z), 3); });
+    k.at(650, () => { impact(k, to, `−${LULLABY_PENALTY}`, true); const z = box(to); if (z) zzz(k, cen(z), 3); });
     return 800;
   },
 });
@@ -652,7 +652,7 @@ S.mutagen = f => ({
     k.rm(au, 1220);
     fx.spray({ ...c, w: 120, h: 140 }, { n: 34, spreadX: 0.8, spreadY: 0.6, speed: [40, 140], angle: [-2.4, -0.7], g: -80, size: [3, 6], colors: ['rgba(140,255,180,.8)', 'rgba(60,220,150,.75)', '#e6fbff'], shape: 'dot', life: [0.8, 1.4], wob: [2, 5] });
     [0, 180, 360].forEach(t => ring(k, c.x, c.y, 'good', 0.5, 600, t));
-    k.at(380, () => { impact(k, el, '+10', true, ['#a6f2b7', '#3fa38c', '#e6fbff']); stamp(k, c.x, c.y - 90, 'Мутаген!', `${api.pname(f.pid)}: +10 к силе`, 'good', 700); });
+    k.at(380, () => { impact(k, el, `+${MUTAGEN_BONUS}`, true, ['#a6f2b7', '#3fa38c', '#e6fbff']); stamp(k, c.x, c.y - 90, 'Мутаген!', `${api.pname(f.pid)}: +${MUTAGEN_BONUS} к силе`, 'good', 700); });
     return 1100;
   },
 });

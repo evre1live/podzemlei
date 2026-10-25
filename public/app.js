@@ -1,5 +1,5 @@
 // «Под Землёй» — клиент.
-import { def, RACE_NAMES, CLASS_NAMES, setRuleVars, ruleText, BOSS_FLOOR } from '/shared/cards.js';
+import { def, RACE_NAMES, CLASS_NAMES, setRuleVars, ruleText, BOSS_FLOOR, TROUBLE_BONUS, LULLABY_PENALTY, MUTAGEN_BONUS, DISTILL_COST } from '/shared/cards.js';
 import { esc, cardHTML, chipHTML, avatarSVG, iconSVG, cardBackSVG, locationSVG } from '/art.js';
 import { fx } from '/fx.js';
 import { sfx } from '/sfx.js';
@@ -554,7 +554,7 @@ function renderStage() {
   if (g.phase === 'ended') { title = 'Партия окончена'; text = ''; }
   else if (mine) {
     if (step === 'pre') { title = 'Ваш ход'; text = 'Разложите вещи и выбейте дверь — посмотрим, кто за ней.'; }
-    else if (step === 'post') { title = 'За дверью никого'; text = 'Можно поискать неприятности — выйдет случайный монстр из колоды — или обшарить комнату и взять карту втёмную.'; }
+    else if (step === 'post') { title = 'За дверью никого'; text = `Можно поискать неприятности — выйдет случайный монстр из колоды, разбуженный (+${TROUBLE_BONUS} к силе) — или обшарить комнату и взять карту втёмную.`; }
     else { title = 'Ход почти закончен'; text = h.mustGive ? `В руке на ${cardsWord(h.mustGive)} больше нормы — лишнее уйдёт ${h.giveToLowest ? 'самому слабому игроку' : 'в сброс'}.` : 'Наведите порядок в вещах и передайте ход.'; }
   } else if (tp) {
     title = `Ходит ${esc(tp.name)}`;
@@ -616,7 +616,7 @@ function actionButtons() {
   if (!h || g.phase !== 'playing') return '';
   const b = [];
   if (h.kick) b.push(`<button class="btn primary big" data-act="kick">Выбить дверь</button>`);
-  if (h.lookForTrouble) b.push(`<button class="btn danger" data-act="trouble" title="Бой со случайным монстром из колоды: можно нарваться и на босса">Искать неприятности</button>`);
+  if (h.lookForTrouble) b.push(`<button class="btn danger" data-act="trouble" title="Бой со случайным монстром из колоды: он разбужен (+${TROUBLE_BONUS} к силе), можно нарваться и на босса">Искать неприятности</button>`);
   if (h.loot) b.push(`<button class="btn" data-act="loot">Обшарить комнату</button>`);
   if (h.endTurn) b.push(`<button class="btn primary big" data-act="endTurn">${h.mustGive ? `Отдать ${cardsWord(h.mustGive)} и закончить ход` : 'Закончить ход'}</button>`);
   if (h.autoEquip && h.manage) b.push(`<button class="btn ghost small" data-act="autoEquip">Надеть лучшее</button>`);
@@ -653,7 +653,7 @@ function fightHTML() {
     return `<div class="hero-pill" data-pid="${p.id}" data-vmember="${p.id}" style="--seat:${p.color}"><span class="ava">${avatarSVG(p.avatar, p.color)}</span><span><b>${esc(p.name)}</b><br><small>сила ${c.heroStrengths[id]}</small></span></div>`;
   }).join('');
   const pm = [];
-  for (const m of c.mods) pm.push({ side: m.side, t: `${esc(pname(m.by))}: ${esc(m.uid ? def(m.uid).name : m.label || 'эффект')} ${m.n > 0 ? '+' : '−'}${Math.abs(m.n)}` });
+  for (const m of c.mods) pm.push({ side: m.side, t: `${m.anon ? '' : esc(pname(m.by)) + ': '}${esc(m.uid ? def(m.uid).name : m.label || 'эффект')} ${m.n > 0 ? '+' : '−'}${Math.abs(m.n)}` });
   for (const id of [c.fighter, c.helper].filter(Boolean)) { const v = pl(id)?.nextCombat; if (v) pm.push({ side: 'player', t: `${esc(pname(id))}: ${v > 0 ? 'зелье +' + v : 'слабость −' + Math.abs(v)}` }); }
   for (const [id, v] of Object.entries(c.rage || {})) if (v) pm.push({ side: 'player', t: `${esc(pname(id))}: ярость +${v}` });
   for (const [id, v] of Object.entries(c.turnUndead || {})) if (v) pm.push({ side: 'player', t: `${esc(pname(id))}: изгнание +${v}` });
@@ -733,9 +733,9 @@ const ABIL = {
   charm: { cls: 'mage', label: 'Чары', tip: 'Сбросьте всю руку (от 3 карт) и усыпите монстра' },
   backstab: { cls: 'rogue', label: 'Удар в спину', tip: 'Сбросьте карту: участник боя получает −2' },
   steal: { cls: 'rogue', label: 'Кража', tip: 'Сбросьте карту и бросьте кубик: 4+ — вещь ваша' },
-  lullaby: { cls: 'bard', label: 'Колыбельная', tip: 'Сбросьте карту: монстры −3 в этом бою (до двух раз)', need: 1 },
-  distill: { cls: 'alchemist', label: 'Перегонка', tip: 'Сбросьте 2 карты и возьмите карту клада (раз в ход)', need: 2 },
-  mutagen: { cls: 'witcher', label: 'Мутаген', tip: 'Один раз за партию: сбросьте 2 карты в бою — ещё +10 к силе', need: 2 },
+  lullaby: { cls: 'bard', label: 'Колыбельная', tip: `Сбросьте карту: монстры −${LULLABY_PENALTY} в этом бою (раз за бой)`, need: 1 },
+  distill: { cls: 'alchemist', label: 'Перегонка', tip: `Сбросьте ${DISTILL_COST} карты и возьмите карту клада (раз в ход)`, need: DISTILL_COST },
+  mutagen: { cls: 'witcher', label: 'Мутаген', tip: `Один раз за партию: сбросьте 2 карты в бою — ещё +${MUTAGEN_BONUS} к силе`, need: 2 },
 };
 const abilNeed = name => ABIL[name]?.need || (name === 'backstab' || name === 'steal' ? 1 : 0);
 
@@ -1098,7 +1098,7 @@ const RULES = `<div class="modal rules" role="dialog" aria-label="Как игр�
   <h2>Как играть</h2>
   <p>Каждый начинает человеком первого уровня с 4 картами проходов и 4 картами клада. Побеждает тот, кто первым дойдёт до <b>10-го уровня</b>; для долгой партии хозяин в лобби может выбрать 15 или 20. Последний уровень берётся только победой над монстром.</p>
   <h3>Ход</h3>
-  <p>1. Разложите расу, класс и вещи. 2. <b>Выбейте дверь</b>: монстр — бой, проклятие — сработает на вас, остальное уходит в руку. 3. Если монстра не было — ищите неприятности (выйдет случайный монстр из колоды) или обшарьте комнату. 4. Лишние карты сверх пяти отдаются самому слабому.</p>
+  <p>1. Разложите расу, класс и вещи. 2. <b>Выбейте дверь</b>: монстр — бой, проклятие — сработает на вас, остальное уходит в руку. 3. Если монстра не было — ищите неприятности (выйдет случайный монстр из колоды, разбуженный: +${TROUBLE_BONUS} к силе) или обшарьте комнату. 4. Лишние карты сверх пяти отдаются самому слабому.</p>
   <h3>Бой</h3>
   <p>Ваша сила — уровень плюс надетые вещи. Если она больше силы монстров, жмите «Добить!». У остальных есть несколько секунд, чтобы помешать: усилить монстра, подбросить ещё одного, ударить в спину. За победу — уровень и клад. Не хватает сил — зовите на помощь, пообещав часть клада, или бегите: побег удаётся на 5–6 кубика. Карта «Ты мой раб» заставляет любого игрока вступить в ваш бой: отказаться он не может, а клада ему не положено. Не убежали — получите расплату с карты монстра.</p>
   <h3>Вещи и уровни</h3>
@@ -1244,9 +1244,9 @@ function runFx(fresh, snap) {
       }
       case 'mutagen': {
         const el = $('#shieldHero');
-        fx.float(el, '+10', 'good'); fx.burst(el, { n: 30, colors: ['#a6f2b7', '#3fa38c', '#e6fbff'], speed: 300 }); fx.shake(el, 'bump');
+        fx.float(el, `+${MUTAGEN_BONUS}`, 'good'); fx.burst(el, { n: 30, colors: ['#a6f2b7', '#3fa38c', '#e6fbff'], speed: 300 }); fx.shake(el, 'bump');
         fx.smoke(ava || el, { colors: ['rgba(120,255,170,.45)', 'rgba(60,200,140,.4)'], sparks: false });
-        fx.banner('Мутаген!', `${pname(f.pid)}: +10 к силе`, 'win');
+        fx.banner('Мутаген!', `${pname(f.pid)}: +${MUTAGEN_BONUS} к силе`, 'win');
         break;
       }
       case 'legendary': {
@@ -1259,7 +1259,7 @@ function runFx(fresh, snap) {
       case 'lullaby': {
         const el = $('#shieldMon');
         fx.notes(ava || $('#shieldHero'), el);
-        setTimeout(() => { fx.float(el, '−3', 'good'); fx.shake(el, 'bump'); }, 500);
+        setTimeout(() => { fx.float(el, `−${LULLABY_PENALTY}`, 'good'); fx.shake(el, 'bump'); }, 500);
         break;
       }
     }
