@@ -6,8 +6,8 @@ import { fx } from '/fx.js';
 import { sfx } from '/sfx.js';
 import { setWorld } from '/world.js';
 import { cine, growlKind } from '/cine.js';
-import { AVATAR_PARTS, avatarFromSeed, cleanAvatar, withGender } from '/shared/avatar.js';
-import { AV_LABELS, lookNote } from '/art-avatar.js';
+import { AVATAR_PARTS, avatarFromSeed, cleanAvatar, avatarInGame, gameRaces, pickCode } from '/shared/avatar.js';
+import { AV_LABELS, lookNote, portraitThumb } from '/art-avatar.js';
 import { createVoice } from '/voice.js';
 import { ico } from '/icons.js';
 
@@ -59,6 +59,9 @@ async function act(a) {
 }
 const me = () => S.game?.players.find(p => p.id === S.room?.me);
 const pl = id => S.game?.players.find(p => p.id === id);
+// портрет героя в партии: раса — по его картам расы
+const raceKeysOf = p => (p?.races || []).map(u => def(u).race);
+const gAva = p => avatarInGame(p.avatar, raceKeysOf(p));
 const pname = id => pl(id)?.name || S.room?.members.find(m => m.id === id)?.name || '—';
 const hints = () => S.game?.hints || {};
 const winLvl = () => S.game?.opts?.winLevel || S.room?.settings?.winLevel || 10;
@@ -530,7 +533,7 @@ function statusTags(p) {
 function oppHTML(p) {
   const g = S.game;
   return `<button class="opp ${g.turn.pid === p.id ? 'turn' : ''} ${p.dead ? 'dead' : ''} ${p.ghost && !p.dead ? 'ghost' : ''}" data-opp="${p.id}" data-vmember="${p.id}" style="--seat:${p.color}" aria-label="${esc(p.name)}, уровень ${p.level}">
-    <div class="ava">${avatarSVG(p.avatar, p.color)}</div>
+    <div class="ava">${avatarSVG(gAva(p), p.color)}</div>
     <div class="oname">${esc(p.name)}</div>
     <div class="ometa"><span>${esc(raceText(p))}</span><span>${esc(classText(p))}</span></div>
     <div class="ostats"><span class="lvl" title="Уровень">${p.level}</span><span class="pow" title="Сила: уровень и надетые вещи">${ico('crossed-swords')}${p.power}</span><span class="handcount" title="Карт в руке"><i></i>${p.handCount}</span>${statusTags(p)}</div>
@@ -669,7 +672,7 @@ function fightHTML() {
   S.ui.fightNums = { key: fk, heroes: n.heroes, monsters: n.monsters, k: tk, win: n.winning };
   const heroes = [c.fighter, c.helper].filter(Boolean).map(id => {
     const p = pl(id);
-    return `<div class="hero-pill" data-pid="${p.id}" data-vmember="${p.id}" style="--seat:${p.color}"><span class="ava">${avatarSVG(p.avatar, p.color)}</span><span><b>${esc(p.name)}</b><br><small>сила ${c.heroStrengths[id]}</small></span></div>`;
+    return `<div class="hero-pill" data-pid="${p.id}" data-vmember="${p.id}" style="--seat:${p.color}"><span class="ava">${avatarSVG(gAva(p), p.color)}</span><span><b>${esc(p.name)}</b><br><small>сила ${c.heroStrengths[id]}</small></span></div>`;
   }).join('');
   const pm = [];
   for (const m of c.mods) pm.push({ side: m.side, t: `${m.anon ? '' : esc(pname(m.by)) + ': '}${esc(m.uid ? def(m.uid).name : m.label || 'эффект')} ${m.n > 0 ? '+' : '−'}${Math.abs(m.n)}` });
@@ -786,7 +789,7 @@ function renderMine() {
   const run = 5 - p.runBonus;
   el.innerHTML = `
     <div class="me-top" style="--seat:${p.color}" data-vmember="${p.id}">
-      <div class="me-ava" id="meava">${avatarSVG(p.avatar, p.color)}</div>
+      <div class="me-ava" id="meava" data-act="avatar" role="button" tabindex="0" title="Сменить портрет" aria-label="Сменить портрет">${avatarSVG(gAva(p), p.color)}</div>
       <div><div class="me-name">${esc(p.name)}</div>
         <div class="me-stats"><span class="lvl" title="Уровень">${p.level}</span><span class="pow" title="Сила: уровень и надетые вещи">${ico('crossed-swords')}${p.power}</span>
         <span class="badge" title="Сколько нужно выбросить на кубике, чтобы убежать">побег ${run <= 1 ? 'всегда' : run > 6 ? 'никогда' : run + '+'}</span>
@@ -834,7 +837,7 @@ function renderWatcher() {
   const now = g.turn.pid === p.id && g.phase === 'playing';
   el.innerHTML = `
     <div class="me-top" style="--seat:${p.color}">
-      <div class="me-ava">${avatarSVG(p.avatar, p.color)}</div>
+      <div class="me-ava">${avatarSVG(gAva(p), p.color)}</div>
       <div><div class="me-name">${esc(p.name)}${now ? ' <span class="badge lamp">ходит</span>' : ''}</div>
         <div class="me-stats"><span class="lvl" title="Уровень">${p.level}</span><span class="pow" title="Сила: уровень и надетые вещи">${ico('crossed-swords')}${p.power}</span>
         <span class="badge" title="Сколько нужно выбросить на кубике, чтобы убежать">побег ${run <= 1 ? 'всегда' : run > 6 ? 'никогда' : run + '+'}</span>${p.dead ? '<span class="badge warn">погиб до следующего хода</span>' : ''}</div>
@@ -842,7 +845,7 @@ function renderWatcher() {
     </div>
     <div class="traits">${traits.join('')}</div>
     <div class="slots">${slots}</div>`;
-  $('#handhead').innerHTML = `<span class="follow-row"><span>Следить за</span>${g.players.map(x => `<button class="follow${x.id === p.id ? ' on' : ''}" data-follow="${x.id}" style="--seat:${x.color}" title="${esc(x.name)}" aria-pressed="${x.id === p.id}"><span class="ava">${avatarSVG(x.avatar, x.color)}</span></button>`).join('')}</span>
+  $('#handhead').innerHTML = `<span class="follow-row"><span>Следить за</span>${g.players.map(x => `<button class="follow${x.id === p.id ? ' on' : ''}" data-follow="${x.id}" style="--seat:${x.color}" title="${esc(x.name)}" aria-pressed="${x.id === p.id}"><span class="ava">${avatarSVG(gAva(x), x.color)}</span></button>`).join('')}</span>
     <span>У ${esc(p.name)} в руке ${cardsNom(p.handCount)} — их видит только сам игрок.</span>`;
   $('#modebar').innerHTML = '';
   $('#hand').innerHTML = p.handCount ? Array.from({ length: p.handCount }, () => `<div class="card hand-back" aria-hidden="true">${cardBackSVG('door')}</div>`).join('') : '<p class="muted">Рука пуста.</p>';
@@ -1039,7 +1042,7 @@ function openOppPop(pid) {
   if (mine && h.tradeTargets?.includes(pid)) popOpts.push({ label: 'Предложить обмен', fn: () => openTrade(pid), cls: 'hero' });
   const items = [...p.equipped.map(u => chipHTML(u)), ...p.carried.map(u => chipHTML(u, { cls: 'off' }))].join('') || '<p class="muted">Вещей нет.</p>';
   showOverlay(`<div class="modal" role="dialog" aria-label="${esc(p.name)}">
-    <div class="row"><span class="me-ava" style="--seat:${p.color}">${avatarSVG(p.avatar, p.color)}</span><div><h2>${esc(p.name)}</h2><div class="me-stats"><span class="lvl">${p.level}</span><span class="pow">${ico('crossed-swords')}${p.power}</span><span class="badge">${esc(raceText(p))}, ${esc(classText(p))}</span><span class="handcount"><i></i>${p.handCount}</span></div></div></div>
+    <div class="row"><span class="me-ava" style="--seat:${p.color}">${avatarSVG(gAva(p), p.color)}</span><div><h2>${esc(p.name)}</h2><div class="me-stats"><span class="lvl">${p.level}</span><span class="pow">${ico('crossed-swords')}${p.power}</span><span class="badge">${esc(raceText(p))}, ${esc(classText(p))}</span><span class="handcount"><i></i>${p.handCount}</span></div></div></div>
     <div class="opp-items" data-zone-view>${items}</div>
     ${popOpts.length ? `<div class="pop-actions">${popOpts.map((o, i) => `<button class="btn ${o.cls}" data-popopt="${i}">${esc(o.label)}</button>`).join('')}</div>` : ''}
     <button class="btn ghost" data-act="closeOverlay">Закрыть</button>
@@ -1063,7 +1066,7 @@ function openHelpModal() {
     showOverlay(`<div class="modal" role="dialog" aria-label="Позвать на помощь">
       <h2>Позвать на помощь</h2>
       <p class="muted" style="margin:0">Не хватает ${n.monsters - n.heroes + (n.warrior ? 0 : 1)} силы. Помощник добавит свою силу, а вы пообещаете ему часть клада.</p>
-      <div class="pick-list">${h.helpTargets.map(id => { const p = pl(id); return `<button class="pick" data-helpto="${id}" aria-pressed="${id === target}" style="--seat:${p.color}"><span class="ava">${avatarSVG(p.avatar, p.color)}</span><span><b>${esc(p.name)}</b><br><small class="muted">сила ${p.power}, ${esc(raceText(p))}</small></span></button>`; }).join('')}</div>
+      <div class="pick-list">${h.helpTargets.map(id => { const p = pl(id); return `<button class="pick" data-helpto="${id}" aria-pressed="${id === target}" style="--seat:${p.color}"><span class="ava">${avatarSVG(gAva(p), p.color)}</span><span><b>${esc(p.name)}</b><br><small class="muted">сила ${p.power}, ${esc(raceText(p))}</small></span></button>`; }).join('')}</div>
       <div><div class="muted" style="font-size:14px">Сколько карт клада отдать из ${n.treasures}</div><div class="stepper"><button class="btn small" data-offer="-1" aria-label="Меньше">−</button><b>${offer}</b><button class="btn small" data-offer="1" aria-label="Больше">+</button></div>
         <div class="muted" style="font-size:13.5px;margin-top:6px">Вам останется ${n.treasures - offer} из ${n.treasures}.${helpBonusNote(target)}</div></div>
       <div class="row"><button class="btn hero" data-act="sendHelp">Позвать</button><button class="btn ghost" data-act="closeOverlay">Отмена</button></div>
@@ -1279,7 +1282,7 @@ cine.init({
   heroAva: pid => document.querySelector(`#stage .hero-pill[data-pid="${CSS.escape(pid)}"] .ava`),
   lvlEl: pid => (pid === S.room?.me ? $('#mecard .lvl') : document.querySelector(`[data-opp="${pid}"] .lvl`)),
   color: pid => pl(pid)?.color || '#f5b83d',
-  avatar: pid => pl(pid)?.avatar,
+  avatar: pid => (pl(pid) ? gAva(pl(pid)) : null),
   winLevel: winLvl,
 });
 function soundFx(fresh) {
@@ -1419,7 +1422,7 @@ function playDice() {
 document.addEventListener('click', async e => {
   const t = e.target;
   if (t.closest('[data-uid]')) sfx.play(S.ui.mode ? 'click' : 'flip');
-  else if (t.closest('.btn, .seg button, .tabs button, .opp, .pick, .room-row, .av-pick, .hero-ava')) sfx.play('click');
+  else if (t.closest('.btn, .seg button, .tabs button, .opp, .pick, .room-row, .av-pick, .av-chip, .hero-ava')) sfx.play('click');
   if (t.matches('[data-backdrop]')) {
     if ($('#helpPrompt') || $('#tradePrompt')) return; // на просьбу о помощи и обмен нужно ответить
     return closeOverlay();
@@ -1474,7 +1477,11 @@ document.addEventListener('click', async e => {
   const tab = t.closest('[data-tab]');
   if (tab) return setTab(tab.dataset.tab);
   const avk = t.closest('[data-av-k]');
-  if (avk) { S.ui.avEdit.cfg = avWith(S.ui.avEdit.cfg, avk.dataset.avK, Number(avk.dataset.avV)); return drawAvatarEditor(); }
+  if (avk) { S.ui.avEdit.cfg = { ...S.ui.avEdit.cfg, [avk.dataset.avK]: Number(avk.dataset.avV) }; return drawAvatarEditor(); }
+  const avp = t.closest('[data-av-pick]');
+  if (avp) { const [r, g, l] = avp.dataset.avPick.split('.').map(Number); return avPick(r, g, l); }
+  const avf = t.closest('[data-av-f]');
+  if (avf) { const [k, v] = avf.dataset.avF.split(':'); S.ui.avEdit.filter[k] = Number(v); if (!S.ui.avEdit.game) LS.set('avFilter', S.ui.avEdit.filter); return drawAvatarEditor(); }
   const avt = t.closest('[data-av-tab]');
   if (avt) { S.ui.avEdit.tab = avt.dataset.avTab; return drawAvatarEditor(); }
   const ab = t.closest('[data-ability]');
@@ -1495,7 +1502,7 @@ document.addEventListener('click', async e => {
     case 'closeOverlay': return closeOverlay();
     case 'sound': return openSoundModal();
     case 'avatar': return openAvatarEditor();
-    case 'avatarRandom': S.ui.avEdit.cfg = avatarFromSeed(Math.floor(Math.random() * 1e6)); return drawAvatarEditor();
+    case 'avatarRandom': return avRandom();
     case 'avatarSave': return saveAvatar();
     case 'soundTest': return sfx.play('victory', { gap: 0 });
     case 'rules': return showOverlay(RULES);
@@ -1613,53 +1620,117 @@ document.addEventListener('click', async e => {
 });
 
 // ───────────────────────── облик героя ─────────────────────────
-// Облик — готовый живописный портрет: пол, раса и образ, плюс рамка медальона
-const AV_TABS = [
-  { id: 'face', label: 'Портрет', rows: [{ k: 'gender', t: 'Пол' }, { k: 'race', t: 'Раса' }, { k: 'look', t: 'Образ' }] },  // пол — переключатель, остальное — портреты
-  { id: 'frame', label: 'Рамка', rows: [{ k: 'frame', t: 'Рамка медальона' }] },
-];
-const avWith = (cfg, k, i) => (k === 'gender' ? withGender(cfg, i) : { ...cfg, [k]: i });
+// В меню — каталог всех портретов с отбором по полу, расе и образу. В партии портрет следует за расой героя,
+// поэтому там можно выбрать только портреты своей расы (полукровке — двух).
+const RACE_PL = ['Люди', 'Эльфы', 'Гномы', 'Полурослики', 'Орки', 'Гоблины', 'Кротолюды'];
+const RACE_GEN = ['человека', 'эльфа', 'гнома', 'полурослика', 'орка', 'гоблина', 'кротолюда'];
+const AV_TABS = [{ id: 'face', label: 'Портреты' }, { id: 'frame', label: 'Рамка' }];
 const seatColor = () => S.room?.members.find(m => m.id === S.room.me)?.color || '#3a3a42';
+// расы героя в идущей партии или null, если партии нет (или вы зритель)
+const avGameRaces = () => { const p = S.game?.phase === 'playing' || S.game?.phase === 'ended' ? me() : null; return p ? gameRaces(raceKeysOf(p)) : null; };
+// какой портрет (1 + пол × 6 + образ) будет у расы в партии
+const avCode = (cfg, r) => cfg.alt[r] || pickCode(cfg.gender, cfg.look);
 function openAvatarEditor() {
-  S.ui.avEdit = { cfg: cleanAvatar(S.avatar && typeof S.avatar === 'object' ? S.avatar : avatarFromSeed(Number(S.avatar) || 0)), tab: S.ui.avEdit?.tab || 'face' };
+  // в партии портретов всего дюжина — отбор начинается с «все» и не трогает сохранённый отбор меню
+  const game = !!avGameRaces(), f = game ? null : LS.get('avFilter', null);
+  S.ui.avEdit = { cfg: cleanAvatar(S.avatar && typeof S.avatar === 'object' ? S.avatar : avatarFromSeed(Number(S.avatar) || 0)), tab: S.ui.avEdit?.tab || 'face', game,
+    filter: f && typeof f === 'object' ? { g: f.g ?? -1, r: f.r ?? -1, l: f.l ?? -1 } : { g: -1, r: -1, l: -1 } };
   drawAvatarEditor();
 }
-function avRow({ k, t }, cfg, sc) {
-  const names = AV_LABELS[k] || [];
-  if (k === 'gender') return `<div class="av-row"><div class="seg av-seg" role="group" aria-label="${t}">${names.map((n, i) => `<button type="button" data-av-k="gender" data-av-v="${i}" aria-pressed="${cfg.gender === i}">${n}</button>`).join('')}</div></div>`;
-  return `<div class="av-row"><div class="av-title">${t}: <b>${esc(names[cfg[k]] || '')}</b></div><div class="av-grid labeled${k === 'look' ? ' looks' : ''}">${Array.from({ length: AVATAR_PARTS[k] }, (_, i) => {
-    const v = avWith(cfg, k, i), note = k === 'look' ? lookNote(v) : '';
-    return `<button class="av-pick${cfg[k] === i ? ' on' : ''}" data-av-k="${k}" data-av-v="${i}" aria-pressed="${cfg[k] === i}"${note ? ` title="${esc(note)}"` : ''}><span class="c">${avatarSVG(v, sc)}</span><small>${esc(names[i] || '')}</small></button>`;
-  }).join('')}</div></div>`;
+// облик, который видно сейчас: в партии — по расе героя
+const avShown = (cfg, races) => (races ? avatarInGame(cfg, races.map(r => ['human', 'elf', 'dwarf', 'halfling', 'orc', 'goblin', 'molefolk'][r])) : cfg);
+function avChips(key, title, names, val) {
+  return `<div class="av-chips" role="group" aria-label="${title}"><span class="av-chips-t">${title}</span>${[['Все', -1], ...names.map((n, i) => [n, i])].map(([n, i]) =>
+    `<button type="button" class="av-chip" data-av-f="${key}:${i}" aria-pressed="${val === i}">${esc(n)}</button>`).join('')}</div>`;
 }
-const avCaption = cfg => `<b>${esc(AV_LABELS.race[cfg.race])} · ${esc(AV_LABELS.look[cfg.look])}</b><span>${esc(lookNote(cfg))}</span>`;
+function avGallery(cfg, races) {
+  const F = S.ui.avEdit.filter, game = !!races;
+  const list = game ? races : F.r >= 0 ? [F.r] : [0, 1, 2, 3, 4, 5, 6];
+  const shown = avShown(cfg, races);
+  const secs = list.map(r => {
+    const items = [];
+    for (const g of [0, 1]) if (F.g < 0 || F.g === g) for (let l = 0; l < 6; l++) if (F.l < 0 || F.l === l) items.push([g, l]);
+    if (!items.length) return '';
+    const inGame = avCode(cfg, r);
+    return `<section class="av-sec"><h3>${RACE_PL[r]}</h3><div class="av-grid looks">${items.map(([g, l]) => {
+      const v = { race: r, gender: g, look: l }, code = pickCode(g, l);
+      const on = game ? r === shown.race && code === inGame : r === cfg.race && g === cfg.gender && l === cfg.look;
+      const mark = !game && code === inGame;
+      return `<button class="av-pick${on ? ' on' : ''}" data-av-pick="${r}.${g}.${l}" aria-pressed="${on}" title="${esc(lookNote(v))}">`
+        + `<span class="c"><img src="${portraitThumb(v)}" alt="" loading="lazy" decoding="async" width="96" height="96"></span>`
+        + `<small>${esc(AV_LABELS.look[l])}<em>${g ? 'женщина' : 'мужчина'}</em></small>${mark ? '<i class="av-mark" title="Этот портрет будет у вас в партии за эту расу">в игре</i>' : ''}</button>`;
+    }).join('')}</div></section>`;
+  }).join('');
+  return secs || '<p class="muted">Таких портретов нет — снимите часть отбора.</p>';
+}
+function avFrames(cfg, races, sc) {
+  const shown = avShown(cfg, races);
+  return `<div class="av-row"><div class="av-title">Рамка медальона: <b>${esc(AV_LABELS.frame[cfg.frame])}</b></div><div class="av-grid labeled">${AV_LABELS.frame.map((n, i) =>
+    `<button class="av-pick${cfg.frame === i ? ' on' : ''}" data-av-k="frame" data-av-v="${i}" aria-pressed="${cfg.frame === i}"><span class="c">${avatarSVG({ ...shown, frame: i }, sc)}</span><small>${esc(n)}</small></button>`).join('')}</div></div>`;
+}
+const avCaption = (cfg, races) => {
+  const v = avShown(cfg, races);
+  return `<b>${races ? 'В партии: ' : ''}${esc(AV_LABELS.race[v.race])} · ${esc(AV_LABELS.look[v.look])}</b><span>${esc(lookNote(v))}</span>`;
+};
+function avIntro(races) {
+  if (races) {
+    const names = races.map(r => AV_LABELS.race[r].toLowerCase()).join(' и ');
+    return `Сейчас ваш герой — ${names}. В партии портрет совпадает с расой героя, поэтому здесь только портреты ${races.map(r => RACE_GEN[r]).join(' и ')}. Сыграете карту другой расы или потеряете её — портрет сменится сам, а выбранный здесь запомнится.`;
+  }
+  return 'Нажмите на портрет — он станет вашим в лобби и за свою расу в партии. В партии портрет меняется вместе с расой героя: без карты расы вы человек. Значок «в игре» показывает, какой портрет будет у вас за каждую расу.';
+}
 function drawAvatarEditor() {
-  const E = S.ui.avEdit, cfg = E.cfg, sc = seatColor();
+  const E = S.ui.avEdit, cfg = E.cfg, sc = seatColor(), races = avGameRaces(), F = E.filter;
   const tab = AV_TABS.find(t => t.id === E.tab) || AV_TABS[0];
-  const rows = tab.rows.map(r => avRow(r, cfg, sc)).join('');
-  // при выборе варианта перерисовываем только содержимое, чтобы список не прыгал наверх
+  const filters = tab.id === 'face'
+    ? `<div class="av-filters">${avChips('g', 'Пол', ['Мужчины', 'Женщины'], F.g)}${races ? '' : avChips('r', 'Раса', RACE_PL, F.r)}${avChips('l', 'Образ', AV_LABELS.look, F.l)}</div>` : '';
+  const body = tab.id === 'face' ? avGallery(cfg, races) : avFrames(cfg, races, sc);
   const box = $('#avModal');
+  // при выборе перерисовываем только содержимое, чтобы список не прыгал наверх
   if (box && box.dataset.avtab === tab.id) {
-    box.querySelector('.av-preview').innerHTML = avatarSVG(cfg, sc);
-    box.querySelector('.av-caption').innerHTML = avCaption(cfg);
-    box.querySelector('.av-rows').innerHTML = rows;
-    return;
+    box.querySelector('.av-preview').innerHTML = avatarSVG(avShown(cfg, races), sc);
+    box.querySelector('.av-caption').innerHTML = avCaption(cfg, races);
+    const fl = box.querySelector('.av-filters'); if (fl) fl.outerHTML = filters;
+    box.querySelector('.av-rows').innerHTML = body;
+    return avChipsInView(box);
   }
   showOverlay(`<div class="modal av-modal" role="dialog" aria-label="Облик героя" id="avModal" data-avtab="${tab.id}">
     <h2>Облик героя</h2>
     <div class="av-body">
       <div class="av-side">
-        <div class="av-preview" style="--seat:${sc}">${avatarSVG(cfg, sc)}</div>
-        <p class="av-caption">${avCaption(cfg)}</p>
+        <div class="av-preview" style="--seat:${sc}">${avatarSVG(avShown(cfg, races), sc)}</div>
+        <p class="av-caption">${avCaption(cfg, races)}</p>
         <button class="btn small" data-act="avatarRandom">${ico('rolling-dices')}Случайно</button>
       </div>
       <div class="av-main">
         <div class="tabs av-tabs" role="tablist">${AV_TABS.map(t => `<button role="tab" data-av-tab="${t.id}" aria-selected="${t.id === tab.id}">${t.label}</button>`).join('')}</div>
-        <div class="av-rows">${rows}</div>
+        ${tab.id === 'face' ? `<p class="av-intro">${esc(avIntro(races))}</p>` : ''}
+        ${filters}
+        <div class="av-rows">${body}</div>
       </div>
     </div>
     <div class="row" style="justify-content:flex-end"><button class="btn ghost" data-act="closeOverlay">Отмена</button><button class="btn primary" data-act="avatarSave">Сохранить</button></div>
   </div>`);
+  avChipsInView($('#avModal'));
+}
+// на телефоне ряды отбора листаются вбок — выбранный пункт держим на виду
+function avChipsInView(box) {
+  box?.querySelectorAll('.av-chips').forEach(row => {
+    const b = row.querySelector('[aria-pressed="true"]');
+    if (b && row.scrollWidth > row.clientWidth) row.scrollLeft = b.offsetLeft - row.offsetLeft - (row.clientWidth - b.offsetWidth) / 2;
+  });
+}
+// выбор портрета: в меню — основной и за свою расу в партии; в партии — только за расу героя
+function avPick(r, g, l) {
+  const E = S.ui.avEdit, races = avGameRaces(), alt = [...E.cfg.alt];
+  alt[r] = pickCode(g, l);
+  E.cfg = races ? { ...E.cfg, alt, pref: r } : { ...E.cfg, race: r, gender: g, look: l, alt };
+  drawAvatarEditor();
+}
+function avRandom() {
+  const races = avGameRaces(), x = avatarFromSeed(Math.floor(Math.random() * 1e6));
+  const r = races ? races[Math.floor(Math.random() * races.length)] : x.race;
+  avPick(r, x.gender, x.look);
 }
 async function saveAvatar() {
   S.avatar = cleanAvatar(S.ui.avEdit.cfg);

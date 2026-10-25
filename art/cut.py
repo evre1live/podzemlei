@@ -6,9 +6,11 @@
   python3 art/cut.py index                             — пересобрать список карт с рисунками (public/card-art.js)
   python3 art/cut.py avatars <картинка> <номер листа>  — лист портретов или рамок, порядок — art/portraits.json
   python3 art/cut.py avindex                           — пересобрать список портретов и рамок (public/avatar-art.js)
+  python3 art/cut.py thumbs                            — пересобрать маленькие портреты для каталога (public/avatars/v1/t)
 
 Рисунки ложатся в public/cards/v1/<id>.webp (длинная сторона до 460 px).
-Портреты — в public/avatars/v1/<id>.webp (квадрат 360 px), рамки — туда же, кольцо с прозрачностью (400 px).
+Портреты — в public/avatars/v1/<id>.webp (квадрат 360 px) и уменьшенные для каталога в t/<id>.webp (192 px),
+рамки — туда же, кольцо с прозрачностью (400 px).
 """
 import json, os, sys
 import numpy as np
@@ -82,7 +84,20 @@ def index():
 
 AVOUT = os.path.join(ROOT, 'public', 'avatars', 'v1')
 PORTRAIT = 360
+THUMB = 192
 FRAME = 400
+
+
+def save_thumb(img, pid):
+    os.makedirs(os.path.join(AVOUT, 't'), exist_ok=True)
+    img.convert('RGB').resize((THUMB, THUMB), Image.LANCZOS).save(os.path.join(AVOUT, 't', pid + '.webp'), 'WEBP', quality=78, method=6)
+
+
+def thumbs():
+    for f in sorted(os.listdir(AVOUT)):
+        if f.startswith('p_') and f.endswith('.webp'):
+            save_thumb(Image.open(os.path.join(AVOUT, f)), f[:-5])
+    print('уменьшенные портреты готовы')
 
 
 def save_portrait(img, pid):
@@ -94,6 +109,7 @@ def save_portrait(img, pid):
     img = img.resize((PORTRAIT, PORTRAIT), Image.LANCZOS)
     path = os.path.join(AVOUT, pid + '.webp')
     img.save(path, 'WEBP', quality=82, method=6)
+    save_thumb(img, pid)
     print(f'  {pid}: {os.path.getsize(path) // 1024} КБ')
 
 
@@ -185,6 +201,8 @@ def main():
         avatars(Image.open(sys.argv[2]), int(sys.argv[3]))
     elif cmd == 'avindex':
         avindex()
+    elif cmd == 'thumbs':
+        thumbs()
     else:
         print(__doc__)
 

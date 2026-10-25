@@ -12,6 +12,8 @@ export const AV_LABELS = {
 
 // подпись образа: что на портрете
 export const lookNote = a => PORTRAITS.get(portraitId(avatarConfig(a)))?.[1] || '';
+// уменьшенный портрет для каталога (без рамки)
+export const portraitThumb = a => { const id = portraitId(a), p = PORTRAITS.get(id); return p ? `/avatars/v1/t/${id}.webp?v=${p[0]}` : ''; };
 
 const portraitUrl = v => {
   let id = portraitId(v);

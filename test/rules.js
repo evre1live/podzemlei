@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createGame, act, tick, view, combatNumbers, P, saleValue, fillText } from '../shared/engine.js';
 import { botDecide } from '../shared/bot.js';
 import { def } from '../shared/cards.js';
-import { AVATAR_PARTS, cleanAvatar, avatarFromSeed, withGender, portraitId } from '../shared/avatar.js';
+import { AVATAR_PARTS, cleanAvatar, avatarFromSeed, portraitId, pickCode, avatarInGame, gameRaces } from '../shared/avatar.js';
 
 let seed = 7; const rng = () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
 function fresh(n = 3) {
@@ -459,20 +459,33 @@ t('по умолчанию и при мусоре в настройках — 10
 });
 
 t('облик: пол, раса, образ и рамка; аватары прошлых версий не ломаются', () => {
-  assert.deepEqual(AVATAR_PARTS, { gender: 2, race: 7, look: 6, frame: 13 });
+  assert.deepEqual(AVATAR_PARTS, { gender: 2, race: 7, look: 6, frame: 13, pref: 7 });
+  const Z = [0, 0, 0, 0, 0, 0, 0];
   const a = cleanAvatar({ gender: 1, race: 6, look: 5, frame: 12 });
-  assert.deepEqual(a, { gender: 1, race: 6, look: 5, frame: 12 });
+  assert.deepEqual(a, { gender: 1, race: 6, look: 5, frame: 12, pref: 0, alt: Z });
   assert.equal(portraitId(a), 'p_mole_f_6');
   assert.equal(portraitId(cleanAvatar({})), 'p_human_m_1');
   // облик прошлой версии: пол и раса остаются, детали лица и одежды отбрасываются
-  const old = cleanAvatar({ gender: 1, race: 2, hair: 9, outfit: 12, jewel: 4, skin: 3 });
-  assert.deepEqual(old, { gender: 1, race: 2, look: 0, frame: 0 });
-  const junk = cleanAvatar({ gender: 5, race: -1, look: 'маг', frame: 1.5 });
-  assert.deepEqual(junk, { gender: 0, race: 0, look: 0, frame: 0 });
+  assert.deepEqual(cleanAvatar({ gender: 1, race: 2, hair: 9, outfit: 12, jewel: 4 }), { gender: 1, race: 2, look: 0, frame: 0, pref: 0, alt: Z });
+  assert.deepEqual(cleanAvatar({ gender: 5, race: -1, look: 'маг', frame: 1.5, alt: 'x' }), { gender: 0, race: 0, look: 0, frame: 0, pref: 0, alt: Z });
+  assert.deepEqual(cleanAvatar({ alt: [3, 13, -1, '12', 1.5, 0, 7, 9] }).alt, [3, 0, 0, 12, 0, 0, 7]);
   const seen = new Set();
   for (let i = 0; i < 400; i++) { const r = avatarFromSeed(i); assert.deepEqual(cleanAvatar(r), r); seen.add(portraitId(r)); }
   assert.ok(seen.size > 60, 'случайные облики разнообразны');
-  assert.deepEqual(withGender({ gender: 0, race: 4, look: 3, frame: 2 }, 1), { gender: 1, race: 4, look: 3, frame: 2 });
+});
+
+t('облик в партии: портрет следует за расой героя, у каждой расы свой выбор', () => {
+  // основной облик — эльфийка-маг; за орка выбран орк-воин (мужчина)
+  const a = cleanAvatar({ gender: 1, race: 1, look: 1, alt: [0, 0, 0, 0, pickCode(0, 0), 0, 0] });
+  assert.deepEqual(gameRaces([]), [0]);
+  const human = avatarInGame(a, []);          // без карты расы — человек того же пола и образа
+  assert.equal(portraitId(human), 'p_human_f_2');
+  assert.equal(portraitId(avatarInGame(a, ['orc'])), 'p_orc_m_1');      // запомненный выбор
+  assert.equal(portraitId(avatarInGame(a, ['dwarf'])), 'p_dwarf_f_2');  // без выбора — пол и образ основного
+  // полукровка: показывается основная раса, а после выбора в партии — выбранная
+  assert.equal(avatarInGame(a, ['orc', 'elf']).race, 1);
+  assert.equal(avatarInGame({ ...a, pref: 4 }, ['orc', 'elf']).race, 4);
+  assert.equal(avatarInGame({ ...a, pref: 4 }, ['goblin']).race, 5);
 });
 
 // кубик всегда показывает 1 или 6 — чтобы побег точно провалился или удался
