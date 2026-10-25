@@ -345,11 +345,93 @@
     "l_shortcut",
     "h_hoard"
    ]
+  },
+  {
+   "n": 32,
+   "ids": [
+    "m_rusteater",
+    "m_viy",
+    "m_chudo",
+    "m_ghosttrain",
+    "m_ratking",
+    "m_swarm"
+   ]
+  },
+  {
+   "n": 33,
+   "ids": [
+    "m_mimicdoor",
+    "m_midnight",
+    "m_bannik",
+    "m_morena",
+    "m_chernobog",
+    "d_duel"
+   ]
+  },
+  {
+   "n": 34,
+   "ids": [
+    "t_tripwire",
+    "t_pit",
+    "t_net",
+    "t_gas",
+    "t_rocks",
+    "t_plate"
+   ]
+  },
+  {
+   "n": 35,
+   "ids": [
+    "i_ares",
+    "i_excalibur",
+    "i_overalls",
+    "i_kingmail",
+    "i_kingcrown",
+    "i_kinghammer"
+   ]
+  },
+  {
+   "n": 36,
+   "ids": [
+    "i_gasmask",
+    "i_canary",
+    "i_ushanka",
+    "i_ratcloak",
+    "i_firesuit",
+    "i_trays"
+   ]
+  },
+  {
+   "n": 37,
+   "ids": [
+    "i_rollers",
+    "i_valenki",
+    "i_waders",
+    "i_samovar",
+    "i_turnshield",
+    "i_kladenets"
+   ]
+  },
+  {
+   "n": 38,
+   "ids": [
+    "p_raven",
+    "p_owl",
+    "a_porter",
+    "a_guide",
+    "a_merc",
+    "ev_shift"
+   ]
   }
  ],
  "extra": [
   "back_door",
   "back_treasure",
-  "menu_bg"
+  "menu_bg",
+  "ev_union",
+  "ev_flood",
+  "loc_flooded",
+  "loc_grove",
+  "loc_koschei"
  ]
 }

@@ -3,12 +3,15 @@
 
   python3 art/cut.py sheet <картинка> <номер листа>   — лист из ChatGPT: сетка 3×2, порядок панелей — art/sheets.json
   python3 art/cut.py one <картинка> <id карты>         — отдельная картинка для одной карты (или back_door, back_treasure)
+  python3 art/cut.py loc <картинка> <id локации>       — сцена локации: фон стола 16:9 и картинка карты 4:3
   python3 art/cut.py index                             — пересобрать список карт с рисунками (public/card-art.js)
   python3 art/cut.py avatars <картинка> <номер листа>  — лист портретов или рамок, порядок — art/portraits.json
   python3 art/cut.py avindex                           — пересобрать список портретов и рамок (public/avatar-art.js)
   python3 art/cut.py thumbs                            — пересобрать маленькие портреты для каталога (public/avatars/v1/t)
 
 Рисунки ложатся в public/cards/v1/<id>.webp (длинная сторона до 460 px).
+Сцены локаций — в public/loc/v1/<id>.webp (1672×941) и <id>-card.webp (640×480); локация сама прописывается
+в списки картин (LOC_IMG в public/art.js и IMG_SCENES в public/world.js).
 Портреты — в public/avatars/v1/<id>.webp (квадрат 360 px) и уменьшенные для каталога в t/<id>.webp (192 px),
 рамки — туда же, кольцо с прозрачностью (400 px).
 """
@@ -30,6 +33,29 @@ def save(img, cid):
     path = os.path.join(OUT, cid + '.webp')
     img.save(path, 'WEBP', quality=80, method=6)
     print(f'  {cid}: {img.width}×{img.height}, {os.path.getsize(path) // 1024} КБ')
+
+
+def cover(img, w, h):
+    s = max(w / img.width, h / img.height)
+    im = img.resize((round(img.width * s), round(img.height * s)), Image.LANCZOS)
+    x, y = (im.width - w) // 2, (im.height - h) // 2
+    return im.crop((x, y, x + w, y + h))
+
+
+def location(img, lid):
+    import re
+    out = os.path.join(ROOT, 'public', 'loc', 'v1')
+    img = img.convert('RGB')
+    cover(img, 1672, 941).save(os.path.join(out, lid + '.webp'), 'WEBP', quality=78, method=6)
+    cover(img, 640, 480).save(os.path.join(out, lid + '-card.webp'), 'WEBP', quality=80, method=6)
+    for f, name in (('public/art.js', 'export const LOC_IMG'), ('public/world.js', 'const IMG_SCENES')):
+        path = os.path.join(ROOT, f)
+        src = open(path, encoding='utf-8').read()
+        m = re.search(re.escape(name) + r" = new Set\(\[([^\]]*)\]\)", src)
+        if m and f"'{lid}'" not in m.group(1):
+            src = src[:m.end(1)] + f", '{lid}'" + src[m.end(1):]
+            open(path, 'w', encoding='utf-8').write(src)
+    print(f'  {lid}: фон и карта готовы')
 
 
 def gutters(profile, n, size):
@@ -195,6 +221,8 @@ def main():
         index()
     elif cmd == 'one':
         save(Image.open(sys.argv[2]), sys.argv[3]); index()
+    elif cmd == 'loc':
+        location(Image.open(sys.argv[2]), sys.argv[3])
     elif cmd == 'index':
         index()
     elif cmd == 'avatars':
