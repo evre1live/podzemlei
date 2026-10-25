@@ -5,3 +5,6 @@ https://kenney.nl/assets/particle-pack
 
 Движок эффектов: PixiJS 8.20.1 — лицензия MIT, текст лицензии в /vendor/pixi-LICENSE.txt.
 https://pixijs.com
+
+Ударная волна по фону: ShockwaveFilter из pixi-filters 6.1.5 — лицензия MIT, текст лицензии в /vendor/pixi-filters-LICENSE.txt.
+https://github.com/pixijs/filters

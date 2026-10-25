@@ -4,7 +4,7 @@ import { def, RACE_NAMES, CLASS_NAMES, SETS, setRuleVars, ruleText, BOSS_FLOOR, 
 import { esc, cardHTML, chipHTML, avatarSVG, iconSVG, cardBackSVG, locationSVG, cardIcon } from '/art.js';
 import { fx } from '/fx.js';
 import { sfx } from '/sfx.js';
-import { setWorld } from '/world.js';
+import { setWorld, worldMood } from '/world.js';
 import { cine, growlKind } from '/cine.js';
 import { AVATAR_PARTS, avatarFromSeed, cleanAvatar, avatarInGame, gameRaces, pickCode } from '/shared/avatar.js';
 import { AV_LABELS, lookNote, portraitThumb } from '/art-avatar.js';
@@ -141,10 +141,11 @@ socket.on('room:state', ({ room, game, serverTime }) => {
   S.room = room; S.game = game;
   if (!room.spectator) S.watch = null;
   { const w = game?.opts?.winLevel || room.settings?.winLevel || 10; setRuleVars({ win: w, lux: Math.round(w * 0.7) }); }
-  if (first) { setUrl(room.id, room.spectator); S.ui.lastFx = null; S.ui.watchPid = null; S.ui.mode = null; S.ui.prevHand = new Set(); }
+  if (first) { setUrl(room.id, room.spectator); S.ui.lastFx = null; S.ui.watchPid = null; S.ui.mode = null; S.ui.prevHand = new Set(); S.ui.legReady = false; }
   // звук: начало моего хода и чужие сообщения в чате
   const tk = game?.phase === 'playing' ? `${game.turn.n}:${game.turn.pid}` : '';
   if (!first && tk && tk !== S.ui.turnKey && game.turn.pid === room.me) { sfx.play('yourTurn', { always: true, delay: 0.25 }); cine.turn(); }
+  if (!first && tk && tk !== S.ui.turnKey) { worldMood('flare', { n: 1 }); setTimeout(() => turnSweep(game.turn.pid), 60); }
   S.ui.turnKey = tk;
   const lastMsg = room.chat.at(-1);
   if (!first && lastMsg && lastMsg.id !== S.ui.lastMsg && !lastMsg.sys && lastMsg.from !== room.me) sfx.play('pop', { always: true });
@@ -161,6 +162,11 @@ function render() {
   const scr = !S.room ? 'home' : S.game ? 'game' : 'lobby';
   if (scr !== S.screen) { S.screen = scr; mount[scr](); soundIcons(); }
   setWorld($('#world'), scr === 'home' ? null : scr === 'game' && S.game.location ? def(S.game.location).art : 'default');
+  // фон откликается на бой: края кадра наливаются тревожным светом, у босса — лиловым
+  { const g = scr === 'game' ? S.game : null, c = g?.phase === 'playing' ? g.combat : null;
+    if (c) worldMood('combat', { boss: c.monsters.some(m => def(m.uid).boss), losing: !c.numbers?.winning });
+    else if (g?.phase === 'playing' && g.duel) worldMood('combat', {});
+    else worldMood('calm'); }
   update[scr]();
   if (scr !== 'home') renderVoice();
 }
@@ -177,7 +183,7 @@ mount.home = () => {
     </header>
     <section class="band b-clay pebbles title-wrap">
       <h1 class="title">Под Землёй</h1>
-      <p class="subtitle">Карточная игра для компании от двух до шести человек. Выбивайте двери, побеждайте монстров из подвалов и тоннелей, собирайте клад и не стесняйтесь подставлять друзей. Кто первым дойдёт до 10-го уровня, тот и победил. Для долгой партии хозяин комнаты может поставить цель 15 или 20.</p>
+      <p class="subtitle">Карточная игра для компании от двух до шести человек. Выбивайте двери, побеждайте монстров из подвалов и тоннелей, собирайте клад и не стесняйтесь подставлять друзей. Кто первым дойдёт до 10-го уровня, тот и победил. Хозяин комнаты может выбрать быструю партию до 5-го или долгую — до 15 или 20.</p>
     </section>
     <section class="band b-rock home-main">
       <div class="panel">
@@ -751,7 +757,7 @@ function fightHTML() {
   }
   if (c.winAt && c.passed?.length) b.push(`<span class="hint passed">Не мешают: ${c.passed.map(id => esc(pname(id))).join(', ')}</span>`);
   return `
-    <div class="fight">
+    <div class="fight" style="--ha:${n.winning ? 0.34 : 0.12};--ma:${n.winning ? 0.12 : 0.36}">
       <div class="side-col hero"><div class="side-main"><div class="shield hero${n.winning ? ' lead' : ''}" id="shieldHero" title="Сила героев">${SHIELD('hero')}<b data-roll="${n.heroes}">${prev ? prev.heroes : n.heroes}</b></div><div class="heroes-row">${heroes}</div></div><div class="mods">${mods('player')}</div></div>
       <div class="versus">${center}${verdict}</div>
       <div class="side-col mon"><div class="side-main"><div class="shield mon${n.winning ? '' : ' lead'}" id="shieldMon" title="Сила монстров">${SHIELD('mon')}<b data-roll="${n.monsters}">${prev ? prev.monsters : n.monsters}</b></div><div class="monsters-row">${monsters}</div></div><div class="mods">${mods('monster')}</div></div>
@@ -784,7 +790,7 @@ function duelHTML() {
   if (h.pass) b.push(`<button class="btn ghost" data-act="pass">Не мешаю</button>`);
   if (d.passed.length) b.push(`<span class="hint passed">Не мешают: ${d.passed.map(id => esc(pname(id))).join(', ')}</span>`);
   return `
-    <div class="fight duel">
+    <div class="fight duel" style="--ha:${n.winner === d.from ? 0.34 : 0.12};--ma:${n.winner === d.to ? 0.34 : 0.12}">
       ${side('from')}
       <div class="versus">${center}${verdict}</div>
       ${side('to')}
@@ -898,18 +904,83 @@ function renderMine() {
   const handEl = $('#hand');
   handEl.classList.toggle('has-play', !mode && p.hand.some(u => (h.cards?.[u] || []).length));
   const prev = S.ui.prevHand;
+  const legNew = [];
   let k = 0;
   handEl.innerHTML = p.hand.length ? p.hand.map(u => {
     let playable = (h.cards?.[u] || []).length > 0;
     let dim = false;
     if (mode) { playable = false; dim = !modeAccepts(u, 'hand'); }
     const isNew = prev && !prev.has(u);
+    // легендарка приходит не раздачей, а своей сценой
+    if (isNew && def(u).rarity === 'legendary') { legNew.push(u); return cardHTML(u, { playable, selected: picked.has(u), dim, attrs: 'data-zone="hand"' }); }
     return cardHTML(u, { playable, selected: picked.has(u), dim, cls: isNew ? 'deal-in' : '', attrs: `data-zone="hand"${isNew ? ` style="animation-delay:${(k++) * 90}ms"` : ''}` });
   }).join('') : `<p class="muted">Рука пуста.</p>`;
+  if (S.ui.legReady) legNew.forEach(legendArrive);
+  S.ui.legReady = true;
   S.ui.prevHand = new Set(p.hand);
   for (let i = 0; i < Math.min(k, 6); i++) sfx.play('deal', { delay: i * 0.09, gap: 0 });
   fitHand();
 }
+// смена хода: по фишке того, кто ходит, пробегает полоса света, портрет вспыхивает кольцом
+function turnSweep(pid) {
+  const el = pid === S.room?.me ? $('#mecard .me-top') : document.querySelector(`[data-opp="${CSS.escape(pid)}"]`);
+  if (!el || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const i = document.createElement('i');
+  i.className = 'turn-sweep';
+  el.append(i);
+  setTimeout(() => i.remove(), 1300);
+  const ava = el.querySelector('.ava, .me-ava');
+  if (ava) { fx.ring(ava, { n: 2, size: 26, grow: 180, width: 3, color: 'rgba(255,214,140,.85)', life: 0.7 }); fx.sparkle(ava, { n: 8 }); }
+}
+
+// живой бой: вокруг монстров всё время что-то происходит — по их природе: огонь, нежить, вода, грибы, механизмы
+const AMBIENT = {
+  boss: el => { fx.spray(el, { n: 7, spreadX: 1, spreadY: 0.2, dy: 0.45, speed: [40, 120], angle: [-2.3, -0.85], size: [2, 3.6], colors: ['#ff8a3d', '#ff4a1a', '#ffd27a', '#d96bff'], shape: 'spark', life: [0.6, 1.2], g: -70 });
+    if (Math.random() < 0.3) fx.ring(el, { size: 34, grow: 240, width: 3, color: 'rgba(220,80,255,.75)', life: 0.8 }); },
+  fire: el => fx.spray(el, { n: 6, spreadX: 0.9, spreadY: 0.1, dy: 0.45, speed: [30, 90], angle: [-2.1, -1.05], size: [1.8, 3.2], colors: ['#ffd27a', '#ff8a3d', '#ff5a1a'], shape: 'spark', life: [0.7, 1.3], g: -90 }),
+  undead: el => fx.spray(el, { n: 3, spreadX: 0.8, spreadY: 0.3, dy: 0.3, speed: [10, 30], angle: [-2, -1.1], size: [10, 18], grow: [14, 24], colors: ['rgba(120,255,180,.28)', 'rgba(170,140,255,.22)'], shape: 'smoke', add: false, life: [1.4, 2.2], fadeIn: true, wob: [1, 2] }),
+  water: el => fx.spray(el, { n: 4, spreadX: 0.9, spreadY: 0.1, dy: -0.35, speed: [10, 40], angle: [1.2, 1.9], size: [2, 3], colors: ['#cfefff', '#9fd8e8'], shape: 'drop', add: false, life: [0.6, 0.9], g: 520 }),
+  fungus: el => fx.spray(el, { n: 5, spreadX: 0.9, spreadY: 0.4, speed: [8, 26], angle: [-2.4, -0.7], size: [1.6, 3], colors: ['#c4ef86', '#8ff0d2', '#fff3b0'], shape: 'dot', life: [1.4, 2.4], fadeIn: true, wob: [2, 4], g: -12 }),
+  machine: el => { if (Math.random() < 0.6) fx.spray(el, { n: 6, spreadX: 0.7, spreadY: 0.5, speed: [120, 260], size: [1.2, 2], colors: ['#bcd8ff', '#ffffff', '#7fb0ff'], shape: 'spark', life: [0.18, 0.35], g: 300 }); },
+  insect: el => fx.spray(el, { n: 4, spreadX: 0.8, spreadY: 0.6, speed: [40, 90], size: [1.2, 1.8], colors: ['rgba(30,24,20,.85)', 'rgba(70,60,40,.8)'], shape: 'dot', add: false, life: [0.8, 1.4], wob: [6, 10] }),
+  dust: el => fx.spray(el, { n: 3, spreadX: 1, spreadY: 0.05, dy: 0.5, speed: [10, 40], angle: [-2.6, -0.5], size: [6, 10], grow: [8, 14], colors: ['rgba(214,190,160,.3)', 'rgba(170,140,110,.28)'], shape: 'smoke', add: false, life: [0.9, 1.5] }),
+};
+function combatAmbient() {
+  const g = S.game;
+  if (!g?.combat || g.phase !== 'playing' || document.hidden || matchMedia('(prefers-reduced-motion: reduce)').matches || (cine.on && !cine.idle)) return;
+  for (const m of g.combat.monsters) {
+    const el = document.querySelector(`#stage .mon-wrap .card[data-uid="${CSS.escape(m.uid)}"]`);
+    if (!el) continue;
+    const d = def(m.uid), t = d.tags || [];
+    const k = d.boss ? 'boss' : t.includes('fire') ? 'fire' : t.includes('undead') ? 'undead' : t.includes('water') ? 'water' : t.includes('fungus') ? 'fungus'
+      : t.includes('machine') ? 'machine' : t.includes('insect') ? 'insect' : 'dust';
+    AMBIENT[k](el);
+  }
+  // герой в легендарном снаряжении искрится у своего щита
+  const heroes = [g.combat.fighter, g.combat.helper].filter(Boolean).map(pl);
+  if (heroes.some(p => p?.equipped.some(u => def(u).rarity === 'legendary'))) fx.sparkle($('#shieldHero'), { n: 3, colors: ['#fff3b0', '#ffd56a', '#ffffff'] });
+}
+setInterval(combatAmbient, 850);
+
+// легендарная карта пришла в руку: сцена в кино-режиме, иначе — вспышка, лучи и искры прямо в руке
+function legendArrive(uid) {
+  shockAt(null, 1.2);
+  worldMood('flash', { color: 0xffe08a, alpha: 0.3 });
+  if (cine.legendDrop(uid)) return;
+  const el = document.querySelector(`#hand .card[data-uid="${CSS.escape(uid)}"]`);
+  if (!el) return;
+  const dragon = def(uid).id === 'p_golddragon';
+  el.classList.add('legend-arrive');
+  sfx.play('legendary', { always: true });
+  fx.banner('Легендарная находка!', def(uid).name, 'legend');
+  setTimeout(() => {
+    fx.rays(el, { color: dragon ? '255,150,60' : '255,214,120', dur: 2000 });
+    fx.ring(el, { n: 2, color: dragon ? 'rgba(255,150,60,.9)' : 'rgba(255,230,160,.9)' });
+    fx.burst(el, { n: 40, colors: dragon ? ['#ffe08a', '#ff8a3d', '#fff'] : ['#ffe08a', '#f5b83d', '#fff', '#d9b3ff'], speed: 340, g: 160 });
+    fx.sparkle(el, { n: 24, colors: ['#fff3b0', '#ffd56a', '#ffffff', '#a6f2ff'] });
+  }, 380);
+}
+
 // зритель следит за любым героем: по умолчанию — за тем, кто ходит
 function renderWatcher() {
   const g = S.game;
@@ -1301,8 +1372,27 @@ function maybeTradePrompt() {
   </div>`);
 }
 // всплывающие знаки новых механик — поверх обычных эффектов и заставок
+// фон отвечает вспышкой на важные события (в обоих режимах показа)
+const MOOD_FX = {
+  victory: [0xffd27a, 0.24, 1.2], caught: [0xff3020, 0.22, 0], death: [0x8fa8ff, 0.3, 0], legendary: [0xffe08a, 0.3, 1.2], depth: [0x9fb8ff, 0.25, 1],
+  duelEnd: [0xffd27a, 0.18, 0.8], trap: [0xffa040, 0.12, 0], location: [0xffffff, 0.16, 1], levelUp: [0xffe6a0, 0.08, 0.6], tame: [0xc4ef86, 0.14, 0.6],
+};
+const SHOCK_AT = { victory: () => document.querySelector('#stage .mon-wrap .card') || $('#stage'), legendary: f => avaOf(f.pid), depth: () => null, duelEnd: () => $('#stage') };
+function shockAt(el, power) { const r = el?.getBoundingClientRect?.(); worldMood('shock', r ? { x: r.left + r.width / 2, y: r.top + r.height / 2, power } : { power }); }
+function moodFx(fresh) {
+  for (const f of fresh) {
+    if (SHOCK_AT[f.kind]) shockAt(SHOCK_AT[f.kind](f), f.kind === 'depth' ? 0.7 : 1);
+    if ((f.kind === 'combat' || f.kind === 'wandering') && def(f.card)?.boss) shockAt($('#stage'), 1.3);
+    const m = MOOD_FX[f.kind] || (f.kind === 'combat' || f.kind === 'wandering' ? (def(f.card)?.boss ? [0xc23cff, 0.28, 0] : [0xff5a2a, 0.12, 0]) : null);
+    if (!m) continue;
+    worldMood('flash', { color: m[0], alpha: m[1] });
+    if (m[2]) worldMood('flare', { n: m[2] });
+  }
+}
+
 function extraFx(fresh) {
   achFx(fresh);
+  moodFx(fresh);
   for (const f of fresh) {
     const ava = avaOf(f.pid);
     switch (f.kind) {
@@ -1561,8 +1651,25 @@ function runFx(fresh, snap) {
       case 'buff':
         fx.sparkle(ava, { colors: ['#ffb0c8', '#ff7aa8', '#fff3b0'] }); fx.float(ava, `+${f.n} в бою`, 'good');
         break;
+      case 'strike': {
+        const mon = document.querySelector('#stage .mon-wrap .card');
+        fx.slash(mon, { color: '255,236,200' }); fx.ring($('#shieldMon'), { size: 30, grow: 420, color: 'rgba(255,236,200,.9)' }); fx.shake($('#stage'), 'bump');
+        break;
+      }
+      case 'caught':
+        fx.vignette('rgba(200,30,20,.55)'); fx.slash(ava, { color: '255,90,60', angle: 32 }); fx.shake(ava?.closest('.opp') || ava);
+        break;
+      case 'escaped':
+        fx.dust(ava, { n: 14 }); fx.float(ava, 'Удрал!', 'good');
+        break;
+      case 'reveal': {
+        const door = $('#deckDoor');
+        fx.rays(door, { size: 220, dur: 900, color: '255,220,160' }); fx.dust(door, { n: 10 });
+        break;
+      }
       case 'victory': {
         const st = $('#stage');
+        fx.rays(st, { size: Math.min(innerWidth, 900), dur: 1700 }); fx.ring($('#shieldHero'), { n: 3, size: 40, grow: 700, color: 'rgba(143,240,210,.85)' });
         fx.banner('Победа!', `${pname(f.pid)} одолевает монстров`, 'win');
         fx.confetti({ at: st, n: 90 });
         fx.coins(st, avaOf(f.pid), { n: 14 });
@@ -1612,6 +1719,8 @@ function runFx(fresh, snap) {
       }
       case 'legendary': {
         const d = def(f.card);
+        fx.rays(ava, { color: d.id === 'p_golddragon' ? '255,150,60' : '255,214,120', size: 260, dur: 2000 });
+        fx.ring(ava, { n: 3, size: 30, grow: 420, color: 'rgba(255,230,160,.9)' });
         fx.banner(d.name, `Легендарная вещь у ${pname(f.pid)}`, 'legend');
         fx.sparkle(ava, { n: 26, colors: ['#fff3b0', '#ffd56a', '#ffffff', '#a6f2ff'] });
         fx.burst(ava, { n: 34, colors: ['#ffe08a', '#f5b83d', '#fff'], speed: 320, g: 120 });

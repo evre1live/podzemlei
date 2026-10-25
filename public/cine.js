@@ -1114,6 +1114,51 @@ S.legendary = f => ({
   },
 });
 
+// легендарка пришла в руку: торжественный выход в центре, потом карта улетает на своё место в руке
+S.legendDrop = uid => ({
+  run(k) {
+    const d = def(uid), dragon = d.id === 'p_golddragon';
+    const c = { x: vw() / 2, y: vh() * 0.42 };
+    const fit = fitBig();
+    const slot = () => document.querySelector(`#hand .card[data-uid="${CSS.escape(uid)}"]`);
+    const real = slot();
+    if (real) real.style.visibility = 'hidden';
+    const restore = () => { const r = slot(); if (r) { r.style.visibility = ''; r.classList.add('legend-arrive'); } };
+    k.at(4200, restore);
+    const dim = k.el('cn-dim legend');
+    k.a(dim, [{ opacity: 0 }, { opacity: 1 }], { dur: 300 });
+    const rays = k.pt('cn-rays legend', raysSVG(), c.x, c.y);
+    k.a(rays, [{ opacity: 0, transform: `scale(${fit * 0.4}) rotate(0deg)` }, { opacity: 1, transform: `scale(${fit * 1.15}) rotate(50deg)`, offset: 0.3 }, { opacity: 1, transform: `scale(${fit * 1.2}) rotate(110deg)`, offset: 0.8 }, { opacity: 0, transform: `scale(${fit * 1.3}) rotate(140deg)` }], { dur: 2500, ease: EASE.lin });
+    const halo = k.pt('cn-halo', '', c.x, c.y);
+    k.a(halo, [{ opacity: 0, transform: `scale(${fit * 0.5}) rotate(0deg)` }, { opacity: 1, transform: `scale(${fit * 1.05}) rotate(90deg)`, offset: 0.3 }, { opacity: 1, transform: `scale(${fit * 1.05}) rotate(240deg)`, offset: 0.8 }, { opacity: 0, transform: `scale(${fit * 1.15}) rotate(300deg)` }], { dur: 2500, ease: EASE.lin });
+    const card = k.pt('cn-card', cardHTML(uid, { size: 'lg', tab: false }), c.x, c.y);
+    // карта поднимается из сундука: снизу, с поворотом, в столбе света
+    k.a(card, [{ transform: `translateY(${vh() * 0.4}px) scale(${fit * 0.2}) rotateY(540deg)`, opacity: 0 }, { transform: `translateY(-10px) scale(${fit * 1.14}) rotateY(10deg)`, opacity: 1, offset: 0.72 }, { transform: `scale(${fit}) rotateY(0deg)`, opacity: 1 }], { dur: 1000, ease: EASE.out });
+    sfx.play('legendary', { always: true });
+    const sparks = dragon ? ['#fff3c0', '#ffb347', '#ff7a2a', '#ffd56a'] : ['#fff3b0', '#ffd56a', '#ffffff', '#a6f2ff', '#ffb0e0'];
+    k.at(700, () => {
+      fx.spray({ ...c, w: 300 * fit, h: 380 * fit }, { n: 46, spreadX: 1, spreadY: 1, speed: [20, 90], size: [3, 6], colors: sparks, shape: 'star', life: [0.8, 1.6], fadeIn: true, delay: [0, 0.9] });
+      fx.burst(c, { n: 48, colors: dragon ? ['#ffe08a', '#ff8a3d', '#fff'] : ['#ffe08a', '#f5b83d', '#fff', '#d9b3ff'], speed: 420, g: 100 });
+      fx.ring(c, { n: 3, size: 60 * fit, grow: 900, width: 6, color: dragon ? 'rgba(255,150,60,.9)' : 'rgba(255,230,160,.9)', life: 0.7 });
+      ring(k, c.x, c.y, 'legend', fit, 800);
+      flash(k, dragon ? 'rgba(255,170,90,.45)' : 'rgba(255,240,200,.45)', 320);
+      if (dragon) fx.spray({ ...c, w: 260 * fit, h: 60, y: c.y + 170 * fit }, { n: 50, spreadX: 1, spreadY: 1, speed: [60, 160], angle: [-Math.PI * 0.7, -Math.PI * 0.3], size: [2, 4], colors: ['#ffd27a', '#ff8a3d', '#fff3c0'], shape: 'dot', life: [0.9, 1.6], g: -40 });
+    });
+    stamp(k, c.x, Math.max(64, c.y - 168 * fit - 62), 'Легендарная находка!', d.name, 'legend', 1300).style.zIndex = 3;
+    k.at(2050, () => {
+      k.a(dim, [{ opacity: 1 }, { opacity: 0 }], { dur: 400, fill: 'forwards' }); k.rm(dim, 420); k.rm(rays, 450); k.rm(halo, 450);
+      const tr = box(slot());
+      if (!tr) { k.fade(card, 0, 300); restore(); return; }
+      const t = cen(tr);
+      k.a(card, [{ transform: `scale(${fit})`, opacity: 1 }, { transform: `translate(${(t.x - c.x) * 0.5}px, ${(t.y - c.y) * 0.5 - 50}px) scale(${fit * 0.7}) rotate(-6deg)`, opacity: 1, offset: 0.5 }, { transform: `translate(${t.x - c.x}px, ${t.y - c.y}px) scale(${tr.height / 340}) rotate(0deg)`, opacity: 1 }], { dur: 560, ease: EASE.io, fill: 'forwards' });
+      k.rm(card, 580);
+      k.snd('whoosh');
+      k.at(560, () => { restore(); fx.burst(t, { n: 30, colors: ['#ffe08a', '#f5b83d', '#fff'], speed: 260 }); fx.ring(t, { size: 40, grow: 500, color: 'rgba(255,224,150,.9)' }); });
+    });
+    return 2700;
+  },
+});
+
 // показать карту в центре: вылетает рубашкой вперёд и переворачивается
 function showcase(k, uid, cls) {
   const c = { x: vw() / 2, y: vh() * 0.42 };
@@ -1297,6 +1342,8 @@ export const cine = {
     }
     enqueue(...scenes);
   },
+  // легендарка пришла в руку (только для своего героя): сцена в общей очереди
+  legendDrop(uid) { if (!this.on || document.hidden) return false; enqueue(S.legendDrop(uid)); return true; },
   // мой ход: лента «Ваш ход» проносится через экран
   turn() {
     if (!this.on) return;

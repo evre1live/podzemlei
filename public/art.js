@@ -390,12 +390,17 @@ export function cornerOf(d) {
   return null;
 }
 
+// легендарная карта: бегущий по кромке свет, золотое сияние и мерцающие искры (у дракона — угольки)
+const LEG_AURA = `<i class="c-aura" aria-hidden="true">${[[9, 16], [88, 9], [91, 54], [10, 60], [52, 5], [72, 90], [24, 92], [56, 46]]
+  .map(([x, y], i) => `<b style="--x:${x}%;--y:${y}%;--d:-${(i * 0.43).toFixed(2)}s;--e:${(i * 11 + 7) % 90 + 5}%"></b>`).join('')}</i>`;
+
 export function cardHTML(uid, o = {}) {
   const d = def(uid);
   const cls = ['card', d.deck, 't-' + d.type, o.size || 'md'];
   if (d.rarity && d.rarity !== 'common') cls.push('r-' + d.rarity);
   if (d.bg) cls.push('k-' + d.bg);
   if (d.boss) cls.push('boss');
+  if (d.id === 'p_golddragon') cls.push('k-dragon');
   if (d.type === 'item' && d.slot === 'pet') cls.push('pet');
   if (d.type === 'enhancer' && d.bonus < 0) cls.push('weak');
   if (CARD_IMG.has(d.id) || (d.type === 'location' && LOC_IMG.has(d.art))) cls.push('painted');
@@ -421,7 +426,7 @@ export function cardHTML(uid, o = {}) {
     <div class="c-text">${cardText(d)}</div>
     <div class="c-foot"><span class="fl">${fl}</span><b class="fc">${esc(label)}</b><span class="fr">${fr}</span></div>
     <i class="c-orn" aria-hidden="true"></i>
-    <i class="c-glare" aria-hidden="true"></i>
+    ${d.rarity === 'legendary' ? LEG_AURA : ''}<i class="c-glare" aria-hidden="true"></i>
   </div>`;
 }
 

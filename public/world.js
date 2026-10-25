@@ -127,6 +127,11 @@ export function worldHTML(key) {
 
 // Живые эффекты подгружаются, только когда нужны: библиотека весит ~230 КБ
 let vfx = null, vfxKey = null;
+// фон откликается на события: бой окрашивает края, победа и смена хода вспыхивают светом
+export function worldMood(kind, o) {
+  document.getElementById('world')?.classList.toggle('mood-combat', kind === 'combat' ? true : kind === 'calm' ? false : document.getElementById('world')?.classList.contains('mood-combat'));
+  vfx?.then(m => m.vfxMood?.(kind, o)).catch(() => {});
+}
 function syncVfx(host) {
   const k = current;
   if (!k || host.classList.contains('still')) { if (vfx && !k) vfx.then(m => m.hideVfx()); return; }
@@ -142,6 +147,19 @@ function watchStill(host) {
   // включили живой фон в настройках — эффекты появляются без перезагрузки
   new MutationObserver(() => { if (!host.classList.contains('still')) { vfxKey = null; syncVfx(host); } }).observe(host, { attributes: true, attributeFilter: ['class'] });
 }
+
+// лёгкий параллакс: фон чуть смещается за мышью, будто смотришь в глубину пещеры
+let parRaf = 0;
+addEventListener('pointermove', e => {
+  if (e.pointerType !== 'mouse' || parRaf) return;
+  parRaf = requestAnimationFrame(() => {
+    parRaf = 0;
+    const h = document.getElementById('world');
+    if (!h || h.classList.contains('still')) return;
+    h.style.setProperty('--wx', ((0.5 - e.clientX / innerWidth) * 18).toFixed(1) + 'px');
+    h.style.setProperty('--wy', ((0.5 - e.clientY / innerHeight) * 11).toFixed(1) + 'px');
+  });
+}, { passive: true });
 
 // Плавная смена сцены: новая проявляется поверх старой
 let current = null;

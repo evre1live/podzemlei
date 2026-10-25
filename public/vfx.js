@@ -109,7 +109,7 @@ function orb(x, y, color = '#c78bff') {
 function rays(x, y, len, angle, color, alpha = 0.16, n = 3, gap = 26) {
   const [X, Y] = P(x, y);
   return Array.from({ length: n }, (_, i) => ({ glow: true, at: [X + (i - (n - 1) / 2) * gap, Y], tex: 'beam', size: 110, stretch: len / 110,
-    rotation: angle + (i - (n - 1) / 2) * 0.05, color, alpha, pulse: [0.12 + i * 0.04, 0.5], anchorTop: true }));
+    rotation: angle + (i - (n - 1) / 2) * 0.05, color, alpha, pulse: [0.12 + i * 0.04, 0.5], anchorTop: true, swing: [0.025 + i * 0.006, 0.04 + i * 0.013] }));
 }
 const snow = q => [
   { tex: ['dot'], area: [-80, W + 80, -30, -10], rate: 10 * q, life: [14, 22], vx: [-8, 8], vy: [28, 46], sway: [26, 0.5], size: [3, 3], sizeVar: 0.5, colors: ['#ffffff', '#e8f4ff'], alpha: [0.75, 0.75, 0.75, 0], noScale: true, prewarm: true },
@@ -126,6 +126,43 @@ function fall(x0, x1, y0, y1, color = '#dff7ff', rate = 14) {
 const water = (poly, o = {}) => [{ water: true, poly: poly.map(([x, y]) => P(x, y)), scale: o.scale || [9, 6], speed: o.speed || [14, 6] }];
 const lava = (poly, o = {}) => water(poly, { scale: [14, 10], speed: [8, 5], ...o });
 const lightning = xs => [{ lightning: true, xs: xs.map(x => P(x, 0)[0]), every: [4.5, 9] }];
+
+// ───────────── общие слои для всех сцен ─────────────
+// Тёплый или холодный тон «воздуха» каждой локации: им окрашены пылинки, боке и лучи
+const AIR = { loc_tavern: '#ffcf8a', loc_dungeon: '#d8ffb0', loc_glade: '#e6f7b0', loc_forge: '#ffb070', loc_ice: '#dff1ff', loc_graveyard: '#b9ffd9', loc_sky: '#e8f0ff',
+  loc_cove: '#d8fbff', loc_library: '#e6d2ff', loc_oasis: '#ffe2a8', loc_flooded: '#d8f2ff', loc_grove: '#b8fff0', loc_koschei: '#c9ffd9' };
+// лучи света сверху: где в сцене есть пролом, окно или свод с небом
+const SHAFTS = {
+  loc_glade: [[820, 0, 720, 0.04, '#fff3c4', 0.08, 4, 70]],
+  loc_ice: [[830, 0, 700, 0.05, '#dff1ff', 0.09, 4, 55]],
+  loc_graveyard: [[1100, 0, 680, -0.18, '#cfe0ff', 0.07, 3, 70]],
+  loc_flooded: [[1010, 0, 720, 0.12, '#bfe6ff', 0.1, 4, 45]],
+  loc_grove: [[760, 0, 650, 0.03, '#9ff5e8', 0.08, 3, 70]],
+  loc_koschei: [[255, 0, 620, -0.08, '#b8ffd4', 0.07, 3, 50]],
+  loc_library: [[980, 0, 640, 0.1, '#e9d8ff', 0.06, 3, 60]],
+  default: [[834, 0, 560, 0, '#ffe2b0', 0.06, 3, 80]],
+};
+const WATERY = new Set(['loc_cove', 'loc_flooded', 'loc_grove', 'loc_oasis']);
+function common(key, q) {
+  const air = AIR[key] || '#ffd99a';
+  const out = [
+    // боке: крупные размытые пятна света плывут у самого «объектива» — глубина кадра
+    { tex: ['glow'], add: true, area: [-120, W + 120, -80, H + 80], rate: 0.45 * q, life: [18, 28], vx: [-9, 9], vy: [-7, 3], wander: 3,
+      size: [70, 160, 90], sizeVar: 0.45, colors: [air, air], alpha: [0, 0.09, 0.09, 0], prewarm: true },
+    // мелкая пыль в воздухе, медленно кружится
+    { tex: ['dot'], add: true, area: [0, W, 0, H], rate: 2.2 * q, life: [9, 15], vx: [-5, 5], vy: [-6, 6], wander: 8, size: [2.2, 2.2], sizeVar: 0.5,
+      colors: [air, '#ffffff'], alpha: [0, 0.32, 0.25, 0], prewarm: true },
+  ];
+  // со свода время от времени сыплется пыль (на воде — капает)
+  if (key !== 'loc_sky') {
+    const drip = WATERY.has(key);
+    for (const [x, i] of [[180, 0], [760, 1], [1380, 2]]) out.push({ tex: ['dot'], at: P(x + i * 37, -6), spread: [drip ? 8 : 70, 2], burst: { every: [8 + i * 3, 17 + i * 4], count: drip ? [3, 6] : [14, 26] },
+      life: [1.6, 2.6], vx: [-5, 5], vy: [30, 70], acc: [0, drip ? 420 : 150], size: drip ? [3, 2.4] : [2.2, 1.4], sizeVar: 0.4,
+      colors: drip ? ['#e6f8ff', '#bfe6ff'] : ['#e8dcc8', '#a89880'], alpha: [0, drip ? 0.8 : 0.5, drip ? 0.7 : 0.35, 0] });
+  }
+  for (const r of SHAFTS[key] || []) out.push(...rays(...r));
+  return out;
+}
 
 // ───────────── сцены ─────────────
 function scene(key, q) {
@@ -278,7 +315,11 @@ function scene(key, q) {
 
 // ───────────── движок ─────────────
 let PIXI = null, app = null, host = null, frames = {}, dispTex = null;
-let groups = null, dim = null, vig = null, flash = null;
+let groups = null, dim = null, vig = null, flash = null, mood = null;
+// настроение сцены: в бою края кадра наливаются цветом опасности, на смене хода вспыхивают огни
+let moodA = 0, moodTarget = 0, moodColor = 0xff3a1a, moodPulse = 1.2, flare = 0;
+// ударная волна по фону (ShockwaveFilter из pixi-filters, MIT): в победу, на выход босса, на легендарку
+let Shock = null, shock = null, shockT = 0, shockEnd = 0;
 let scenes = [], current = null, quality = 1, running = false, ready = null;
 let worldA = 0, worldTarget = 0, clock = 0, lastW = 0, lastH = 0, layout = () => {};
 
@@ -304,6 +345,11 @@ function gradientTexture(kind) {
     const gr = g.createLinearGradient(0, 0, 0, 256);
     gr.addColorStop(0, 'rgba(10,8,20,.14)'); gr.addColorStop(1, 'rgba(10,8,20,.30)');
     g.fillStyle = gr; g.fillRect(0, 0, 4, 256);
+  } else if (kind === 'edge') {
+    c.width = c.height = 512;
+    const gr = g.createRadialGradient(256, 256, 120, 256, 256, 362);
+    gr.addColorStop(0, 'rgba(255,255,255,0)'); gr.addColorStop(0.6, 'rgba(255,255,255,.25)'); gr.addColorStop(1, 'rgba(255,255,255,.95)');
+    g.fillStyle = gr; g.fillRect(0, 0, 512, 512);
   } else {
     c.width = c.height = 512;
     const gr = g.createRadialGradient(256, 256, 0, 256, 256, 362);
@@ -327,18 +373,22 @@ async function init(hostEl) {
   for (const [k, [cx, cy]] of Object.entries(ATLAS)) frames[k] = new PIXI.Texture({ source: base.source, frame: new PIXI.Rectangle(cx * TEX, cy * TEX, TEX, TEX) });
   dispTex = makeNoiseTexture();
   const root = new PIXI.Container();
-  groups = { water: new PIXI.Container(), parts: new PIXI.Container(), bolts: new PIXI.Container() };
+  groups = { bg: new PIXI.Container(), water: new PIXI.Container(), parts: new PIXI.Container(), bolts: new PIXI.Container() };
+  // копия картины фона: видна только во время ударной волны, чтобы волна гнула и картину
+  groups.bg.visible = false;
   dim = new PIXI.Sprite(gradientTexture('dim')); dim.width = W; dim.height = H;
-  root.addChild(groups.water, dim, groups.parts, groups.bolts);
+  root.addChild(groups.bg, groups.water, dim, groups.parts, groups.bolts);
+  try { ({ ShockwaveFilter: Shock } = await import('/vendor/pixi-shockwave-6.1.5.min.mjs')); } catch { Shock = null; }
   vig = new PIXI.Sprite(gradientTexture('vig'));
-  flash = new PIXI.Graphics().rect(0, 0, 10, 10).fill(0xe8f0ff); flash.alpha = 0; flash.blendMode = 'add';
-  app.stage.addChild(root, vig, flash);
+  flash = new PIXI.Graphics().rect(0, 0, 10, 10).fill(0xffffff); flash.alpha = 0; flash.blendMode = 'add'; flash.tint = 0xe8f0ff;
+  mood = new PIXI.Sprite(gradientTexture('edge')); mood.blendMode = 'add'; mood.alpha = 0;
+  app.stage.addChild(root, vig, mood, flash);
   layout = () => {
     const vw = app.screen.width, vh = app.screen.height;
     lastW = vw; lastH = vh;
     const bw = Math.max(vw, vh * 16 / 9), bh = Math.max(vh, vw * 9 / 16);
     root.scale.set(bw / W); root.position.set((vw - bw) / 2, (vh - bh) / 2);
-    vig.width = vw; vig.height = vh; flash.width = vw; flash.height = vh;
+    vig.width = vw; vig.height = vh; flash.width = vw; flash.height = vh; mood.width = vw; mood.height = vh;
   };
   layout();
   app.ticker.add(t => step(Math.min(t.deltaMS / 1000, 0.05)));
@@ -364,16 +414,21 @@ function makeScene(key, bgUrl) {
   S.pcAdd = new PIXI.ParticleContainer({ texture: frames.glow, dynamicProperties: dyn }); S.pcAdd.blendMode = 'add';
   S.pcNorm = new PIXI.ParticleContainer({ texture: frames.glow, dynamicProperties: dyn });
   S.waterC = new PIXI.Container();
+  S.bgC = new PIXI.Container(); groups.bg.addChild(S.bgC);
   S.boltC = new PIXI.Container(); S.boltC.blendMode = 'add';
   S.partsC = new PIXI.Container(); S.partsC.addChild(S.pcNorm, S.pcAdd);
   groups.water.addChild(S.waterC); groups.parts.addChild(S.partsC); groups.bolts.addChild(S.boltC);
-  for (const spec of scene(key, quality)) {
+  for (const spec of [...scene(key, quality), ...common(key, quality)]) {
     if (spec.water) S.waters.push({ spec });
     else if (spec.lightning) S.bolts = { spec, next: rnd(1, 4), live: [] };
     else if (spec.glow) S.statics.push(makeStatic(S, spec));
     else S.emitters.push(makeEmitter(S, spec));
   }
-  if (S.waters.length) PIXI.Assets.load(bgUrl).then(tex => { if (!S.dead) for (const w of S.waters) buildWater(S, w, tex); }).catch(() => {});
+  PIXI.Assets.load(bgUrl).then(tex => {
+    if (S.dead) return;
+    const sp = new PIXI.Sprite(tex); sp.width = W; sp.height = H; S.bgC.addChild(sp);
+    for (const w of S.waters) buildWater(S, w, tex);
+  }).catch(() => {});
   return S;
 }
 function makeStatic(S, spec) {
@@ -468,6 +523,9 @@ function updEmitter(E, dt, fade, time) {
 function updStatic(St, dt, fade, time) {
   const s = St.spec;
   let a = s.alpha;
+  // огни вспыхивают ярче на смене хода и в победу
+  if (s.flicker && flare > 0) a *= 1 + flare * 0.9;
+  if (s.swing) St.p.rotation = (s.rotation || 0) + Math.sin(time * s.swing[1] * 6.28 + St.ph) * s.swing[0];
   if (St.boost !== undefined) { St.boost = Math.max(0, St.boost - dt * 2.5); a = 0.55 * St.boost; }
   if (s.flicker) { St.fl = lerp(St.fl, 1 - Math.random() * s.flicker, 0.35); a *= St.fl; }
   if (s.pulse) a *= 1 - s.pulse[1] * (0.5 + 0.5 * Math.sin(time * s.pulse[0] * 6.28 + St.ph));
@@ -506,7 +564,7 @@ function updBolts(S, dt, fade) {
     bolt(mid[0], mid[1], mid[0] + rnd(-140, 140), mid[1] + rnd(80, 200), g, 1.3);
     S.boltC.addChild(g);
     B.live.push({ g, age: 0, life: 0.45 });
-    flash.alpha = 0.16;
+    flash.tint = 0xe8f0ff; flash.alpha = 0.16;
     B.next = rnd(...B.spec.every);
   }
   for (const b of B.live) { b.age += dt; b.g.alpha = b.age > b.life ? 0 : (Math.random() < 0.25 ? 0.25 : 1) * (1 - b.age / b.life) * fade; }
@@ -514,9 +572,9 @@ function updBolts(S, dt, fade) {
 }
 function dropScene(S) {
   S.dead = true;
-  S.waterC.destroy({ children: true }); S.partsC.destroy({ children: true }); S.boltC.destroy({ children: true });
-  // картинку фона для воды держим в памяти видеокарты, только пока она нужна
-  if (S.waters.length && !scenes.some(o => o.bgUrl === S.bgUrl)) PIXI.Assets.unload(S.bgUrl).catch(() => {});
+  S.waterC.destroy({ children: true }); S.partsC.destroy({ children: true }); S.boltC.destroy({ children: true }); S.bgC.destroy({ children: true });
+  // картинку фона держим в памяти видеокарты, только пока она нужна
+  if (!scenes.some(o => o.bgUrl === S.bgUrl)) PIXI.Assets.unload(S.bgUrl).catch(() => {});
 }
 function step(dt) {
   clock += dt;
@@ -524,10 +582,18 @@ function step(dt) {
   worldA += Math.sign(worldTarget - worldA) * Math.min(Math.abs(worldTarget - worldA), dt / 1.3);
   dim.alpha = vig.alpha = worldA;
   if (flash.alpha > 0) flash.alpha = Math.max(0, flash.alpha - dt * 0.9);
+  moodA += Math.sign(moodTarget - moodA) * Math.min(Math.abs(moodTarget - moodA), dt / 0.9);
+  mood.alpha = moodA * worldA * (0.72 + 0.28 * Math.sin(clock * moodPulse * 6.28));
+  mood.tint = moodColor;
+  if (flare > 0) flare = Math.max(0, flare - dt * 1.1);
+  if (shock) {
+    shockT += dt; shock.time = shockT;
+    if (shockT >= shockEnd) { app.stage.filters = null; shock.destroy(); shock = null; groups.bg.visible = false; }
+  }
   for (const S of scenes) {
     S.alpha += Math.sign(S.target - S.alpha) * Math.min(Math.abs(S.target - S.alpha), dt / 1.2);
     const f = S.alpha;
-    S.waterC.alpha = f;
+    S.waterC.alpha = f; S.bgC.alpha = f;
     for (const E of S.emitters) {
       updEmitter(E, dt, f, clock);
       if (E.burst) for (const St of S.statics) if (St.boost !== undefined) St.boost = 1;
@@ -561,6 +627,27 @@ export async function showVfx(hostEl, key, bgUrl) {
   const same = scenes.find(S => S.key === key);
   for (const S of scenes) S.target = S === same ? 1 : 0;
   if (!same) scenes.push(makeScene(key, bgUrl));
+}
+// Настроение фона от событий партии: бой, вспышки, огни
+export function vfxMood(kind, o = {}) {
+  if (!app) return;
+  if (kind === 'combat') { moodTarget = o.boss ? 0.5 : o.losing ? 0.36 : 0.24; moodColor = o.boss ? 0xc23cff : o.losing ? 0xff3218 : 0xff7a2a; moodPulse = o.boss ? 1.6 : o.losing ? 1.1 : 0.6; }
+  else if (kind === 'calm') moodTarget = 0;
+  else if (kind === 'flash') { flash.tint = o.color ?? 0xffffff; flash.alpha = Math.max(flash.alpha, o.alpha ?? 0.2); }
+  else if (kind === 'flare') flare = Math.max(flare, o.n ?? 1);
+  else if (kind === 'shock' && Shock && running) {
+    // экранная точка → точка холста (фон слегка увеличен и смещён параллаксом)
+    const r = app.canvas.getBoundingClientRect(), sw = app.screen.width / (r.width || 1), sh = app.screen.height / (r.height || 1);
+    const x = ((o.x ?? innerWidth / 2) - r.left) * sw, y = ((o.y ?? innerHeight / 2) - r.top) * sh;
+    const radius = Math.hypot(app.screen.width, app.screen.height) * 0.8, speed = 1100;
+    if (shock) shock.destroy();
+    shock = new Shock({ center: { x, y }, speed, amplitude: 22 * (o.power ?? 1), wavelength: 170, brightness: 1.12, radius });
+    shock.resolution = quality < 1 ? 0.5 : 1;
+    shockT = 0; shockEnd = radius / speed + 0.1;
+    app.stage.filterArea = app.screen;
+    app.stage.filters = [shock];
+    groups.bg.visible = true;
+  }
 }
 export function hideVfx() {
   current = null;

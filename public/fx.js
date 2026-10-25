@@ -133,6 +133,12 @@ function draw(p, a) {
       ctx.fillStyle = p.color; ctx.beginPath();
       ctx.moveTo(p.x, p.y - s * 1.4); ctx.quadraticCurveTo(p.x + s, p.y, p.x, p.y + s * 0.8); ctx.quadraticCurveTo(p.x - s, p.y, p.x, p.y - s * 1.4); ctx.fill();
       break;
+    case 'ring': {
+      // ударная волна: кольцо расширяется и тает, толщина убывает
+      ctx.strokeStyle = p.color; ctx.lineWidth = Math.max(0.5, (p.lw || 4) * (p.life / p.max));
+      ctx.beginPath(); ctx.arc(p.x, p.y, s, 0, Math.PI * 2); ctx.stroke();
+      break;
+    }
     case 'rock':
       ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot);
       ctx.fillStyle = p.color; ctx.beginPath(); ctx.moveTo(-s, -s * 0.4); ctx.lineTo(-s * 0.2, -s); ctx.lineTo(s, -s * 0.3); ctx.lineTo(s * 0.6, s * 0.8); ctx.lineTo(-s * 0.7, s * 0.7); ctx.closePath(); ctx.fill();
@@ -288,8 +294,40 @@ export const fx = {
       loc_cove: { shape: 'drop', colors: ['#9ff0f5', '#bff7fa'], g: 400, vy: [-120, -20], y: 0.3 },
       loc_library: { shape: 'dot', colors: ['#c78bff', '#e9d8ff', '#fff3b0'], g: -30, vy: [-60, -20], y: 0.3, add: true },
       loc_oasis: { shape: 'coin', colors: ['#f5c14e'], g: 500, vy: [-240, -100], y: 0.2 },
+      loc_flooded: { shape: 'drop', colors: ['#cfefff', '#9fd8e8'], g: 420, vy: [-140, -40], y: 0.3 },
+      loc_grove: { shape: 'dot', colors: ['#8dffe8', '#3fe0d0', '#ffd27a'], g: -30, vy: [-60, -20], y: 0.3, add: true },
+      loc_koschei: { shape: 'smoke', colors: ['rgba(120,255,170,.3)', 'rgba(255,215,120,.25)'], g: -10, vy: [-30, -5], y: 0.2 },
     }[kind] || { shape: 'dot', colors: PAL.gold, g: -30, vy: [-60, -20], y: 0.3, add: true };
     emit(30, c, () => ({ x: c.x + rnd(-c.w / 2, c.w / 2), y: c.y + c.h * spec.y + rnd(-c.h * 0.3, c.h * 0.3), vx: rnd(-30, 30), vy: rnd(...spec.vy), g: spec.g, size: spec.shape === 'glow' ? rnd(6, 12) : spec.shape === 'smoke' ? rnd(10, 18) : rnd(2.5, 5), grow: spec.shape === 'smoke' ? 14 : 0, vr: rnd(-6, 6), color: pick(spec.colors), shape: spec.shape, add: spec.add, life: rnd(1, 2), fadeIn: true, delay: rnd(0, 0.6), wob: 2 }));
+  },
+
+  // ударная волна: одно или несколько колец от центра
+  ring(el, o = {}) {
+    const c = el?.x !== undefined && !el.getBoundingClientRect ? { w: 0, h: 0, ...el } : center(el);
+    const n = o.n || 1;
+    for (let i = 0; i < n; i++) emit(1, c, () => ({ shape: 'ring', size: o.size || Math.max(18, c.w * 0.3), grow: o.grow || 520, lw: o.width || 5, color: o.color || 'rgba(255,224,150,.9)', add: true, life: o.life || 0.6, fade: 1.2, delay: i * (o.gap || 0.12) }));
+  },
+  // лучи света: вращающийся «солнечный» веер за элементом
+  rays(el, o = {}) {
+    if (reduced()) return;
+    const c = center(el);
+    const d = document.createElement('div');
+    d.className = 'fx-rays ' + (o.cls || '');
+    const size = o.size || Math.max(c.w, c.h) * 2.6;
+    d.style.cssText = `left:${c.x}px;top:${c.y}px;width:${size}px;height:${size}px;--rc:${o.color || '255,214,120'};--dur:${o.dur || 1800}ms`;
+    document.body.append(d);
+    setTimeout(() => d.remove(), (o.dur || 1800) + 60);
+    return d;
+  },
+  // косой росчерк удара поперёк элемента
+  slash(el, o = {}) {
+    if (reduced()) return;
+    const c = center(el);
+    const d = document.createElement('div');
+    d.className = 'fx-slash ' + (o.cls || '');
+    d.style.cssText = `left:${c.x}px;top:${c.y}px;width:${Math.max(c.w, 120) * 1.5}px;--sc:${o.color || '255,240,210'};--ang:${o.angle ?? -28}deg`;
+    document.body.append(d);
+    setTimeout(() => d.remove(), 520);
   },
 
   // ───────────── DOM-эффекты ─────────────
