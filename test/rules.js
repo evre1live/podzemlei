@@ -393,7 +393,7 @@ t('локации: библиотека, небесная цитадель, та
   assert.equal(combatNumbers(s).treasures, 4);
 });
 
-t('ник «Еврей»: обе легендарки приходят ему по ходу игры', () => {
+t('ник «Еврей»: все легендарки приходят ему по ходу игры', () => {
   for (const nick of ['Еврей', 'EVRE1', ' evre1 ']) {
     const s = createGame([{ id: 'a', name: 'Аня' }, { id: 'b', name: nick }, { id: 'c', name: 'Вова' }], {}, rng);
     assert.ok(s.rig && s.rig.pid === 'b');
@@ -402,19 +402,19 @@ t('ник «Еврей»: обе легендарки приходят ему п
     for (const p of s.players) { for (const u of p.hand) s.discard[def(u).deck].push(u); p.hand = []; }
     const b = P(s, 'b');
     const owned = () => [...b.hand, ...b.equipped, ...b.carried].filter(u => def(u).rarity === 'legendary');
-    for (let i = 0; i < 20 && owned().length < 2; i++) {
+    for (let i = 0; i < 40 && owned().length < 4; i++) {
       s.turn = { idx: 1, pid: 'b', step: 'pre', n: i + 1, hoardPlayed: false };
       b.hand.push(take(s, 'h_hoard#' + (i % 2)));
       A(s, 'b', { type: 'playCard', uid: 'h_hoard#' + (i % 2) });
       s.discard.treasure.push(...b.hand.filter(u => def(u).rarity !== 'legendary'));
       b.hand = b.hand.filter(u => def(u).rarity === 'legendary');
     }
-    assert.deepEqual(owned().map(u => def(u).id).sort(), ['i_godarmor', 'p_golddragon']);
+    assert.deepEqual(owned().map(u => def(u).id).sort(), ['i_ares', 'i_excalibur', 'i_godarmor', 'p_golddragon']);
   }
   const s = createGame([{ id: 'a', name: 'Аня' }, { id: 'b', name: 'Боря' }], {}, rng);
   assert.equal(s.rig, undefined);
   const all = [...s.decks.treasure, ...s.players.flatMap(p => p.hand)];
-  assert.ok(all.includes('i_godarmor#0') && all.includes('p_golddragon#0'));
+  assert.ok(['i_godarmor#0', 'i_ares#0', 'i_excalibur#0', 'p_golddragon#0'].every(u => all.includes(u)));
 });
 
 t('ник «Еврей»: если клада нет, легендарка находится сама в начале хода', () => {
@@ -873,6 +873,39 @@ t('бот выкладывает выгодную локацию', () => {
   s.turn.step = 'post';
   const a = botDecide(s, 'p0', { rng, now: 1000 });
   assert.deepEqual(a, { type: 'playCard', uid: 'loc_library#0' });
+});
+
+t('комплекты: легендарный +10 сверху, шахтёрский +3 и побег, подгорного короля против огненных', () => {
+  const s = fresh(); const p = P(s, 'p0'); p.level = 3;
+  const eq = id => { p.hand.push(take(s, id + '#0')); assert.equal(A(s, 'p0', { type: 'playCard', uid: id + '#0' }).ok, true); };
+  eq('i_godarmor'); eq('i_ares');
+  assert.deepEqual(p.equipped, ['i_godarmor#0', 'i_ares#0']);
+  assert.equal(view(s, 'p0').players[0].power, 3 + 10 + 7);
+  eq('i_excalibur');
+  assert.deepEqual(view(s, 'p0').players[0].sets, ['legend']);
+  assert.equal(view(s, 'p0').players[0].power, 3 + 10 + 7 + 7 + 10);
+  // экскалибур держится обеими руками, легендарки не украсть
+  assert.equal(def('i_excalibur#0').hands, 2);
+  assert.ok(['i_ares', 'i_excalibur'].every(id => def(id).noSteal && def(id).rarity === 'legendary'));
+  // снял одну вещь — комплект распался
+  s.turn.step = 'pre';
+  A(s, 'p0', { type: 'unequip', uid: 'i_ares#0' });
+  assert.deepEqual(view(s, 'p0').players[0].sets, []);
+  assert.equal(view(s, 'p0').players[0].power, 3 + 10 + 7);
+
+  const s2 = fresh(); const q = P(s2, 'p0');
+  for (const id of ['i_helmet', 'i_overalls', 'i_pick']) { q.hand.push(take(s2, id + '#0')); A(s2, 'p0', { type: 'playCard', uid: id + '#0' }); }
+  const v = view(s2, 'p0').players[0];
+  assert.deepEqual(v.sets, ['miner']);
+  assert.equal(v.power, 1 + 1 + 2 + 3 + 3);
+  assert.equal(v.runBonus, 1);
+
+  const s3 = fresh(); const r = P(s3, 'p0'); r.level = 5;
+  for (const id of ['i_kingcrown', 'i_kingmail', 'i_kinghammer']) { r.hand.push(take(s3, id + '#0')); A(s3, 'p0', { type: 'playCard', uid: id + '#0' }); }
+  assert.equal(view(s3, 'p0').players[0].power, 5 + 9 + 3);
+  s3.decks.door.push(take(s3, 'm_salamander#0'));
+  A(s3, 'p0', { type: 'kick' });
+  assert.equal(combatNumbers(s3).heroes, 5 + 9 + 3 + 5);
 });
 
 console.log(`Правила: ${n} проверок пройдено.`);

@@ -1,7 +1,7 @@
 // «Под Землёй» — игровой движок. Чистые функции над JSON-состоянием.
 // Сервер хранит состояние, вызывает act()/tick() и рассылает view() каждому игроку.
 import { def, allUids, RACE_NAMES, CLASS_NAMES, ruleText, BOSS_MULT, BOSS_MIN_LEVEL, BOSS_FLOOR, TROUBLE_BONUS, WITCHER_BONUS, MUTAGEN_BONUS, LULLABY_PENALTY, LULLABY_MAX, DISTILL_COST,
-  DEPTH, DEPTH_TREASURE_EVERY, DEATH_LEVELS, GHOST_BONUS, CONTRACTS, CONTRACT_DEFS, rewardText } from './cards.js';
+  DEPTH, DEPTH_TREASURE_EVERY, DEATH_LEVELS, GHOST_BONUS, CONTRACTS, CONTRACT_DEFS, SETS, rewardText } from './cards.js';
 
 export const WIN_LEVEL = 10;
 // до какого уровня идёт партия: 10 по умолчанию, в лобби можно выбрать 15 или 20
@@ -81,7 +81,9 @@ function setupRig(s, rng) {
   const legend = s.decks.treasure.filter(isLegend);
   if (!lucky || !legend.length) return;
   s.decks.treasure = s.decks.treasure.filter(u => !isLegend(u));
-  legend.sort((a, b) => (def(a).slot === 'armor' ? 0 : 1) - (def(b).slot === 'armor' ? 0 : 1));
+  // сначала доспехи, потом шлем и меч — легендарный комплект собирается по порядку, дракон последним
+  const order = u => ({ armor: 0, head: 1, hand: 2 }[def(u).slot] ?? 3);
+  legend.sort((a, b) => order(a) - order(b));
   s.rig = { pid: lucky.id, queue: legend, got: 0, next: 2 + Math.floor(rng() * 3), turns: 0, dueTurn: 4 };
 }
 // карта клада для конкретного героя (с учётом секрета)
@@ -153,7 +155,17 @@ export function itemBonus(p, s = null) {
     if (d.clsBonus && hasClass(p, d.clsBonus.cls)) v += d.clsBonus.n;
     if (s && d.vsTag && combatHasTag(s, d.vsTag.tag)) v += d.vsTag.n;
   }
+  for (const k of setsOf(p)) {
+    const st = SETS[k];
+    v += st.bonus || 0;
+    if (s && st.vsTag && combatHasTag(s, st.vsTag.tag)) v += st.vsTag.n;
+  }
   return v;
+}
+// собранные комплекты: все вещи комплекта надеты
+export function setsOf(p) {
+  const have = new Set(p.equipped.map(u => def(u).id));
+  return Object.keys(SETS).filter(k => SETS[k].items.every(id => have.has(id)));
 }
 // постоянные бонусы расы, класса и локации (без боевых)
 export function passiveBonus(s, p) {
@@ -173,6 +185,7 @@ export const powerOf = (s, p) => p.level + itemBonus(p) + passiveBonus(s, p);
 export function runBonusOf(s, p) {
   let b = (hasRace(p, 'elf') ? 1 : 0) + (hasRace(p, 'molefolk') ? 2 : 0) + (p.nextEscape || 0);
   for (const u of p.equipped) b += def(u).runBonus || 0;
+  for (const k of setsOf(p)) b += SETS[k].run || 0;
   b += locationOf(s)?.escapeAll || 0;
   return b;
 }
@@ -1529,7 +1542,7 @@ export function view(s, pid) {
       level: p.level, races: [...p.races], classes: [...p.classes], halfbreed: p.halfbreed, supermunch: p.supermunch,
       equipped: [...p.equipped], carried: [...p.carried], nextCombat: p.nextCombat, nextEscape: p.nextEscape || 0,
       dead: p.dead, handCount: p.hand.length, handLimit: handLimit(p, s), handsLimit: handsLimit(p), mutagenUsed: !!p.mutagenUsed,
-      power: powerOf(s, p), runBonus: runBonusOf(s, p), ghost: isGhost(p), persona: p.persona || null, contractsDone: p.contractsDone || 0,
+      power: powerOf(s, p), runBonus: runBonusOf(s, p), sets: setsOf(p), ghost: isGhost(p), persona: p.persona || null, contractsDone: p.contractsDone || 0,
       hand: p.id === pid ? [...p.hand] : undefined,
       contract: p.id === pid && p.contract && CONTRACT_DEFS[p.contract.id] ? { ...CONTRACT_DEFS[p.contract.id], progress: p.contract.progress, rewardText: rewardText(CONTRACT_DEFS[p.contract.id].reward) } : undefined,
     })),

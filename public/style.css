@@ -1610,3 +1610,11 @@ label { color: var(--text-2); font-size: 14px; }
   .card .c-name.long { font-size: 10px; } .card .c-name.xlong { font-size: 9.4px; }
   .card .c-text { font-size: 9px; padding-top: 10px; }
 }
+
+/* комплекты снаряжения под слотами героя */
+.sets { display: grid; gap: 4px; margin-top: 8px; }
+.set-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 5px 8px; border-radius: 6px; border: 1px solid var(--edge); background: rgba(255,255,255,.03); font-size: 12.5px; color: var(--muted); }
+.set-row .gi { width: 16px; height: 16px; color: var(--muted); flex: none; }
+.set-row b { color: var(--text-2); font-weight: 600; }
+.set-row.done { border-color: rgba(214,168,90,.55); background: rgba(214,168,90,.08); color: var(--text-2); }
+.set-row.done .gi, .set-row.done b { color: var(--gold-hi); }

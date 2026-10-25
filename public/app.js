@@ -1,5 +1,5 @@
 // «Под Землёй» — клиент.
-import { def, RACE_NAMES, CLASS_NAMES, setRuleVars, ruleText, BOSS_FLOOR, TROUBLE_BONUS, LULLABY_PENALTY, MUTAGEN_BONUS, DISTILL_COST,
+import { def, RACE_NAMES, CLASS_NAMES, SETS, setRuleVars, ruleText, BOSS_FLOOR, TROUBLE_BONUS, LULLABY_PENALTY, MUTAGEN_BONUS, DISTILL_COST,
   PERSONAS, GHOST_BONUS, DEATH_LEVELS, DEPTH, DEPTH_TREASURE_EVERY, TRADE_TIMEOUT_MS } from '/shared/cards.js';
 import { esc, cardHTML, chipHTML, avatarSVG, iconSVG, cardBackSVG, locationSVG, cardIcon } from '/art.js';
 import { fx } from '/fx.js';
@@ -750,6 +750,18 @@ requestAnimationFrame(tickCountdowns);
 
 // ───────────────────────── мой стол ─────────────────────────
 const SLOT_ORDER = [['head', 'Головняк'], ['armor', 'Броник'], ['feet', 'Обувка'], ['hand', 'В руках'], ['pet', 'Питомец'], ['none', 'Прочее']];
+// комплекты снаряжения: собранные и начатые (надета хоть одна вещь)
+function setsHTML(p) {
+  const have = new Set(p.equipped.map(u => def(u).id));
+  const rows = Object.entries(SETS).map(([k, st]) => {
+    const n = st.items.filter(id => have.has(id)).length;
+    if (!n) return '';
+    const done = (p.sets || []).includes(k);
+    const missing = st.items.filter(id => !have.has(id)).map(id => def(id).name).join(', ');
+    return `<div class="set-row${done ? ' done' : ''}" title="${esc(st.text)}">${ico(done ? 'crown' : 'armor-upgrade')}<b>${esc(st.name)}</b><span>${done ? esc(st.text.split(': ').pop()) : `${n} из ${st.items.length} — не хватает: ${esc(missing)}`}</span></div>`;
+  }).join('');
+  return rows ? `<div class="sets">${rows}</div>` : '';
+}
 const ABIL = {
   rage: { cls: 'warrior', label: 'Ярость', tip: 'Сбросьте до 3 карт: +1 к силе за каждую' },
   turn: { cls: 'cleric', label: 'Изгнание', tip: 'Против нежити: до 3 карт, +3 за каждую' },
@@ -800,6 +812,7 @@ function renderMine() {
     ${p.ghost ? `<div class="ghost-note">${ico('ghost')} Вы призрак до своего хода: раз за ход можно подкинуть +${GHOST_BONUS} героям или монстрам в чужом бою.</div>` : ''}
     ${contractHTML(p)}
     <div class="slots">${slots}</div>
+    ${setsHTML(p)}
     ${abil ? `<div class="abilities">${abil}</div>` : ''}
     ${tradeWaitHTML()}`;
 
@@ -844,7 +857,8 @@ function renderWatcher() {
       </div>
     </div>
     <div class="traits">${traits.join('')}</div>
-    <div class="slots">${slots}</div>`;
+    <div class="slots">${slots}</div>
+    ${setsHTML(p)}`;
   $('#handhead').innerHTML = `<span class="follow-row"><span>Следить за</span>${g.players.map(x => `<button class="follow${x.id === p.id ? ' on' : ''}" data-follow="${x.id}" style="--seat:${x.color}" title="${esc(x.name)}" aria-pressed="${x.id === p.id}"><span class="ava">${avatarSVG(gAva(x), x.color)}</span></button>`).join('')}</span>
     <span>У ${esc(p.name)} в руке ${cardsNom(p.handCount)} — их видит только сам игрок.</span>`;
   $('#modebar').innerHTML = '';
@@ -1044,6 +1058,7 @@ function openOppPop(pid) {
   showOverlay(`<div class="modal" role="dialog" aria-label="${esc(p.name)}">
     <div class="row"><span class="me-ava" style="--seat:${p.color}">${avatarSVG(gAva(p), p.color)}</span><div><h2>${esc(p.name)}</h2><div class="me-stats"><span class="lvl">${p.level}</span><span class="pow">${ico('crossed-swords')}${p.power}</span><span class="badge">${esc(raceText(p))}, ${esc(classText(p))}</span><span class="handcount"><i></i>${p.handCount}</span></div></div></div>
     <div class="opp-items" data-zone-view>${items}</div>
+    ${setsHTML(p)}
     ${popOpts.length ? `<div class="pop-actions">${popOpts.map((o, i) => `<button class="btn ${o.cls}" data-popopt="${i}">${esc(o.label)}</button>`).join('')}</div>` : ''}
     <button class="btn ghost" data-act="closeOverlay">Закрыть</button>
   </div>`);

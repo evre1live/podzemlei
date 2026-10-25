@@ -68,6 +68,13 @@ export const CONTRACTS = [
   { id: 'q_trade', name: 'Купец', text: 'Обменяйся вещами с другим игроком.', ev: 'trade', need: 1, reward: { treasures: 2 } },
 ];
 export const CONTRACT_DEFS = Object.fromEntries(CONTRACTS.map(k => [k.id, k]));
+
+// Комплекты снаряжения: все вещи комплекта надеты — сверху бонус (bonus — к силе, run — к побегу, vsTag — против меток монстров).
+export const SETS = {
+  legend: { name: 'Легендарный', items: ['i_godarmor', 'i_ares', 'i_excalibur'], bonus: 10, text: 'Доспехи Бога, Шлем Ареса и Меч Экскалибур вместе: ещё +10 к силе.' },
+  miner: { name: 'Шахтёрский', items: ['i_helmet', 'i_overalls', 'i_pick'], bonus: 3, run: 1, text: 'Каска шахтёра, Роба шахтёра и Кирка ударника вместе: +3 к силе и +1 к побегу.' },
+  king: { name: 'Подгорного короля', items: ['i_kingcrown', 'i_kingmail', 'i_kinghammer'], bonus: 3, vsTag: { tag: 'fire', n: 5 }, text: 'Венец, кольчуга и молот подгорного короля вместе: +3 к силе, против огненных ещё +5.' },
+};
 export const rewardText = r => (r.levels ? `+${r.levels} уровень` : `${r.treasures} карты клада`);
 const BOSS = (id, name, extra) => ({
   id, deck: 'door', type: 'monster', boss: true, name, level: BOSS_LEVEL, treasures: 5, levels: 2, copies: 1, rarity: 'epic',
@@ -470,7 +477,8 @@ export const CARD_DEFS = [
 
   // ───────────── КЛАД: ВЕЩИ ─────────────
   // slot: head | armor | feet | hand | none | pet ; hands: 1|2|3 ; big ; tags: ['light','water'] ; vsTag ; clsBonus
-  { id: 'i_helmet', deck: 'treasure', type: 'item', name: 'Каска шахтёра', slot: 'head', bonus: 1, value: 200, copies: 2, art: 'helmet' },
+  { id: 'i_helmet', deck: 'treasure', type: 'item', name: 'Каска шахтёра', slot: 'head', bonus: 1, value: 200, copies: 2, art: 'helmet', set: 'miner',
+    text: 'Комплект «Шахтёрский».' },
   { id: 'i_headlamp', deck: 'treasure', type: 'item', name: 'Налобный фонарь', slot: 'head', bonus: 2, value: 400, art: 'lamp', tags: ['light'],
     text: 'Светит в глаза монстрам. Источник света.' },
   { id: 'i_hardlamp', deck: 'treasure', type: 'item', name: 'Каска с прожектором', slot: 'head', bonus: 2, value: 500, art: 'hardlamp', tags: ['light'], rarity: 'rare',
@@ -483,8 +491,17 @@ export const CARD_DEFS = [
   { id: 'i_diver', deck: 'treasure', type: 'item', name: 'Скафандр водолаза', slot: 'armor', bonus: 3, value: 600, big: true, art: 'diver', tags: ['water'],
     runBonus: -1, text: '−1 к побегу: в нём не побегаешь.' },
   { id: 'i_godarmor', deck: 'treasure', type: 'item', name: 'Доспехи Бога', slot: 'armor', bonus: 10, value: 0, art: 'godarmor',
-    rarity: 'legendary', noSteal: true, req: { race: 'human' },
-    text: 'Легендарная броня. Носит только человек — герой без расы. Плут не может её украсть.' },
+    rarity: 'legendary', noSteal: true, req: { race: 'human' }, set: 'legend',
+    text: 'Легендарная броня. Носит только человек — герой без расы. Плут не может её украсть. Комплект «Легендарный».' },
+  { id: 'i_ares', deck: 'treasure', type: 'item', name: 'Шлем Ареса', slot: 'head', bonus: 7, value: 0, art: 'ares',
+    rarity: 'legendary', noSteal: true, set: 'legend',
+    text: 'Легендарный шлем бога войны. Плут не может его украсть. Комплект «Легендарный»: с Доспехами Бога и Мечом Экскалибур ещё +10.' },
+  { id: 'i_overalls', deck: 'treasure', type: 'item', name: 'Роба шахтёра', slot: 'armor', bonus: 2, value: 400, art: 'overalls', set: 'miner',
+    text: 'Брезент, лямки, карманы для всего. Комплект «Шахтёрский».' },
+  { id: 'i_kingmail', deck: 'treasure', type: 'item', name: 'Кольчуга подгорного короля', slot: 'armor', bonus: 3, value: 600, art: 'kingmail', rarity: 'rare', set: 'king',
+    text: 'Кольца выкованы в лаве. Комплект «Подгорного короля».' },
+  { id: 'i_kingcrown', deck: 'treasure', type: 'item', name: 'Венец подгорного короля', slot: 'head', bonus: 3, value: 600, art: 'kingcrown', rarity: 'rare', set: 'king',
+    text: 'Тяжёлый, как корона, и надёжный, как каска. Комплект «Подгорного короля».' },
   { id: 'i_robe', deck: 'treasure', type: 'item', name: 'Мантия архивариуса', slot: 'armor', bonus: 3, value: 600, art: 'robe', rarity: 'rare',
     req: { cls: 'mage' }, text: 'Только для магов.' },
   { id: 'i_boots', deck: 'treasure', type: 'item', name: 'Резиновые сапоги', slot: 'feet', bonus: 1, value: 200, art: 'boots' },
@@ -493,7 +510,13 @@ export const CARD_DEFS = [
   { id: 'i_slippers', deck: 'treasure', type: 'item', name: 'Тапки бесшумные', slot: 'feet', bonus: 1, value: 300, art: 'slippers',
     runBonus: 1, text: '+1 к побегу.' },
   { id: 'i_shovel', deck: 'treasure', type: 'item', name: 'Совковая лопата', slot: 'hand', hands: 1, bonus: 2, value: 200, copies: 2, art: 'shovel' },
-  { id: 'i_pick', deck: 'treasure', type: 'item', name: 'Кирка ударника', slot: 'hand', hands: 2, bonus: 3, value: 400, art: 'pick' },
+  { id: 'i_pick', deck: 'treasure', type: 'item', name: 'Кирка ударника', slot: 'hand', hands: 2, bonus: 3, value: 400, art: 'pick', set: 'miner',
+    text: 'Комплект «Шахтёрский».' },
+  { id: 'i_excalibur', deck: 'treasure', type: 'item', name: 'Меч Экскалибур', slot: 'hand', hands: 2, bonus: 7, value: 0, art: 'excalibur',
+    rarity: 'legendary', noSteal: true, set: 'legend',
+    text: 'Легендарный меч из камня. Держится обеими руками. Плут не может его украсть. Комплект «Легендарный».' },
+  { id: 'i_kinghammer', deck: 'treasure', type: 'item', name: 'Молот подгорного короля', slot: 'hand', hands: 1, bonus: 3, value: 600, art: 'kinghammer', rarity: 'rare', set: 'king',
+    text: 'Бьёт, как обвал. Комплект «Подгорного короля».' },
   { id: 'i_jackhammer', deck: 'treasure', type: 'item', name: 'Отбойный молоток', slot: 'hand', hands: 2, bonus: 5, value: 800, big: true, art: 'hammer', rarity: 'rare' },
   { id: 'i_drill', deck: 'treasure', type: 'item', name: 'Перфоратор механика', slot: 'hand', hands: 3, bonus: 6, value: 800, big: true, art: 'drill', rarity: 'epic',
     req: { cls: 'engineer' }, text: 'Держится тремя руками — только для механиков.' },
