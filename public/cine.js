@@ -204,35 +204,44 @@ export function phase(el) {
 
 // ───────────── картинки ─────────────
 const INK = '#231a26';
+// дверь подземелья: тёмный дуб с железными полосами и заклёпками в каменной арке (текстуры /ui/v1)
 const leaf = side => {
   const L1 = side === 'l';
   const shape = L1 ? 'M0 270 V105 A105 105 0 0 1 105 0 V270 Z' : 'M105 270 V105 A105 105 0 0 0 0 0 V270 Z';
   const id = 'cnLeaf' + side;
   let planks = '';
-  for (let i = 0; i < 4; i++) planks += `<rect x="${i * 26.25}" y="0" width="26.5" height="270" fill="${i % 2 ? '#7a4b2c' : '#8f5a35'}"/><path d="M${i * 26.25 + 6} ${40 + i * 30} q4 6 0 12" stroke="#5e3a20" stroke-width="2" fill="none"/>`;
+  for (let i = 0; i < 4; i++) planks += `<rect x="${i * 26.25}" y="0" width="26.5" height="270" fill="url(#${id}w)"/><rect x="${i * 26.25}" y="0" width="26.5" height="270" fill="#000" opacity="${[0.05, 0.18, 0.1, 0.22][i]}"/>`;
   let bands = '';
-  for (const y of [72, 200]) {
-    bands += `<rect x="0" y="${y}" width="105" height="13" fill="#4a4450"/><rect x="0" y="${y}" width="105" height="3" fill="#6d6676"/>`;
-    for (const x of [12, 38, 64, 90]) bands += `<circle cx="${x}" cy="${y + 6.5}" r="2.6" fill="#c9c1b4"/>`;
+  for (const y of [70, 198]) {
+    bands += `<rect x="0" y="${y}" width="105" height="15" fill="url(#${id}i)"/><rect x="0" y="${y}" width="105" height="15" fill="url(#${id}b)"/>`;
+    for (const x of [10, 36, 62, 88]) bands += `<circle cx="${x}" cy="${y + 7.5}" r="2.8" fill="#2a2420"/><circle cx="${x - 0.6}" cy="${y + 6.8}" r="1.6" fill="#a89a88"/>`;
   }
   const hx = L1 ? 88 : 17;
-  return `<svg class="cn-leaf ${side}" viewBox="0 0 105 270" aria-hidden="true"><defs><clipPath id="${id}"><path d="${shape}"/></clipPath><linearGradient id="${id}g" x1="0" x2="1"><stop offset="0" stop-color="#000" stop-opacity="${L1 ? 0 : 0.28}"/><stop offset="1" stop-color="#000" stop-opacity="${L1 ? 0.28 : 0}"/></linearGradient></defs>
-    <g clip-path="url(#${id})">${planks}<path d="M26.25 0 V270 M52.5 0 V270 M78.75 0 V270" stroke="#4d2f1a" stroke-width="2.2"/>${bands}<rect width="105" height="270" fill="url(#${id}g)"/></g>
-    <circle cx="${hx}" cy="150" r="5" fill="#b8862b" stroke="${INK}" stroke-width="2"/><circle cx="${hx}" cy="163" r="9" fill="none" stroke="#e8c15a" stroke-width="3.5"/><circle cx="${hx}" cy="163" r="9" fill="none" stroke="${INK}" stroke-width="1.2" opacity=".6"/>
-    <path d="${shape}" fill="none" stroke="${INK}" stroke-width="4"/></svg>`;
+  return `<svg class="cn-leaf ${side}" viewBox="0 0 105 270" aria-hidden="true"><defs><clipPath id="${id}"><path d="${shape}"/></clipPath>
+    <pattern id="${id}w" width="105" height="160" patternUnits="userSpaceOnUse"><image href="/ui/v1/wood.webp" width="105" height="160" preserveAspectRatio="none"/></pattern>
+    <pattern id="${id}i" width="64" height="64" patternUnits="userSpaceOnUse"><image href="/ui/v1/iron.webp" width="64" height="64"/></pattern>
+    <linearGradient id="${id}b" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#d8cfc0" stop-opacity=".35"/><stop offset=".3" stop-color="#000" stop-opacity=".25"/><stop offset="1" stop-color="#000" stop-opacity=".7"/></linearGradient>
+    <linearGradient id="${id}g" x1="0" x2="1"><stop offset="0" stop-color="#000" stop-opacity="${L1 ? 0 : 0.45}"/><stop offset="1" stop-color="#000" stop-opacity="${L1 ? 0.45 : 0}"/></linearGradient></defs>
+    <g clip-path="url(#${id})">${planks}<path d="M26.25 0 V270 M52.5 0 V270 M78.75 0 V270" stroke="#0e0805" stroke-width="2"/>${bands}<rect width="105" height="270" fill="url(#${id}g)"/></g>
+    <circle cx="${hx}" cy="150" r="5" fill="#3a332c" stroke="#0a0806" stroke-width="1.6"/><circle cx="${hx}" cy="164" r="10" fill="none" stroke="#14100c" stroke-width="5"/><circle cx="${hx}" cy="164" r="10" fill="none" stroke="#8a7a62" stroke-width="2.4"/><circle cx="${hx - 2}" cy="161" r="10" fill="none" stroke="#e0d0b0" stroke-opacity=".35" stroke-width=".8" stroke-dasharray="10 60"/>
+    <path d="${shape}" fill="none" stroke="#050403" stroke-width="3"/></svg>`;
 };
 const ARCH = (() => {
   let joints = '';
   for (let a = 200; a <= 340; a += 20) {
     const t = a * Math.PI / 180;
-    joints += `<line x1="${(120 + 105 * Math.cos(t)).toFixed(1)}" y1="${(145 + 105 * Math.sin(t)).toFixed(1)}" x2="${(120 + 120 * Math.cos(t)).toFixed(1)}" y2="${(120 + 120 * Math.sin(t)).toFixed(1)}" stroke="${INK}" stroke-width="2.5"/>`;
+    joints += `<line x1="${(120 + 105 * Math.cos(t)).toFixed(1)}" y1="${(145 + 105 * Math.sin(t)).toFixed(1)}" x2="${(120 + 120 * Math.cos(t)).toFixed(1)}" y2="${(120 + 120 * Math.sin(t)).toFixed(1)}" stroke="#0c0a08" stroke-width="2.2"/>`;
   }
-  for (const y of [185, 235, 285]) joints += `<line x1="0" y1="${y}" x2="15" y2="${y}" stroke="${INK}" stroke-width="2.5"/><line x1="225" y1="${y}" x2="240" y2="${y}" stroke="${INK}" stroke-width="2.5"/>`;
-  return `<svg class="cn-arch" viewBox="-6 -6 252 334" aria-hidden="true">
-    <path fill-rule="evenodd" d="M0 320 V120 A120 120 0 0 1 240 120 V320 Z M15 320 V145 A105 105 0 0 1 225 145 V320 Z" fill="#6b6272" stroke="${INK}" stroke-width="4.5"/>
-    <path fill-rule="evenodd" d="M4 320 V121 A116 116 0 0 1 236 121 V320 Z M15 320 V145 A105 105 0 0 1 225 145 V320 Z" fill="none" stroke="rgba(255,255,255,.18)" stroke-width="3"/>
-    ${joints}<path d="M106 -2 L134 -2 L130 41 L110 41 Z" fill="#81788a" stroke="${INK}" stroke-width="3.5" stroke-linejoin="round"/>
-    <rect x="-6" y="306" width="252" height="18" rx="5" fill="#4a4450" stroke="${INK}" stroke-width="4"/></svg>`;
+  for (const y of [185, 235, 285]) joints += `<line x1="0" y1="${y}" x2="15" y2="${y}" stroke="#0c0a08" stroke-width="2.2"/><line x1="225" y1="${y}" x2="240" y2="${y}" stroke="#0c0a08" stroke-width="2.2"/>`;
+  return `<svg class="cn-arch" viewBox="-6 -6 252 334" aria-hidden="true"><defs>
+    <pattern id="cnStone" width="96" height="96" patternUnits="userSpaceOnUse"><image href="/ui/v1/stone.webp" width="96" height="96"/></pattern>
+    <radialGradient id="cnArchSh" cx="50%" cy="40%" r="70%"><stop offset=".55" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".55"/></radialGradient></defs>
+    <path fill-rule="evenodd" d="M0 320 V120 A120 120 0 0 1 240 120 V320 Z M15 320 V145 A105 105 0 0 1 225 145 V320 Z" fill="url(#cnStone)" stroke="#050403" stroke-width="3"/>
+    <path fill-rule="evenodd" d="M0 320 V120 A120 120 0 0 1 240 120 V320 Z M15 320 V145 A105 105 0 0 1 225 145 V320 Z" fill="url(#cnArchSh)"/>
+    <path fill-rule="evenodd" d="M3 320 V121 A117 117 0 0 1 237 121 V320 Z M15 320 V145 A105 105 0 0 1 225 145 V320 Z" fill="none" stroke="rgba(255,236,200,.12)" stroke-width="2"/>
+    ${joints}<path d="M106 -2 L134 -2 L130 41 L110 41 Z" fill="url(#cnStone)" stroke="#050403" stroke-width="2.5" stroke-linejoin="round"/>
+    <path d="M114 8 L126 8 L124 30 L116 30Z" fill="none" stroke="#d9ad5c" stroke-opacity=".6" stroke-width="1"/>
+    <rect x="-6" y="306" width="252" height="18" rx="2" fill="url(#cnStone)" stroke="#050403" stroke-width="3"/><rect x="-6" y="306" width="252" height="18" rx="2" fill="#000" opacity=".35"/></svg>`;
 })();
 // лучи — статичная SVG-картинка без масок: дёшево вращать
 let rayId = 0;

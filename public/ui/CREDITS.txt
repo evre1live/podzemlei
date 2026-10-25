@@ -1,0 +1,6 @@
+Гравированные значки интерфейса и карт: game-icons.net — лицензия CC BY 3.0 (https://creativecommons.org/licenses/by/3.0/).
+Авторы: Lorc, Delapouite, Skoll, Carl Olsen, Faithtoken, John Colburn, Sbed, Willdabeast, Viscious Speed, Lord Berandas, Zajkonur, Caro Asercion, Darkzaitzev, Felbrigg, Irongamer, Pierre Leducq, PriorBlue, Quoting, Rihlsul, SpencerDub, Various Artists и другие — https://game-icons.net/about.html
+Пути взяты из пакета @iconify-json/game-icons; цвет и размер меняет игра.
+
+Текстуры в ui/v1 (кованое железо, кожа, пергамент, дуб, камень, зерно) созданы программой для этой игры.
+Живописные рисунки карт в cards/v1 — иллюстрации автора игры.

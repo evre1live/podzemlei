@@ -1,14 +1,15 @@
 // «Под Землёй» — клиент.
 import { def, RACE_NAMES, CLASS_NAMES, setRuleVars, ruleText, BOSS_FLOOR, TROUBLE_BONUS, LULLABY_PENALTY, MUTAGEN_BONUS, DISTILL_COST,
   PERSONAS, GHOST_BONUS, DEATH_LEVELS, DEPTH, DEPTH_TREASURE_EVERY, TRADE_TIMEOUT_MS } from '/shared/cards.js';
-import { esc, cardHTML, chipHTML, avatarSVG, iconSVG, cardBackSVG, locationSVG } from '/art.js';
+import { esc, cardHTML, chipHTML, avatarSVG, iconSVG, cardBackSVG, locationSVG, cardIcon } from '/art.js';
 import { fx } from '/fx.js';
 import { sfx } from '/sfx.js';
 import { setWorld } from '/world.js';
 import { cine, growlKind } from '/cine.js';
 import { AVATAR_PARTS, avatarFromSeed, cleanAvatar, withGender } from '/shared/avatar.js';
-import { AV_LABELS, SKIN, HAIRC, CLOTH, BGC } from '/art-avatar.js';
+import { AV_LABELS, TINCT, BGC } from '/art-avatar.js';
 import { createVoice } from '/voice.js';
+import { ico } from '/icons.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const app = $('#app');
@@ -155,7 +156,7 @@ function render() {
 const mount = {}, update = {};
 
 // ───────────────────────── главная ─────────────────────────
-const HATCH = `<svg class="hatch" viewBox="0 0 64 64" aria-hidden="true"><ellipse cx="32" cy="34" rx="28" ry="14" fill="#3b3540" stroke="#231a26" stroke-width="3"/><ellipse cx="32" cy="32" rx="22" ry="10" fill="#57505e" stroke="#231a26" stroke-width="2.5"/><path d="M14 32 h36 M20 26 l24 12 M44 26 l-24 12" stroke="#231a26" stroke-width="2"/></svg>`;
+const HATCH = ico('dungeon-gate', 'hatch');
 
 mount.home = () => {
   app.innerHTML = `
@@ -171,8 +172,8 @@ mount.home = () => {
       <div class="panel">
         <h2>Новая комната</h2>
         <form class="form" id="createForm" autocomplete="off">
-          <div class="hero-row"><button type="button" class="hero-ava" id="homeAva" data-act="avatar" aria-label="Настроить внешность героя">${avatarSVG(S.avatar, '#f5b83d')}</button>
-            <div><div class="muted" style="font-size:14px;margin-bottom:6px">Ваш герой</div><button type="button" class="btn small" data-act="avatar">Настроить внешность</button></div></div>
+          <div class="hero-row"><button type="button" class="hero-ava" id="homeAva" data-act="avatar" aria-label="Настроить герб героя">${avatarSVG(S.avatar, '#f5b83d')}</button>
+            <div><div class="muted" style="font-size:14px;margin-bottom:6px">Ваш герой</div><button type="button" class="btn small" data-act="avatar">Настроить герб</button></div></div>
           <label>Ваше имя<input type="text" id="nameInput" maxlength="20" placeholder="Например, Джамшид" required></label>
           <label>Название комнаты<input type="text" name="rname" maxlength="20" placeholder="Пятничный подвал"></label>
           <label>Пароль, чтобы зашли только свои<input type="password" name="password" maxlength="64" placeholder="Можно оставить пустым"></label>
@@ -363,8 +364,8 @@ update.lobby = () => {
   if (cp) cp.textContent = r.spectator ? 'Ссылка для зрителей' : 'Скопировать приглашение';
   const seats = r.members.map(m => `
     <div class="seat ${m.id === r.me ? 'me' : ''}" style="--seat:${m.color}" data-vmember="${m.id}">
-      ${isHost && m.id !== r.me ? `<button class="btn ghost small kick" data-kick="${m.id}" title="Убрать из-за стола" aria-label="Убрать ${esc(m.name)}">✕</button>` : ''}
-      ${m.id === r.me ? `<button class="ava ava-edit" data-act="avatar" aria-label="Настроить внешность" title="Настроить внешность">${avatarSVG(m.avatar, m.color)}<i>✎</i></button>` : `<div class="ava">${avatarSVG(m.avatar, m.color)}</div>`}
+      ${isHost && m.id !== r.me ? `<button class="btn ghost small kick" data-kick="${m.id}" title="Убрать из-за стола" aria-label="Убрать ${esc(m.name)}">${ico('cross-mark')}</button>` : ''}
+      ${m.id === r.me ? `<button class="ava ava-edit" data-act="avatar" aria-label="Настроить герб" title="Настроить герб">${avatarSVG(m.avatar, m.color)}<i>${ico('quill-ink')}</i></button>` : `<div class="ava">${avatarSVG(m.avatar, m.color)}</div>`}
       <div class="sname">${esc(m.name)}</div>
       <div class="stag">${m.id === r.hostId ? 'хозяин' : m.isBot ? 'бот' : m.connected ? 'готов' : 'нет связи'}${m.id === r.me ? ', это вы' : ''}</div>
     </div>`);
@@ -532,11 +533,24 @@ function oppHTML(p) {
     <div class="ava">${avatarSVG(p.avatar, p.color)}</div>
     <div class="oname">${esc(p.name)}</div>
     <div class="ometa"><span>${esc(raceText(p))}</span><span>${esc(classText(p))}</span></div>
-    <div class="ostats"><span class="lvl" title="Уровень">${p.level}</span><span class="pow" title="Сила: уровень и надетые вещи">⚔ ${p.power}</span><span class="handcount" title="Карт в руке"><i></i>${p.handCount}</span>${statusTags(p)}</div>
+    <div class="ostats"><span class="lvl" title="Уровень">${p.level}</span><span class="pow" title="Сила: уровень и надетые вещи">${ico('crossed-swords')}${p.power}</span><span class="handcount" title="Карт в руке"><i></i>${p.handCount}</span>${statusTags(p)}</div>
   </button>`;
 }
 
-const SHIELD = color => `<svg viewBox="0 0 100 116" aria-hidden="true"><path d="M50 4 L94 18 C94 64 80 92 50 112 C20 92 6 64 6 18 Z" fill="${color}" stroke="#231a26" stroke-width="5" stroke-linejoin="round"/><path d="M50 14 L84 25 C84 62 73 84 50 100" fill="none" stroke="rgba(255,255,255,.3)" stroke-width="4" stroke-linecap="round"/></svg>`;
+// геральдический щит: золотая кайма, эмаль стороны (герои — патина, монстры — кровь), заклёпки и блик
+const SHIELD = side => {
+  const [a, b, c] = side === 'mon' ? ['#c2412f', '#6e160e', '#2a0503'] : ['#4f9a84', '#1f5545', '#081d17'];
+  return `<svg viewBox="0 0 100 116" aria-hidden="true"><defs>
+    <linearGradient id="sh-rim-${side}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f6e2a4"/><stop offset=".45" stop-color="#c99a45"/><stop offset=".55" stop-color="#7d5a22"/><stop offset="1" stop-color="#d9ad5c"/></linearGradient>
+    <radialGradient id="sh-en-${side}" cx="42%" cy="30%" r="80%"><stop offset="0" stop-color="${a}"/><stop offset=".6" stop-color="${b}"/><stop offset="1" stop-color="${c}"/></radialGradient></defs>
+    <path d="M50 3 L95 17 C95 64 81 93 50 113 C19 93 5 64 5 17 Z" fill="#050403"/>
+    <path d="M50 6 L92 19 C92 63 79 90 50 109 C21 90 8 63 8 19 Z" fill="url(#sh-rim-${side})"/>
+    <path d="M50 13 L85 24 C85 61 74 84 50 101 C26 84 15 61 15 24 Z" fill="url(#sh-en-${side})" stroke="#050403" stroke-width="1.6"/>
+    <path d="M50 13 L85 24 C85 40 83 52 79 62 C64 48 40 34 15 30 L15 24 Z" fill="#fff" opacity=".07"/>
+    <path d="M50 18 L80 27" stroke="#fff" stroke-opacity=".22" stroke-width="1.4" fill="none"/>
+    ${[[50, 9.5], [12, 21], [88, 21], [50, 105]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="2.2" fill="#f2d898" stroke="#3a2608" stroke-width=".8"/>`).join('')}
+  </svg>`;
+};
 
 function renderStage() {
   const g = S.game;
@@ -628,10 +642,10 @@ function actionButtons() {
   return b.join('');
 }
 
-const SWORDS = (() => {
-  const sw = `<path d="M32 3 L36 10 L36 40 L28 40 L28 10 Z" fill="#e9eef5"/><path d="M32 9 V38" stroke="#b9c3cf" stroke-width="1.6"/><rect x="21" y="39" width="22" height="5" rx="2" fill="#e8c15a"/><rect x="29.5" y="44" width="5" height="11" rx="2" fill="#7a4b2c"/><circle cx="32" cy="57.5" r="3.2" fill="#e8c15a"/>`;
-  return `<svg viewBox="0 0 64 64" aria-hidden="true"><g stroke="#231a26" stroke-width="2.6" stroke-linejoin="round"><g transform="rotate(42 32 32)">${sw}</g><g transform="rotate(-42 32 32)">${sw}</g></g></svg>`;
-})();
+const SWORDS = ico('crossed-swords');
+// в летописи эмодзи из движка заменяются гравированными значками
+const LOG_ICON = { '💀': 'skull-crossed-bones', '⛏': 'stairs', '📜': 'scroll-quill', '👹': 'horned-skull', '⚔️': 'crossed-swords', '⚔': 'crossed-swords', '🏆': 'trophy', '🤝': 'shaking-hands', '👻': 'ghost' };
+const logText = t => esc(t).replace(/💀|⛏|📜|👹|⚔️|⚔|🏆|🤝|👻/g, m => ico(LOG_ICON[m], 'li'));
 // пометки под монстром: босс, «не убежать», «без помощи»; босс подсказывает, тронет ли он участников боя
 function monFlags(m, c) {
   const d = def(m.uid), f = [];
@@ -674,7 +688,7 @@ function fightHTML() {
     </div>`).join('');
   let center;
   if (c.winAt) {
-    center = `<div class="countdown" data-until="${c.winAt}" data-total="${g.opts.winDelayMs}"><svg viewBox="0 0 74 74"><circle cx="37" cy="37" r="32" fill="none" stroke="rgba(255,255,255,.12)" stroke-width="6"/><circle class="ring" cx="37" cy="37" r="32" fill="none" stroke="#f5b83d" stroke-width="6" stroke-linecap="round" stroke-dasharray="201" stroke-dashoffset="0"/></svg><b>…</b></div>`;
+    center = `<div class="countdown" data-until="${c.winAt}" data-total="${g.opts.winDelayMs}"><svg viewBox="0 0 74 74"><circle cx="37" cy="37" r="32" fill="rgba(0,0,0,.55)" stroke="rgba(217,173,92,.18)" stroke-width="5"/><circle class="ring" cx="37" cy="37" r="32" fill="none" stroke="#d9ad5c" stroke-width="5" stroke-linecap="round" stroke-dasharray="201" stroke-dashoffset="0"/></svg><b>…</b></div>`;
   } else center = `<span class="vs-emblem">${SWORDS}<span class="vs-word">против</span></span>`;
   const flip = prev && prev.win !== n.winning ? ' flip' : '';
   const verdict = n.winning ? `<span class="verdict win${flip}">Герои сильнее${n.warrior && n.heroes === n.monsters ? ' (ничья — за воином)' : ''}</span>` : `<span class="verdict lose${flip}">Монстры сильнее</span>`;
@@ -693,16 +707,16 @@ function fightHTML() {
     const canMeddle = Object.values(h.cards || {}).some(o => o.some(a => a.side || Number.isInteger(a.monster) || a.with));
     const who = c.helper === S.room.me ? 'Вы помогаете в этом бою.' : `${esc(pname(c.fighter))} в бою.`;
     b.push(`<span class="hint">${who} ${canMeddle ? 'Карты, которыми можно вмешаться, подсвечены в руке.' : ''}</span>`);
-    if (h.haunt?.player) b.push(`<button class="btn spook" data-act="haunt" data-side="player" title="Вы призрак: раз за ход можно подкинуть +${GHOST_BONUS} одной стороне">👻 +${GHOST_BONUS} героям</button>`);
-    if (h.haunt?.monster) b.push(`<button class="btn spook" data-act="haunt" data-side="monster" title="Вы призрак: раз за ход можно подкинуть +${GHOST_BONUS} одной стороне">👻 +${GHOST_BONUS} монстрам</button>`);
+    if (h.haunt?.player) b.push(`<button class="btn spook" data-act="haunt" data-side="player" title="Вы призрак: раз за ход можно подкинуть +${GHOST_BONUS} одной стороне">${ico('ghost')} +${GHOST_BONUS} героям</button>`);
+    if (h.haunt?.monster) b.push(`<button class="btn spook" data-act="haunt" data-side="monster" title="Вы призрак: раз за ход можно подкинуть +${GHOST_BONUS} одной стороне">${ico('ghost')} +${GHOST_BONUS} монстрам</button>`);
     if (h.pass) b.push(`<button class="btn ghost" data-act="pass">Не мешаю</button>`);
   }
   if (c.winAt && c.passed?.length) b.push(`<span class="hint passed">Не мешают: ${c.passed.map(id => esc(pname(id))).join(', ')}</span>`);
   return `
     <div class="fight">
-      <div class="side-col hero"><div class="side-main"><div class="shield hero${n.winning ? ' lead' : ''}" id="shieldHero" title="Сила героев">${SHIELD('#3fa38c')}<b data-roll="${n.heroes}">${prev ? prev.heroes : n.heroes}</b></div><div class="heroes-row">${heroes}</div></div><div class="mods">${mods('player')}</div></div>
+      <div class="side-col hero"><div class="side-main"><div class="shield hero${n.winning ? ' lead' : ''}" id="shieldHero" title="Сила героев">${SHIELD('hero')}<b data-roll="${n.heroes}">${prev ? prev.heroes : n.heroes}</b></div><div class="heroes-row">${heroes}</div></div><div class="mods">${mods('player')}</div></div>
       <div class="versus">${center}${verdict}</div>
-      <div class="side-col mon"><div class="side-main"><div class="shield mon${n.winning ? '' : ' lead'}" id="shieldMon" title="Сила монстров">${SHIELD('#d2502f')}<b data-roll="${n.monsters}">${prev ? prev.monsters : n.monsters}</b></div><div class="monsters-row">${monsters}</div></div><div class="mods">${mods('monster')}</div></div>
+      <div class="side-col mon"><div class="side-main"><div class="shield mon${n.winning ? '' : ' lead'}" id="shieldMon" title="Сила монстров">${SHIELD('mon')}<b data-roll="${n.monsters}">${prev ? prev.monsters : n.monsters}</b></div><div class="monsters-row">${monsters}</div></div><div class="mods">${mods('monster')}</div></div>
     </div>
     <div class="tug" style="--k:${(prev ? prev.k : tk).toFixed(3)}" data-k="${tk.toFixed(3)}" title="Перевес сил: ${n.heroes} против ${n.monsters}"><i class="tug-fill"></i><i class="tug-mark"></i></div>
     <div class="reward">За победу: +${n.levels} ${plural(n.levels, 'уровень', 'уровня', 'уровней')} и ${n.treasures} ${plural(n.treasures, 'карта', 'карты', 'карт')} клада${c.helper ? `: ${esc(pname(c.fighter))} — ${n.treasures - n.helperShare}, ${esc(pname(c.helper))} — ${n.helperShare}${n.helperExtra ? ` (обещано ${c.helpOffer}, ещё ${n.helperExtra} сверху из колоды)` : ''}` : ''}</div>
@@ -774,13 +788,13 @@ function renderMine() {
     <div class="me-top" style="--seat:${p.color}" data-vmember="${p.id}">
       <div class="me-ava" id="meava">${avatarSVG(p.avatar, p.color)}</div>
       <div><div class="me-name">${esc(p.name)}</div>
-        <div class="me-stats"><span class="lvl" title="Уровень">${p.level}</span><span class="pow" title="Сила: уровень и надетые вещи">⚔ ${p.power}</span>
+        <div class="me-stats"><span class="lvl" title="Уровень">${p.level}</span><span class="pow" title="Сила: уровень и надетые вещи">${ico('crossed-swords')}${p.power}</span>
         <span class="badge" title="Сколько нужно выбросить на кубике, чтобы убежать">побег ${run <= 1 ? 'всегда' : run > 6 ? 'никогда' : run + '+'}</span>
         ${p.nextCombat > 0 ? `<span class="badge good">+${p.nextCombat} в бою</span>` : p.nextCombat < 0 ? `<span class="badge warn">${p.nextCombat} в бою</span>` : ''}${p.nextEscape < 0 ? `<span class="badge warn">побег ${p.nextEscape}</span>` : ''}${p.dead ? '<span class="badge warn">вы погибли до следующего хода</span>' : ''}</div>
       </div>
     </div>
     <div class="traits">${traits.join('')}</div>
-    ${p.ghost ? `<div class="ghost-note">👻 Вы призрак до своего хода: раз за ход можно подкинуть +${GHOST_BONUS} героям или монстрам в чужом бою.</div>` : ''}
+    ${p.ghost ? `<div class="ghost-note">${ico('ghost')} Вы призрак до своего хода: раз за ход можно подкинуть +${GHOST_BONUS} героям или монстрам в чужом бою.</div>` : ''}
     ${contractHTML(p)}
     <div class="slots">${slots}</div>
     ${abil ? `<div class="abilities">${abil}</div>` : ''}
@@ -822,7 +836,7 @@ function renderWatcher() {
     <div class="me-top" style="--seat:${p.color}">
       <div class="me-ava">${avatarSVG(p.avatar, p.color)}</div>
       <div><div class="me-name">${esc(p.name)}${now ? ' <span class="badge lamp">ходит</span>' : ''}</div>
-        <div class="me-stats"><span class="lvl" title="Уровень">${p.level}</span><span class="pow" title="Сила: уровень и надетые вещи">⚔ ${p.power}</span>
+        <div class="me-stats"><span class="lvl" title="Уровень">${p.level}</span><span class="pow" title="Сила: уровень и надетые вещи">${ico('crossed-swords')}${p.power}</span>
         <span class="badge" title="Сколько нужно выбросить на кубике, чтобы убежать">побег ${run <= 1 ? 'всегда' : run > 6 ? 'никогда' : run + '+'}</span>${p.dead ? '<span class="badge warn">погиб до следующего хода</span>' : ''}</div>
       </div>
     </div>
@@ -932,7 +946,7 @@ async function modeOk() {
 function renderLog() {
   const el = $('#logfeed');
   const near = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
-  el.innerHTML = S.game.log.map(l => `<div class="l-${l.kind}">${esc(l.text)}</div>`).join('');
+  el.innerHTML = S.game.log.map(l => `<div class="l-${l.kind}">${logText(l.text)}</div>`).join('');
   if (near || !el.dataset.init) { el.scrollTop = el.scrollHeight; el.dataset.init = '1'; }
 }
 
@@ -1025,7 +1039,7 @@ function openOppPop(pid) {
   if (mine && h.tradeTargets?.includes(pid)) popOpts.push({ label: 'Предложить обмен', fn: () => openTrade(pid), cls: 'hero' });
   const items = [...p.equipped.map(u => chipHTML(u)), ...p.carried.map(u => chipHTML(u, { cls: 'off' }))].join('') || '<p class="muted">Вещей нет.</p>';
   showOverlay(`<div class="modal" role="dialog" aria-label="${esc(p.name)}">
-    <div class="row"><span class="me-ava" style="--seat:${p.color}">${avatarSVG(p.avatar, p.color)}</span><div><h2>${esc(p.name)}</h2><div class="me-stats"><span class="lvl">${p.level}</span><span class="pow">⚔ ${p.power}</span><span class="badge">${esc(raceText(p))}, ${esc(classText(p))}</span><span class="handcount"><i></i>${p.handCount}</span></div></div></div>
+    <div class="row"><span class="me-ava" style="--seat:${p.color}">${avatarSVG(p.avatar, p.color)}</span><div><h2>${esc(p.name)}</h2><div class="me-stats"><span class="lvl">${p.level}</span><span class="pow">${ico('crossed-swords')}${p.power}</span><span class="badge">${esc(raceText(p))}, ${esc(classText(p))}</span><span class="handcount"><i></i>${p.handCount}</span></div></div></div>
     <div class="opp-items" data-zone-view>${items}</div>
     ${popOpts.length ? `<div class="pop-actions">${popOpts.map((o, i) => `<button class="btn ${o.cls}" data-popopt="${i}">${esc(o.label)}</button>`).join('')}</div>` : ''}
     <button class="btn ghost" data-act="closeOverlay">Закрыть</button>
@@ -1100,25 +1114,25 @@ function depthPill(dp) {
   const bottom = dp.level >= dp.max;
   const next = bottom ? 'Глубже некуда — это дно.' : `До спуска ${dp.turnsLeft} ${plural(dp.turnsLeft, 'ход', 'хода', 'ходов')}.`;
   const tip = `Каждые ${dp.every} ${plural(dp.every, 'круг', 'круга', 'кругов')} подземелье уходит глубже: монстры +1 к силе (боссов это не касается), дно — глубина ${dp.max}. С каждой ${DEPTH_TREASURE_EVERY}-й глубины победа даёт лишнюю карту клада. ${next}`;
-  return `<span class="depth-pill${dp.level ? ' deep' : ''}" title="${esc(tip)}">⛏ ${dp.level ? `Глубина ${dp.level} · монстры +${dp.bonus}${dp.treasure ? ` · клад +${dp.treasure}` : ''}` : 'Поверхность'}</span>`;
+  return `<span class="depth-pill${dp.level ? ' deep' : ''}" title="${esc(tip)}">${ico('stairs')}${dp.level ? `Глубина ${dp.level} · монстры +${dp.bonus}${dp.treasure ? ` · клад +${dp.treasure}` : ''}` : 'Поверхность'}</span>`;
 }
 function contractHTML(p) {
   const k = p.contract;
   if (!k) return '';
   const tip = 'Контракт — ваша тайная цель. Выполните его — получите награду и новый контракт. Самому отстающему — ещё карта клада.';
-  return `<div class="contract" title="${esc(tip)}"><span class="c-ico" aria-hidden="true">📜</span><div class="c-body">
-    <div class="c-head"><b>${esc(k.name)}</b><span class="c-prog">${k.progress}/${k.need}</span>${p.contractsDone ? `<span class="c-done" title="Выполнено контрактов">✓ ${p.contractsDone}</span>` : ''}</div>
+  return `<div class="contract" title="${esc(tip)}"><span class="c-ico" aria-hidden="true">${ico('scroll-quill')}</span><div class="c-body">
+    <div class="c-head"><b>${esc(k.name)}</b><span class="c-prog">${k.progress}/${k.need}</span>${p.contractsDone ? `<span class="c-done" title="Выполнено контрактов">${ico('check-mark')}${p.contractsDone}</span>` : ''}</div>
     <div class="c-text">${esc(k.text)} Награда: ${esc(k.rewardText)}.</div></div></div>`;
 }
 function tradeWaitHTML() {
   const mine = (S.game.trades || []).filter(o => o.from === S.room.me);
-  return mine.map(o => `<div class="trade-wait"><span>🤝 Обмен → ${esc(pname(o.to))}: ждём ответа…</span><button class="btn ghost small" data-act="cancelTrade" data-id="${o.id}">Отозвать</button></div>`).join('');
+  return mine.map(o => `<div class="trade-wait"><span>${ico('shaking-hands')} Обмен → ${esc(pname(o.to))}: ждём ответа…</span><button class="btn ghost small" data-act="cancelTrade" data-id="${o.id}">Отозвать</button></div>`).join('');
 }
 // фишка вещи для выбора в обмене: без data-uid, чтобы клик не открывал карту
 function tradeChip(uid, attr, on, note = '') {
   const d = def(uid);
   const val = d.bonus ? `+${d.bonus}` : d.runBonus ? `бег +${d.runBonus}` : '';
-  return `<button class="chip tpick${on ? ' picked' : ''}${d.rarity && d.rarity !== 'common' ? ' r-' + d.rarity : ''}" ${attr}="${esc(uid)}" aria-pressed="${on}" title="${esc(d.name + (d.text ? ' — ' + d.text : ''))}">${iconSVG(typeof d.art === 'string' ? d.art : 'question')}<span class="chip-name">${esc(d.name)}${note ? ` <small>${note}</small>` : ''}</span>${val ? `<b>${val}</b>` : ''}</button>`;
+  return `<button class="chip tpick${on ? ' picked' : ''}${d.rarity && d.rarity !== 'common' ? ' r-' + d.rarity : ''}" ${attr}="${esc(uid)}" aria-pressed="${on}" title="${esc(d.name + (d.text ? ' — ' + d.text : ''))}">${ico(cardIcon(d))}<span class="chip-name">${esc(d.name)}${note ? ` <small>${note}</small>` : ''}</span>${val ? `<b>${val}</b>` : ''}</button>`;
 }
 function openTrade(pid) {
   const give = new Set(), want = new Set();
@@ -1172,18 +1186,18 @@ function extraFx(fresh) {
       case 'contract':
         sfx.play('levelUp');
         if (f.pid === S.room.me) fx.banner('Контракт выполнен!', f.reward, 'win');
-        else fx.float(ava, '📜 Контракт!', 'good');
+        else fx.float(ava, 'Контракт!', 'good');
         break;
       case 'haunt': {
         sfx.play(f.side === 'monster' ? 'modBad' : 'modGood');
         const el = $(f.side === 'monster' ? '#shieldMon' : '#shieldHero');
-        fx.float(el || ava, `👻 +${f.n}`, f.side === 'monster' ? 'bad' : 'good');
+        fx.float(el || ava, `+${f.n}`, f.side === 'monster' ? 'bad' : 'good');
         fx.smoke(ava || el, { colors: ['rgba(190,210,255,.45)', 'rgba(150,170,230,.35)'], sparks: false });
         break;
       }
       case 'trade':
         sfx.play('buff');
-        fx.float(ava, '🤝 Обмен', 'good'); fx.float(avaOf(f.to), '🤝 Обмен', 'good');
+        fx.float(ava, 'Обмен', 'good'); fx.float(avaOf(f.to), 'Обмен', 'good');
         break;
       case 'tradeNo':
         if (f.to === S.room.me) toast(`${pname(f.pid)} отказывается от обмена`);
@@ -1547,7 +1561,7 @@ document.addEventListener('click', async e => {
           <button class="btn ghost" data-act="closeOverlay">Вернуться к столу</button></div>`);
       }
       return showOverlay(`<div class="modal" role="dialog" aria-label="Меню"><h2>Меню</h2>
-        <button class="btn" data-act="avatar">Внешность героя</button>
+        <button class="btn" data-act="avatar">Герб героя</button>
         <button class="btn" data-act="copy">Скопировать приглашение</button>
         <button class="btn" data-act="copyWatch">Ссылка для зрителей</button>
         <button class="btn" data-act="guide">Справочник карт</button>
@@ -1600,18 +1614,15 @@ document.addEventListener('click', async e => {
 
 // ───────────────────────── внешность героя ─────────────────────────
 const AV_TABS = [
-  { id: 'body', label: 'Тело', rows: [['gender', 'Пол', null, true], ['body', 'Телосложение', null, true], ['skin', 'Кожа', SKIN.map(c => c[1])]] },
-  { id: 'face', label: 'Лицо', rows: [['eyes', 'Глаза'], ['brows', 'Брови'], ['mouth', 'Рот'], ['extra', 'Приметы']] },
-  { id: 'hair', label: 'Волосы', rows: [['hair', 'Причёска'], ['hairColor', 'Цвет волос', HAIRC], ['facial', 'Борода и усы']] },
-  { id: 'wear', label: 'Одежда', rows: [['outfit', 'Верхняя одежда', null, true], ['shirt', 'Цвет одежды', CLOTH]] },
-  { id: 'hat', label: 'Шапка и очки', rows: [['hat', 'Головной убор'], ['hatColor', 'Цвет шапки', CLOTH], ['glasses', 'Очки']] },
+  { id: 'shield', label: 'Щит', rows: [['shirt', 'Цвет поля', TINCT], ['glasses', 'Деление щита', null, true], ['hatColor', 'Второй цвет', TINCT]] },
+  { id: 'charge', label: 'Знак', rows: [['hat', 'Гербовый знак', null, true]] },
   { id: 'bg', label: 'Фон', rows: [['bg', 'Цвет фона', BGC]] },
 ];
 // вариант внешности для превью и для клика: пол меняет ещё бороду и причёску
 const avWith = (cfg, k, i) => (k === 'gender' ? withGender(cfg, i) : { ...cfg, [k]: i });
 const seatColor = () => S.room?.members.find(m => m.id === S.room.me)?.color || '#f5b83d';
 function openAvatarEditor() {
-  S.ui.avEdit = { cfg: cleanAvatar(S.avatar && typeof S.avatar === 'object' ? S.avatar : avatarFromSeed(Number(S.avatar) || 0)), tab: S.ui.avEdit?.tab || 'body' };
+  S.ui.avEdit = { cfg: cleanAvatar(S.avatar && typeof S.avatar === 'object' ? S.avatar : avatarFromSeed(Number(S.avatar) || 0)), tab: S.ui.avEdit?.tab || 'shield' };
   drawAvatarEditor();
 }
 function drawAvatarEditor() {
@@ -1627,8 +1638,8 @@ function drawAvatarEditor() {
       : `<button class="av-opt${cfg[k] === i ? ' on' : ''}" data-av-k="${k}" data-av-v="${i}" aria-pressed="${cfg[k] === i}" title="${esc(AV_LABELS[k]?.[i] || '')}" aria-label="${lab(i)}">${avatarSVG(avWith(cfg, k, i), sc)}</button>`).join('');
     return `<div class="av-row"><div class="av-title">${title}${!colors && AV_LABELS[k] ? `: <b>${esc(AV_LABELS[k][cfg[k]])}</b>` : ''}</div><div class="${colors ? 'av-swatches' : 'av-grid'}">${items}</div></div>`;
   };
-  showOverlay(`<div class="modal av-modal" role="dialog" aria-label="Внешность героя" id="avModal">
-    <h2>Внешность героя</h2>
+  showOverlay(`<div class="modal av-modal" role="dialog" aria-label="Герб героя" id="avModal">
+    <h2>Герб героя</h2>
     <div class="av-body">
       <div class="av-side">
         <div class="av-preview" style="--seat:${sc}">${avatarSVG(cfg, sc)}</div>
@@ -1647,8 +1658,8 @@ async function saveAvatar() {
   LS.set('avatar', S.avatar);
   closeOverlay();
   const home = $('#homeAva'); if (home) home.innerHTML = avatarSVG(S.avatar, '#f5b83d');
-  if (S.room) { const r = await call('me:avatar', { avatar: S.avatar }); if (!r.ok) toast(r.error); else toast('Внешность обновлена', true); }
-  else toast('Внешность сохранена', true);
+  if (S.room) { const r = await call('me:avatar', { avatar: S.avatar }); if (!r.ok) toast(r.error); else toast('Герб обновлён', true); }
+  else toast('Герб сохранён', true);
 }
 
 // ───────────────────────── голосовой чат ─────────────────────────
@@ -1731,7 +1742,7 @@ function openSoundModal() {
     <label class="check"><input type="checkbox" id="sndAmb" ${s.amb ? 'checked' : ''}> Атмосфера пещеры: гул, ветер и капли</label>
     <label class="check"><input type="checkbox" id="liveBg" ${liveBg() ? 'checked' : ''}> Живой фон: вода, снег, светлячки (на слабом телефоне лучше выключить)</label>
     <label class="check"><input type="checkbox" id="cineOn" ${cine.enabled ? 'checked' : ''}> Зрелищные сцены: двери, удары, разрубленные карты, салют</label>
-    <p class="muted" style="margin:0;font-size:13.5px">Звуки — записи из свободных библиотек Kenney и OpenGameArt (лицензия CC0), мелодии сыграны на пиццикато и стальных барабанах. Если на телефоне тишина, проверьте беззвучный режим.</p>
+    <p class="muted" style="margin:0;font-size:13.5px">Звуки — записи из свободных библиотек Kenney и OpenGameArt (лицензия CC0), мелодии сыграны на пиццикато и стальных барабанах. Значки — game-icons.net (CC BY 3.0, Lorc, Delapouite и другие). Если на телефоне тишина, проверьте беззвучный режим.</p>
     <div class="row"><button class="btn" data-act="soundTest">Послушать</button><button class="btn primary" data-act="closeOverlay">Готово</button></div>
   </div>`);
   $('#sndOn').addEventListener('change', e => { sfx.set({ on: e.target.checked }); soundIcons(); if (e.target.checked) sfx.play('yourTurn', { gap: 0 }); });

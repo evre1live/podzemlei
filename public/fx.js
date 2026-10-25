@@ -78,7 +78,7 @@ function heart(x, y, s) {
 function draw(p, a) {
   ctx.globalAlpha = a;
   ctx.globalCompositeOperation = p.add ? 'lighter' : 'source-over';
-  const s = p.size;
+  const s = Math.max(0.01, p.size); // размер может уйти в минус на последнем кадре — градиент этого не прощает
   switch (p.shape) {
     case 'spark': {
       const len = Math.min(26, Math.hypot(p.vx, p.vy) * 0.05 + 2);

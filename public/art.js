@@ -1,8 +1,10 @@
-// «Под Землёй» — вся графика игры рисуется кодом: мультяшные монстры (art-monsters.js),
-// иконки вещей, сцены локаций, рубашки колод, аватары героев и рамки карт.
+// «Под Землёй» — графика карт: рамки по категориям, живописные рисунки (/cards/v1), гравированные значки (icons.js),
+// рубашки колод. Пока у карты нет рисунка, показывается старая картинка, нарисованная кодом (art-monsters.js и иконки ниже).
 import { def, DEFS, RACE_NAMES, CLASS_NAMES, TAG_NAMES, SLOT_NAMES, ruleText } from '/shared/cards.js';
 import { monsterSVG, monsterDefs, INK } from '/art-monsters.js';
 import { avatarSVG, avatarDefs } from '/art-avatar.js';
+import { ico } from '/icons.js';
+import { CARD_IMG } from '/card-art.js';
 
 export { monsterSVG };
 export const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -50,6 +52,8 @@ export function injectDefs() {
   for (const [k, [a, b]] of Object.entries(BG)) g += `<radialGradient id="bg-${k}" cx="50%" cy="45%" r="75%"><stop offset="0" stop-color="${a}"/><stop offset="1" stop-color="${b}"/></radialGradient>`;
   // комиксовый растр и мягкое затемнение краёв картинки
   g += `<pattern id="ht" width="7" height="7" patternUnits="userSpaceOnUse"><circle cx="3.5" cy="3.5" r="1.15" fill="#fff" fill-opacity=".2"/></pattern>`;
+  g += `<linearGradient id="gold-emb" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff3c8"/><stop offset=".38" stop-color="#e6bb62"/><stop offset=".7" stop-color="#94672a"/><stop offset="1" stop-color="#d7a952"/></linearGradient>`;
+  g += `<linearGradient id="silver-emb" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset=".4" stop-color="#c6ced8"/><stop offset=".72" stop-color="#5f6874"/><stop offset="1" stop-color="#aab3be"/></linearGradient>`;
   g += `<radialGradient id="vig" cx="50%" cy="45%" r="70%"><stop offset=".55" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".38"/></radialGradient>`;
   g += `<radialGradient id="glow" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#fff" stop-opacity=".85"/><stop offset=".4" stop-color="#fff" stop-opacity=".25"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>`;
   g += `<linearGradient id="beam" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fff6c8" stop-opacity=".9"/><stop offset="1" stop-color="#fff6c8" stop-opacity="0"/></linearGradient>`;
@@ -213,7 +217,14 @@ export function locationSVG(key) {
 }
 
 // ───────────── иконки и арт карт ─────────────
+// старые ключи рисунков → гравированные значки (game-icons.net, CC BY 3.0)
+const ART2ICON = {
+  chest: 'chest', amulet: 'padlock', crown: 'crown', elf: 'elf-ear', dwarf: 'dwarf-face', halfling: 'barefoot', orc: 'orc-head', goblin: 'goblin-head',
+  molefolk: 'mole', warrior: 'crossed-swords', mage: 'pointy-hat', cleric: 'holy-symbol', rogue: 'cloak-dagger', bard: 'lyre', alchemist: 'round-bottom-flask',
+  engineer: 'gear-hammer', witcher: 'crossed-sabres', mix: 'yin-yang', badge: 'double-face-mask', human: 'person',
+};
 export function iconSVG(name, cls = '') {
+  if (ART2ICON[name]) return ico(ART2ICON[name], cls);
   if (LOC_IMG.has(name)) return locationSVG(name).replace('<svg ', `<svg class="${cls}" `);
   return `<svg class="${cls}" viewBox="0 0 64 64" aria-hidden="true">${ICONS[name] || ICONS.question}</svg>`;
 }
@@ -242,20 +253,82 @@ function bgDeco(k) {
 export function iconScene(key, kind = 'item') {
   return `<svg viewBox="0 0 160 120" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><rect width="160" height="120" fill="url(#bg-${kind})"/>${kind === 'dark' ? '' : '<rect width="160" height="120" fill="url(#ht)"/>'}${bgDeco(kind)}<ellipse cx="80" cy="56" rx="54" ry="40" fill="url(#glow)" opacity="${kind === 'dark' ? 0.1 : 0.3}"/><rect width="160" height="120" fill="url(#vig)"/><ellipse cx="80" cy="102" rx="32" ry="6" fill="rgba(0,0,0,.3)"/><g transform="translate(40 16) scale(1.25)">${ICONS[key] || ICONS.question}</g></svg>`;
 }
+// значок в медальоне карты: по самой карте, иначе по её виду
+const ICON_OF = {
+  m_slime: 'slime', m_floorboard: 'claw-slashes', m_mold: 'cheese-wedge', m_moth: 'butterfly', m_mosquito: 'fly', m_roach: 'beetle-shell', m_mole: 'mole', m_leech: 'leeching-worm',
+  m_turnstile: 'security-gate', m_ninjamole: 'running-ninja', m_beggar: 'cloak', m_robovac: 'vintage-robot', m_duck: 'duck', m_gossip: 'dripping-stone', m_mycel: 'mushrooms-cluster',
+  m_hypno: 'mushroom-gills', m_ratunion: 'rat', m_lasttrain: 'subway-train', m_inspector: 'skeleton', m_slug: 'slime', m_cart: 'mine-wagon', m_batchoir: 'bat', m_watchman: 'lantern-flame',
+  m_dj: 'rat', m_plumber: 'monkey-wrench', m_banshee: 'floating-ghost', m_cashier: 'coins', m_zhek: 'archive-register', m_minotaur: 'minotaur', m_endless: 'earth-worm',
+  m_salamander: 'salamander', m_spider: 'spider-web', m_croc: 'croc-jaws', m_paranoid: 'gas-mask', m_golem: 'rock-golem', m_worm: 'earth-worm', m_ghostdriver: 'ghost',
+  m_excavator: 'mine-truck', m_mirror: 'mirror-mirror', m_concrete: 'golem-head', m_vampire: 'vampire-dracula', m_heatpipe: 'snake', m_lich: 'crowned-skull', m_moldking: 'mushrooms',
+  m_ratqueen: 'rat', m_troll: 'troll', m_cricket: 'insect-jaws', m_dragon: 'dragon-head', m_pit: 'spiky-pit', m_philosopher: 'stone-bust', m_molekron: 'mole', m_gorynych: 'dragon-breath',
+  m_kolobok: 'bread', m_kikimora: 'frog', m_likho: 'eyeball', m_mimic: 'mimic-chest', m_medusa: 'medusa-head', m_leshy: 'holy-oak', m_cyclops: 'cyclops', m_solovey: 'whistle',
+  m_koschei: 'crowned-skull', m_griffin: 'griffin-symbol', m_vodyanoy: 'frog', m_genie: 'magic-lamp', m_babayaga: 'witch-flight', m_basilisk: 'snake-tongue', m_cerberus: 'wolf-head',
+  m_manticore: 'scorpion-tail', m_hydra: 'hydra', m_kraken: 'kraken-tentacle', m_lucifer: 'daemon-skull', m_hades: 'horned-skull', m_anubis: 'anubis',
+  k_draft: 'whirlwind', k_cavein: 'stone-pile', k_puddle: 'water-drop', k_rust: 'rusty-sword', k_rusthands: 'rusty-sword', k_tax: 'coins', k_fever: 'heart-minus', k_amnesia: 'brain',
+  k_fired: 'cross-mark', k_pickpocket: 'robber-hand', k_klepto: 'robber-hand', k_flu: 'snowflake-1', k_backpack: 'knapsack', k_jinx: 'evil-eyes',
+  e_seasoned: 'upgrade', e_armored: 'armor-upgrade', e_hungry: 'sharp-smile', e_pack: 'two-shadows', e_rabid: 'fanged-skull', e_morning: 'alarm-clock', e_baby: 'egg-clutch',
+  e_decrepit: 'hourglass', e_cold: 'snowflake-1', w_wandering: 'evil-eyes',
+  ev_quake: 'earth-crack', ev_light: 'sunbeams', ev_fair: 'shop', ev_draft: 'whirlwind', ev_rollcall: 'scroll-unfurled', ev_luxtax: 'coins',
+  i_helmet: 'mining-helmet', i_headlamp: 'mining-helmet', i_hardlamp: 'mining-helmet', i_barrel: 'crested-helmet', i_crown: 'crown', i_quilt: 'breastplate', i_tokens: 'breastplate',
+  i_diver: 'diving-helmet', i_godarmor: 'breastplate', i_robe: 'robe', i_boots: 'rubber-boot', i_runners: 'running-shoe', i_slippers: 'boot-prints', i_shovel: 'spade', i_pick: 'war-pick',
+  i_jackhammer: 'drill', i_drill: 'drill', i_hatch: 'round-shield', i_stapler: 'crossbow', i_censer: 'incense', i_lute: 'lyre', i_rail: 'broadsword', i_staff: 'wizard-staff', i_bow: 'bow-arrow',
+  i_knuckles: 'mailed-fist', i_claws: 'claws', i_crowbar: 'crowbar', i_wrench: 'monkey-wrench', i_extinguisher: 'fire-extinguisher', i_trap: 'wolf-trap', i_flashlight: 'flashlight',
+  i_taser: 'electric', i_ladle: 'ladle', i_charm: 'clover', i_flasks: 'fizzing-flask', i_sack: 'swap-bag', i_trolley: 'mine-wagon', i_ring: 'diamond-ring',
+  p_rat: 'rat', p_firefly: 'lantern', p_hamster: 'paw-print', p_golddragon: 'dragon-head', p_cat: 'cat',
+  o_pickles: 'mushrooms', o_kvass: 'beer-stein', o_shawarma: 'meat', o_cola: 'soda-can', o_firecracker: 'firework-rocket', o_holywater: 'holy-water', o_rope: 'grapple',
+  o_smoke: 'smoke-bomb', o_petrify: 'scroll-unfurled', o_slave: 'handcuffs', o_ward: 'stone-sphere',
+  b_courage: 'standing-potion', b_energy: 'soda-can', b_pies: 'bread',
+  l_stash: 'two-coins', l_bribe: 'coins', l_manual: 'open-book', l_sleep: 'night-sleep', l_exam: 'graduate-cap', l_friend: 'shaking-hands', l_map: 'treasure-map', l_bonus: 'coins-pile',
+  l_shortcut: 'path-distance', h_hoard: 'open-treasure-chest',
+  r_elf: 'elf-ear', r_dwarf: 'dwarf-face', r_halfling: 'barefoot', r_orc: 'orc-head', r_goblin: 'goblin-head', r_mole: 'mole',
+  c_warrior: 'crossed-swords', c_mage: 'pointy-hat', c_cleric: 'holy-symbol', c_rogue: 'cloak-dagger', c_bard: 'lyre', c_alchemist: 'round-bottom-flask', c_engineer: 'gear-hammer',
+  c_witcher: 'crossed-sabres', x_halfbreed: 'yin-yang', x_super: 'double-face-mask',
+};
+const ICON_OF_TYPE = { monster: 'claw-slashes', curse: 'cursed-star', enhancer: 'upgrade', wandering: 'evil-eyes', event: 'sunbeams', location: 'stone-tower', item: 'broadsword',
+  oneshot: 'fizzing-flask', buff: 'standing-potion', levelup: 'upgrade', hoard: 'open-treasure-chest', race: 'person', class: 'crossed-swords', halfbreed: 'yin-yang', supermunch: 'double-face-mask' };
+export function cardIcon(d) {
+  return ICON_OF[d.id] || (d.boss ? 'horned-skull' : d.tags?.includes('undead') ? 'skull-crossed-bones' : ICON_OF_TYPE[d.type] || 'cursed-star');
+}
+// у карты есть живописный рисунок?
+export const hasCardImg = id => CARD_IMG.has(id);
+export const cardImgUrl = id => `/cards/v1/${id}.webp?v=${CARD_IMG.get(id)}`;
 export function cardArt(d, uid = null) {
-  if (d.type === 'monster') return monsterSVG(uid || d.id + '#0');
+  if (CARD_IMG.has(d.id)) return `<img class="c-img" src="${cardImgUrl(d.id)}" alt="" loading="lazy" decoding="async" draggable="false">`;
   if (d.type === 'location') return locationSVG(d.art);
-  const kind = d.bg || (d.slot === 'pet' ? 'pet' : BG_OF[d.type] || 'item');
-  return iconScene(typeof d.art === 'string' ? d.art : 'question', kind);
+  // пока нет живописи — гравированная золотая эмблема на тёмном фоне в цвете категории
+  return `<div class="emb">${ico(cardIcon(d), 'emb-ico')}</div>`;
+}
+// значок категории для медальона (у карт с эмблемой вместо рисунка — чтобы не повторять большой знак)
+export function kindIcon(d) {
+  if (d.boss) return 'horned-skull';
+  if (d.type === 'monster') { const t = d.tags || []; return t.includes('undead') ? 'skull-crossed-bones' : t.includes('rat') ? 'rat' : t.includes('fungus') ? 'mushroom-gills' : t.includes('insect') ? 'beetle-shell' : t.includes('water') ? 'wave-crest' : t.includes('fire') ? 'flame' : t.includes('rock') ? 'stone-block' : t.includes('metro') ? 'subway-train' : 'claw-slashes'; }
+  if (d.type === 'item') return { head: 'crested-helmet', armor: 'breastplate', feet: 'boots', hand: 'broadsword', pet: 'paw-print' }[d.slot] || 'diamond-ring';
+  if (d.type === 'race') return 'person';
+  if (d.type === 'class') return 'crossed-swords';
+  return ICON_OF_TYPE[d.type] || 'cursed-star';
 }
 
 // ───────────── рубашки колод ─────────────
+// тёмный металл с золотой каймой и гравированным знаком колоды; если есть живописная рубашка — она под рамкой
 export function cardBackSVG(deck) {
-  if (deck === 'treasure') {
-    return `<svg viewBox="0 0 60 84" preserveAspectRatio="none" aria-hidden="true"><rect width="60" height="84" fill="${GD}"/><rect x="4" y="4" width="52" height="76" rx="6" fill="none" stroke="#7a4d0a" stroke-width="2" stroke-dasharray="4 3"/><g transform="translate(12 22) scale(.56)">${ICONS.chest}</g><path d="M0 0 L60 84" stroke="#fff" stroke-opacity=".14" stroke-width="18"/></svg>`;
-  }
-  return `<svg viewBox="0 0 60 84" preserveAspectRatio="none" aria-hidden="true"><rect width="60" height="84" fill="${B}"/><rect x="4" y="4" width="52" height="76" rx="6" fill="none" stroke="#14233d" stroke-width="2" stroke-dasharray="4 3"/><path d="M16 66 V36 Q16 20 30 20 Q44 20 44 36 V66Z" fill="${Br}" ${st2}/><path d="M23 66 V38 M30 66 V22 M37 66 V38" stroke="#55331f" stroke-width="1.6"/><circle cx="39" cy="48" r="2.4" fill="${GD}" ${st2}/><path d="M0 0 L60 84" stroke="#fff" stroke-opacity=".12" stroke-width="18"/></svg>`;
+  const tr = deck === 'treasure';
+  const id = tr ? 'back_treasure' : 'back_door';
+  const art = CARD_IMG.has(id) ? `<image href="${cardImgUrl(id)}" x="0" y="0" width="60" height="84" preserveAspectRatio="xMidYMid slice"/>` : '';
+  const c1 = tr ? '#5a4318' : '#22262c', c2 = tr ? '#1e1508' : '#0b0c0f', gem = tr ? '#e2b13c' : '#5b8fd0';
+  const path = ICON_PATH(tr ? 'open-treasure-chest' : 'dungeon-gate');
+  return `<svg viewBox="0 0 60 84" preserveAspectRatio="none" aria-hidden="true">
+    <defs><radialGradient id="bk-${deck}" cx="50%" cy="42%" r="70%"><stop offset="0" stop-color="${c1}"/><stop offset="1" stop-color="${c2}"/></radialGradient></defs>
+    <rect width="60" height="84" fill="url(#bk-${deck})"/>${art}
+    <rect x="2.5" y="2.5" width="55" height="79" rx="3" fill="none" stroke="#d8b26a" stroke-opacity=".75" stroke-width=".8"/>
+    <rect x="4.5" y="4.5" width="51" height="75" rx="2" fill="none" stroke="#000" stroke-opacity=".6" stroke-width=".8"/>
+    ${art ? '' : `<path d="M30 14 L33 20 L30 26 L27 20Z M30 58 L33 64 L30 70 L27 64Z" fill="#d8b26a" opacity=".7"/>
+    <circle cx="30" cy="42" r="13" fill="#0b0908" stroke="#d8b26a" stroke-width="1.2"/><circle cx="30" cy="42" r="15.2" fill="none" stroke="#d8b26a" stroke-opacity=".4" stroke-width=".6"/>
+    <g transform="translate(22.5 34.5) scale(.0293)" fill="#e2c27e">${path}</g>`}
+    ${[[6, 6], [54, 6], [6, 78], [54, 78]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="1.6" fill="${gem}" stroke="#000" stroke-width=".5"/>`).join('')}
+  </svg>`;
 }
+const ICON_PATH = name => { const m = ico(name).match(/<path[^>]*>/); return m ? m[0].replace(' fill="currentColor"', '') : ''; };
 
 // ───────────── аватары: см. art-avatar.js ─────────────
 export { avatarSVG };
@@ -309,24 +382,31 @@ export function cardHTML(uid, o = {}) {
   if (d.rarity && d.rarity !== 'common') cls.push('r-' + d.rarity);
   if (d.bg) cls.push('k-' + d.bg);
   if (d.boss) cls.push('boss');
+  if (d.type === 'item' && d.slot === 'pet') cls.push('pet');
+  if (d.type === 'enhancer' && d.bonus < 0) cls.push('weak');
+  if (CARD_IMG.has(d.id) || d.type === 'location') cls.push('painted');
   if (o.selected) cls.push('selected');
   if (o.playable) cls.push('playable');
   if (o.dim) cls.push('dim');
   if (o.cls) cls.push(o.cls);
   const c = cornerOf(d);
   const corner = c ? `<span class="corner ${c.cls}${String(c.v).length > 2 ? ' wide' : ''}" title="${c.t}">${c.v}</span>` : '';
-  let foot = '';
-  if (d.boss) foot = `<span title="Сила босса — вдвое больше силы героя, против которого он вышел">сила ×2</span><span title="Клад и уровни за победу"><i class="ico-gem"></i>${d.treasures} · +${d.levels} ур.</span>`;
-  else if (d.type === 'monster') foot = `<span title="Клад за победу"><i class="ico-gem"></i>${d.treasures}</span><span>+${d.levels || 1} ур.</span>`;
-  else if (d.type === 'item') foot = `<span>${SLOT_LABEL[d.slot] || ''}${d.hands === 2 ? ' ×2' : d.hands === 3 ? ' ×3' : ''}${d.big ? ' · большая' : ''}</span><span>${d.value ? d.value + ' г' : 'бесценно'}</span>`;
-  else if (d.value) foot = `<span>${TYPE_LABEL[d.type]}</span><span>${d.value} г</span>`;
-  else foot = `<span>${TYPE_LABEL[d.type]}</span>`;
-  const typeTag = d.boss ? 'Босс' : d.rarity === 'legendary' ? 'Легенда' : d.type === 'monster' ? (d.tags?.includes('undead') ? 'Нежить' : 'Монстр') : TYPE_LABEL[d.type];
+  // нижняя планка: слева — что даёт карта, по центру — её вид, справа — цена или уровни
+  let fl = '', fr = '', label;
+  if (d.boss) { label = 'Босс'; fl = `<span title="Сила босса — вдвое больше силы героя">сила ×2</span>`; fr = `<span title="Клад и уровни за победу"><i class="ico-gem"></i>${d.treasures} · +${d.levels}</span>`; }
+  else if (d.type === 'monster') { label = d.tags?.includes('undead') ? 'Нежить' : 'Монстр'; fl = `<span title="Клад за победу"><i class="ico-gem"></i>${d.treasures}</span>`; fr = `<span title="Уровни за победу">+${d.levels || 1} ур.</span>`; }
+  else if (d.type === 'item') {
+    label = d.slot === 'pet' ? 'Питомец' : (SLOT_LABEL[d.slot] || 'Шмотка') + (d.hands === 2 ? ' ×2' : d.hands === 3 ? ' ×3' : '');
+    fl = d.big ? '<span title="Большая вещь">больш.</span>' : '';
+    fr = `<span>${d.value ? d.value + ' г' : 'бесценно'}</span>`;
+  } else { label = d.rarity === 'legendary' ? 'Легенда' : TYPE_LABEL[d.type]; if (d.value) fr = `<span>${d.value} г</span>`; }
+  const big = o.size === 'lg';
   return `<div class="${cls.join(' ')}" data-uid="${esc(uid)}" ${o.attrs || ''} tabindex="${o.tab === false ? -1 : 0}" role="button" aria-label="${esc(d.name)}">
     <div class="c-name ${nameClass(d.name)}"><span>${esc(d.name)}</span></div>
-    <div class="c-art">${cardArt(d, uid)}${corner}<span class="c-type">${typeTag}</span></div>
+    <div class="c-art"><div class="c-pic">${cardArt(d, uid)}</div>${corner}<i class="c-medal" title="${esc(label)}">${ico(CARD_IMG.has(d.id) || d.type === 'location' ? cardIcon(d) : kindIcon(d))}</i></div>
     <div class="c-text">${cardText(d)}</div>
-    <div class="c-foot">${foot}</div>
+    <div class="c-foot"><span class="fl">${fl}</span><b class="fc">${esc(label)}</b><span class="fr">${fr}</span></div>
+    <i class="c-orn" aria-hidden="true"></i>
     <i class="c-glare" aria-hidden="true"></i>
   </div>`;
 }
@@ -334,7 +414,7 @@ export function cardHTML(uid, o = {}) {
 export function chipHTML(uid, o = {}) {
   const d = def(uid);
   const val = d.bonus ? `+${d.bonus}` : d.runBonus ? `бег +${d.runBonus}` : '';
-  return `<button class="chip ${o.cls || ''}${d.rarity && d.rarity !== 'common' ? ' r-' + d.rarity : ''}" data-uid="${esc(uid)}" title="${esc(d.name)}">${iconSVG(typeof d.art === 'string' ? d.art : 'question')}<span class="chip-name">${esc(d.name)}</span>${val ? `<b>${val}</b>` : ''}</button>`;
+  return `<button class="chip ${o.cls || ''}${d.rarity && d.rarity !== 'common' ? ' r-' + d.rarity : ''}" data-uid="${esc(uid)}" title="${esc(d.name)}">${ico(cardIcon(d), 'chip-ico')}<span class="chip-name">${esc(d.name)}</span>${val ? `<b>${val}</b>` : ''}</button>`;
 }
 
 export { TYPE_LABEL, SLOT_LABEL, RACE_NAMES, CLASS_NAMES };

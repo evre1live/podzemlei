@@ -2,6 +2,7 @@
 // Используется и отдельной страницей /guide, и окном прямо в игре.
 import { CARD_DEFS, RACE_NAMES, CLASS_NAMES, SLOT_NAMES, TAG_NAMES, ruleText, BOSS_MIN_LEVEL, BOSS_FLOOR, TROUBLE_BONUS, CONTRACTS, rewardText } from '/shared/cards.js';
 import { esc, cardHTML } from '/art.js';
+import { ico } from '/icons.js';
 
 // категории в порядке показа; у каждой — проверка карты и пояснение
 export const GUIDE_CATS = [
@@ -153,7 +154,7 @@ export function renderGuide(root, { onClose = null, standalone = false } = {}) {
     if (st.cat === 'contracts') {
       const ks = CONTRACTS.filter(k => !q || `${k.name} ${k.text} ${rewardText(k.reward)}`.toLowerCase().includes(q));
       list.innerHTML = `<h3 class="g-sec">Контракты</h3><p class="g-note">Тайные цели: у каждого игрока по одной. Выполнил — награда и новый контракт; самому отстающему ещё карта клада. Уровень по контракту не бывает последним — тогда вместо него клад.</p>`
-        + (ks.map(k => `<div class="g-contract"><span aria-hidden="true">📜</span><div><b>${esc(k.name)}</b><p>${esc(k.text)}</p><small>Награда: ${esc(rewardText(k.reward))}</small></div></div>`).join('') || '<p class="muted">Ничего не нашлось.</p>');
+        + (ks.map(k => `<div class="g-contract"><span aria-hidden="true">${ico('scroll-quill')}</span><div><b>${esc(k.name)}</b><p>${esc(k.text)}</p><small>Награда: ${esc(rewardText(k.reward))}</small></div></div>`).join('') || '<p class="muted">Ничего не нашлось.</p>');
       return;
     }
     let defs = CARD_DEFS.filter(d => (st.cat === 'all' || catOf(d) === st.cat)
