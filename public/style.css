@@ -1495,7 +1495,13 @@ label { color: var(--text-2); font-size: 14px; }
 .fx-fly .card { box-shadow: 0 18px 40px rgba(0,0,0,.6), 0 0 0 2px rgba(255,255,255,.6); }
 
 /* главная: название игры — единственное крупное золото */
-.home { background: linear-gradient(180deg, rgba(10,10,12,.55), rgba(10,10,12,.88) 55%, rgba(10,10,12,.97)), url(/loc/v1/default.webp) center top / cover no-repeat; background-color: #0e0e10; }
+/* фон меню — живописный подземный город за воротами: картинка по ширине экрана (на телефоне — по высоте), ниже неё — тёмный камень */
+.home { --menu-w: max(100vw, 140vh);
+  background: linear-gradient(90deg, rgba(10,10,12,.74), rgba(10,10,12,.12) 60%, rgba(10,10,12,.38)) 0 0 / 100% 100% no-repeat,
+    linear-gradient(180deg, rgba(10,10,12,.12), rgba(10,10,12,.42) 55%, #0e0e10 97%) center top / var(--menu-w) calc(var(--menu-w) * 2 / 3) no-repeat,
+    url(/ui/v1/menu.webp) center top / var(--menu-w) auto no-repeat;
+  background-color: #0e0e10; }
+@media (max-width: 700px) { .home { background: linear-gradient(180deg, rgba(10,10,12,.3), rgba(10,10,12,.62) 45%, #0e0e10 97%) center top / var(--menu-w) calc(var(--menu-w) * 2 / 3) no-repeat, url(/ui/v1/menu.webp) center top / var(--menu-w) auto no-repeat; background-color: #0e0e10; } }
 .home .b-surface, .home .b-clay, .home .b-rock { background: transparent; box-shadow: none; }
 .home .home-main { background: linear-gradient(180deg, transparent, rgba(10,10,12,.6) 30%); }
 .title { font-family: var(--title); font-weight: 700; letter-spacing: .04em; color: transparent; text-shadow: none;
