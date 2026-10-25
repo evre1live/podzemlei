@@ -1,13 +1,14 @@
 // Точечные проверки правил.
 import assert from 'node:assert/strict';
 import { createGame, act, tick, view, combatNumbers, P, saleValue, fillText } from '../shared/engine.js';
+import { botDecide } from '../shared/bot.js';
 import { def } from '../shared/cards.js';
 import { AVATAR_PARTS, cleanAvatar, avatarFromSeed, withGender } from '../shared/avatar.js';
 
 let seed = 7; const rng = () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
 function fresh(n = 3) {
   const s = createGame(Array.from({ length: n }, (_, i) => ({ id: 'p' + i, name: 'И' + i })), { winDelayMs: 5000 }, rng);
-  for (const p of s.players) { for (const u of p.hand) s.discard[def(u).deck].push(u); p.hand = []; }
+  for (const p of s.players) { for (const u of p.hand) s.discard[def(u).deck].push(u); p.hand = []; p.contract = null; }
   s.turn = { idx: 0, pid: 'p0', step: 'pre', n: 1 };
   return s;
 }
@@ -115,7 +116,7 @@ t('чужая рука скрыта в представлении', () => {
   assert.ok(Array.isArray(v.players[0].hand)); assert.equal(typeof v.decks.door, 'number');
 });
 
-t('смерть: вещи разбирают, уровень остаётся, возрождение с 8 картами', () => {
+t('смерть: вещи разбирают, −1 уровень, возрождение с 8 картами', () => {
   const s = fresh(); const p = P(s, 'p0'); p.level = 4;
   p.hand.push(take(s, 'i_helmet#0'), take(s, 'i_boots#0'));
   A(s, 'p0', { type: 'playCard', uid: 'i_helmet#0' });
@@ -124,7 +125,7 @@ t('смерть: вещи разбирают, уровень остаётся, �
   let tries = 0;
   while (s.combat && tries++ < 50) { const r = A(s, 'p0', { type: 'runAway' }); if (!r.ok) break; }
   if (p.dead) {
-    assert.equal(p.level, 4); assert.equal(p.hand.length + p.equipped.length, 0);
+    assert.equal(p.level, 3); assert.equal(p.hand.length + p.equipped.length, 0);
     A(s, 'p0', { type: 'endTurn' }); assert.equal(p.dead, false);
     A(s, 'p1', { type: 'kick' }); if (!s.combat) { A(s, 'p1', { type: 'loot' }); }
   }
@@ -508,14 +509,14 @@ t('босс не гонится за героями ниже 9-го уровня
   }
 });
 
-t('босс догнал героя 9-го уровня: −5 уровней и смерть, раса и класс остаются', () => {
+t('босс догнал героя 9-го уровня: −5 уровней и смерть (ещё −1), раса и класс остаются', () => {
   const s = fresh(); const p = P(s, 'p0'); p.level = 9;
   p.races.push(take(s, 'r_elf#0')); p.classes.push(take(s, 'c_warrior#0'));
   p.equipped.push(take(s, 'i_helmet#0')); p.hand.push(take(s, 'l_stash#0'));
   fight(s, 'm_anubis#0');
   assert.equal(runWith(s, 'p0', lowDie).ok, true);
   assert.equal(s.combat, null);
-  assert.equal(p.level, 4); assert.equal(p.dead, true);
+  assert.equal(p.level, 3); assert.equal(p.dead, true);
   assert.deepEqual([p.races, p.classes, p.equipped, p.hand], [['r_elf#0'], ['c_warrior#0'], [], []]);
   assert.ok(s.fx.some(f => f.kind === 'levelDown' && f.pid === 'p0' && f.from === 9 && f.to === 4));
   assert.ok(s.fx.some(f => f.kind === 'death' && f.pid === 'p0'));
@@ -567,6 +568,8 @@ t('«Искать неприятности»: бой со случайным м�
   const s = fresh(); const p = P(s, 'p0'); p.level = 3;
   s.turn.step = 'post';
   const handMon = take(s, 'm_troll#0'); p.hand.push(handMon);
+  // монстры с засадой могут выбить карты из руки — для этой проверки уберём их в сброс
+  for (let i = s.decks.door.length - 1; i >= 0; i--) if (def(s.decks.door[i]).ambush) s.discard.door.push(...s.decks.door.splice(i, 1));
   const deckMons = s.decks.door.filter(u => def(u).type === 'monster').length;
   assert.equal(A(s, 'p0', { type: 'lookForTrouble' }).ok, true);
   assert.ok(s.combat);
@@ -664,6 +667,186 @@ t('«Ты мой раб» вне своего боя не играется', () 
   fight(s, 'm_mosquito#0', 'p0');
   const o = P(s, 'p1'); o.hand.push(take(s, 'o_slave#1'));
   assert.match(A(s, 'p1', { type: 'playCard', uid: 'o_slave#1', target: 'p2' }).error, /своём бою/);
+});
+
+// ───────────────────────── глубина ─────────────────────────
+t('глубина: в партии до 10 — каждые 3 круга монстры +1, дно на 3; с 3-й глубины — лишний клад; боссов не касается', () => {
+  const s = fresh(); const p = P(s, 'p0');
+  s.round = 2; s.turn = { idx: 2, pid: 'p2', step: 'charity', n: 9 };
+  assert.equal(A(s, 'p2', { type: 'endTurn' }).ok, true); // начинается 4-й круг
+  assert.equal(s.round, 3); assert.equal(s.depth, 1);
+  assert.ok(s.log.some(l => /глубже: глубина 1/.test(l.text)));
+  assert.equal(view(s, 'p0').depth.level, 1); assert.equal(view(s, 'p0').depth.bonus, 1);
+  fight(s, 'm_roach#0'); // ур. 2
+  assert.equal(combatNumbers(s).monsters, 3);
+  assert.equal(combatNumbers(s).treasures, def('m_roach#0').treasures);
+  s.depth = 3;
+  assert.equal(combatNumbers(s).monsters, 5);
+  assert.equal(combatNumbers(s).treasures, def('m_roach#0').treasures + 1);
+  // дно: глубже третьей в партии до 10 не спускаемся
+  const d = fresh(); d.depth = 3; d.round = 8; d.turn = { idx: 2, pid: 'p2', step: 'charity', n: 27 };
+  A(d, 'p2', { type: 'endTurn' });
+  assert.equal(d.round, 9); assert.equal(d.depth, 3);
+  const b = fresh(); P(b, 'p0').level = 9; b.depth = 5;
+  fight(b, 'm_lucifer#0');
+  assert.equal(combatNumbers(b).monsters, 30, 'босс: только вдвое против героя или 30');
+});
+
+// ───────────────────────── смерть и призрак ─────────────────────────
+t('смерть стоит уровня, но не ниже первого', () => {
+  const s = fresh(); const p = P(s, 'p0'); p.level = 1;
+  fight(s, 'm_kraken#0');
+  runWith(s, 'p0', lowDie);
+  assert.equal(p.dead, true); assert.equal(p.level, 1);
+});
+
+t('призрак: раз за ход ±2 в чужом бою; живым нельзя', () => {
+  const s = fresh(); const p = P(s, 'p0'); const g = P(s, 'p1'); p.level = 3;
+  g.needsRevive = true; // погиб и ждёт своего хода
+  fight(s, 'm_roach#0'); // 2
+  const before = combatNumbers(s).monsters;
+  assert.equal(A(s, 'p1', { type: 'haunt', side: 'monster' }).ok, true);
+  assert.equal(combatNumbers(s).monsters, before + 2);
+  assert.ok(s.fx.some(f => f.kind === 'haunt' && f.pid === 'p1'));
+  assert.match(A(s, 'p1', { type: 'haunt', side: 'player' }).error, /раз за ход/);
+  assert.match(A(s, 'p2', { type: 'haunt', side: 'player' }).error, /погибший/);
+  assert.match(A(s, 'p0', { type: 'haunt', side: 'player' }).error, /погибший/);
+  assert.equal(view(s, 'p0').players[1].ghost, true);
+  assert.equal(view(s, 'p0').hints === null, false);
+  // против «только уровня» героям призрак не поможет
+  const s2 = fresh(); P(s2, 'p1').needsRevive = true; fight(s2, 'm_likho#0');
+  assert.match(A(s2, 'p1', { type: 'haunt', side: 'player' }).error, /только уровень/);
+});
+
+// ───────────────────────── контракты ─────────────────────────
+t('контракт: «Сталкер» — три обыска, награда и новый контракт', () => {
+  const s = fresh(); const p = P(s, 'p0'); p.level = 4; P(s, 'p1').level = 2;
+  p.contract = { id: 'q_loot', progress: 0 };
+  for (let i = 0; i < 3; i++) {
+    s.turn = { idx: 0, pid: 'p0', step: 'post', n: 1 };
+    assert.equal(A(s, 'p0', { type: 'loot' }).ok, true);
+  }
+  assert.equal(p.contractsDone, 1);
+  assert.notEqual(p.contract.id, 'q_loot'); assert.equal(p.contract.progress, 0);
+  assert.equal(p.hand.length, 3 + 2); // три карты обыска и два клада
+  assert.ok(s.log.some(l => /контракт «Сталкер»/.test(l.text)));
+  assert.ok(s.fx.some(f => f.kind === 'contract' && f.pid === 'p0'));
+  // свой контракт виден только себе
+  assert.ok(view(s, 'p0').players[0].contract.name);
+  assert.equal(view(s, 'p1').players[0].contract, undefined);
+  assert.equal(view(s, 'p1').players[0].contractsDone, 1);
+});
+
+t('контракт: отстающему ещё карта, а на последнем уровне вместо уровня — клад', () => {
+  const s = fresh(); const p = P(s, 'p0'); p.level = 1; P(s, 'p1').level = 3; P(s, 'p2').level = 3;
+  p.contract = { id: 'q_trouble', progress: 0 };
+  s.turn.step = 'post';
+  for (let i = s.decks.door.length - 1; i >= 0; i--) if (def(s.decks.door[i]).type === 'monster') s.discard.door.push(...s.decks.door.splice(i, 1));
+  s.decks.door.push(take(s, 'm_floorboard#0'));
+  p.equipped.push(take(s, 'i_jackhammer#0'));
+  assert.equal(A(s, 'p0', { type: 'lookForTrouble' }).ok, true);
+  A(s, 'p0', { type: 'fight' }, 1000); tick(s, { rng, now: 9000 });
+  assert.equal(p.level, 3); // +1 за монстра, +1 по контракту
+  assert.ok(s.log.some(l => /отстающему/.test(l.text)));
+  const w = fresh(); const q = P(w, 'p0'); q.level = 8;
+  q.contract = { id: 'q_big', progress: 0 };
+  q.equipped.push(take(w, 'i_jackhammer#0'), take(w, 'p_golddragon#0'));
+  fight(w, 'm_zhek#0'); // 12 ур.
+  A(w, 'p0', { type: 'fight' }, 1000); tick(w, { rng, now: 9000 });
+  assert.equal(q.level, 9);
+  assert.ok(w.log.some(l => /«Крупная дичь».*2 карты клада/.test(l.text)));
+});
+
+// ───────────────────────── обмен ─────────────────────────
+t('обмен: предложение, согласие, отказ и устаревшее предложение', () => {
+  const s = fresh(); const a = P(s, 'p0'); const b = P(s, 'p1');
+  a.equipped.push(take(s, 'i_helmet#0')); a.hand.push(take(s, 'i_boots#0'));
+  b.carried.push(take(s, 'i_ladle#0')); b.equipped.push(take(s, 'i_pick#0'));
+  assert.match(A(s, 'p0', { type: 'offerTrade', to: 'p1', give: [], want: [] }).error, /Выберите/);
+  assert.match(A(s, 'p0', { type: 'offerTrade', to: 'p1', give: ['i_helmet#0'], want: ['i_boots#0'] }).error, /со стола соперника/);
+  assert.equal(A(s, 'p0', { type: 'offerTrade', to: 'p1', give: ['i_helmet#0', 'i_boots#0'], want: ['i_ladle#0'] }).ok, true);
+  const id = s.trades[0].id;
+  assert.equal(view(s, 'p2').trades.length, 0, 'чужие сделки не видны');
+  assert.equal(view(s, 'p1').trades.length, 1);
+  assert.match(A(s, 'p2', { type: 'answerTrade', id, accept: true }).error, /нет/);
+  assert.equal(A(s, 'p1', { type: 'answerTrade', id, accept: true }).ok, true);
+  assert.deepEqual(b.carried.sort(), ['i_boots#0', 'i_helmet#0']);
+  assert.ok(a.carried.includes('i_ladle#0'));
+  assert.equal(s.trades.length, 0);
+  // отказ
+  A(s, 'p0', { type: 'offerTrade', to: 'p1', give: ['i_ladle#0'], want: ['i_pick#0'] });
+  A(s, 'p1', { type: 'answerTrade', id: s.trades[0].id, accept: false });
+  assert.ok(a.carried.includes('i_ladle#0')); assert.ok(b.equipped.includes('i_pick#0'));
+  // вещь продали — предложение устарело
+  A(s, 'p0', { type: 'offerTrade', to: 'p1', give: ['i_ladle#0'], want: ['i_pick#0'] });
+  A(s, 'p0', { type: 'discardInPlay', uid: 'i_ladle#0' });
+  assert.match(A(s, 'p1', { type: 'answerTrade', id: s.trades[0].id, accept: true }).error, /устарело/);
+  // в бою не меняются
+  const c = fresh(); P(c, 'p0').equipped.push(take(c, 'i_helmet#0')); fight(c, 'm_roach#0');
+  assert.match(A(c, 'p0', { type: 'offerTrade', to: 'p1', give: ['i_helmet#0'], want: [] }).error, /боя/);
+});
+
+t('обмен засчитывается в контракт «Купец»', () => {
+  const s = fresh(); const a = P(s, 'p0'); const b = P(s, 'p1');
+  a.contract = { id: 'q_trade', progress: 0 }; b.contract = { id: 'q_trade', progress: 0 };
+  a.carried.push(take(s, 'i_helmet#0'));
+  A(s, 'p0', { type: 'offerTrade', to: 'p1', give: ['i_helmet#0'], want: [] });
+  A(s, 'p1', { type: 'answerTrade', id: s.trades[0].id, accept: true });
+  assert.equal(a.contractsDone, 1); assert.equal(b.contractsDone, 1);
+});
+
+// ───────────────────────── боты ─────────────────────────
+t('бот играет «Детёныша» на своего монстра, когда не хватает силы', () => {
+  const s = fresh(); const p = P(s, 'p0'); p.isBot = true; p.level = 3;
+  p.hand.push(take(s, 'e_baby#0'));
+  fight(s, 'm_gossip#0'); // 6 против 3
+  const a = botDecide(s, 'p0', { rng, now: 1000 });
+  assert.deepEqual(a, { type: 'playCard', uid: 'e_baby#0', monster: 0 });
+  assert.equal(A(s, 'p0', a).ok, true);
+  assert.equal(combatNumbers(s).winning, true);
+});
+
+t('мстительный бот проклинает обидчика, а не лидера', () => {
+  const s = fresh(); const p = P(s, 'p0'); p.isBot = true; p.persona = 'vengeful';
+  P(s, 'p1').level = 6; P(s, 'p2').level = 2;
+  s.grudges = { p0: { p2: 2 } };
+  p.hand.push(take(s, 'k_flu#0'));
+  const a = botDecide(s, 'p0', { rng, now: 1000 });
+  assert.equal(a.type, 'playCard'); assert.equal(a.target, 'p2');
+  // обычный бот бьёт лидера
+  p.persona = null;
+  assert.equal(botDecide(s, 'p0', { rng, now: 1000 }).target, 'p1');
+});
+
+t('бот принимает выгодный обмен и отклоняет грабительский', () => {
+  const s = fresh(); const b = P(s, 'p1'); b.isBot = true; const a = P(s, 'p0');
+  b.equipped.push(take(s, 'i_ladle#0')); a.carried.push(take(s, 'i_jackhammer#0'), take(s, 'i_helmet#0'));
+  A(s, 'p0', { type: 'offerTrade', to: 'p1', give: ['i_jackhammer#0'], want: ['i_ladle#0'] });
+  let d = botDecide(s, 'p1', { rng, now: 1000 });
+  assert.equal(d.type, 'answerTrade'); assert.equal(d.accept, true);
+  A(s, 'p1', d);
+  A(s, 'p0', { type: 'offerTrade', to: 'p1', give: [], want: ['i_jackhammer#0'] });
+  d = botDecide(s, 'p1', { rng, now: 1000 });
+  assert.equal(d.accept, false);
+});
+
+t('бот-призрак мешает тому, кто вот-вот победит', () => {
+  const s = fresh(); const f = P(s, 'p0'); const g = P(s, 'p1'); g.isBot = true; g.needsRevive = true;
+  f.level = 9;
+  fight(s, 'm_roach#0'); // 2 против 9 — не перебить
+  assert.equal(botDecide(s, 'p1', { rng, now: 1000 }), null);
+  const s2 = fresh(); const f2 = P(s2, 'p0'); const g2 = P(s2, 'p1'); g2.isBot = true; g2.needsRevive = true;
+  f2.level = 9; fight(s2, 'm_watchman#0'); // ур. 9 против 9 — ничья, а с +2 монстрам проигрыш
+  f2.level = 9; s2.combat.mods.push({ side: 'player', n: 1, by: 'p0', uid: null, label: 'тест' });
+  assert.deepEqual(botDecide(s2, 'p1', { rng, now: 1000 }), { type: 'haunt', side: 'monster' });
+});
+
+t('бот выкладывает выгодную локацию', () => {
+  const s = fresh(); const p = P(s, 'p0'); p.isBot = true;
+  p.hand.push(take(s, 'loc_crystal#0')); // всем героям +2
+  s.turn.step = 'post';
+  const a = botDecide(s, 'p0', { rng, now: 1000 });
+  assert.deepEqual(a, { type: 'playCard', uid: 'loc_crystal#0' });
 });
 
 console.log(`Правила: ${n} проверок пройдено.`);

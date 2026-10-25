@@ -3,7 +3,20 @@ import { def, TROUBLE_BONUS, MUTAGEN_BONUS, LULLABY_PENALTY, LULLABY_MAX, DISTIL
 import {
   P, check, combatNumbers, playOptions, handLimit, hasClass, hasRace, cardWorth,
   equipError, participants, heroStrength, levelOnlyFight, winLevel, luxLevel, saleValue, monsterBaseLevel, powerOf, locationOf,
+  isGhost, grudgeOf,
 } from './engine.js';
+import { GHOST_BONUS } from './cards.js';
+
+// Характеры: осторожный реже ищет неприятности и помогает только наверняка, жадный рискует и торгуется,
+// мстительный помнит, кто ему мешал, и отвечает тем же.
+const persona = p => p.persona || 'normal';
+const TROUBLE_RATIO = { cautious: 0.8, greedy: 0.5, vengeful: 0.65, normal: 0.65 };
+// кто больше всех насолил этому игроку (и насолил хоть раз)
+function worstEnemy(s, p) {
+  let best = null, n = 0;
+  for (const x of s.players) { const g = grudgeOf(s, p.id, x.id); if (x !== p && g > n) { n = g; best = x; } }
+  return best;
+}
 
 const byWorth = list => [...list].sort((a, b) => cardWorth(a) - cardWorth(b));
 
@@ -41,10 +54,21 @@ export function botDecide(s, pid, { rng = Math.random, now = Date.now() } = {}) 
     const mine = heroStrength(s, p);
     const wouldWin = n.heroes + mine > n.monsters || (hasClass(p, 'warrior') && n.heroes + mine === n.monsters);
     const givesGame = f.level + n.levels >= winLevel(s);
-    const worth = c.helpReq.offer > 0 || hasRace(p, 'elf');
-    return { type: 'answerHelp', accept: !!(wouldWin && !givesGame && worth) };
+    const per = persona(p);
+    const margin = n.heroes + mine - n.monsters;
+    const worth = (per === 'greedy' ? c.helpReq.offer >= 2 : c.helpReq.offer > 0) || hasRace(p, 'elf');
+    const sure = per !== 'cautious' || margin >= 2;
+    const enemy = per === 'vengeful' && grudgeOf(s, p.id, f.id) > 0;
+    return { type: 'answerHelp', accept: !!(wouldWin && !givesGame && worth && sure && !enemy) };
+  }
+  // нам предложили обмен
+  const offer = (s.trades || []).find(o => o.to === pid);
+  if (offer) {
+    const yes = tradeWorth(s, p, offer) && ok({ type: 'answerTrade', id: offer.id, accept: true });
+    return { type: 'answerTrade', id: offer.id, accept: yes };
   }
   if (p.dead) return s.turn.pid === pid && !c && s.turn.step === 'charity' ? { type: 'endTurn', give: [] } : null;
+  if (c && isGhost(p) && !participants(s).includes(pid)) { const g = ghostMove(s, p); if (g) return g; }
 
   if (c && c.fighter === pid) return fighterMove(s, p, rng, now);
   if (c && c.helper === pid) return helperMove(s, p);
@@ -67,14 +91,18 @@ function boostSelf(s, p, gap) {
   const onlyLevel = levelOnlyFight(s);
   const isBoost = u => !onlyLevel && ((def(u).type === 'oneshot' && def(u).effect === 'bonus') || def(u).type === 'buff');
   const bonusCards = hand.filter(isBoost).sort((a, b) => val(b) - val(a));
-  const cheap = byWorth(hand.filter(u => !isBoost(u) && def(u).type !== 'levelup'));
+  // «Детёныш», «Дряхлый», «Простуженный» — ослабить своего монстра (на боссов не действуют)
+  const target = c.monsters.map((m, i) => ({ i, boss: def(m.uid).boss })).filter(x => !x.boss).map(x => x.i)[0];
+  const debuffs = target === undefined ? [] : hand.filter(u => def(u).type === 'enhancer' && def(u).bonus < 0).sort((a, b) => def(a).bonus - def(b).bonus);
+  const cheap = byWorth(hand.filter(u => !isBoost(u) && def(u).type !== 'levelup' && !debuffs.includes(u)));
   const turnLeft = !onlyLevel && hasClass(p, 'cleric') && undead ? 3 - (c.turnCount[p.id] || 0) : 0;
   const rageLeft = !onlyLevel && hasClass(p, 'warrior') ? 3 - (c.rageCount[p.id] || 0) : 0;
   const songLeft = hasClass(p, 'bard') ? LULLABY_MAX - (c.lullaby[p.id] || 0) : 0;
   const mutagen = !onlyLevel && hasClass(p, 'witcher') && !p.mutagenUsed && cheap.length >= 2;
   const potential = bonusCards.reduce((a, u) => a + val(u), 0)
     + Math.min(turnLeft, cheap.length) * 3 + Math.min(songLeft, cheap.length) * LULLABY_PENALTY
-    + Math.min(rageLeft, Math.max(0, cheap.length - turnLeft)) + (mutagen ? MUTAGEN_BONUS : 0);
+    + Math.min(rageLeft, Math.max(0, cheap.length - turnLeft)) + (mutagen ? MUTAGEN_BONUS : 0)
+    + debuffs.reduce((a, u) => a - def(u).bonus, 0);
   if (potential < gap) return null;
   // мутаген — раз за партию: пьём, когда без него не хватает много
   if (mutagen && gap > Math.max(3, potential - MUTAGEN_BONUS)) return { type: 'ability', name: 'mutagen', cards: cheap.slice(0, 2) };
@@ -86,6 +114,10 @@ function boostSelf(s, p, gap) {
   if (bonusCards.length) {
     const fit = [...bonusCards].reverse().find(u => val(u) >= gap) || bonusCards[0];
     return def(fit).type === 'buff' ? { type: 'playCard', uid: fit } : { type: 'playCard', uid: fit, side: 'player' };
+  }
+  if (debuffs.length) {
+    const fit = [...debuffs].reverse().find(u => -def(u).bonus >= gap) || debuffs[0];
+    return { type: 'playCard', uid: fit, monster: target };
   }
   if (rageLeft > 0 && cheap.length) {
     return { type: 'ability', name: 'rage', cards: cheap.slice(0, Math.min(rageLeft, gap, cheap.length)) };
@@ -127,7 +159,8 @@ function fighterMove(s, p, rng, now) {
       .filter(o => o.str >= gap)
       .sort((a, b) => a.str - b.str);
     if (cands.length && n.treasures >= 0) {
-      const offer = Math.min(n.treasures, Math.max(1, Math.ceil(n.treasures / 2)));
+      const share = persona(p) === 'greedy' ? Math.floor(n.treasures / 3) : persona(p) === 'cautious' ? Math.ceil(n.treasures * 0.6) : Math.ceil(n.treasures / 2);
+      const offer = Math.min(n.treasures, Math.max(1, share));
       const a = { type: 'askHelp', to: cands[0].x.id, offer };
       if (!check(s, p.id, a)) return a;
     }
@@ -160,7 +193,9 @@ function interfere(s, p) {
   const forGame = f.level + n.levels >= winLevel(s);
   const top = leader(s, null);
   const isLeader = f.level >= winLevel(s) - 4 && f.level >= top.level && f.id !== p.id;
-  if (!forGame && !isLeader) return null;
+  const revenge = persona(p) === 'vengeful' && grudgeOf(s, p.id, f.id) > 0;
+  if (persona(p) === 'cautious' && !forGame) return null;
+  if (!forGame && !isLeader && !revenge) return null;
   const margin = n.heroes - n.monsters + (n.warrior ? 1 : 0); // сколько добавить монстрам
   const opts = [];
   for (const u of p.hand) {
@@ -211,13 +246,11 @@ function turnMove(s, p, rng) {
       if (d.type === 'levelup' && ok({ type: 'playCard', uid: u })) return { type: 'playCard', uid: u };
     }
     if (greedyBonus(p) > curBonus(p) && ok({ type: 'autoEquip' })) return { type: 'autoEquip' };
-    // локация: выкладываем, если она нам выгодна или стола пусто
-    for (const u of p.hand) {
-      const d = def(u);
-      if (d.type !== 'location' || !ok({ type: 'playCard', uid: u })) continue;
-      const mine = (d.heroMod || []).some(m => (m.cls && hasClass(p, m.cls)) || (m.race && hasRace(p, m.race)));
-      if (mine || d.treasureBonus || d.heroAll > 0 || d.levelBonus || d.handBonus || (!s.location && step === 'pre')) return { type: 'playCard', uid: u };
-    }
+    // локация: выкладываем, если она нам выгоднее той, что лежит на столе
+    const cur = s.location ? locScore(p, def(s.location)) : 0;
+    const locs = p.hand.filter(u => def(u).type === 'location' && ok({ type: 'playCard', uid: u }))
+      .map(u => ({ u, v: locScore(p, def(u)) })).sort((a, b) => b.v - a.v);
+    if (locs[0] && (locs[0].v > cur + 0.5 || (!s.location && locs[0].v >= 0))) return { type: 'playCard', uid: locs[0].u };
     // событие: играем, если оно нас не бьёт
     for (const u of p.hand) {
       const d = def(u);
@@ -237,6 +270,8 @@ function turnMove(s, p, rng) {
     // проклясть лидера
     const curse = p.hand.find(u => def(u).type === 'curse');
     if (curse && step === 'pre') {
+      const foe = persona(p) === 'vengeful' ? worstEnemy(s, p) : null;
+      if (foe && !foe.dead && ok({ type: 'playCard', uid: curse, target: foe.id })) return { type: 'playCard', uid: curse, target: foe.id };
       const top = leader(s, id);
       if (top && top.level >= p.level && ok({ type: 'playCard', uid: curse, target: top.id })) return { type: 'playCard', uid: curse, target: top.id };
     }
@@ -264,12 +299,58 @@ function turnMove(s, p, rng) {
     const power = powerOf(s, p) + (p.nextCombat || 0);
     const pool = s.decks.door.filter(u => def(u).type === 'monster');
     const beatable = pool.filter(u => !def(u).boss && !def(u).levelOnly && monsterBaseLevel(s, def(u)) + 1 + TROUBLE_BONUS < power).length;
-    if (pool.length >= 4 && beatable / pool.length >= 0.65 && ok({ type: 'lookForTrouble' })) return { type: 'lookForTrouble' };
+    if (pool.length >= 4 && beatable / pool.length >= TROUBLE_RATIO[persona(p)] && ok({ type: 'lookForTrouble' })) return { type: 'lookForTrouble' };
     return { type: 'loot' };
   }
   if (step === 'charity') {
     const excess = Math.max(0, p.hand.length - handLimit(p, s));
     return { type: 'endTurn', give: byWorth(p.hand).slice(0, excess) };
   }
+  return null;
+}
+
+// насколько локация хороша для этого героя
+function locScore(p, d) {
+  let v = (d.heroAll || 0) - (d.monsterAll || 0);
+  for (const m of d.heroMod || []) if ((m.cls && hasClass(p, m.cls)) || (m.race && hasRace(p, m.race))) v += m.n;
+  if (d.lightBonus && p.equipped.some(u => (def(u).tags || []).includes('light'))) v += d.lightBonus;
+  v += (d.treasureBonus || 0) * 0.8 + (d.levelBonus || 0) * 2 + (d.handBonus ? 0.5 : 0) + (d.escapeAll || 0) * 0.5 + (d.helperBonus ? 0.3 : 0);
+  if (d.saleRate && d.saleRate < 1000) v += 1;
+  if (d.noCurses) v += 0.5;
+  for (const t of d.monsterTag || []) v -= t.n * 0.15;
+  return v;
+}
+
+// выгоден ли обмен: считаем, как изменится лучший набор надетых вещей и цена барахла
+function tradeWorth(s, p, o) {
+  const f = P(s, o.from);
+  if (!f || f.dead || p.dead) return false;
+  if (persona(p) === 'vengeful' && grudgeOf(s, p.id, f.id) > 0) return false;
+  const swap = (x, out, inn) => ({ ...x, equipped: x.equipped.filter(u => !out.includes(u)), carried: [...x.carried.filter(u => !out.includes(u)), ...inn] });
+  const val = list => list.reduce((a, u) => a + (def(u).value || 0), 0);
+  const mine = greedyBonus(swap(p, o.want, o.give)) - greedyBonus(p) + (val(o.give) - val(o.want)) / 200;
+  // почти победителю не помогаем
+  const theirs = greedyBonus(swap({ ...f, carried: [...f.carried, ...f.hand.filter(u => o.give.includes(u))] }, o.give, o.want)) - greedyBonus({ ...f, carried: [...f.carried, ...f.hand.filter(u => o.give.includes(u))] });
+  if (f.level >= winLevel(s) - 2 && theirs > 0) return false;
+  const need = persona(p) === 'greedy' ? 6 : 1;
+  return mine >= need;
+}
+
+// погибший герой-призрак: мешает тому, кто вот-вот победит, или выручает самого отстающего
+function ghostMove(s, p) {
+  const c = s.combat;
+  if ((s.turn.haunted || []).includes(p.id)) return null;
+  const n = combatNumbers(s);
+  const f = P(s, c.fighter);
+  const W = winLevel(s);
+  const top = leader(s, null);
+  const forGame = f.level + n.levels >= W;
+  const threat = forGame || (f.level >= W - 3 && f.level >= top.level) || (persona(p) === 'vengeful' && grudgeOf(s, p.id, f.id) > 0);
+  const margin = n.heroes - n.monsters + (n.warrior ? 1 : 0);
+  if (n.winning && threat && margin <= GHOST_BONUS && !check(s, p.id, { type: 'haunt', side: 'monster' })) return { type: 'haunt', side: 'monster' };
+  const others = s.players.filter(x => x !== p);
+  const low = f.level <= Math.min(...others.map(x => x.level));
+  const gap = n.monsters - n.heroes + (n.warrior ? 0 : 1);
+  if (!n.winning && !forGame && low && gap <= GHOST_BONUS && !check(s, p.id, { type: 'haunt', side: 'player' })) return { type: 'haunt', side: 'player' };
   return null;
 }

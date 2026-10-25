@@ -36,6 +36,39 @@ export const MUTAGEN_BONUS = 6;  // мутаген, раз за партию
 export const LULLABY_PENALTY = 2; // колыбельная барда: монстры слабее на столько
 export const LULLABY_MAX = 1;     // и не чаще раза за бой
 export const DISTILL_COST = 3;    // перегонка алхимика: столько карт сбросить
+
+// Глубина: каждые every кругов подземелье уходит глубже, и все монстры, кроме боссов, получают +1 к силе за каждую глубину.
+// Глубже max не спускаемся: иначе монстры со временем становятся непобедимыми и партия не кончается.
+// В длинных партиях спуск глубже — иначе к середине партии монстры перестают пугать.
+export const DEPTH = { 10: { every: 3, max: 3 }, 15: { every: 1, max: 7 }, 20: { every: 1, max: 8 } };
+export const DEPTH_TREASURE_EVERY = 3; // с каждой третьей глубины победа приносит ещё карту клада
+// Смерть стоит уровня, а погибший, пока ждёт своего хода, — призрак: раз за ход подкидывает ±2 в чужой бой.
+export const DEATH_LEVELS = 1;
+export const GHOST_BONUS = 2;
+// Обмен: предложение ждёт ответа столько, потом считается отклонённым
+export const TRADE_TIMEOUT_MS = 30000;
+// Характеры ботов
+export const PERSONAS = { cautious: 'осторожный', greedy: 'жадный', vengeful: 'мстительный' };
+
+// Контракты — тайные цели. Выполнил — награда и новый контракт; самому отстающему ещё карта клада.
+// ev — какое событие двигает счётчик, need — сколько раз, reward — уровень (не победный) или карты клада.
+export const CONTRACTS = [
+  { id: 'q_undead', name: 'Охотник на нежить', text: 'Победи 2 монстров-нежить.', ev: 'kill', tag: 'undead', need: 2, reward: { levels: 1 } },
+  { id: 'q_big', name: 'Крупная дичь', text: 'Победи монстра 12-го уровня или выше.', ev: 'kill', minLevel: 12, need: 1, reward: { levels: 1 } },
+  { id: 'q_solo', name: 'Одиночка', text: 'Победи 2 раза без помощника.', ev: 'killSolo', need: 2, reward: { levels: 1 } },
+  { id: 'q_help', name: 'Плечо друга', text: 'Помоги другому победить 2 раза.', ev: 'helpWin', need: 2, reward: { levels: 1 } },
+  { id: 'q_trouble', name: 'Искатель приключений', text: 'Найди неприятности и победи.', ev: 'troubleWin', need: 1, reward: { levels: 1 } },
+  { id: 'q_beasts', name: 'Зверолов', text: 'Победи 2 монстров-зверей: крысу, насекомое или водного.', ev: 'kill', tags: ['rat', 'insect', 'water'], need: 2, reward: { treasures: 2 } },
+  { id: 'q_sell', name: 'Барыга', text: 'Продай 3 вещи.', ev: 'sellItem', need: 3, reward: { treasures: 2 } },
+  { id: 'q_loot', name: 'Сталкер', text: 'Обшарь 3 комнаты.', ev: 'loot', need: 3, reward: { treasures: 2 } },
+  { id: 'q_flee', name: 'Ноги в руки', text: 'Удери от монстра 2 раза.', ev: 'escape', need: 2, reward: { treasures: 2 } },
+  { id: 'q_curse', name: 'Злой язык', text: 'Наложи 2 проклятия на соперников.', ev: 'curse', need: 2, reward: { treasures: 2 } },
+  { id: 'q_potion', name: 'Зельевар', text: 'Используй 3 разовые карты или зелья.', ev: 'oneshot', need: 3, reward: { treasures: 2 } },
+  { id: 'q_outfit', name: 'Модник', text: 'Надень разом головняк, броник и обувку.', ev: 'outfit', need: 1, reward: { treasures: 2 } },
+  { id: 'q_trade', name: 'Купец', text: 'Обменяйся вещами с другим игроком.', ev: 'trade', need: 1, reward: { treasures: 2 } },
+];
+export const CONTRACT_DEFS = Object.fromEntries(CONTRACTS.map(k => [k.id, k]));
+export const rewardText = r => (r.levels ? `+${r.levels} уровень` : `${r.treasures} карты клада`);
 const BOSS = (id, name, extra) => ({
   id, deck: 'door', type: 'monster', boss: true, name, level: BOSS_LEVEL, treasures: 5, levels: 2, copies: 1, rarity: 'epic',
   noPursue: BOSS_MIN_LEVEL - 1,

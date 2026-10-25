@@ -1,6 +1,7 @@
 // «Под Землёй» — игровой движок. Чистые функции над JSON-состоянием.
 // Сервер хранит состояние, вызывает act()/tick() и рассылает view() каждому игроку.
-import { def, allUids, RACE_NAMES, CLASS_NAMES, ruleText, BOSS_MULT, BOSS_MIN_LEVEL, BOSS_FLOOR, TROUBLE_BONUS, WITCHER_BONUS, MUTAGEN_BONUS, LULLABY_PENALTY, LULLABY_MAX, DISTILL_COST } from './cards.js';
+import { def, allUids, RACE_NAMES, CLASS_NAMES, ruleText, BOSS_MULT, BOSS_MIN_LEVEL, BOSS_FLOOR, TROUBLE_BONUS, WITCHER_BONUS, MUTAGEN_BONUS, LULLABY_PENALTY, LULLABY_MAX, DISTILL_COST,
+  DEPTH, DEPTH_TREASURE_EVERY, DEATH_LEVELS, GHOST_BONUS, CONTRACTS, CONTRACT_DEFS, rewardText } from './cards.js';
 
 export const WIN_LEVEL = 10;
 // до какого уровня идёт партия: 10 по умолчанию, в лобби можно выбрать 15 или 20
@@ -30,17 +31,20 @@ export function createGame(seats, opts = {}, rng = Math.random) {
       id: x.id, name: x.name, color: x.color || null, avatar: x.avatar ?? i, isBot: !!x.isBot, seat: i,
       level: 1, races: [], classes: [], halfbreed: null, supermunch: null,
       equipped: [], carried: [], hand: [], nextCombat: 0, nextEscape: 0, dead: false, needsRevive: false, mutagenUsed: false,
+      persona: x.isBot && x.persona ? x.persona : null, contract: null, contractsDone: 0,
     })),
     decks: { door: shuffle(allUids('door'), rng), treasure: shuffle(allUids('treasure'), rng) },
     discard: { door: [], treasure: [] },
     turn: { idx: 0, pid: null, step: 'pre', n: 0, halflingSold: false },
     combat: null, reveal: null, winners: [], location: null,
+    round: 0, depth: 0, trades: [], tradeSeq: 0, grudges: {},
   };
   setupRig(s, rng);
   for (const p of s.players) {
     for (let i = 0; i < 4; i++) { give(p, draw(s, 'door', rng)); give(p, draw(s, 'treasure', rng)); }
   }
   if (!WIN_LEVELS.includes(s.opts.winLevel)) s.opts.winLevel = WIN_LEVEL;
+  for (const p of s.players) p.contract = newContract(s, p, rng);
   log(s, `Партия началась. Первым дошедший до ${s.opts.winLevel}-го уровня побеждает.`, 'sys');
   beginTurn(s, Math.floor(rng() * s.players.length), rng);
   return s;
@@ -308,9 +312,11 @@ function kill(s, p, rng) {
     taken.push(x.name);
   }
   for (const u of pool) toDiscard(s, u);
+  const before = p.level;
+  if (DEATH_LEVELS) setLevel(s, p, p.level - DEATH_LEVELS);
   p.dead = true; p.needsRevive = true;
   fx(s, { kind: 'death', pid: p.id });
-  log(s, `💀 ${p.name} погибает. Уровень, раса и класс остаются.${taken.length ? ' Труп обшарили: ' + taken.join(', ') + '.' : ''}`, 'bad');
+  log(s, `💀 ${p.name} погибает${before > p.level ? ` и теряет ${before - p.level} ур. (теперь ${p.level})` : ''}. Раса и класс остаются.${taken.length ? ' Труп обшарили: ' + taken.join(', ') + '.' : ''} До своего хода — призрак.`, 'bad');
 }
 
 function resolveCurse(s, target, uid, rng, byName, byId = null) {
@@ -382,10 +388,78 @@ function resolveEvent(s, p, uid, rng) {
   toDiscard(s, uid);
 }
 
+// ───────────────────────── глубина ─────────────────────────
+// Каждые несколько кругов подземелье уходит глубже: монстры (кроме боссов) злее, а с каждой третьей глубины — богаче.
+const depthRule = s => DEPTH[winLevel(s)] || DEPTH[10];
+export const depthEvery = s => depthRule(s).every;
+export const depthMax = s => depthRule(s).max;
+export const depthBonus = s => s.depth || 0;
+export const depthTreasure = s => Math.floor((s.depth || 0) / DEPTH_TREASURE_EVERY);
+function newRound(s) {
+  s.round = (s.round || 0) + 1;
+  if (s.round % depthEvery(s) || (s.depth || 0) >= depthMax(s)) return;
+  s.depth = (s.depth || 0) + 1;
+  fx(s, { kind: 'depth', depth: s.depth, treasure: depthTreasure(s) });
+  log(s, `⛏ Подземелье уходит глубже: глубина ${s.depth}${s.depth >= depthMax(s) ? ' — это дно' : ''}, монстры +${depthBonus(s)}${depthTreasure(s) ? `, за победу +${depthTreasure(s)} клада` : ''}.`, 'event');
+}
+
+// ───────────────────────── контракты ─────────────────────────
+function newContract(s, p, rng, except = null) {
+  const taken = new Set(s.players.map(x => x.contract?.id).filter(Boolean));
+  let pool = CONTRACTS.filter(k => k.id !== except && !taken.has(k.id));
+  if (!pool.length) pool = CONTRACTS.filter(k => k.id !== except);
+  return { id: pick(pool, rng).id, progress: 0 };
+}
+function contractHits(s, k, ev, data) {
+  if (k.ev !== ev) return 0;
+  if (ev === 'kill') {
+    const d = def(data.uid);
+    if (k.tag && !(d.tags || []).includes(k.tag)) return 0;
+    if (k.tags && !(d.tags || []).some(t => k.tags.includes(t))) return 0;
+    if (k.minLevel && !(d.boss || monsterBaseLevel(s, d) >= k.minLevel)) return 0;
+    return 1;
+  }
+  return data.n || 1;
+}
+function contractEvent(s, p, ev, data, rng) {
+  if (!p || !p.contract || s.phase !== 'playing') return;
+  const k = CONTRACT_DEFS[p.contract.id];
+  const n = k ? contractHits(s, k, ev, data) : 0;
+  if (!n) return;
+  p.contract.progress = Math.min(k.need, p.contract.progress + n);
+  if (p.contract.progress < k.need) return;
+  // награда: уровень (последний уровень — только боем, поэтому тогда клад), отстающему ещё карта
+  const others = s.players.filter(x => x !== p);
+  const lowest = others.length && p.level <= Math.min(...others.map(x => x.level));
+  let got;
+  if (k.reward.levels && p.level + k.reward.levels < winLevel(s)) { setLevel(s, p, p.level + k.reward.levels); got = rewardText(k.reward); }
+  else { const t = k.reward.treasures || 2; for (let i = 0; i < t; i++) give(p, drawT(s, p, rng)); got = rewardText({ treasures: t }); }
+  if (lowest) { give(p, drawT(s, p, rng)); got += ' и ещё карта клада отстающему'; }
+  p.contractsDone = (p.contractsDone || 0) + 1;
+  fx(s, { kind: 'contract', pid: p.id, id: k.id, reward: got });
+  log(s, `📜 ${p.name} выполняет контракт ${q(k.name)} (${k.text.replace(/\.$/, '').toLowerCase()}): ${got}.`, 'good');
+  p.contract = newContract(s, p, rng, k.id);
+}
+function checkOutfit(s, p, rng) {
+  const slots = new Set(p.equipped.map(u => def(u).slot));
+  if (slots.has('head') && slots.has('armor') && slots.has('feet')) contractEvent(s, p, 'outfit', {}, rng);
+}
+
+// ───────────────────────── обиды ─────────────────────────
+// кто кому мешал: мстительные боты это помнят
+function grudge(s, victimId, byId) {
+  if (!victimId || !byId || victimId === byId) return;
+  const g = (s.grudges ||= {});
+  const v = (g[victimId] ||= {});
+  v[byId] = (v[byId] || 0) + 1;
+}
+export const grudgeOf = (s, victimId, byId) => s.grudges?.[victimId]?.[byId] || 0;
+
 // ───────────────────────── ход ─────────────────────────
 function beginTurn(s, idx, rng) {
   const p = s.players[idx];
-  s.turn = { idx, pid: p.id, step: 'pre', n: (s.turn?.n || 0) + 1, halflingSold: false, hoardPlayed: false, distilled: false };
+  s.turn = { idx, pid: p.id, step: 'pre', n: (s.turn?.n || 0) + 1, halflingSold: false, hoardPlayed: false, distilled: false, haunted: [] };
+  if (s.turn.n > 1 && (s.turn.n - 1) % s.players.length === 0) newRound(s);
   s.reveal = null;
   for (const x of s.players) x.dead = false;
   if (p.needsRevive) {
@@ -439,6 +513,7 @@ export function monsterStrength(s, m) {
   for (const vs of d.vs || []) if (parts.some(p => matchVs(p, vs))) v += vs.n;
   for (const w of d.vsItem || []) if (parts.some(p => hasItemTag(p, w.tag))) v += w.n;
   if (d.soloBonus && s.combat && !s.combat.helper) v += d.soloBonus;
+  v += depthBonus(s);
   const L = locationOf(s);
   if (L) {
     v += L.monsterAll || 0;
@@ -468,6 +543,7 @@ export function combatNumbers(s) {
   let bonusT = 0;
   if (c.monsters.length) {
     bonusT += locationOf(s)?.treasureBonus || 0;
+    bonusT += depthTreasure(s);
     // бард берёт лишнюю карту, только когда побеждает сам
     if (hasClass(f, 'bard') && !c.helper) bonusT += 1;
     if (hasRace(f, 'orc') && c.monsters.some(m => monsterBaseLevel(s, def(m.uid)) >= 10)) bonusT += 1;
@@ -572,6 +648,10 @@ function resolveVictory(s, rng) {
   const r = shareTreasure(s, n.treasures, rng, n.helperShare);
   fx(s, { kind: 'victory', pid: f.id, helper: c.helper || null, cards: c.monsters.map(m => m.uid), levels: n.levels, treasures: r.total });
   log(s, `⚔️ ${f.name}${h ? ' и ' + h.name : ''} ${h ? 'побеждают' : 'побеждает'} ${names}! ${f.name} получает +${n.levels} ур. и ${r.total - r.share} клада${h && r.share ? `, ${h.name} — ${r.share}` : ''}.`, 'good');
+  for (const m of c.monsters) contractEvent(s, f, 'kill', { uid: m.uid }, rng);
+  if (!h) contractEvent(s, f, 'killSolo', {}, rng);
+  if (c.trouble) contractEvent(s, f, 'troubleWin', {}, rng);
+  if (h) contractEvent(s, h, 'helpWin', {}, rng);
   endCombat(s);
   const winners = [f, h].filter(x => x && x.level >= winLevel(s));
   if (winners.length) {
@@ -610,7 +690,7 @@ function resolveEscape(s, rng) {
         }
       }
       const sign = bonus ? (bonus > 0 ? '+' : '') + bonus : '';
-      if (ok) { fx(s, { kind: 'escaped', pid, card: m.uid }); log(s, `${p.name} удирает от ${q(d.name)} (${r}${sign}).`, 'good'); continue; }
+      if (ok) { fx(s, { kind: 'escaped', pid, card: m.uid }); log(s, `${p.name} удирает от ${q(d.name)} (${r}${sign}).`, 'good'); contractEvent(s, p, 'escape', {}, rng); continue; }
       const pet = p.equipped.find(u => def(u).slot === 'pet' && def(u).petSave !== false);
       if (pet) {
         removeItem(p, pet); toDiscard(s, pet);
@@ -685,6 +765,7 @@ H.lookForTrouble = {
     log(s, `${p.name} ищет неприятности — и находит!`, 'combat');
     startCombat(s, p, uid, rng);
     // разбуженный монстр злее; боссов это не касается — их сила и так считается по герою
+    if (s.combat) s.combat.trouble = true;
     if (s.combat && !def(uid).boss) {
       s.combat.mods.push({ side: 'monster', n: TROUBLE_BONUS, by: p.id, uid: null, label: 'Разбуженный монстр', anon: true });
       log(s, `Разбуженный монстр злее: +${TROUBLE_BONUS} к силе.`, 'bad');
@@ -698,6 +779,7 @@ H.loot = {
     give(p, draw(s, 'door', rng));
     s.turn.step = 'charity';
     log(s, `${p.name} обшаривает комнату и берёт карту прохода втёмную.`, 'info');
+    contractEvent(s, p, 'loot', {}, rng);
   },
 };
 
@@ -817,6 +899,7 @@ H.playCard = {
       case 'supermunch': p.supermunch = a.uid; log(s, `${p.name}: ${d.name}.`, 'info'); break;
       case 'item':
         if (!equipError(p, a.uid)) { p.equipped.push(a.uid); legendFx(s, p, a.uid); } else p.carried.push(a.uid);
+        checkOutfit(s, p, rng);
         log(s, `${p.name} выкладывает ${q(d.name)}${isLegend(a.uid) ? ' — легендарная вещь!' : ''}.`, isLegend(a.uid) ? 'win' : 'info');
         break;
       case 'location': setLocation(s, p, a.uid); break;
@@ -824,6 +907,7 @@ H.playCard = {
       case 'buff':
         toDiscard(s, a.uid);
         p.nextCombat += d.bonus;
+        contractEvent(s, p, 'oneshot', {}, rng);
         fx(s, { kind: 'buff', pid: p.id, card: a.uid, n: d.bonus });
         log(s, `${p.name}: ${q(d.name)} — +${d.bonus} к силе ${isParticipant(s, p.id) ? 'прямо сейчас' : 'в следующем бою'}.`, 'good');
         break;
@@ -838,10 +922,11 @@ H.playCard = {
         setLevel(s, p, p.level + 1);
         log(s, `${p.name}: ${q(d.name)} — теперь ${p.level} ур.`, 'good');
         break;
-      case 'curse': resolveCurse(s, P(s, a.target), a.uid, rng, p.name, p.id); break;
+      case 'curse': grudge(s, a.target, p.id); resolveCurse(s, P(s, a.target), a.uid, rng, p.name, p.id); contractEvent(s, p, 'curse', {}, rng); break;
       case 'enhancer': {
         const m = c.monsters[a.monster];
         m.enh.push(a.uid);
+        if ((d.bonus > 0 || d.double) && !isParticipant(s, p.id)) grudge(s, c.fighter, p.id);
         fx(s, { kind: 'enhance', pid: p.id, card: a.uid, n: d.bonus });
         log(s, `${p.name} играет ${q(d.name)} на ${q(def(m.uid).name)}${d.double ? ' — уровень удваивается!' : ` (${d.bonus > 0 ? '+' : ''}${d.bonus})`}.`, 'combat');
         break;
@@ -852,15 +937,18 @@ H.playCard = {
         const wm = { uid: a.with, enh: [] };
         if (def(a.with).boss) wm.power = bossPower(s, P(s, c.fighter));
         c.monsters.push(wm);
+        grudge(s, c.fighter, p.id);
         log(s, `${p.name}: из темноты вылезает ${q(def(a.with).name)} (${wm.power ? `босс, сила ${wm.power}` : `ур. ${def(a.with).level}`})!`, 'combat');
         fx(s, { kind: 'wandering', pid: p.id, card: a.with, ...(wm.power ? { power: wm.power } : {}) });
         break;
       case 'oneshot':
         c.used.push(a.uid);
+        contractEvent(s, p, 'oneshot', {}, rng);
         if (d.effect === 'bonus') {
           let n = d.bonus + (hasClass(p, 'alchemist') ? 2 : 0);
           if (d.tagBonus && a.side === 'player' && combatHasTag(s, d.tagBonus.tag)) n += d.tagBonus.n;
           c.mods.push({ side: a.side, n, by: p.id, uid: a.uid });
+          if (a.side === 'monster' && !isParticipant(s, p.id)) grudge(s, c.fighter, p.id);
           fx(s, { kind: 'mod', pid: p.id, card: a.uid, side: a.side, n });
           log(s, `${p.name} использует ${q(d.name)}: +${n} ${a.side === 'player' ? 'героям' : 'монстрам'}.`, 'combat');
         } else if (d.effect === 'escapeBonus') {
@@ -896,7 +984,7 @@ function legendFx(s, p, uid) {
 }
 H.equip = {
   check(s, p, a) { return manageErr(s, p) || (!p.carried.includes(a.uid) ? 'Вещи нет среди носимых' : equipError(p, a.uid)); },
-  run(s, p, a) { without(p.carried, a.uid); p.equipped.push(a.uid); legendFx(s, p, a.uid); },
+  run(s, p, a, rng) { without(p.carried, a.uid); p.equipped.push(a.uid); legendFx(s, p, a.uid); checkOutfit(s, p, rng); },
 };
 H.unequip = {
   check(s, p, a) { return manageErr(s, p) || (!p.equipped.includes(a.uid) ? 'Вещь не надета' : null); },
@@ -904,10 +992,11 @@ H.unequip = {
 };
 H.autoEquip = {
   check(s, p) { return manageErr(s, p) || (!inPlayItems(p).length ? 'Нет вещей' : null); },
-  run(s, p) {
+  run(s, p, a, rng) {
     const all = inPlayItems(p).sort((a, b) => (def(b).bonus || 0) - (def(a).bonus || 0) || (def(b).runBonus || 0) - (def(a).runBonus || 0));
     p.equipped = []; p.carried = [];
     for (const u of all) { if (!equipError(p, u)) { p.equipped.push(u); legendFx(s, p, u); } else p.carried.push(u); }
+    checkOutfit(s, p, rng);
   },
 };
 H.discardInPlay = {
@@ -948,12 +1037,13 @@ H.sell = {
     if (p.level + lv >= winLevel(s)) return `Продажей нельзя дойти до ${winLevel(s)}-го уровня`;
     return null;
   },
-  run(s, p, a) {
+  run(s, p, a, rng) {
     const { total, doubled, levels: lv } = saleValue(s, p, a.uids);
     for (const x of a.uids) { if (!without(p.hand, x)) removeItem(p, x); toDiscard(s, x); }
     if (doubled) s.turn.halflingSold = true;
     setLevel(s, p, p.level + lv);
     log(s, `${p.name} продаёт ${a.uids.length} вещ. за ${total} голдов${doubled ? ' (полурослик торгуется вдвое)' : ''}: +${lv} ур.`, 'good');
+    contractEvent(s, p, 'sellItem', { n: a.uids.length }, rng);
   },
 };
 
@@ -970,6 +1060,88 @@ H.gift = {
     const t = P(s, a.to);
     removeItem(p, a.uid); t.carried.push(a.uid);
     log(s, `${p.name} передаёт ${q(def(a.uid).name)} → ${t.name}.`, 'info');
+  },
+};
+
+// ───────────────────────── обмен ─────────────────────────
+// Предложение: свои вещи (со стола или из руки) за вещи соперника со стола. Тот принимает или отказывается.
+const MAX_TRADE = 6;
+const tradeCards = (p, list) => Array.isArray(list) && list.length <= MAX_TRADE && new Set(list).size === list.length;
+function tradeError(s, p, t, give, want) {
+  if (!t || t === p) return 'С кем меняемся?';
+  if (p.dead || t.dead) return 'Мёртвым ничего не нужно';
+  if (isParticipant(s, p.id) || isParticipant(s, t.id)) return 'Во время своего боя меняться нельзя';
+  if (!tradeCards(p, give) || !tradeCards(t, want)) return 'Выберите вещи для обмена';
+  if (!give.length && !want.length) return 'Выберите вещи для обмена';
+  for (const u of give) {
+    if (!inPlayItems(p).includes(u) && !(p.hand.includes(u) && def(u).type === 'item')) return 'Отдавать можно свои вещи — со стола или из руки';
+  }
+  for (const u of want) if (!inPlayItems(t).includes(u)) return 'Просить можно только вещи со стола соперника';
+  return null;
+}
+export const tradeById = (s, id) => (s.trades || []).find(x => x.id === id);
+H.offerTrade = {
+  check(s, p, a) { return tradeError(s, p, P(s, a.to), a.give || [], a.want || []); },
+  run(s, p, a) {
+    s.trades = (s.trades || []).filter(x => x.from !== p.id);
+    s.tradeSeq = (s.tradeSeq || 0) + 1; // в партиях, сохранённых до обновления, счётчика ещё нет
+    const o = { id: s.tradeSeq, from: p.id, to: a.to, give: [...(a.give || [])], want: [...(a.want || [])], at: s.now };
+    s.trades.push(o);
+    fx(s, { kind: 'tradeOffer', pid: p.id, to: a.to, id: o.id });
+    log(s, `${p.name} предлагает обмен ${P(s, a.to).name}.`, 'info');
+  },
+};
+H.answerTrade = {
+  check(s, p, a) {
+    const o = tradeById(s, a.id);
+    if (!o || o.to !== p.id) return 'Такого предложения нет';
+    if (a.accept) return tradeError(s, P(s, o.from), p, o.give, o.want) ? 'Предложение устарело: вещи уже не те' : null;
+    return null;
+  },
+  run(s, p, a, rng) {
+    const o = tradeById(s, a.id);
+    s.trades = s.trades.filter(x => x !== o);
+    const f = P(s, o.from);
+    if (!a.accept) { log(s, `${p.name} отказывается от обмена с ${f.name}.`, 'info'); fx(s, { kind: 'tradeNo', pid: p.id, to: f.id }); return; }
+    for (const u of o.give) { if (!without(f.hand, u)) removeItem(f, u); p.carried.push(u); }
+    for (const u of o.want) { removeItem(p, u); f.carried.push(u); }
+    normalize(s, f); normalize(s, p);
+    // встречные предложения с отданными вещами больше не годятся
+    const moved = new Set([...o.give, ...o.want]);
+    s.trades = s.trades.filter(x => ![...x.give, ...x.want].some(u => moved.has(u)));
+    const names = list => (list.length ? list.map(u => q(def(u).name)).join(', ') : 'ничего');
+    fx(s, { kind: 'trade', pid: f.id, to: p.id, give: o.give, want: o.want });
+    log(s, `🤝 Обмен: ${f.name} отдаёт ${names(o.give)}, ${p.name} — ${names(o.want)}.`, 'good');
+    contractEvent(s, f, 'trade', {}, rng);
+    contractEvent(s, p, 'trade', {}, rng);
+  },
+};
+H.cancelTrade = {
+  check(s, p, a) { const o = tradeById(s, a.id); return o && o.from === p.id ? null : 'Нечего отменять'; },
+  run(s, p, a) { s.trades = s.trades.filter(x => x.id !== a.id); log(s, `${p.name} отзывает предложение обмена.`, 'info'); },
+};
+
+// ───────────────────────── призрак ─────────────────────────
+// Погибший до своего хода — призрак: раз за ход может подкинуть ±2 в чужой бой.
+export const isGhost = p => !!p?.needsRevive;
+H.haunt = {
+  check(s, p, a) {
+    if (!isGhost(p)) return 'Подкидывать из-за грани может только погибший, пока ждёт своего хода';
+    const c = s.combat;
+    if (!c) return 'Сейчас нет боя';
+    if (isParticipant(s, p.id)) return 'Вы сами в этом бою';
+    if ((s.turn.haunted || []).includes(p.id)) return 'Призрак вмешивается раз за ход';
+    if (a.side !== 'player' && a.side !== 'monster') return 'Выберите сторону';
+    if (a.side === 'player' && levelOnlyFight(s)) return 'Против этого монстра считается только уровень';
+    return null;
+  },
+  run(s, p, a) {
+    const c = s.combat;
+    (s.turn.haunted ||= []).push(p.id);
+    c.mods.push({ side: a.side, n: GHOST_BONUS, by: p.id, uid: null, label: 'Призрак' });
+    if (a.side === 'monster') grudge(s, c.fighter, p.id);
+    fx(s, { kind: 'haunt', pid: p.id, side: a.side, n: GHOST_BONUS });
+    log(s, `👻 Призрак ${p.name} подкидывает +${GHOST_BONUS} ${a.side === 'player' ? 'героям' : 'монстрам'}.`, 'combat');
   },
 };
 
@@ -1178,6 +1350,7 @@ H.ability = {
       }
       case 'backstab': {
         c.backstabs.push({ by: p.id, on: a.target });
+        grudge(s, a.target, p.id);
         log(s, `${p.name} бьёт в спину ${P(s, a.target).name}: −2.`, 'combat');
         fx(s, { kind: 'backstab', pid: a.target, by: p.id });
         break;
@@ -1308,6 +1481,9 @@ export function hints(s, pid) {
     answerHelp: s.combat?.helpReq?.to === pid,
     autoEquip: ok({ type: 'autoEquip' }),
     manage: !manageErr(s, p),
+    haunt: { player: ok({ type: 'haunt', side: 'player' }), monster: ok({ type: 'haunt', side: 'monster' }) },
+    trade: !p.dead && !isParticipant(s, p.id),
+    tradeTargets: s.players.filter(x => x !== p && !x.dead && !isParticipant(s, x.id) && !isParticipant(s, p.id) && !p.dead).map(x => x.id),
     cards: {}, equip: {}, abilities: {},
   };
   for (const u of p.hand) h.cards[u] = playOptions(s, pid, u);
@@ -1341,6 +1517,9 @@ export function view(s, pid) {
     reveal: s.reveal, opts: { winDelayMs: s.opts.winDelayMs, winLevel: winLevel(s) }, location: s.location,
     log: s.log.slice(-80), fx: s.fx.slice(-20),
     decks: { door: s.decks.door.length, treasure: s.decks.treasure.length },
+    depth: { level: s.depth || 0, bonus: depthBonus(s), treasure: depthTreasure(s), round: s.round || 0, every: depthEvery(s), max: depthMax(s),
+      turnsLeft: 1 + ((s.round || 0) + depthEvery(s) - ((s.round || 0) % depthEvery(s))) * s.players.length - s.turn.n },
+    trades: (s.trades || []).filter(x => x.from === pid || x.to === pid).map(x => ({ ...x, give: [...x.give], want: [...x.want] })),
     discard: {
       door: { count: s.discard.door.length, top: s.discard.door.at(-1) || null },
       treasure: { count: s.discard.treasure.length, top: s.discard.treasure.at(-1) || null },
@@ -1350,8 +1529,9 @@ export function view(s, pid) {
       level: p.level, races: [...p.races], classes: [...p.classes], halfbreed: p.halfbreed, supermunch: p.supermunch,
       equipped: [...p.equipped], carried: [...p.carried], nextCombat: p.nextCombat, nextEscape: p.nextEscape || 0,
       dead: p.dead, handCount: p.hand.length, handLimit: handLimit(p, s), handsLimit: handsLimit(p), mutagenUsed: !!p.mutagenUsed,
-      power: powerOf(s, p), runBonus: runBonusOf(s, p),
+      power: powerOf(s, p), runBonus: runBonusOf(s, p), ghost: isGhost(p), persona: p.persona || null, contractsDone: p.contractsDone || 0,
       hand: p.id === pid ? [...p.hand] : undefined,
+      contract: p.id === pid && p.contract && CONTRACT_DEFS[p.contract.id] ? { ...CONTRACT_DEFS[p.contract.id], progress: p.contract.progress, rewardText: rewardText(CONTRACT_DEFS[p.contract.id].reward) } : undefined,
     })),
     combat: c ? {
       fighter: c.fighter, helper: c.helper, helpOffer: c.helpOffer, helpReq: c.helpReq,

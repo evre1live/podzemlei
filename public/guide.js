@@ -1,6 +1,6 @@
 // «Под Землёй» — справочник карт: все карты колоды с полным описанием, разбивкой по категориям, поиском и сортировкой.
 // Используется и отдельной страницей /guide, и окном прямо в игре.
-import { CARD_DEFS, RACE_NAMES, CLASS_NAMES, SLOT_NAMES, TAG_NAMES, ruleText, BOSS_MIN_LEVEL, BOSS_FLOOR, TROUBLE_BONUS } from '/shared/cards.js';
+import { CARD_DEFS, RACE_NAMES, CLASS_NAMES, SLOT_NAMES, TAG_NAMES, ruleText, BOSS_MIN_LEVEL, BOSS_FLOOR, TROUBLE_BONUS, CONTRACTS, rewardText } from '/shared/cards.js';
 import { esc, cardHTML } from '/art.js';
 
 // категории в порядке показа; у каждой — проверка карты и пояснение
@@ -143,12 +143,19 @@ export function renderGuide(root, { onClose = null, standalone = false } = {}) {
     <div class="g-cats" role="tablist" aria-label="Категории">
       <button role="tab" data-gcat="all" aria-selected="true">Все <small>${CARD_DEFS.length}</small></button>
       ${GUIDE_CATS.map(c => `<button role="tab" data-gcat="${c.id}" aria-selected="false">${c.label} <small>${counts[c.id]}</small></button>`).join('')}
+      <button role="tab" data-gcat="contracts" aria-selected="false">Контракты <small>${CONTRACTS.length}</small></button>
     </div>
     <div class="g-list"></div>
   </div>`;
   const list = root.querySelector('.g-list');
   const draw = () => {
     const q = st.q.trim().toLowerCase();
+    if (st.cat === 'contracts') {
+      const ks = CONTRACTS.filter(k => !q || `${k.name} ${k.text} ${rewardText(k.reward)}`.toLowerCase().includes(q));
+      list.innerHTML = `<h3 class="g-sec">Контракты</h3><p class="g-note">Тайные цели: у каждого игрока по одной. Выполнил — награда и новый контракт; самому отстающему ещё карта клада. Уровень по контракту не бывает последним — тогда вместо него клад.</p>`
+        + (ks.map(k => `<div class="g-contract"><span aria-hidden="true">📜</span><div><b>${esc(k.name)}</b><p>${esc(k.text)}</p><small>Награда: ${esc(rewardText(k.reward))}</small></div></div>`).join('') || '<p class="muted">Ничего не нашлось.</p>');
+      return;
+    }
     let defs = CARD_DEFS.filter(d => (st.cat === 'all' || catOf(d) === st.cat)
       && (!q || searchText(d).includes(q)));
     const order = Object.fromEntries(GUIDE_CATS.map((c, i) => [c.id, i]));

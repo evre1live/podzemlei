@@ -1,5 +1,6 @@
 // «Под Землёй» — клиент.
-import { def, RACE_NAMES, CLASS_NAMES, setRuleVars, ruleText, BOSS_FLOOR, TROUBLE_BONUS, LULLABY_PENALTY, MUTAGEN_BONUS, DISTILL_COST } from '/shared/cards.js';
+import { def, RACE_NAMES, CLASS_NAMES, setRuleVars, ruleText, BOSS_FLOOR, TROUBLE_BONUS, LULLABY_PENALTY, MUTAGEN_BONUS, DISTILL_COST,
+  PERSONAS, GHOST_BONUS, DEATH_LEVELS, DEPTH, DEPTH_TREASURE_EVERY, TRADE_TIMEOUT_MS } from '/shared/cards.js';
 import { esc, cardHTML, chipHTML, avatarSVG, iconSVG, cardBackSVG, locationSVG } from '/art.js';
 import { fx } from '/fx.js';
 import { sfx } from '/sfx.js';
@@ -429,6 +430,7 @@ mount.game = () => {
         <span class="rtitle" id="rtitle"></span>
         <span class="turninfo" id="turninfo"></span>
         <span class="goal-pill" id="goalpill" title="Уровень победы"></span>
+        <span id="depthpill"></span>
         <span id="locpill" class="locpill"></span>
         <span id="watchpill"></span>
         <span class="spacer"></span>
@@ -486,6 +488,7 @@ update.game = () => {
   const tp = pl(g.turn.pid);
   $('#turninfo').textContent = g.phase === 'ended' ? 'Партия окончена' : tp ? (tp.id === r.me ? 'Ваш ход' : `Ходит ${tp.name}`) : '';
   $('#goalpill').textContent = `Цель: ${winLvl()} ур.`;
+  $('#depthpill').innerHTML = depthPill(g.depth);
   const wn = r.watchers || 0;
   $('#watchpill').innerHTML = r.spectator ? `<span class="watch-pill on" title="Вы видите стол, бои и летопись, но не чужие карты на руках">${EYE}Вы зритель${wn > 1 ? ` · ещё ${wn - 1}` : ''}</span>`
     : wn ? `<span class="watch-pill" title="Столько людей смотрят партию со стороны">${EYE}${wn}</span>` : '';
@@ -498,6 +501,7 @@ update.game = () => {
   renderTabs();
   $('#sidepanel').classList.toggle('open', S.ui.sideOpen);
   maybeHelpPrompt();
+  maybeTradePrompt();
   maybeEndScreen();
 };
 
@@ -516,14 +520,15 @@ function statusTags(p) {
   if (c?.fighter === p.id) t.push('<span class="badge warn">в бою</span>');
   if (c?.helper === p.id) t.push('<span class="badge">помогает</span>');
   if (p.dead) t.push('<span class="badge warn">погиб</span>');
-  if (p.isBot) t.push('<span class="badge">бот</span>');
+  else if (p.ghost) t.push(`<span class="badge ghost" title="Погиб и ждёт своего хода. Раз за ход может подкинуть +${GHOST_BONUS} героям или монстрам в чужом бою">призрак</span>`);
+  if (p.isBot) t.push(`<span class="badge"${p.persona ? ` title="${esc(personaTip(p.persona))}"` : ''}>бот${p.persona ? ' · ' + esc(PERSONAS[p.persona] || '') : ''}</span>`);
   else if (mem?.autopilot) t.push('<span class="badge">автопилот</span>');
   else if (mem && !mem.connected) t.push('<span class="badge">нет связи</span>');
   return t.join('');
 }
 function oppHTML(p) {
   const g = S.game;
-  return `<button class="opp ${g.turn.pid === p.id ? 'turn' : ''} ${p.dead ? 'dead' : ''}" data-opp="${p.id}" data-vmember="${p.id}" style="--seat:${p.color}" aria-label="${esc(p.name)}, уровень ${p.level}">
+  return `<button class="opp ${g.turn.pid === p.id ? 'turn' : ''} ${p.dead ? 'dead' : ''} ${p.ghost && !p.dead ? 'ghost' : ''}" data-opp="${p.id}" data-vmember="${p.id}" style="--seat:${p.color}" aria-label="${esc(p.name)}, уровень ${p.level}">
     <div class="ava">${avatarSVG(p.avatar, p.color)}</div>
     <div class="oname">${esc(p.name)}</div>
     <div class="ometa"><span>${esc(raceText(p))}</span><span>${esc(classText(p))}</span></div>
@@ -663,7 +668,7 @@ function fightHTML() {
   const monsters = c.monsters.map((m, i) => `
     <div class="mon-wrap">
       <div class="mon-body ${def(m.uid).boss ? 'boss hell' : tierClass(m.strength)}">${cardHTML(m.uid, { size: 'sm', attrs: `data-zone="view"` })}</div>
-      <span class="mon-str">сила ${m.strength}${def(m.uid).mirror != null ? ` <small>(лидер ${m.level - def(m.uid).mirror} + ${def(m.uid).mirror})</small>` : ''}${def(m.uid).boss ? ` <small>(вдвое больше силы ${esc(pname(c.fighter))}, но не меньше ${BOSS_FLOOR})</small>` : ''}</span>
+      <span class="mon-str">сила ${m.strength}${def(m.uid).mirror != null ? ` <small>(лидер ${m.level - def(m.uid).mirror} + ${def(m.uid).mirror})</small>` : ''}${def(m.uid).boss ? ` <small>(вдвое больше силы ${esc(pname(c.fighter))}, но не меньше ${BOSS_FLOOR})</small>` : ''}${!def(m.uid).boss && S.game.depth?.bonus ? ` <small title="Подземелье уходит глубже — монстры злее">(глубина +${S.game.depth.bonus})</small>` : ''}</span>
       ${monFlags(m, c)}
       ${m.enh.length ? `<div class="enh-list">${m.enh.map(u => `<span class="mod m" data-uid="${u}" data-zone="view">${esc(def(u).name)} ${def(u).double ? '×2' : (def(u).bonus > 0 ? '+' : '') + def(u).bonus}</span>`).join('')}</div>` : ''}
     </div>`).join('');
@@ -688,6 +693,8 @@ function fightHTML() {
     const canMeddle = Object.values(h.cards || {}).some(o => o.some(a => a.side || Number.isInteger(a.monster) || a.with));
     const who = c.helper === S.room.me ? 'Вы помогаете в этом бою.' : `${esc(pname(c.fighter))} в бою.`;
     b.push(`<span class="hint">${who} ${canMeddle ? 'Карты, которыми можно вмешаться, подсвечены в руке.' : ''}</span>`);
+    if (h.haunt?.player) b.push(`<button class="btn spook" data-act="haunt" data-side="player" title="Вы призрак: раз за ход можно подкинуть +${GHOST_BONUS} одной стороне">👻 +${GHOST_BONUS} героям</button>`);
+    if (h.haunt?.monster) b.push(`<button class="btn spook" data-act="haunt" data-side="monster" title="Вы призрак: раз за ход можно подкинуть +${GHOST_BONUS} одной стороне">👻 +${GHOST_BONUS} монстрам</button>`);
     if (h.pass) b.push(`<button class="btn ghost" data-act="pass">Не мешаю</button>`);
   }
   if (c.winAt && c.passed?.length) b.push(`<span class="hint passed">Не мешают: ${c.passed.map(id => esc(pname(id))).join(', ')}</span>`);
@@ -773,8 +780,11 @@ function renderMine() {
       </div>
     </div>
     <div class="traits">${traits.join('')}</div>
+    ${p.ghost ? `<div class="ghost-note">👻 Вы призрак до своего хода: раз за ход можно подкинуть +${GHOST_BONUS} героям или монстрам в чужом бою.</div>` : ''}
+    ${contractHTML(p)}
     <div class="slots">${slots}</div>
-    ${abil ? `<div class="abilities">${abil}</div>` : ''}`;
+    ${abil ? `<div class="abilities">${abil}</div>` : ''}
+    ${tradeWaitHTML()}`;
 
   const over = p.hand.length - p.handLimit;
   $('#handhead').innerHTML = `<span>В руке ${cardsNom(p.hand.length)}${over > 0 ? `. К концу хода можно оставить ${p.handLimit}, лишние уйдут` : ''}</span>${h.manage ? `<button class="btn ghost small" data-act="sellMode">Продать вещи</button>` : ''}`;
@@ -1012,6 +1022,7 @@ function openOppPop(pid) {
     for (const s of h.abilities?.steal || []) if (s.target === pid) popOpts.push({ label: `Стащить «${def(s.item).name}»`, fn: () => startMode({ kind: 'ability', name: 'steal', target: pid, item: s.item, picked: [], max: 1 }), cls: 'ghost' });
     for (const t of h.abilities?.backstab || []) if (t === pid) popOpts.push({ label: 'Ударить в спину (−2)', fn: () => startMode({ kind: 'ability', name: 'backstab', target: pid, picked: [], max: 1 }), cls: 'danger' });
   }
+  if (mine && h.tradeTargets?.includes(pid)) popOpts.push({ label: 'Предложить обмен', fn: () => openTrade(pid), cls: 'hero' });
   const items = [...p.equipped.map(u => chipHTML(u)), ...p.carried.map(u => chipHTML(u, { cls: 'off' }))].join('') || '<p class="muted">Вещей нет.</p>';
   showOverlay(`<div class="modal" role="dialog" aria-label="${esc(p.name)}">
     <div class="row"><span class="me-ava" style="--seat:${p.color}">${avatarSVG(p.avatar, p.color)}</span><div><h2>${esc(p.name)}</h2><div class="me-stats"><span class="lvl">${p.level}</span><span class="pow">⚔ ${p.power}</span><span class="badge">${esc(raceText(p))}, ${esc(classText(p))}</span><span class="handcount"><i></i>${p.handCount}</span></div></div></div>
@@ -1077,6 +1088,110 @@ function maybeHelpPrompt() {
   </div>`);
 }
 
+// ───────────────────────── глубина, контракты, призрак, обмен ─────────────────────────
+const PERSONA_TIPS = {
+  cautious: 'Осторожный: помогает только наверняка, редко ищет неприятности, мешает лишь тому, кто вот-вот победит',
+  greedy: 'Жадный: часто ищет неприятности, за помощь хочет побольше клада, а сам делится скупо',
+  vengeful: 'Мстительный: помнит, кто ему мешал или насылал проклятия, и отвечает тем же',
+};
+const personaTip = k => PERSONA_TIPS[k] || '';
+function depthPill(dp) {
+  if (!dp) return '';
+  const bottom = dp.level >= dp.max;
+  const next = bottom ? 'Глубже некуда — это дно.' : `До спуска ${dp.turnsLeft} ${plural(dp.turnsLeft, 'ход', 'хода', 'ходов')}.`;
+  const tip = `Каждые ${dp.every} ${plural(dp.every, 'круг', 'круга', 'кругов')} подземелье уходит глубже: монстры +1 к силе (боссов это не касается), дно — глубина ${dp.max}. С каждой ${DEPTH_TREASURE_EVERY}-й глубины победа даёт лишнюю карту клада. ${next}`;
+  return `<span class="depth-pill${dp.level ? ' deep' : ''}" title="${esc(tip)}">⛏ ${dp.level ? `Глубина ${dp.level} · монстры +${dp.bonus}${dp.treasure ? ` · клад +${dp.treasure}` : ''}` : 'Поверхность'}</span>`;
+}
+function contractHTML(p) {
+  const k = p.contract;
+  if (!k) return '';
+  const tip = 'Контракт — ваша тайная цель. Выполните его — получите награду и новый контракт. Самому отстающему — ещё карта клада.';
+  return `<div class="contract" title="${esc(tip)}"><span class="c-ico" aria-hidden="true">📜</span><div class="c-body">
+    <div class="c-head"><b>${esc(k.name)}</b><span class="c-prog">${k.progress}/${k.need}</span>${p.contractsDone ? `<span class="c-done" title="Выполнено контрактов">✓ ${p.contractsDone}</span>` : ''}</div>
+    <div class="c-text">${esc(k.text)} Награда: ${esc(k.rewardText)}.</div></div></div>`;
+}
+function tradeWaitHTML() {
+  const mine = (S.game.trades || []).filter(o => o.from === S.room.me);
+  return mine.map(o => `<div class="trade-wait"><span>🤝 Обмен → ${esc(pname(o.to))}: ждём ответа…</span><button class="btn ghost small" data-act="cancelTrade" data-id="${o.id}">Отозвать</button></div>`).join('');
+}
+// фишка вещи для выбора в обмене: без data-uid, чтобы клик не открывал карту
+function tradeChip(uid, attr, on, note = '') {
+  const d = def(uid);
+  const val = d.bonus ? `+${d.bonus}` : d.runBonus ? `бег +${d.runBonus}` : '';
+  return `<button class="chip tpick${on ? ' picked' : ''}${d.rarity && d.rarity !== 'common' ? ' r-' + d.rarity : ''}" ${attr}="${esc(uid)}" aria-pressed="${on}" title="${esc(d.name + (d.text ? ' — ' + d.text : ''))}">${iconSVG(typeof d.art === 'string' ? d.art : 'question')}<span class="chip-name">${esc(d.name)}${note ? ` <small>${note}</small>` : ''}</span>${val ? `<b>${val}</b>` : ''}</button>`;
+}
+function openTrade(pid) {
+  const give = new Set(), want = new Set();
+  const draw = () => {
+    const mine = me(), p = pl(pid);
+    if (!mine || !p) return closeOverlay();
+    const myItems = [...mine.equipped.map(u => [u, 'надето']), ...mine.carried.map(u => [u, '']), ...mine.hand.filter(u => def(u).type === 'item').map(u => [u, 'в руке'])];
+    const theirs = [...p.equipped.map(u => [u, 'надето']), ...p.carried.map(u => [u, ''])];
+    const none = '<p class="muted" style="margin:0">Вещей нет.</p>';
+    showOverlay(`<div class="modal trade-modal" role="dialog" aria-label="Обмен с ${esc(p.name)}">
+      <h2>Обмен с ${esc(p.name)}</h2>
+      <p class="muted" style="margin:0">Отметьте, что отдаёте и что хотите взамен. ${esc(p.name)} увидит предложение и решит. Можно просто подарить или попросить.</p>
+      <div class="trade-cols">
+        <div><h3>Вы отдаёте</h3><div class="trade-list">${myItems.map(([u, n]) => tradeChip(u, 'data-tgive', give.has(u), n)).join('') || none}</div></div>
+        <div><h3>Вы просите</h3><div class="trade-list">${theirs.map(([u, n]) => tradeChip(u, 'data-twant', want.has(u), n)).join('') || none}</div></div>
+      </div>
+      <div class="row"><button class="btn hero" data-act="sendTrade" ${give.size + want.size ? '' : 'disabled'}>Предложить</button><button class="btn ghost" data-act="closeOverlay">Отмена</button></div>
+    </div>`);
+  };
+  S.ui.tradeForm = {
+    get: () => ({ to: pid, give: [...give], want: [...want] }),
+    toggle: (side, uid) => { const set = side === 'give' ? give : want; set.has(uid) ? set.delete(uid) : set.add(uid); draw(); },
+  };
+  draw();
+}
+function maybeTradePrompt() {
+  const g = S.game;
+  const o = (g.trades || []).find(x => x.to === S.room.me);
+  if (!o) { if (S.ui.tradeAsked && $('#tradePrompt')) closeOverlay(); S.ui.tradeAsked = null; return; }
+  if ($('#helpPrompt')) return; // сначала — просьба о помощи
+  if (S.ui.tradeAsked === o.id && $('#tradePrompt')) return;
+  S.ui.tradeAsked = o.id;
+  sfx.play('bell', { always: true });
+  const chips = list => (list.length ? `<div class="opp-items trade-list" data-zone-view>${list.map(u => chipHTML(u)).join('')}</div>` : '<p class="muted" style="margin:0">ничего</p>');
+  showOverlay(`<div class="modal trade-modal" id="tradePrompt" role="alertdialog" aria-label="Предложение обмена">
+    <h2>${esc(pname(o.from))} предлагает обмен</h2>
+    <div class="trade-cols"><div><h3>Вы получите</h3>${chips(o.give)}</div><div><h3>Вы отдадите</h3>${chips(o.want)}</div></div>
+    <p class="muted" style="margin:0;font-size:13.5px">Не ответите за ${Math.round(TRADE_TIMEOUT_MS / 1000)} с — это будет отказ. Полученные вещи лягут в «Не надето».</p>
+    <div class="row"><button class="btn hero" data-trade="1" data-id="${o.id}">Принять</button><button class="btn ghost" data-trade="0" data-id="${o.id}">Отказаться</button></div>
+  </div>`);
+}
+// всплывающие знаки новых механик — поверх обычных эффектов и заставок
+function extraFx(fresh) {
+  for (const f of fresh) {
+    const ava = avaOf(f.pid);
+    switch (f.kind) {
+      case 'depth':
+        sfx.play('quake');
+        fx.banner(`Глубина ${f.depth}`, `Подземелье уходит глубже: монстры +${f.depth}${f.treasure ? `, за победу +${f.treasure} клада` : ''}`, '');
+        break;
+      case 'contract':
+        sfx.play('levelUp');
+        if (f.pid === S.room.me) fx.banner('Контракт выполнен!', f.reward, 'win');
+        else fx.float(ava, '📜 Контракт!', 'good');
+        break;
+      case 'haunt': {
+        sfx.play(f.side === 'monster' ? 'modBad' : 'modGood');
+        const el = $(f.side === 'monster' ? '#shieldMon' : '#shieldHero');
+        fx.float(el || ava, `👻 +${f.n}`, f.side === 'monster' ? 'bad' : 'good');
+        fx.smoke(ava || el, { colors: ['rgba(190,210,255,.45)', 'rgba(150,170,230,.35)'], sparks: false });
+        break;
+      }
+      case 'trade':
+        sfx.play('buff');
+        fx.float(ava, '🤝 Обмен', 'good'); fx.float(avaOf(f.to), '🤝 Обмен', 'good');
+        break;
+      case 'tradeNo':
+        if (f.to === S.room.me) toast(`${pname(f.pid)} отказывается от обмена`);
+        break;
+    }
+  }
+}
+
 function maybeEndScreen() {
   const g = S.game;
   if (g.phase !== 'ended') return;
@@ -1104,15 +1219,23 @@ const RULES = `<div class="modal rules" role="dialog" aria-label="Как игр�
   <h3>Вещи и уровни</h3>
   <p>Один головняк, один броник, одна обувка, две руки и одна большая вещь (гномам — сколько угодно, механикам — три руки). Можно завести одного питомца: он даёт бонус и один раз спасает от расплаты. Вещи можно продать: каждые 1000 голдов — уровень.</p>
   <h3>Расы и классы</h3>
-  <p>Расы: эльф, гном, полурослик, орк, гоблин и кротолюд. Классы: воин, маг, жрец, плут, бард, алхимик и механик. У каждого свои способности — они написаны на картах, а кнопки способностей появляются у вас на столе.</p>
+  <p>Расы: эльф, гном, полурослик, орк, гоблин и кротолюд. Классы: воин, маг, жрец, плут, бард, алхимик, механик и ведьмак. У каждого свои способности — они написаны на картах, а кнопки способностей появляются у вас на столе.</p>
+  <h3>Глубина</h3>
+  <p>Каждые несколько кругов подземелье уходит глубже: все монстры, кроме боссов, получают +1 к силе за каждую глубину, а с каждой ${DEPTH_TREASURE_EVERY}-й глубины победа приносит лишнюю карту клада. В партии до 10 спуск — раз в ${DEPTH[10].every} круга, дно на глубине ${DEPTH[10].max}; в длинных партиях спуск чаще и глубже. Глубина видна в шапке стола.</p>
+  <h3>Контракты</h3>
+  <p>У каждого есть тайный контракт — небольшая цель вроде «победи двух нежитей» или «обшарь три комнаты». Выполнили — получаете награду (уровень, но не последний, или карты клада) и новый контракт. Самому отстающему за выполненный контракт положена ещё карта клада. Свой контракт видите только вы, остальные — сколько контрактов вы закрыли.</p>
+  <h3>Обмен</h3>
+  <p>Нажмите на соперника и выберите «Предложить обмен»: отметьте свои вещи (со стола или из руки) и вещи, которые хотите у него со стола. Он примет или откажется; молчание дольше ${Math.round(TRADE_TIMEOUT_MS / 1000)} с — отказ. Во время своего боя меняться нельзя. Боты тоже отвечают на обмен, но почти победителю не помогают.</p>
+  <h3>Характеры ботов</h3>
+  <p>Осторожный помогает только наверняка и редко лезет в неприятности. Жадный рискует, торгуется за клад и делится скупо. Мстительный помнит, кто ему мешал или насылал проклятия, и отвечает тем же. Характер виден на фишке бота.</p>
   <h3>Локации и события</h3>
   <p>Карта локации меняет правила для всех, пока кто-нибудь не сыграет другую: в затопленном тоннеле труднее убежать, на рынке вещи дороже, в котельной проклятия тают. События срабатывают сразу для всего стола. Зелья дают бонус в текущем или следующем бою.</p>
   <h3>Особые монстры</h3>
   <p>Одни нападают из засады, едва вы открыли дверь, другие не терпят помощников (метка «без помощи»), от третьих не убежать. Против монстров с меткой «только уровень» — Лихо, Горгоны, Циклопа и Кощея — считается один уровень героя: вещи, зелья, способности и разовые бонусы не помогают. Зеркальный двойник всегда сильнее лидера партии. Читайте карту, прежде чем драться.</p>
   <h3>Боссы</h3>
   <p>В колоде три босса — Люцифер, Аид и Анубис. Уровень у них 666, а сила — вдвое больше силы героя, против которого босс вышел, но не меньше ${BOSS_FLOOR}. Усилители и чары на них не действуют, зато помощник, зелья и разовые карты помогают как обычно: вдвоём босса можно одолеть и получить 5 кладов и 2 уровня. За героями ниже 9-го уровня боссы не гонятся, а тех, кто постарше, при неудачном побеге убивают и отбрасывают на 5 уровней.</p>
-  <h3>Смерть</h3>
-  <p>Погибший теряет вещи и руку, но сохраняет уровень, расу и класс. В свой следующий ход он возвращается с новыми картами.</p>
+  <h3>Смерть и призраки</h3>
+  <p>Погибший теряет вещи, руку и ${DEATH_LEVELS} уровень (ниже первого не опустится), но сохраняет расу и класс. В свой следующий ход он возвращается с новыми картами. А пока ждёт — он призрак: раз за ход может подкинуть +${GHOST_BONUS} героям или монстрам в чужом бою.</p>
   <div class="row"><button class="btn primary" data-act="closeOverlay">Понятно</button><button class="btn ghost" data-act="guide">Справочник карт</button></div>
 </div>`;
 
@@ -1176,6 +1299,7 @@ function soundFx(fresh) {
   }
 }
 function runFx(fresh, snap) {
+  extraFx(fresh);
   if (cine.on) return cine.play(fresh, snap);
   soundFx(fresh);
   for (const f of fresh) {
@@ -1192,7 +1316,7 @@ function runFx(fresh, snap) {
         break;
       case 'death':
         fx.dust(ava, { n: 22 }); fx.float(ava, 'Погиб!', 'bad');
-        if (f.pid === S.room.me) toast('Вы погибли. Вернётесь в свой следующий ход с новыми картами.');
+        if (f.pid === S.room.me) toast(`Вы погибли и потеряли уровень. Вернётесь в свой следующий ход с новыми картами, а пока вы призрак: раз за ход можно подкинуть +${GHOST_BONUS} в чужом бою.`);
         break;
       case 'pet':
         fx.hearts(ava); fx.float(ava, `${def(f.card).name} спасает!`, 'good');
@@ -1283,7 +1407,7 @@ document.addEventListener('click', async e => {
   if (t.closest('[data-uid]')) sfx.play(S.ui.mode ? 'click' : 'flip');
   else if (t.closest('.btn, .seg button, .tabs button, .opp, .pick, .room-row, .av-opt, .av-sw, .hero-ava')) sfx.play('click');
   if (t.matches('[data-backdrop]')) {
-    if ($('#helpPrompt')) return; // на просьбу о помощи нужно ответить
+    if ($('#helpPrompt') || $('#tradePrompt')) return; // на просьбу о помощи и обмен нужно ответить
     return closeOverlay();
   }
   // внутри справочника свои обработчики: карты там только рассматривают
@@ -1315,6 +1439,10 @@ document.addEventListener('click', async e => {
     if (!S.name.trim()) return openJoinModal(join.dataset.join, S.rooms.find(r => r.id === join.dataset.join));
     return tryJoin(join.dataset.join, join.dataset.locked === 'true' ? undefined : '');
   }
+  const tg = t.closest('[data-tgive], [data-twant]');
+  if (tg) return S.ui.tradeForm?.toggle(tg.dataset.tgive ? 'give' : 'want', tg.dataset.tgive || tg.dataset.twant);
+  const trAns = t.closest('[data-trade]');
+  if (trAns) { const r = await act({ type: 'answerTrade', id: Number(trAns.dataset.id), accept: trAns.dataset.trade === '1' }); if (r.ok) closeOverlay(); return; }
   const helpAns = t.closest('[data-help]');
   if (helpAns) { const r = await act({ type: 'answerHelp', accept: helpAns.dataset.help === '1' }); if (r.ok) closeOverlay(); return; }
   const helpTo = t.closest('[data-helpto]');
@@ -1448,6 +1576,15 @@ document.addEventListener('click', async e => {
       return act({ type: 'endTurn', give: [] });
     }
     case 'trouble': return act({ type: 'lookForTrouble' });
+    case 'haunt': return act({ type: 'haunt', side: t.closest('[data-side]')?.dataset.side });
+    case 'sendTrade': {
+      const f = S.ui.tradeForm?.get();
+      if (!f) return;
+      const r = await act({ type: 'offerTrade', to: f.to, give: f.give, want: f.want });
+      if (r.ok) { closeOverlay(); toast(`Предложение отправлено: ${pname(f.to)} ответит в течение ${Math.round(TRADE_TIMEOUT_MS / 1000)} с`, true); }
+      return;
+    }
+    case 'cancelTrade': return act({ type: 'cancelTrade', id: Number(t.closest('[data-id]')?.dataset.id) });
     case 'askHelp': return openHelpModal();
     case 'sendHelp': {
       const { target, offer } = S.ui.helpForm.get();
@@ -1662,7 +1799,7 @@ function startAbility(name) {
 
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
-    if (S.ui.overlay && !$('#helpPrompt')) closeOverlay();
+    if (S.ui.overlay && !$('#helpPrompt') && !$('#tradePrompt')) closeOverlay();
     else if (S.ui.mode) { S.ui.mode = null; render(); }
   }
   if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('.card[data-uid]')) { e.preventDefault(); e.target.click(); }

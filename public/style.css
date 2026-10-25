@@ -1125,3 +1125,35 @@ body.has-world { background: #120e22; }
 .v-vol input { width: 110px; accent-color: var(--lamp); }
 .v-host { display: flex; gap: 6px; flex-wrap: wrap; width: 100%; justify-content: flex-end; }
 @media (max-width: 900px) { .voice-open span { display: none; } .voice-ctl .voice-open { padding-inline: 10px; } }
+
+/* ───────── глубина, контракты, призрак, обмен ───────── */
+.depth-pill { font-size: 13px; font-weight: 700; padding: 3px 10px; border-radius: 99px; background: rgba(120,150,210,.14); border: 1.5px solid rgba(140,170,230,.45); color: #c9d8ff; white-space: nowrap; cursor: help; }
+.depth-pill.deep { background: linear-gradient(180deg, rgba(90,70,150,.55), rgba(50,36,90,.6)); border-color: #9d8cff; color: #efeaff; }
+.badge.ghost { background: rgba(180,200,255,.22); color: #e8eeff; border: 1px dashed rgba(200,215,255,.6); }
+.opp.ghost .ava { opacity: .55; filter: grayscale(.6) drop-shadow(0 0 6px rgba(170,195,255,.8)); }
+.ghost-note { font-size: 13.5px; padding: 6px 10px; border-radius: var(--r); background: rgba(170,195,255,.12); border: 1.5px dashed rgba(190,210,255,.5); color: #e3eaff; }
+.contract { display: flex; gap: 8px; align-items: flex-start; padding: 7px 10px; border-radius: var(--r); background: linear-gradient(180deg, rgba(246,231,193,.13), rgba(246,231,193,.06)); border: 1.5px solid rgba(246,231,193,.35); cursor: help; }
+.contract .c-ico { font-size: 20px; line-height: 1.2; }
+.contract .c-body { min-width: 0; }
+.contract .c-head { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.contract .c-head b { color: var(--brass); }
+.contract .c-prog { font-weight: 800; font-size: 13px; padding: 0 7px; border-radius: 99px; background: var(--lamp); color: var(--lamp-ink); }
+.contract .c-done { font-size: 12px; color: var(--verdigris); font-weight: 700; }
+.contract .c-text { font-size: 13px; color: var(--muted); }
+.trade-wait { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 13.5px; padding: 5px 10px; border-radius: 99px; background: rgba(63,163,140,.15); border: 1.5px dashed var(--verdigris); }
+.btn.spook { background: linear-gradient(180deg, #c9d6ff, #8ea2e8); color: #1b1630; border-color: #231a26; }
+.trade-modal { max-width: 620px; }
+.trade-modal h3 { font-size: 16px; margin: 0 0 6px; color: var(--lamp); }
+.trade-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.trade-list { display: flex; flex-direction: column; gap: 6px; max-height: 300px; overflow-y: auto; }
+.chip.tpick small { color: var(--muted); font-weight: 400; }
+@media (max-width: 560px) {
+  .trade-cols { grid-template-columns: 1fr; }
+  .trade-list { max-height: 190px; }
+  .depth-pill { font-size: 12px; padding: 2px 8px; }
+}
+.g-contract { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; margin: 0 0 8px; border-radius: var(--r); background: rgba(246,231,193,.08); border: 1.5px solid rgba(246,231,193,.28); }
+.g-contract > span { font-size: 22px; line-height: 1.2; }
+.g-contract b { color: var(--brass); }
+.g-contract p { margin: 2px 0; }
+.g-contract small { color: var(--lamp); font-weight: 700; }

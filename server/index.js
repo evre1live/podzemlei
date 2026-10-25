@@ -10,6 +10,8 @@ import { Server } from 'socket.io';
 import { createGame, act, tick, view, P, WIN_LEVELS } from '../shared/engine.js';
 import { botDecide } from '../shared/bot.js';
 import { cleanAvatar, avatarFromSeed, withGender } from '../shared/avatar.js';
+import { PERSONAS, TRADE_TIMEOUT_MS } from '../shared/cards.js';
+const PERSONA_KEYS = Object.keys(PERSONAS);
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
@@ -111,7 +113,7 @@ function lobbyInfo(r, meId) {
     settings: r.settings, status: roomSummary(r).status, me: meId, spectator: !meId, watchers: watchCount(r), voice: voiceInfo(r),
     members: r.members.filter(m => !m.left).map((m, i) => ({
       id: m.id, name: m.name, isBot: m.isBot, connected: m.isBot || m.connected, ready: m.ready, color: m.color, avatar: m.avatar,
-      autopilot: !!m.autopilot,
+      autopilot: !!m.autopilot, persona: m.isBot ? m.persona || null : null,
     })),
     chat: r.chat.slice(-60),
   };
@@ -156,12 +158,12 @@ function sysChat(r, text) {
   if (r.chat.length > 120) r.chat.splice(0, r.chat.length - 120);
 }
 
-function addMember(r, { name, isBot = false, avatar: look = null }) {
+function addMember(r, { name, isBot = false, persona = null, avatar: look = null }) {
   const used = new Set(r.members.filter(m => !m.left).map(m => m.color));
   const color = COLORS.find(c => !used.has(c)) || COLORS[r.members.length % COLORS.length];
   // своя внешность, если игрок её собрал; иначе — случайная по номеру
   const avatar = look && typeof look === 'object' ? cleanAvatar(look) : crypto.randomInt(100000);
-  const m = { id: newId(), token: isBot ? null : newToken(), name, isBot, connected: false, socketId: null, ready: isBot, color, avatar, joinedAt: now(), lastSeen: now() };
+  const m = { id: newId(), token: isBot ? null : newToken(), name, isBot, connected: false, socketId: null, ready: isBot, color, avatar, joinedAt: now(), lastSeen: now(), ...(isBot && persona ? { persona } : {}) };
   r.members.push(m);
   return m;
 }
@@ -220,6 +222,9 @@ function runRoom(r) {
       const sleepy = gp.id === g.turn.pid && t - Math.max(m.lastSeen || 0, r.turnSeen.at) > IDLE_TURN_MS;
       const afk = !m.isBot && (((!m.connected || m.left) && t - (m.lastSeen || 0) > AFK_MS) || sleepy);
       if (!m.isBot && !afk) {
+        // живому игроку, который 30 с молчит на предложение обмена, отвечаем «нет»
+        const late = (g.trades || []).find(o => o.to === gp.id && t - (o.at || 0) > TRADE_TIMEOUT_MS);
+        if (late) { act(g, gp.id, { type: 'answerTrade', id: late.id, accept: false }, { rng, now: t }); changed = true; break; }
         // живому игроку, который не отвечает на просьбу о помощи 20 с, отвечаем «нет»
         if (g.combat?.helpReq?.to === gp.id && t - (g.combat.helpReq.at || 0) > 20000) {
           act(g, gp.id, { type: 'answerHelp', accept: false }, { rng, now: t });
@@ -228,6 +233,9 @@ function runRoom(r) {
         continue;
       }
       if (afk !== !!m.autopilot && !m.isBot) { m.autopilot = afk; }
+      // за отошедшего человека автопилот сделок не заключает
+      const offer = !m.isBot && (g.trades || []).find(o => o.to === gp.id);
+      if (offer) { act(g, gp.id, { type: 'answerTrade', id: offer.id, accept: false }, { rng, now: t }); changed = true; break; }
       const a = botDecide(g, gp.id, { rng, now: t });
       if (!a) continue;
       const res = act(g, gp.id, a, { rng, now: t });
@@ -534,8 +542,9 @@ io.on('connection', socket => {
     const used = new Set(activeMembers(r).map(m => m.name));
     const name = BOT_NAMES.find(n => !used.has(n)) || 'Бот';
     // у ботов внешность под стать имени: Зоя и Лариса — женщины, Кротыч и Дед Фонарь — мужчины
-    addMember(r, { name, isBot: true, avatar: withGender(avatarFromSeed(crypto.randomInt(100000)), BOT_WOMEN.has(name) ? 1 : 0) });
-    sysChat(r, `За стол садится бот ${name}.`);
+    const persona = PERSONA_KEYS[crypto.randomInt(PERSONA_KEYS.length)];
+    addMember(r, { name, isBot: true, persona, avatar: withGender(avatarFromSeed(crypto.randomInt(100000)), BOT_WOMEN.has(name) ? 1 : 0) });
+    sysChat(r, `За стол садится бот ${name} — характер ${PERSONAS[persona]}.`);
   }));
 
   socket.on('room:kick', (p = {}, cb) => hostOnly(cb, (r, me) => {
@@ -567,7 +576,7 @@ io.on('connection', socket => {
     if (r.game && r.game.phase === 'playing') return 'Игра уже идёт';
     const seats = activeMembers(r);
     if (seats.length < 2) return 'Нужно минимум 2 участника (можно добавить ботов)';
-    r.game = createGame(seats.map(m => ({ id: m.id, name: m.name, isBot: m.isBot, color: m.color, avatar: m.avatar })), { winDelayMs: r.settings.winDelayMs, winLevel: cleanWin(r.settings.winLevel) }, rng);
+    r.game = createGame(seats.map(m => ({ id: m.id, name: m.name, isBot: m.isBot, persona: m.persona, color: m.color, avatar: m.avatar })), { winDelayMs: r.settings.winDelayMs, winLevel: cleanWin(r.settings.winLevel) }, rng);
     r.game.now = now();
     r.nextBotAt = now() + 1500;
     sysChat(r, 'Партия началась! Удачи под землёй.');
