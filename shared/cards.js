@@ -477,6 +477,10 @@ export const CARD_DEFS = [
 
   // ───────────── КЛАД: ВЕЩИ ─────────────
   // slot: head | armor | feet | hand | none | pet ; hands: 1|2|3 ; big ; tags: ['light','water'] ; vsTag ; clsBonus
+  // immune: [метки] — расплата и засады таких монстров не действуют; calm: [метки] — такие монстры не гонятся
+  // foeMod: {tag, n} — монстры с меткой слабее/сильнее против героя; noAmbush — засады не срабатывают
+  // locBonus: {loc, n} — бонус в локации; noWandering — «Из темноты вылезло…» в бой героя не подкинуть
+  // minFoe — вещь не помогает против монстров ниже этого уровня; peek — видно верхнюю карту проходов
   { id: 'i_helmet', deck: 'treasure', type: 'item', name: 'Каска шахтёра', slot: 'head', bonus: 1, value: 200, copies: 2, art: 'helmet', set: 'miner',
     text: 'Комплект «Шахтёрский».' },
   { id: 'i_headlamp', deck: 'treasure', type: 'item', name: 'Налобный фонарь', slot: 'head', bonus: 2, value: 400, art: 'lamp', tags: ['light'],
@@ -484,6 +488,12 @@ export const CARD_DEFS = [
   { id: 'i_hardlamp', deck: 'treasure', type: 'item', name: 'Каска с прожектором', slot: 'head', bonus: 2, value: 500, art: 'hardlamp', tags: ['light'], rarity: 'rare',
     text: 'Источник света.' },
   { id: 'i_barrel', deck: 'treasure', type: 'item', name: 'Шлем-бочонок', slot: 'head', bonus: 2, value: 400, art: 'barrel' },
+  { id: 'i_gasmask', deck: 'treasure', type: 'item', name: 'Противогаз', slot: 'head', bonus: 2, value: 400, art: 'gasmask', immune: ['fungus'],
+    text: 'Грибы и их споры тебе не страшны: засады и расплата грибных монстров не действуют.' },
+  { id: 'i_canary', deck: 'treasure', type: 'item', name: 'Каска с канарейкой', slot: 'head', bonus: 1, value: 400, art: 'canary', noAmbush: true,
+    text: 'Канарейка чует неладное: засады монстров на тебя не срабатывают.' },
+  { id: 'i_ushanka', deck: 'treasure', type: 'item', name: 'Ушанка-невидимка', slot: 'head', bonus: 1, value: 400, art: 'ushanka', runBonus: 2,
+    text: 'Опустил уши — и тебя не видно. +2 к побегу.' },
   { id: 'i_crown', deck: 'treasure', type: 'item', name: 'Корона из пробок', slot: 'head', bonus: 3, value: 600, art: 'crown', rarity: 'rare',
     req: { notRace: 'dwarf' }, text: 'Не для гномов — давит на бороду.' },
   { id: 'i_quilt', deck: 'treasure', type: 'item', name: 'Ватник бронированный', slot: 'armor', bonus: 1, value: 200, copies: 2, art: 'jacket' },
@@ -502,6 +512,12 @@ export const CARD_DEFS = [
     text: 'Кольца выкованы в лаве. Комплект «Подгорного короля».' },
   { id: 'i_kingcrown', deck: 'treasure', type: 'item', name: 'Венец подгорного короля', slot: 'head', bonus: 3, value: 600, art: 'kingcrown', rarity: 'rare', set: 'king',
     text: 'Тяжёлый, как корона, и надёжный, как каска. Комплект «Подгорного короля».' },
+  { id: 'i_ratcloak', deck: 'treasure', type: 'item', name: 'Плащ из крысиных шкур', slot: 'armor', bonus: 1, value: 400, art: 'ratcloak', calm: ['rat'],
+    text: 'Пахнешь своим: крысы за тобой не гонятся.' },
+  { id: 'i_firesuit', deck: 'treasure', type: 'item', name: 'Спецовка пожарного', slot: 'armor', bonus: 2, value: 500, art: 'firesuit', foeMod: { tag: 'fire', n: -4 },
+    text: 'Огненные монстры против тебя −4.' },
+  { id: 'i_trays', deck: 'treasure', type: 'item', name: 'Бронежилет из противней', slot: 'armor', bonus: 3, value: 400, art: 'trays', runBonus: -1,
+    text: 'Гремит на всю штольню. −1 к побегу.' },
   { id: 'i_robe', deck: 'treasure', type: 'item', name: 'Мантия архивариуса', slot: 'armor', bonus: 3, value: 600, art: 'robe', rarity: 'rare',
     req: { cls: 'mage' }, text: 'Только для магов.' },
   { id: 'i_boots', deck: 'treasure', type: 'item', name: 'Резиновые сапоги', slot: 'feet', bonus: 1, value: 200, art: 'boots' },
@@ -509,6 +525,12 @@ export const CARD_DEFS = [
     runBonus: 2, text: '+2 к побегу.' },
   { id: 'i_slippers', deck: 'treasure', type: 'item', name: 'Тапки бесшумные', slot: 'feet', bonus: 1, value: 300, art: 'slippers',
     runBonus: 1, text: '+1 к побегу.' },
+  { id: 'i_rollers', deck: 'treasure', type: 'item', name: 'Ролики с эскалатора', slot: 'feet', bonus: -1, value: 300, art: 'rollers', runBonus: 3,
+    text: '−1 к силе, зато +3 к побегу.' },
+  { id: 'i_valenki', deck: 'treasure', type: 'item', name: 'Валенки', slot: 'feet', bonus: 1, value: 200, art: 'valenki', locBonus: { loc: 'loc_ice', n: 3 },
+    text: 'В Ледяной цитадели ещё +3.' },
+  { id: 'i_waders', deck: 'treasure', type: 'item', name: 'Болотные сапоги', slot: 'feet', bonus: 1, value: 300, art: 'waders', foeMod: { tag: 'water', n: -3 },
+    text: 'Водные монстры против тебя −3.' },
   { id: 'i_shovel', deck: 'treasure', type: 'item', name: 'Совковая лопата', slot: 'hand', hands: 1, bonus: 2, value: 200, copies: 2, art: 'shovel' },
   { id: 'i_pick', deck: 'treasure', type: 'item', name: 'Кирка ударника', slot: 'hand', hands: 2, bonus: 3, value: 400, art: 'pick', set: 'miner',
     text: 'Комплект «Шахтёрский».' },
@@ -537,6 +559,12 @@ export const CARD_DEFS = [
     req: { race: 'orc' }, text: 'Только для орков.' },
   { id: 'i_claws', deck: 'treasure', type: 'item', name: 'Кротовые когти', slot: 'hand', hands: 2, bonus: 4, value: 600, art: 'claws',
     req: { race: 'molefolk' }, text: 'Только для кротолюдов.' },
+  { id: 'i_samovar', deck: 'treasure', type: 'item', name: 'Огнемёт из самовара', slot: 'hand', hands: 2, bonus: 4, value: 600, big: true, art: 'samovar', rarity: 'rare',
+    vsTag: { tag: 'insect', n: 3 }, text: 'Большая. Против насекомых ещё +3.' },
+  { id: 'i_turnshield', deck: 'treasure', type: 'item', name: 'Щит-турникет', slot: 'hand', hands: 1, bonus: 3, value: 500, art: 'turnshield', noWandering: true,
+    text: 'Пропускает строго по одному: в твой бой нельзя подкинуть монстра картой «Из темноты вылезло…».' },
+  { id: 'i_kladenets', deck: 'treasure', type: 'item', name: 'Меч-кладенец с гонором', slot: 'hand', hands: 1, bonus: 6, value: 600, art: 'kladenets', rarity: 'rare', minFoe: 5,
+    text: 'Проклятый: +6, но против монстров ниже 5-го уровня не помогает — гордый.' },
   { id: 'i_crowbar', deck: 'treasure', type: 'item', name: 'Фомка универсальная', slot: 'hand', hands: 1, bonus: 2, value: 300, art: 'crowbar' },
   { id: 'i_wrench', deck: 'treasure', type: 'item', name: 'Разводной ключ', slot: 'hand', hands: 1, bonus: 2, value: 300, art: 'wrench',
     clsBonus: { cls: 'engineer', n: 2 }, text: 'У механика +2 сверху.' },
@@ -570,6 +598,10 @@ export const CARD_DEFS = [
   { id: 'p_golddragon', deck: 'treasure', type: 'item', slot: 'pet', name: 'Золотой Дракон', bonus: 7, value: 0, art: 'pet_dragon',
     rarity: 'legendary', noSteal: true, petSave: false,
     text: 'Легендарный питомец. Плут его не украдёт. Драконы не жертвуют собой: от расплаты не спасает, зато и не улетает.' },
+  { id: 'p_raven', deck: 'treasure', type: 'item', slot: 'pet', name: 'Ворон-разведчик', bonus: 1, value: 400, art: 'pet_raven', peek: true,
+    text: 'Питомец. В твой ход ты видишь, что лежит за следующей дверью. Спасёт от одной расплаты.' },
+  { id: 'p_owl', deck: 'treasure', type: 'item', slot: 'pet', name: 'Сова-проводница', bonus: 1, value: 300, art: 'pet_owl', runBonus: 2,
+    text: 'Питомец. Знает обходные пути: +2 к побегу. Спасёт от одной расплаты.' },
   { id: 'p_cat', deck: 'treasure', type: 'item', slot: 'pet', name: 'Кот-диггер', bonus: 2, value: 400, art: 'pet_cat', rarity: 'rare',
     vsTag: { tag: 'rat', n: 3 }, text: 'Питомец. Против крыс ещё +3. Спасёт от одной расплаты.' },
 

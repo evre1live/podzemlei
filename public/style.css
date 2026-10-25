@@ -1618,3 +1618,8 @@ label { color: var(--text-2); font-size: 14px; }
 .set-row b { color: var(--text-2); font-weight: 600; }
 .set-row.done { border-color: rgba(214,168,90,.55); background: rgba(214,168,90,.08); color: var(--text-2); }
 .set-row.done .gi, .set-row.done b { color: var(--gold-hi); }
+
+/* ворон-разведчик: подсказка о следующей двери */
+.peek-note { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 6px; color: var(--text-2); }
+.peek-note .gi { width: 16px; height: 16px; color: var(--gold-hi); }
+.linkish { padding: 0; min-height: 0; border: 0; background: none; color: var(--gold-hi); font: inherit; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }

@@ -575,7 +575,11 @@ function renderStage() {
   const step = g.turn.step;
   if (g.phase === 'ended') { title = 'Партия окончена'; text = ''; }
   else if (mine) {
-    if (step === 'pre') { title = 'Ваш ход'; text = 'Разложите вещи и выбейте дверь — посмотрим, кто за ней.'; }
+    if (step === 'pre') {
+      title = 'Ваш ход'; text = 'Разложите вещи и выбейте дверь — посмотрим, кто за ней.';
+      // ворон-разведчик подсмотрел, что за следующей дверью
+      if (g.peek) text += ` <span class="peek-note">${ico('all-seeing-eye')}Ворон подсмотрел: за дверью <button class="linkish" data-uid="${esc(g.peek)}" data-zone="view">${esc(def(g.peek).name)}</button></span>`;
+    }
     else if (step === 'post') { title = 'За дверью никого'; text = `Можно поискать неприятности — выйдет случайный монстр из колоды, разбуженный (+${TROUBLE_BONUS} к силе) — или обшарить комнату и взять карту втёмную.`; }
     else { title = 'Ход почти закончен'; text = h.mustGive ? `В руке на ${cardsWord(h.mustGive)} больше нормы — лишнее уйдёт ${h.giveToLowest ? 'самому слабому игроку' : 'в сброс'}.` : 'Наведите порядок в вещах и передайте ход.'; }
   } else if (tp) {

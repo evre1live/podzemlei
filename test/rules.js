@@ -908,4 +908,49 @@ t('комплекты: легендарный +10 сверху, шахтёрск
   assert.equal(combatNumbers(s3).heroes, 5 + 9 + 3 + 5);
 });
 
+t('новые шмотки: противогаз, канарейка, крысиный плащ, спецовка, валенки, турникет, кладенец, ворон', () => {
+  const lowDie = () => 0;
+  const wear = (s, p, id) => { p.hand.push(take(s, id + '#0')); assert.equal(A(s, p.id, { type: 'playCard', uid: id + '#0' }).ok, true); };
+  // противогаз: засада грибного монстра не срабатывает, и расплата его не трогает
+  let s = fresh(); let p = P(s, 'p0'); wear(s, p, 'i_gasmask'); p.hand.push(take(s, 'o_kvass#0'));
+  s.decks.door.push(take(s, 'm_hypno#0'));
+  A(s, 'p0', { type: 'kick' });
+  assert.equal(p.hand.length, 1, 'засада не забрала карту');
+  act(s, 'p0', { type: 'runAway' }, { rng: lowDie, now: 1000 });
+  assert.equal(p.level, 1); assert.ok(p.equipped.includes('i_gasmask#0'));
+  // канарейка: засада мимика не срабатывает
+  s = fresh(); p = P(s, 'p0'); wear(s, p, 'i_canary'); p.hand.push(take(s, 'o_kvass#0'));
+  s.decks.door.push(take(s, 'm_mimic#0')); A(s, 'p0', { type: 'kick' });
+  assert.equal(p.hand.length, 1);
+  // крысиный плащ: крысы не гонятся
+  s = fresh(); p = P(s, 'p0'); p.level = 4; wear(s, p, 'i_ratcloak');
+  s.decks.door.push(take(s, 'm_ratunion#0')); A(s, 'p0', { type: 'kick' });
+  act(s, 'p0', { type: 'runAway' }, { rng: lowDie, now: 1000 });
+  assert.equal(p.level, 4); assert.ok(p.equipped.includes('i_ratcloak#0'));
+  // спецовка: огненный монстр −4
+  s = fresh(); p = P(s, 'p0'); s.decks.door.push(take(s, 'm_salamander#0')); A(s, 'p0', { type: 'kick' });
+  const before = combatNumbers(s).monsters;
+  p.equipped.push(take(s, 'i_firesuit#0'));
+  assert.equal(combatNumbers(s).monsters, before - 4);
+  // валенки: в Ледяной цитадели +3
+  s = fresh(); p = P(s, 'p0'); wear(s, p, 'i_valenki');
+  const pw = view(s, 'p0').players[0].power;
+  p.hand.push(take(s, 'loc_ice#0')); A(s, 'p0', { type: 'playCard', uid: 'loc_ice#0' });
+  assert.equal(view(s, 'p0').players[0].power - pw, 3 + (def('loc_ice').heroAll || 0));
+  // турникет: «Из темноты вылезло…» не подкинуть
+  s = fresh(); p = P(s, 'p0'); p.level = 9; wear(s, p, 'i_turnshield');
+  s.decks.door.push(take(s, 'm_mosquito#0')); A(s, 'p0', { type: 'kick' });
+  const q = P(s, 'p1'); q.hand.push(take(s, 'w_wandering#0'), take(s, 'm_slime#0'));
+  assert.match(A(s, 'p1', { type: 'playCard', uid: 'w_wandering#0', with: 'm_slime#0' }).error, /турникет/);
+  // кладенец не помогает против мелочи
+  s = fresh(); p = P(s, 'p0'); wear(s, p, 'i_kladenets');
+  assert.equal(view(s, 'p0').players[0].power, 1 + 6);
+  s.decks.door.push(take(s, 'm_mosquito#0')); A(s, 'p0', { type: 'kick' });
+  assert.equal(combatNumbers(s).heroes, 1);
+  // ворон: в свой ход видно верхнюю дверь
+  s = fresh(); p = P(s, 'p0'); wear(s, p, 'p_raven');
+  assert.equal(view(s, 'p0').peek, s.decks.door.at(-1));
+  assert.equal(view(s, 'p1').peek, null);
+});
+
 console.log(`Правила: ${n} проверок пройдено.`);

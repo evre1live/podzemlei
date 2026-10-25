@@ -108,6 +108,10 @@ const handsLimit = p => (hasClass(p, 'engineer') ? 3 : 2);
 const inPlayItems = p => [...p.equipped, ...p.carried];
 export const locationOf = s => (s.location ? def(s.location) : null);
 const hasItemTag = (p, tag) => p.equipped.some(u => (def(u).tags || []).includes(tag));
+// свойства надетых вещей: список значений поля (immune, calm) или флаг
+const itemList = (p, key) => p.equipped.flatMap(u => def(u)[key] || []);
+const itemFlag = (p, key) => p.equipped.some(u => def(u)[key]);
+const monTags = uid => def(uid).tags || [];
 const combatHasTag = (s, tag) => !!s.combat && s.combat.monsters.some(m => (def(m.uid).tags || []).includes(tag));
 
 function reqError(p, d) {
@@ -151,6 +155,8 @@ export function itemBonus(p, s = null) {
   let v = 0;
   for (const u of p.equipped) {
     const d = def(u);
+    // гордый клинок не помогает против мелочи
+    if (s?.combat && d.minFoe && s.combat.monsters.length && s.combat.monsters.every(m => monsterBaseLevel(s, def(m.uid)) < d.minFoe)) continue;
     v += d.bonus || 0;
     if (d.clsBonus && hasClass(p, d.clsBonus.cls)) v += d.clsBonus.n;
     if (s && d.vsTag && combatHasTag(s, d.vsTag.tag)) v += d.vsTag.n;
@@ -179,6 +185,7 @@ export function passiveBonus(s, p) {
     for (const m of L.heroMod || []) if ((m.cls && hasClass(p, m.cls)) || (m.race && hasRace(p, m.race))) v += m.n;
     if (L.lightBonus && hasItemTag(p, 'light')) v += L.lightBonus;
   }
+  for (const u of p.equipped) { const lb = def(u).locBonus; if (lb && s?.location && def(s.location).id === lb.loc) v += lb.n; }
   return v;
 }
 export const powerOf = (s, p) => p.level + itemBonus(p) + passiveBonus(s, p);
@@ -525,6 +532,7 @@ export function monsterStrength(s, m) {
   const parts = participants(s).map(id => P(s, id));
   for (const vs of d.vs || []) if (parts.some(p => matchVs(p, vs))) v += vs.n;
   for (const w of d.vsItem || []) if (parts.some(p => hasItemTag(p, w.tag))) v += w.n;
+  for (const p of parts) for (const u of p.equipped) { const fm = def(u).foeMod; if (fm && (d.tags || []).includes(fm.tag)) v += fm.n; }
   if (d.soloBonus && s.combat && !s.combat.helper) v += d.soloBonus;
   v += depthBonus(s);
   const L = locationOf(s);
@@ -586,9 +594,13 @@ function startCombat(s, p, monsterUid, rng = Math.random) {
   if (d.boss) log(s, `👹 Это босс! Его сила — ${m0.power}: ${m0.power > BOSS_FLOOR ? `вдвое больше силы ${p.name}` : `слабее ${BOSS_FLOOR} боссы не бывают`}. ${p.level < BOSS_MIN_LEVEL ? `За героями ниже ${BOSS_MIN_LEVEL}-го уровня он не гонится.` : 'Не одолеешь и не убежишь — −5 уровней и смерть.'}`, 'bad');
   fx(s, { kind: 'combat', pid: p.id, card: monsterUid, ...(d.boss ? { power: m0.power } : {}) });
   if (d.ambush) {
-    log(s, d.ambush.text, 'bad');
-    fx(s, { kind: 'ambush', pid: p.id, card: monsterUid });
-    applyFx(s, p, d.ambush.fx, rng);
+    const guard = itemFlag(p, 'noAmbush') ? 'Канарейка заранее подняла тревогу' : monTags(monsterUid).some(t => itemList(p, 'immune').includes(t)) ? 'Противогаз не пропустил споры' : null;
+    if (guard) log(s, `${guard} — засада ${q(d.name)} не удалась.`, 'good');
+    else {
+      log(s, d.ambush.text, 'bad');
+      fx(s, { kind: 'ambush', pid: p.id, card: monsterUid });
+      applyFx(s, p, d.ambush.fx, rng);
+    }
   }
 }
 
@@ -686,6 +698,11 @@ function resolveEscape(s, rng) {
         log(s, `${q(d.name)} не стал гнаться за ${p.name}.`, 'good');
         continue;
       }
+      if (monTags(m.uid).some(t => itemList(p, 'calm').includes(t))) {
+        fx(s, { kind: 'escaped', pid, card: m.uid, calm: true });
+        log(s, `${q(d.name)} принимает ${p.name} за своего и не гонится.`, 'good');
+        continue;
+      }
       const noEsc = d.escape === false || m.enh.some(u => def(u).noEscape);
       const bonus = runBonusOf(s, p) + (c.escape[pid] || 0) + (d.escapeMod || 0);
       let r = 0, ok = false;
@@ -704,6 +721,11 @@ function resolveEscape(s, rng) {
       }
       const sign = bonus ? (bonus > 0 ? '+' : '') + bonus : '';
       if (ok) { fx(s, { kind: 'escaped', pid, card: m.uid }); log(s, `${p.name} удирает от ${q(d.name)} (${r}${sign}).`, 'good'); contractEvent(s, p, 'escape', {}, rng); continue; }
+      if (monTags(m.uid).some(t => itemList(p, 'immune').includes(t))) {
+        fx(s, { kind: 'escaped', pid, card: m.uid, calm: true });
+        log(s, `${p.name} не убежал от ${q(d.name)}, но противогаз спас от расплаты.`, 'good');
+        continue;
+      }
       const pet = p.equipped.find(u => def(u).slot === 'pet' && def(u).petSave !== false);
       if (pet) {
         removeItem(p, pet); toDiscard(s, pet);
@@ -862,6 +884,7 @@ function playCheck(s, p, a) {
       return null;
     case 'wandering':
       if (!c) return 'Только во время боя';
+      if (participants(s).some(id => itemFlag(P(s, id), 'noWandering'))) return 'Щит-турникет: в этот бой монстров по одному';
       if (!a.with || a.with === a.uid || !p.hand.includes(a.with) || def(a.with).type !== 'monster') return 'Нужен монстр из руки';
       return null;
     case 'oneshot':
@@ -1556,6 +1579,7 @@ export function view(s, pid) {
     } : null,
     me: me ? pid : null,
     hints: me ? hints(s, pid) : null,
+    peek: me && myTurn(s, me) && !s.combat && s.turn.step === 'pre' && itemFlag(me, 'peek') ? s.decks.door.at(-1) || null : null,
     sale: me && s.phase === 'playing' ? { rate: locationOf(s)?.saleRate || 1000, goblin: hasRace(me, 'goblin'), halfling: hasRace(me, 'halfling') && !s.turn.halflingSold } : null,
   };
 }
