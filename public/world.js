@@ -134,7 +134,11 @@ export function setWorld(host, key) {
   const show = () => {
     if (shown || current !== k) return;
     shown = true;
-    requestAnimationFrame(() => requestAnimationFrame(() => { el.classList.add('on'); setTimeout(drop, 900); }));
+    // в фоновой вкладке кадры не рисуются — тогда выручает таймер
+    let on = false;
+    const reveal = () => { if (on || current !== k) return; on = true; el.classList.add('on'); setTimeout(drop, 900); };
+    requestAnimationFrame(() => requestAnimationFrame(reveal));
+    setTimeout(reveal, 120);
   };
   const im = new Image();
   im.onload = show; im.onerror = show;
