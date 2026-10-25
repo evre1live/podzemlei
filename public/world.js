@@ -1,6 +1,7 @@
 // «Под Землёй» — живой фон: подземная арена по умолчанию и своя живописная сцена для каждой локации.
-// Сцена — картинка во весь экран (/loc/v1), поверх — лёгкая анимация: огонь факелов, светлячки, снег, молнии.
-// Двигаются только transform и opacity, так браузер считает их на видеокарте.
+// Сцена — картинка во весь экран (/loc/v1). Поверх неё рисуются живые эффекты на видеокарте (vfx.js, PixiJS):
+// пламя, дым, искры, вода, лава, туман, молнии. Если WebGL недоступен или включён «неподвижный фон» —
+// остаются простые CSS-огоньки ниже (двигаются только transform и opacity).
 
 function mulberry(seed) {
   let a = seed >>> 0;
@@ -113,6 +114,24 @@ export function worldHTML(key) {
   return `<div class="w-box"><div class="w-img" style="background-image:url('${S.img}')"></div><div class="w-fx">${S.fx}</div></div><div class="w-vignette"></div>`;
 }
 
+// Живые эффекты подгружаются, только когда нужны: библиотека весит ~230 КБ
+let vfx = null, vfxKey = null;
+function syncVfx(host) {
+  const k = current;
+  if (!k || host.classList.contains('still')) { if (vfx && !k) vfx.then(m => m.hideVfx()); return; }
+  if (vfxKey === k && vfx) return;
+  vfxKey = k;
+  vfx ??= import('/vfx.js');
+  vfx.then(m => current === k && m.showVfx(host, k, sceneOf(k).img)).catch(e => console.warn('Живые эффекты недоступны:', e?.message || e));
+}
+let watching = false;
+function watchStill(host) {
+  if (watching) return;
+  watching = true;
+  // включили живой фон в настройках — эффекты появляются без перезагрузки
+  new MutationObserver(() => { if (!host.classList.contains('still')) { vfxKey = null; syncVfx(host); } }).observe(host, { attributes: true, attributeFilter: ['class'] });
+}
+
 // Плавная смена сцены: новая проявляется поверх старой
 let current = null;
 export function setWorld(host, key) {
@@ -120,15 +139,16 @@ export function setWorld(host, key) {
   const k = key === null ? null : key || 'default';
   if (k === current) return;
   current = k;
-  const old = [...host.children];
+  watchStill(host);
+  const old = [...host.querySelectorAll(':scope > .world')];
   const drop = () => old.forEach(o => { o.classList.remove('on'); setTimeout(() => o.remove(), 1400); });
   document.body.classList.toggle('has-world', !!k);
-  if (!k) return drop();
+  if (!k) { vfxKey = null; syncVfx(host); return drop(); }
   const el = document.createElement('div');
   el.className = 'world';
   el.dataset.w = k;
   el.innerHTML = worldHTML(k);
-  host.append(el);
+  host.querySelector(':scope > .w-vfx') ? host.insertBefore(el, host.querySelector(':scope > .w-vfx')) : host.append(el);
   // новая сцена проявляется, когда картинка уже загружена — без вспышки пустого фона; старая уходит следом
   let shown = false;
   const show = () => {
@@ -136,7 +156,7 @@ export function setWorld(host, key) {
     shown = true;
     // в фоновой вкладке кадры не рисуются — тогда выручает таймер
     let on = false;
-    const reveal = () => { if (on || current !== k) return; on = true; el.classList.add('on'); setTimeout(drop, 900); };
+    const reveal = () => { if (on || current !== k) return; on = true; el.classList.add('on'); setTimeout(drop, 900); syncVfx(host); };
     requestAnimationFrame(() => requestAnimationFrame(reveal));
     setTimeout(reveal, 120);
   };

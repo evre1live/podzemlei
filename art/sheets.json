@@ -1,0 +1,355 @@
+{
+ "note": "Листы рисунков для карт: 3×2 панели, слева направо, сверху вниз. Номер панели = порядок в массиве.",
+ "grid": [
+  3,
+  2
+ ],
+ "sheets": [
+  {
+   "n": 1,
+   "ids": [
+    "r_elf",
+    "r_dwarf",
+    "r_halfling",
+    "r_orc",
+    "r_goblin",
+    "r_mole"
+   ]
+  },
+  {
+   "n": 2,
+   "ids": [
+    "c_warrior",
+    "c_mage",
+    "c_cleric",
+    "c_rogue",
+    "c_bard",
+    "c_alchemist"
+   ]
+  },
+  {
+   "n": 3,
+   "ids": [
+    "c_engineer",
+    "c_witcher",
+    "x_halfbreed",
+    "x_super",
+    "m_slime",
+    "m_floorboard"
+   ]
+  },
+  {
+   "n": 4,
+   "ids": [
+    "m_mold",
+    "m_moth",
+    "m_mosquito",
+    "m_roach",
+    "m_mole",
+    "m_leech"
+   ]
+  },
+  {
+   "n": 5,
+   "ids": [
+    "m_turnstile",
+    "m_ninjamole",
+    "m_beggar",
+    "m_robovac",
+    "m_duck",
+    "m_gossip"
+   ]
+  },
+  {
+   "n": 6,
+   "ids": [
+    "m_mycel",
+    "m_hypno",
+    "m_ratunion",
+    "m_lasttrain",
+    "m_inspector",
+    "m_slug"
+   ]
+  },
+  {
+   "n": 7,
+   "ids": [
+    "m_cart",
+    "m_batchoir",
+    "m_watchman",
+    "m_dj",
+    "m_plumber",
+    "m_banshee"
+   ]
+  },
+  {
+   "n": 8,
+   "ids": [
+    "m_cashier",
+    "m_zhek",
+    "m_minotaur",
+    "m_endless",
+    "m_salamander",
+    "m_spider"
+   ]
+  },
+  {
+   "n": 9,
+   "ids": [
+    "m_croc",
+    "m_paranoid",
+    "m_golem",
+    "m_worm",
+    "m_ghostdriver",
+    "m_excavator"
+   ]
+  },
+  {
+   "n": 10,
+   "ids": [
+    "m_mirror",
+    "m_concrete",
+    "m_vampire",
+    "m_heatpipe",
+    "m_lich",
+    "m_moldking"
+   ]
+  },
+  {
+   "n": 11,
+   "ids": [
+    "m_ratqueen",
+    "m_troll",
+    "m_cricket",
+    "m_dragon",
+    "m_pit",
+    "m_philosopher"
+   ]
+  },
+  {
+   "n": 12,
+   "ids": [
+    "m_molekron",
+    "m_gorynych",
+    "m_kolobok",
+    "m_kikimora",
+    "m_likho",
+    "m_mimic"
+   ]
+  },
+  {
+   "n": 13,
+   "ids": [
+    "m_medusa",
+    "m_leshy",
+    "m_cyclops",
+    "m_solovey",
+    "m_koschei",
+    "m_griffin"
+   ]
+  },
+  {
+   "n": 14,
+   "ids": [
+    "m_vodyanoy",
+    "m_genie",
+    "m_babayaga",
+    "m_basilisk",
+    "m_cerberus",
+    "m_manticore"
+   ]
+  },
+  {
+   "n": 15,
+   "ids": [
+    "m_hydra",
+    "m_kraken",
+    "m_lucifer",
+    "m_hades",
+    "m_anubis",
+    "e_seasoned"
+   ]
+  },
+  {
+   "n": 16,
+   "ids": [
+    "e_armored",
+    "e_hungry",
+    "e_pack",
+    "e_rabid",
+    "e_morning",
+    "e_baby"
+   ]
+  },
+  {
+   "n": 17,
+   "ids": [
+    "e_decrepit",
+    "e_cold",
+    "w_wandering",
+    "k_draft",
+    "k_cavein",
+    "k_puddle"
+   ]
+  },
+  {
+   "n": 18,
+   "ids": [
+    "k_rust",
+    "k_rusthands",
+    "k_tax",
+    "k_fever",
+    "k_amnesia",
+    "k_fired"
+   ]
+  },
+  {
+   "n": 19,
+   "ids": [
+    "k_pickpocket",
+    "k_klepto",
+    "k_flu",
+    "k_backpack",
+    "k_jinx",
+    "ev_quake"
+   ]
+  },
+  {
+   "n": 20,
+   "ids": [
+    "ev_light",
+    "ev_fair",
+    "ev_draft",
+    "ev_rollcall",
+    "ev_luxtax",
+    "i_helmet"
+   ]
+  },
+  {
+   "n": 21,
+   "ids": [
+    "i_headlamp",
+    "i_hardlamp",
+    "i_barrel",
+    "i_crown",
+    "i_quilt",
+    "i_tokens"
+   ]
+  },
+  {
+   "n": 22,
+   "ids": [
+    "i_diver",
+    "i_godarmor",
+    "i_robe",
+    "i_boots",
+    "i_runners",
+    "i_slippers"
+   ]
+  },
+  {
+   "n": 23,
+   "ids": [
+    "i_shovel",
+    "i_pick",
+    "i_jackhammer",
+    "i_drill",
+    "i_hatch",
+    "i_stapler"
+   ]
+  },
+  {
+   "n": 24,
+   "ids": [
+    "i_censer",
+    "i_lute",
+    "i_rail",
+    "i_staff",
+    "i_bow",
+    "i_knuckles"
+   ]
+  },
+  {
+   "n": 25,
+   "ids": [
+    "i_claws",
+    "i_crowbar",
+    "i_wrench",
+    "i_extinguisher",
+    "i_trap",
+    "i_flashlight"
+   ]
+  },
+  {
+   "n": 26,
+   "ids": [
+    "i_taser",
+    "i_ladle",
+    "i_charm",
+    "i_flasks",
+    "i_sack",
+    "i_trolley"
+   ]
+  },
+  {
+   "n": 27,
+   "ids": [
+    "i_ring",
+    "p_rat",
+    "p_firefly",
+    "p_hamster",
+    "p_golddragon",
+    "p_cat"
+   ]
+  },
+  {
+   "n": 28,
+   "ids": [
+    "o_pickles",
+    "o_kvass",
+    "o_shawarma",
+    "o_cola",
+    "o_firecracker",
+    "o_holywater"
+   ]
+  },
+  {
+   "n": 29,
+   "ids": [
+    "o_rope",
+    "o_smoke",
+    "o_petrify",
+    "o_slave",
+    "o_ward",
+    "b_courage"
+   ]
+  },
+  {
+   "n": 30,
+   "ids": [
+    "b_energy",
+    "b_pies",
+    "l_stash",
+    "l_bribe",
+    "l_manual",
+    "l_sleep"
+   ]
+  },
+  {
+   "n": 31,
+   "ids": [
+    "l_exam",
+    "l_friend",
+    "l_map",
+    "l_bonus",
+    "l_shortcut",
+    "h_hoard"
+   ]
+  }
+ ],
+ "extra": [
+  "back_door",
+  "back_treasure",
+  "menu_bg"
+ ]
+}

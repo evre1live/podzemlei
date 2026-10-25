@@ -749,7 +749,11 @@ label { display: grid; gap: 6px; font-size: 14px; color: var(--muted); }
 #app { position: relative; z-index: 1; }
 .world { position: absolute; inset: 0; overflow: hidden; opacity: 0; transition: opacity 1.3s ease; background: #120e22; }
 .world.on { opacity: 1; }
-.w-box { position: absolute; left: 50%; top: 50%; width: max(100vw, 177.78vh); height: max(100vh, 56.25vw); transform: translate(-50%, -50%); }
+#world { container-type: size; }
+.w-box { position: absolute; left: 50%; top: 50%; width: max(100vw, 177.78vh); height: max(100vh, 56.25vw); width: max(100cqw, 177.78cqh); height: max(100cqh, 56.25cqw); transform: translate(-50%, -50%); }
+/* живые эффекты на видеокарте (vfx.js): холст поверх сцены сам рисует затемнение и виньетку, CSS-огоньки прячутся */
+.w-vfx { position: absolute; inset: 0; width: 100%; height: 100%; display: block; pointer-events: none; }
+#world.vfx .w-fx, #world.vfx .w-vignette, #world.vfx .w-img::after { display: none; }
 .w-static { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 .w-fx { position: absolute; inset: 0; overflow: hidden; }
 .w-fx > * { position: absolute; display: block; }
