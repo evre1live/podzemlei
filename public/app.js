@@ -141,13 +141,12 @@ socket.on('room:state', ({ room, game, serverTime }) => {
   render();
   renderVoice();
   if (fresh.length) requestAnimationFrame(() => runFx(fresh, snap));
-  arenaSync(fresh);
 });
 
 // ───────────────────────── маршрутизация экранов ─────────────────────────
 function render() {
   const scr = !S.room ? 'home' : S.game ? 'game' : 'lobby';
-  if (scr !== S.screen) { if (S.screen === 'game') arenaOff(true); S.screen = scr; mount[scr](); soundIcons(); }
+  if (scr !== S.screen) { S.screen = scr; mount[scr](); soundIcons(); }
   setWorld($('#world'), scr === 'home' ? null : scr === 'game' && S.game.location ? def(S.game.location).art : 'default');
   update[scr]();
   if (scr !== 'home') renderVoice();
@@ -442,7 +441,6 @@ mount.game = () => {
     </div>
     <div class="band b-clay pebbles"><div class="opps" id="opps"></div></div>
     <div class="band b-rock cave" id="cave">
-      <div class="arena3d" id="arena3d" aria-hidden="true" hidden></div>
       <div class="cave-stage" id="stage"></div>
       <div class="motes" aria-hidden="true">${'<i></i>'.repeat(12)}</div>
       <div class="sidepanel side" id="sidepanel">
@@ -1137,7 +1135,6 @@ function handleFx(first) {
   return fresh;
 }
 const avaOf = pid => pid === S.room?.me ? $('#meava') : document.querySelector(`[data-opp="${pid}"] .ava`);
-cine.arenaActive = () => arenaOn() && (!!S.game?.combat || arenaShown());
 cine.init({
   meId: () => S.room?.me,
   pname,
@@ -1517,49 +1514,6 @@ async function saveAvatar() {
   else toast('Внешность сохранена', true);
 }
 
-// ───────────────────────── 3D-арена боя ─────────────────────────
-// Three.js и модели грузятся только тогда, когда начинается первый бой.
-const WEBGL = (() => { try { const c = document.createElement('canvas'); return !!(c.getContext('webgl2') || c.getContext('webgl')); } catch { return false; } })();
-const weakDevice = () => (navigator.hardwareConcurrency || 4) <= 2 || (navigator.deviceMemory || 4) <= 2 || matchMedia('(prefers-reduced-motion: reduce)').matches;
-const arenaOn = () => WEBGL && LS.get('arena3d', !weakDevice());
-const ARENA = { mod: null, inst: null, hideAt: 0, timer: null, prefetched: false };
-function arenaShown() { return !!$('#cave')?.classList.contains('arena-on'); }
-function arenaShow(on) {
-  const cave = $('#cave'), el = $('#arena3d');
-  if (!cave || !el) return;
-  cave.classList.toggle('arena-on', on);
-  el.hidden = !on;
-  if (on) ARENA.inst?.resume(); else ARENA.inst?.pause();
-}
-function arenaOff(dispose = false) {
-  clearTimeout(ARENA.timer);
-  arenaShow(false);
-  if (dispose) { ARENA.inst?.dispose(); ARENA.inst = null; }
-}
-async function arenaSync(fresh) {
-  if (S.screen !== 'game' || !S.game) return arenaOff(true);
-  if (!arenaOn()) return arenaOff();
-  const g = S.game;
-  const el = $('#arena3d');
-  if (!el) return;
-  // модели заранее, пока идёт ход: первый бой не будет ждать загрузки
-  if (!ARENA.prefetched && g.phase === 'playing') { ARENA.prefetched = true; (ARENA.mod ||= import('/arena3d.js')).then(m => m.prefetch(['hero_knight', 'hero_barbarian', 'hero_mage'])).catch(() => {}); }
-  if (!g.combat && !ARENA.inst?.key) return;
-  try {
-    const mod = await (ARENA.mod ||= import('/arena3d.js'));
-    if (!ARENA.inst || ARENA.inst.host !== el) { ARENA.inst?.dispose(); ARENA.inst = new mod.Arena(el, { lite: cine.lite || weakDevice() }); }
-    if (g.combat) { clearTimeout(ARENA.timer); arenaShow(true); }
-    const r = await ARENA.inst.sync(g, fresh);
-    if (S.game?.combat) return;
-    clearTimeout(ARENA.timer);
-    const left = r?.active ? Math.max(0, r.until - performance.now()) : 0;
-    ARENA.timer = setTimeout(() => { if (!S.game?.combat) arenaShow(false); }, left);
-  } catch (e) {
-    console.warn('3D-арена недоступна', e);
-    LS.set('arena3d', false); arenaOff(true); render();
-  }
-}
-
 // ───────────────────────── голосовой чат ─────────────────────────
 const MIC = off => `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3" fill="currentColor"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>${off ? '<path d="M4 4l16 16" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>' : ''}</svg>`;
 // громкость каждого собеседника запоминается по игроку (или по имени зрителя)
@@ -1640,7 +1594,6 @@ function openSoundModal() {
     <label class="check"><input type="checkbox" id="sndAmb" ${s.amb ? 'checked' : ''}> Атмосфера пещеры: гул, ветер и капли</label>
     <label class="check"><input type="checkbox" id="liveBg" ${liveBg() ? 'checked' : ''}> Живой фон: вода, снег, светлячки (на слабом телефоне лучше выключить)</label>
     <label class="check"><input type="checkbox" id="cineOn" ${cine.enabled ? 'checked' : ''}> Зрелищные сцены: двери, удары, разрубленные карты, салют</label>
-    <label class="check"><input type="checkbox" id="arenaOn" ${arenaOn() ? 'checked' : ''} ${WEBGL ? '' : 'disabled'}> 3D-бои: герои и монстры дерутся на арене${WEBGL ? '' : ' (браузер не поддерживает 3D)'}</label>
     <p class="muted" style="margin:0;font-size:13.5px">Звуки — записи из свободных библиотек Kenney и OpenGameArt (лицензия CC0), мелодии сыграны на пиццикато и стальных барабанах. Если на телефоне тишина, проверьте беззвучный режим.</p>
     <div class="row"><button class="btn" data-act="soundTest">Послушать</button><button class="btn primary" data-act="closeOverlay">Готово</button></div>
   </div>`);
@@ -1650,7 +1603,6 @@ function openSoundModal() {
   $('#sndAmb').addEventListener('change', e => sfx.set({ amb: e.target.checked }));
   $('#liveBg').addEventListener('change', e => { LS.set('liveBg', e.target.checked); applyBg(); });
   $('#cineOn').addEventListener('change', e => { cine.set(e.target.checked); render(); });
-  $('#arenaOn').addEventListener('change', e => { LS.set('arena3d', e.target.checked); if (!e.target.checked) arenaOff(true); render(); arenaSync([]); });
 }
 
 // ───────────────────────── полёт сыгранной карты ─────────────────────────

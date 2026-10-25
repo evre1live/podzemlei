@@ -244,8 +244,8 @@ function runRoom(r) {
 // ───────────────────────── HTTP ─────────────────────────
 const app = express();
 app.disable('x-powered-by');
-// текст (код, стили, библиотека 3D) отдаём сжатым — модели и звуки уже сжаты сами
-app.use(compression({ filter: (req, res) => !/\.(glb|mp3|png|woff2?)$/.test(req.path) && compression.filter(req, res) }));
+// код, стили и страницы отдаём сжатыми — звуки, картинки и шрифты уже сжаты сами
+app.use(compression({ filter: (req, res) => !/\.(mp3|png|woff2?)$/.test(req.path) && compression.filter(req, res) }));
 app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Referrer-Policy', 'same-origin');
@@ -255,7 +255,7 @@ app.use((req, res, next) => {
 // чтобы после обновления игры ни у кого не смешались старые и новые файлы. Шрифты кэшируются надолго.
 const fresh = { etag: true, lastModified: true, setHeaders(res, file) {
   // шрифты и звуки (папка звуков с номером версии) кэшируются надолго, остальное перепроверяется
-  res.setHeader('Cache-Control', /\.(woff2?|ttf|mp3|glb)$/.test(file) ? 'public, max-age=2592000, immutable' : 'no-cache');
+  res.setHeader('Cache-Control', /\.(woff2?|ttf|mp3)$/.test(file) ? 'public, max-age=2592000, immutable' : 'no-cache');
 } };
 app.use('/shared', express.static(path.join(ROOT, 'shared'), fresh));
 app.use(express.static(path.join(ROOT, 'public'), { ...fresh, extensions: ['html'] }));

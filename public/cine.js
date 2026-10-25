@@ -1232,38 +1232,6 @@ S.dice = f => ({
 });
 
 const PANEL_KINDS = new Set(['victory', 'caught', 'escaped', 'pet', 'vanish']);
-// с 3D-ареной развязку разыгрывают модели, а сцена добавляет только надпись, звук и конфетти
-S.arenaEnd = f => ({
-  run(k) {
-    const r = box(document.getElementById('stage'));
-    const c = r ? { x: r.left + r.width / 2, y: r.top + Math.min(110, r.height * 0.3) } : focus();
-    const d = f.card ? def(f.card) : null;
-    switch (f.kind) {
-      case 'victory':
-        k.at(900, () => {
-          stamp(k, c.x, c.y, 'Победа!', f.helper ? `${api.pname(f.pid)} и ${api.pname(f.helper)}` : api.pname(f.pid), 'win', 1200);
-          fx.confetti({ at: { x: c.x, y: c.y, w: 300, h: 0 }, n: 70 });
-          sfx.play('victory');
-        });
-        return 2200;
-      case 'caught':
-        k.at(380, () => { stamp(k, c.x, c.y, 'Расплата!', d?.bad?.text || '', 'bad', 1100); sfx.play('claw'); });
-        return 1500;
-      case 'escaped':
-        sfx.play('dash');
-        k.at(200, () => stamp(k, c.x, c.y, f.calm ? 'Не погнался' : 'Удрал!', api.pname(f.pid), 'good', 700));
-        return 1000;
-      case 'pet':
-        sfx.play('pet');
-        stamp(k, c.x, c.y, 'Питомец спас!', api.pname(f.pid), 'good', 800);
-        return 1000;
-      case 'vanish':
-        sfx.play(f.how === 'smoke' ? 'poof' : f.how === 'stone' ? 'stone' : 'sleep');
-        return 700;
-    }
-    return 0;
-  },
-});
 // порядок внутри одной пачки событий: появление → вмешательство → кубик → развязка → последствия
 const RANK = { combat: 1, wandering: 1, strike: 2, helper: 2, mod: 2, enhance: 2, backstab: 2, lullaby: 2, mutagen: 2, power: 2, buff: 2, dice: 3, escaped: 4, caught: 4, pet: 4, vanish: 4, victory: 5, location: 6, event: 6, curse: 6, ward: 6.5, death: 7, levelUp: 8, levelDown: 8, legendary: 9 };
 
@@ -1298,8 +1266,7 @@ export const cine = {
     const scenes = [];
     const dt = reveal ? def(doorCard) : null;
     if (reveal && dt.type !== 'monster') scenes.push(S.reveal(reveal));
-    const arena = !!this.arenaActive?.();
-    const aftermath = !arena && !!snap && items.some(f => PANEL_KINDS.has(f.kind));
+    const aftermath = !!snap && items.some(f => PANEL_KINDS.has(f.kind));
     let lastPanel = -1;
     for (const f of items) {
       let sc = null;
@@ -1309,7 +1276,7 @@ export const cine = {
         case 'curse': sc = S.curse(f, { fromDoor: f.card === doorCard }); break;
         case 'location': sc = S.location(f, { fromDoor: f.card === doorCard }); break;
         case 'event': sc = S.event(f, { fromDoor: f.card === doorCard }); break;
-        default: sc = arena && PANEL_KINDS.has(f.kind) ? S.arenaEnd(f) : S[f.kind]?.(f);
+        default: sc = S[f.kind]?.(f);
       }
       if (!sc) continue;
       scenes.push(sc);
