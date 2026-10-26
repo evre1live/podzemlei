@@ -223,7 +223,7 @@ export function locationSVG(key) {
 const ART2ICON = {
   chest: 'chest', amulet: 'padlock', crown: 'crown', elf: 'elf-ear', dwarf: 'dwarf-face', halfling: 'barefoot', orc: 'orc-head', goblin: 'goblin-head',
   molefolk: 'mole', warrior: 'crossed-swords', mage: 'pointy-hat', cleric: 'holy-symbol', rogue: 'cloak-dagger', bard: 'lyre', alchemist: 'round-bottom-flask',
-  engineer: 'gear-hammer', witcher: 'crossed-sabres', mix: 'yin-yang', badge: 'double-face-mask', human: 'person',
+  engineer: 'gear-hammer', witcher: 'crossed-sabres', warlock: 'warlock-hood', mix: 'yin-yang', badge: 'double-face-mask', human: 'person',
 };
 export function iconSVG(name, cls = '') {
   if (ART2ICON[name]) return ico(ART2ICON[name], cls);
@@ -286,7 +286,7 @@ const ICON_OF = {
   i_jackhammer: 'drill', i_drill: 'drill', i_hatch: 'round-shield', i_stapler: 'crossbow', i_censer: 'incense', i_lute: 'lyre', i_rail: 'broadsword', i_staff: 'wizard-staff', i_bow: 'bow-arrow',
   i_knuckles: 'mailed-fist', i_claws: 'claws', i_crowbar: 'crowbar', i_wrench: 'monkey-wrench', i_extinguisher: 'fire-extinguisher', i_trap: 'wolf-trap', i_flashlight: 'flashlight',
   i_taser: 'electric', i_ladle: 'ladle', i_charm: 'clover', i_flasks: 'fizzing-flask', i_sack: 'swap-bag', i_trolley: 'mine-wagon', i_ring: 'diamond-ring',
-  p_rat: 'rat', p_firefly: 'lantern', p_hamster: 'paw-print', p_golddragon: 'dragon-head', p_cat: 'cat',
+  p_rat: 'rat', p_firefly: 'lantern', p_hamster: 'paw-print', p_golddragon: 'dragon-head', p_cat: 'cat', p_roach: 'horse-head',
   o_pickles: 'mushrooms', o_kvass: 'beer-stein', o_shawarma: 'meat', o_cola: 'soda-can', o_firecracker: 'firework-rocket', o_holywater: 'holy-water', o_rope: 'grapple',
   o_smoke: 'smoke-bomb', o_petrify: 'scroll-unfurled', o_slave: 'handcuffs', o_ward: 'stone-sphere',
   b_courage: 'standing-potion', b_energy: 'soda-can', b_pies: 'bread',
@@ -294,7 +294,7 @@ const ICON_OF = {
   l_shortcut: 'path-distance', h_hoard: 'open-treasure-chest',
   r_elf: 'elf-ear', r_dwarf: 'dwarf-face', r_halfling: 'barefoot', r_orc: 'orc-head', r_goblin: 'goblin-head', r_mole: 'mole',
   c_warrior: 'crossed-swords', c_mage: 'pointy-hat', c_cleric: 'holy-symbol', c_rogue: 'cloak-dagger', c_bard: 'lyre', c_alchemist: 'round-bottom-flask', c_engineer: 'gear-hammer',
-  c_witcher: 'crossed-sabres', x_halfbreed: 'yin-yang', x_super: 'double-face-mask',
+  c_witcher: 'crossed-sabres', c_warlock: 'warlock-hood', x_halfbreed: 'yin-yang', x_super: 'double-face-mask',
 };
 const ICON_OF_TYPE = { monster: 'claw-slashes', curse: 'cursed-star', enhancer: 'upgrade', wandering: 'evil-eyes', event: 'sunbeams', location: 'stone-tower', item: 'broadsword',
   oneshot: 'fizzing-flask', buff: 'standing-potion', levelup: 'upgrade', hoard: 'open-treasure-chest', race: 'person', class: 'crossed-swords', halfbreed: 'yin-yang', supermunch: 'double-face-mask',

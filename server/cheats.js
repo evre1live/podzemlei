@@ -8,6 +8,8 @@ export const CHEATS = {
   GOLDENDRAGON: 'p_golddragon', // Золотой Дракон
   ARES: 'i_ares',            // Шлем Ареса
   AGEBOOTS: 'i_epochboots',  // Сапоги эпохи
+  WARLOCK: 'c_warlock',      // Чернокнижник
+  PLOTVA: 'p_roach',         // Конь Плотва
 };
 // «/witcher», «/WITCHER» → карта; всё остальное → null
 export function cheatCard(text) {

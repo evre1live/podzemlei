@@ -1,6 +1,6 @@
 // Точечные проверки правил.
 import assert from 'node:assert/strict';
-import { createGame, act, tick, view, combatNumbers, P, saleValue, fillText, orderCard, playOptions, troubleBand } from '../shared/engine.js';
+import { createGame, act, tick, view, combatNumbers, P, saleValue, fillText, orderCard, playOptions, troubleBand, shopPrice } from '../shared/engine.js';
 import { cheatCard } from '../server/cheats.js';
 import { botDecide } from '../shared/bot.js';
 import { def, dailyOf } from '../shared/cards.js';
@@ -17,12 +17,19 @@ const take = (s, uid) => { for (const k of ['door', 'treasure']) for (const pile
 const A = (s, pid, a, now = 1000) => act(s, pid, a, { rng, now });
 let n = 0; const t = (name, fn) => { fn(); n++; console.log('✓', name); };
 
-t('нельзя дойти до 10 уровня продажей и картой уровня', () => {
+t('нельзя дойти до 10 уровня картой уровня; продажа даёт голды в кошелёк, а не уровни', () => {
   const s = fresh(); const p = P(s, 'p0'); p.level = 9;
   p.hand.push(take(s, 'l_stash#0'));
   assert.equal(A(s, 'p0', { type: 'playCard', uid: 'l_stash#0' }).ok, false);
   p.hand.push(take(s, 'i_jackhammer#0'), take(s, 'i_diver#0'));
-  assert.match(A(s, 'p0', { type: 'sell', uids: ['i_jackhammer#0', 'i_diver#0'] }).error, /10/);
+  assert.equal(A(s, 'p0', { type: 'sell', uids: ['i_jackhammer#0', 'i_diver#0'] }).ok, true);
+  assert.equal(p.level, 9); assert.equal(p.gold, 800 + 600);
+  assert.equal(view(s, 'p1').players[0].gold, 1400, 'кошелёк виден всем');
+  // мелочь тоже продаётся: порога в 1000 больше нет
+  p.carried.push(take(s, 'i_ladle#0'));
+  assert.equal(A(s, 'p0', { type: 'sell', uids: ['i_ladle#0'] }).ok, true);
+  assert.equal(p.gold, 1500);
+  assert.match(A(s, 'p0', { type: 'sell', uids: ['l_stash#0'] }).error, /ничего не стоит/);
 });
 
 t('ничья — победа воина, иначе поражение', () => {
@@ -170,10 +177,9 @@ t('локации меняют силу, побег, продажу и прок�
   s.combat = null; s.turn.step = 'pre';
   p.hand.push(take(s, 'loc_oasis#0')); A(s, 'p0', { type: 'playCard', uid: 'loc_oasis#0' });
   assert.ok(s.discard.door.includes('loc_cove#0'));
-  p.hand.push(take(s, 'i_tokens#0'), take(s, 'i_boots#0')); // 400 + 200 = 600 < 700
-  assert.equal(saleValue(s, p, ['i_tokens#0', 'i_boots#0']).levels, 0);
-  p.hand.push(take(s, 'i_ladle#0')); // +100 = 700
-  assert.equal(saleValue(s, p, ['i_tokens#0', 'i_boots#0', 'i_ladle#0']).levels, 1);
+  // у джинна уровни на рынке дешевле, проклятия за бесценок, вода дорогая
+  const price = id => view(s, 'p0').shop.items.find(x => x.id === id).price;
+  assert.equal(price('l_stash'), 700); assert.equal(price('k_tax'), 300); assert.equal(price('o_kvass'), 300);
   P(s, 'p1').level = 5; p.hand.push(take(s, 'k_tax#0'));
   A(s, 'p0', { type: 'playCard', uid: 'k_tax#0', target: 'p1' });
   assert.equal(P(s, 'p1').level, 5, 'у оазиса проклятия не действуют');
@@ -209,6 +215,9 @@ t('расы: орк без шапки, гоблин торгуется и бер
   const g = P(s, 'p1'); g.races.push(take(s, 'r_goblin#0'));
   g.hand.push(take(s, 'i_tokens#0'), take(s, 'i_boots#0'));
   assert.equal(saleValue(s, g, ['i_tokens#0', 'i_boots#0']).total, 1000);
+  g.hand.push(take(s, 'o_kvass#0'));
+  assert.equal(saleValue(s, g, ['o_kvass#0']).total, 100, 'гоблинская надбавка — только за вещи');
+  g.hand.splice(g.hand.indexOf('o_kvass#0'), 1); s.discard.treasure.push('o_kvass#0');
   // гоблин-помощник
   p.level = 5; g.level = 8;
   fight(s, 'm_zhek#0'); // 12, 3 клада (+1 орку за крупного монстра)
@@ -553,7 +562,10 @@ t('партия до 15 уровня: карты уровня и продажа 
   p.hand.push(take(s, 'l_bribe#0'));
   assert.equal(A(s, 'p0', { type: 'playCard', uid: 'l_bribe#0' }).ok, false);
   p.hand.push(take(s, 'i_jackhammer#0'), take(s, 'i_diver#0'));
-  assert.match(A(s, 'p0', { type: 'sell', uids: ['i_jackhammer#0', 'i_diver#0'] }).error, /15/);
+  assert.equal(A(s, 'p0', { type: 'sell', uids: ['i_jackhammer#0', 'i_diver#0'] }).ok, true);
+  assert.equal(p.level, 14); // продажа — голды, а не уровни
+  p.gold = 5000; s.decks.treasure.push(take(s, 'l_map#0'));
+  assert.match(A(s, 'p0', { type: 'buy', id: 'l_map' }).error, /Последний уровень/);
   assert.equal(fillText(s, 'Не {win}-й, с {lux}-го'), 'Не 15-й, с 11-го');
   assert.equal(view(s, 'p0').opts.winLevel, 15);
   // уровень 14 и бой с монстром: 10-й уровень больше не победа, а 15-й — да
@@ -869,7 +881,8 @@ t('контракт: «Сталкер» — три обыска, награда 
   }
   assert.equal(p.contractsDone, 1);
   assert.notEqual(p.contract.id, 'q_loot'); assert.equal(p.contract.progress, 0);
-  assert.equal(p.hand.length, 3 + 2); // три карты обыска и два клада
+  assert.equal(p.hand.length, 3); // три карты обыска
+  assert.equal(p.gold, 600); // награда — голды в кошелёк
   assert.ok(s.log.some(l => /контракт «Сталкер»/.test(l.text)));
   assert.ok(s.fx.some(f => f.kind === 'contract' && f.pid === 'p0'));
   // свой контракт виден только себе
@@ -878,7 +891,7 @@ t('контракт: «Сталкер» — три обыска, награда 
   assert.equal(view(s, 'p1').players[0].contractsDone, 1);
 });
 
-t('контракт: отстающему ещё карта, а на последнем уровне вместо уровня — клад', () => {
+t('контракт: голды в кошелёк, отстающему ещё карта клада', () => {
   const s = fresh(); const p = P(s, 'p0'); p.level = 1; P(s, 'p1').level = 3; P(s, 'p2').level = 3;
   p.contract = { id: 'q_trouble', progress: 0 };
   s.turn.step = 'post';
@@ -887,15 +900,16 @@ t('контракт: отстающему ещё карта, а на после�
   p.equipped.push(take(s, 'i_jackhammer#0'));
   assert.equal(A(s, 'p0', { type: 'lookForTrouble' }).ok, true);
   A(s, 'p0', { type: 'fight' }, 1000); tick(s, { rng, now: 9000 });
-  assert.equal(p.level, 3); // +1 за монстра, +1 по контракту
+  assert.equal(p.level, 2); // +1 за монстра
+  assert.equal(p.gold, 1000); // награда по контракту
   assert.ok(s.log.some(l => /отстающему/.test(l.text)));
   const w = fresh(); const q = P(w, 'p0'); q.level = 8;
   q.contract = { id: 'q_big', progress: 0 };
   q.equipped.push(take(w, 'i_jackhammer#0'), take(w, 'p_golddragon#0'));
   fight(w, 'm_zhek#0'); // 12 ур.
   A(w, 'p0', { type: 'fight' }, 1000); tick(w, { rng, now: 9000 });
-  assert.equal(q.level, 9);
-  assert.ok(w.log.some(l => /«Крупная дичь».*2 карты клада/.test(l.text)));
+  assert.equal(q.level, 9); assert.equal(q.gold, 1000);
+  assert.ok(w.log.some(l => /«Крупная дичь».*1000 голдов/.test(l.text)));
 });
 
 // ───────────────────────── обмен ─────────────────────────
@@ -1206,7 +1220,13 @@ t('спутники: носильщик, проводник, наёмник с �
   s.turn.step = 'charity'; A(s, 'p2', { type: 'endTurn' });
   assert.equal(s.turn.pid, 'p0');
   assert.deepEqual(p.hand, ['o_kvass#0']); assert.equal(p.ally, 'a_merc#0');
-  for (const u of p.carried) s.discard.treasure.push(u); p.carried = []; // квас дешевле 200 — платить нечем
+  // есть голды в кошельке — платит из него
+  p.gold = 250;
+  s.turn.step = 'charity'; A(s, 'p0', { type: 'endTurn' });
+  s.turn.step = 'charity'; A(s, 'p1', { type: 'endTurn' });
+  s.turn.step = 'charity'; A(s, 'p2', { type: 'endTurn' });
+  assert.equal(p.gold, 50); assert.deepEqual(p.hand, ['o_kvass#0']); assert.equal(p.ally, 'a_merc#0');
+  for (const u of p.carried) s.discard.treasure.push(u); p.carried = []; // 50 голдов и квас дешевле 200 — платить нечем
   s.turn.step = 'charity'; A(s, 'p0', { type: 'endTurn' });
   s.turn.step = 'charity'; A(s, 'p1', { type: 'endTurn' });
   s.turn.step = 'charity'; A(s, 'p2', { type: 'endTurn' });
@@ -1320,25 +1340,118 @@ t('поединок: равенство — за вызванным; все ск
   assert.ok(q.carried.includes('i_slippers#0'));
 });
 
-t('подземный рынок: открывается с новой глубиной, покупка вещами, одна за ход, сворачивается через круг', () => {
+t('подземный рынок: за голды из кошелька, только то, что ещё в колоде, уровень — один за ход', () => {
   const s = fresh(); const p = P(s, 'p0');
-  s.round = 2; s.turn = { idx: 2, pid: 'p2', step: 'charity', n: 9 }; // следующий ход начинает 4-й круг для трёх игроков — глубина 1
-  A(s, 'p2', { type: 'endTurn' });
-  assert.equal(s.depth, 1); assert.ok(s.market); assert.equal(s.market.cards.length, 3);
-  const [u] = s.market.cards;
-  const price = view(s, 'p0').market.prices[u];
-  // платим двумя дорогими вещами, которых нет на прилавке
-  const [c1, c2] = ['i_jackhammer#0', 'i_diver#0', 'i_drill#0', 'i_kinghammer#0'].filter(x => !s.market.cards.includes(x));
-  p.carried.push(take(s, c1), take(s, c2));
-  assert.equal(view(s, 'p0').hints.buy, true);
-  assert.match(A(s, 'p0', { type: 'buy', uid: u, pay: ['i_ladle#0'] }).error, /уплату|не берут|Выберите/);
-  const pay = def(c1).value >= price ? [c1] : [c1, c2];
-  assert.equal(A(s, 'p0', { type: 'buy', uid: u, pay }).ok, true);
-  assert.ok(p.hand.includes(u));
-  assert.match(A(s, 'p0', { type: 'buy', uid: s.market.cards[0], pay: [c2] }).error || '', /одна покупка|Такой карты/);
-  // через круг рынок сворачивается
+  const toDeck = (...l) => l.forEach(u => s.decks[def(u).deck].push(take(s, u)));
+  toDeck('l_stash#0', 'l_bribe#0', 'k_tax#0', 'o_kvass#0', 'o_smoke#0');
+  const item = id => view(s, 'p0').shop.items.find(x => x.id === id);
+  assert.ok(view(s, 'p0').shop.items.every(x => ['oneshot', 'buff', 'curse', 'levelup'].includes(def(x.id).type)));
+  assert.equal(item('l_stash').price, 1000); assert.equal(item('l_stash').cat, 'level');
+  assert.match(A(s, 'p0', { type: 'buy', id: 'l_stash' }).error, /Нужно 1000/);
+  assert.deepEqual(view(s, 'p0').hints.shop, []);
+  p.gold = 2500;
+  assert.ok(view(s, 'p0').hints.shop.includes('l_stash'));
+  assert.equal(A(s, 'p0', { type: 'buy', id: 'l_stash' }).ok, true);
+  assert.ok(p.hand.includes('l_stash#0')); assert.equal(p.gold, 1500);
+  assert.ok(!s.decks.treasure.includes('l_stash#0'));
+  assert.match(A(s, 'p0', { type: 'buy', id: 'l_bribe' }).error, /один за ход/);
+  // товар — только из колоды: всё, что в сбросе, не продаётся
+  for (const u of ['o_smoke#0', 'o_smoke#1']) { take(s, u); s.discard.treasure.push(u); }
+  assert.equal(item('o_smoke').stock, 0);
+  assert.match(A(s, 'p0', { type: 'buy', id: 'o_smoke' }).error, /Распродано/);
+  // проклятие покупается и насылается
+  assert.equal(A(s, 'p0', { type: 'buy', id: 'k_tax' }).ok, true);
+  assert.equal(p.gold, 900);
+  P(s, 'p1').level = 4;
+  const curse = p.hand.find(u => def(u).id === 'k_tax');
+  assert.equal(A(s, 'p0', { type: 'playCard', uid: curse, target: 'p1' }).ok, true);
+  assert.equal(P(s, 'p1').level, 3);
+  // вещи на рынке не продают; в чужой ход и в бою не купить
+  assert.match(A(s, 'p0', { type: 'buy', id: 'i_helmet' }).error, /не продают/);
+  assert.match(A(s, 'p1', { type: 'buy', id: 'k_flu' }).error, /не ваш ход/);
+  // в таверне еда за полцены (но не дешевле цены продажи + 50), уровни дороже
+  p.hand.push(take(s, 'loc_tavern#0')); A(s, 'p0', { type: 'playCard', uid: 'loc_tavern#0' });
+  assert.equal(item('o_kvass').price, 150); assert.equal(item('l_bribe').price, 1250);
+  assert.equal(shopPrice(s, def('o_shawarma#0')), 350); // 600 × 0,5 = 300, но не ниже цены продажи (300) + 50
+  assert.match(view(s, 'p0').shop.note, /Трактирщик/);
+  // новый ход — снова можно купить уровень
   for (let i = 0; i < 3; i++) { s.turn.step = 'charity'; A(s, s.turn.pid, { type: 'endTurn' }); }
-  assert.equal(s.market, null);
+  p.gold = 1300; s.turn.step = 'pre';
+  assert.equal(A(s, 'p0', { type: 'buy', id: 'l_bribe' }).ok, true);
+  assert.equal(p.gold, 50);
+});
+
+t('полурослик вдвое дороже продаёт только вещь, а разовую — по цене', () => {
+  const s = fresh(); const p = P(s, 'p0'); p.races.push(take(s, 'r_halfling#0'));
+  p.hand.push(take(s, 'o_shawarma#0'));
+  assert.equal(saleValue(s, p, ['o_shawarma#0']).total, 300);
+  p.carried.push(take(s, 'i_tokens#0'));
+  assert.equal(saleValue(s, p, ['o_shawarma#0', 'i_tokens#0']).total, 300 + 800);
+  assert.equal(A(s, 'p0', { type: 'sell', uids: ['i_tokens#0'] }).ok, true);
+  assert.equal(p.gold, 800);
+});
+
+t('чернокнижник: уходит от любого монстра без броска', () => {
+  const s = fresh(); const p = P(s, 'p0'); p.classes.push(take(s, 'c_warlock#0')); p.level = 9;
+  fight(s, 'm_lucifer#0'); // босс: не одолеть и не убежать — −5 уровней и смерть
+  assert.equal(dice(s, 'p0', { type: 'runAway' }, 0).ok, true);
+  assert.equal(p.level, 9); assert.equal(p.dead, false);
+  assert.ok(s.log.some(l => /уходит тенью/.test(l.text)));
+  s.turn.step = 'pre';
+  fight(s, 'm_endless#0'); // от него не убежать
+  assert.equal(dice(s, 'p0', { type: 'runAway' }, 0).ok, true);
+  assert.equal(p.level, 9);
+});
+
+t('чернокнижник приручает зверя при перевесе 5', () => {
+  const s = fresh(); const p = P(s, 'p0'); p.classes.push(take(s, 'c_warlock#0'));
+  p.level = 5; p.nextCombat = 3; // 8 против крота-бухгалтера (3): перевес 5
+  fight(s, 'm_mole#0');
+  A(s, 'p0', { type: 'fight' }); tick(s, { rng, now: 999999 });
+  assert.equal(s.tame?.uid, 'm_mole#0');
+  const q = fresh(); const o = P(q, 'p0'); o.level = 5; o.nextCombat = 3; // без класса — мало
+  fight(q, 'm_mole#0');
+  A(q, 'p0', { type: 'fight' }); tick(q, { rng, now: 999999 });
+  assert.equal(q.tame, null);
+});
+
+t('чернокнижник подкидывает монстра с руки в чужой и свой бой — раз за бой, без «Из темноты…»', () => {
+  const s = fresh(); const w = P(s, 'p1'); w.classes.push(take(s, 'c_warlock#0'));
+  w.hand.push(take(s, 'm_mosquito#0'), take(s, 'm_roach#0'));
+  P(s, 'p2').hand.push(take(s, 'm_duck#0'));
+  P(s, 'p0').level = 6;
+  fight(s, 'm_mole#0');
+  assert.ok(playOptions(s, 'p1', 'm_mosquito#0').some(a => a.into));
+  assert.equal(playOptions(s, 'p2', 'm_duck#0').length, 0, 'не чернокнижнику без карты бродячей твари нельзя');
+  assert.equal(A(s, 'p1', { type: 'playCard', uid: 'm_mosquito#0', into: true }).ok, true);
+  assert.equal(s.combat.monsters.length, 2);
+  assert.match(A(s, 'p1', { type: 'playCard', uid: 'm_roach#0', into: true }).error, /раз за бой/);
+  assert.match(A(s, 'p2', { type: 'playCard', uid: 'm_duck#0', into: true }).error, /только чернокнижник/);
+  assert.ok(s.log.some(l => /призывает «.*» в чужой бой/.test(l.text)));
+  // свой бой: лишний монстр — лишний уровень
+  const t2 = fresh(); const v = P(t2, 'p0'); v.classes.push(take(t2, 'c_warlock#0')); v.level = 6;
+  v.hand.push(take(t2, 'm_mosquito#0'));
+  fight(t2, 'm_mole#0');
+  assert.equal(A(t2, 'p0', { type: 'playCard', uid: 'm_mosquito#0', into: true }).ok, true);
+  A(t2, 'p0', { type: 'fight' }); tick(t2, { rng, now: 999999 });
+  assert.equal(v.level, 8);
+  // щит-турникет не пускает и призыв
+  const u = fresh(); P(u, 'p0').equipped.push(take(u, 'i_turnshield#0'));
+  const x = P(u, 'p1'); x.classes.push(take(u, 'c_warlock#0')); x.hand.push(take(u, 'm_mosquito#0'));
+  fight(u, 'm_mole#0');
+  assert.match(A(u, 'p1', { type: 'playCard', uid: 'm_mosquito#0', into: true }).error, /турникет/);
+});
+
+t('Конь Плотва: +4, у ведьмака ещё +2, спасает от расплаты', () => {
+  const s = fresh(); const p = P(s, 'p0');
+  p.hand.push(take(s, 'p_roach#0'));
+  assert.equal(A(s, 'p0', { type: 'playCard', uid: 'p_roach#0' }).ok, true);
+  assert.equal(view(s, 'p0').players[0].power, 1 + 4);
+  p.classes.push(take(s, 'c_witcher#0'));
+  assert.equal(view(s, 'p0').players[0].power, 1 + 4 + 2 + 3); // +3 — сам ведьмак
+  fight(s, 'm_endless#0');
+  dice(s, 'p0', { type: 'runAway' }, 0);
+  assert.ok(!p.equipped.includes('p_roach#0')); assert.equal(p.level, 1);
 });
 
 t('боты: вызывают слабого на поединок и подкидывают бонус, когда проигрывают', () => {
@@ -1385,7 +1498,8 @@ t('новые локации: затопленная станция, грибн�
   p.hand.push(take(s, 'loc_grove#0')); A(s, 'p0', { type: 'playCard', uid: 'loc_grove#0' });
   assert.equal(view(s, 'p0').players[0].handLimit, 6);
   p.hand.push(take(s, 'loc_koschei#0')); A(s, 'p0', { type: 'playCard', uid: 'loc_koschei#0' });
-  assert.equal(view(s, 'p0').sale.rate, 800);
+  const price = id => view(s, 'p0').shop.items.find(x => x.id === id).price;
+  assert.equal(price('l_stash'), 800); assert.equal(price('k_tax'), 400); assert.equal(price('o_rope'), 500); // −20%, −30%, +25%
 });
 
 t('быстрая партия до 5-го: по 6 карт каждой колоды на старте', () => {
@@ -1405,7 +1519,9 @@ t('испытание дня: одна колода на всех и услов�
   assert.ok(mk(dateFor('rich')).players.every(p => p.hand.length === 10));
   assert.equal(def(mk(dateFor('loc')).location).type, 'location');
   assert.ok(mk(dateFor('veteran')).players.every(p => p.level === 2));
-  assert.equal(mk(dateFor('fair')).market.cards.length, 3);
+  const f = mk(dateFor('fair'));
+  assert.equal(view(f, 'a').shop.items.find(x => x.id === 'l_stash').price, 750);
+  assert.equal(view(f, 'a').shop.fair, true);
   const b = mk(dateFor('beasts'));
   assert.equal(view(b, 'a').opts.dailyId, 'beasts');
   assert.equal(createGame(seat, {}, rng).opts.daily, undefined);

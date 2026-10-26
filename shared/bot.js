@@ -1,7 +1,7 @@
 // Простой ИИ для ботов «Под Землёй». Возвращает одно действие или null.
-import { def, TROUBLE_BONUS, MUTAGEN_BONUS, LULLABY_PENALTY, LULLABY_MAX, DISTILL_COST, tameBonus, TRAP_FAIL_LEVELS, marketPrice } from './cards.js';
+import { def, TROUBLE_BONUS, MUTAGEN_BONUS, LULLABY_PENALTY, LULLABY_MAX, DISTILL_COST, tameBonus, TRAP_FAIL_LEVELS, SHOP_IDS } from './cards.js';
 import {
-  P, check, combatNumbers, playOptions, handLimit, hasClass, hasRace, cardWorth,
+  P, check, act, combatNumbers, playOptions, handLimit, hasClass, hasRace, cardWorth, shopPrice, shopStock, depthBonus,
   equipError, participants, heroStrength, levelOnlyFight, winLevel, luxLevel, saleValue, monsterBaseLevel, powerOf, locationOf,
   isGhost, grudgeOf, trapNeed, duelNumbers, duelStrength, duelPrize, troubleBand,
 } from './engine.js';
@@ -129,7 +129,13 @@ function boostSelf(s, p, gap) {
 function fighterMove(s, p, rng, now) {
   const c = s.combat;
   const n = combatNumbers(s);
-  if (n.winning) return c.winAt ? null : { type: 'fight' };
+  const warlock = hasClass(p, 'warlock');
+  if (n.winning) {
+    if (c.winAt) return null;
+    // чернокнижник с запасом сил призывает в свой бой ещё монстра с руки — за него тоже уровень и клад
+    const sm = warlock ? summonOwn(s, p) : null;
+    return sm || { type: 'fight' };
+  }
   const gap = n.monsters - n.heroes + (n.warrior ? 0 : 1);
 
   if (c.helpReq) return now - (c.helpReq.at || 0) > 15000 ? { type: 'cancelHelp' } : null;
@@ -137,7 +143,8 @@ function fighterMove(s, p, rng, now) {
   const boost = boostSelf(s, p, gap);
   if (boost) return boost;
 
-  const danger = c.monsters.some(m => dangerous(m.uid) && !calmFor(p, m.uid));
+  // от чернокнижника монстры не уходят с добычей: он ускользает без броска
+  const danger = !warlock && c.monsters.some(m => dangerous(m.uid) && !calmFor(p, m.uid));
   // окаменить самого сильного, если без него побеждаем
   const petrify = p.hand.find(u => def(u).effect === 'remove');
   if (petrify && c.monsters.length) {
@@ -172,15 +179,31 @@ function fighterMove(s, p, rng, now) {
   const smoke = p.hand.find(u => def(u).effect === 'escape');
   const trapped = c.monsters.some(m => def(m.uid).escape === false || m.enh.some(u => def(u).noEscape));
   const hasPet = p.equipped.some(u => def(u).slot === 'pet') || !!p.beast;
-  if (smoke && (danger || (trapped && !hasPet))) return { type: 'playCard', uid: smoke };
+  if (smoke && !warlock && (danger || (trapped && !hasPet))) return { type: 'playCard', uid: smoke };
   const rope = p.hand.find(u => def(u).effect === 'escapeBonus');
   if (rope && danger && !trapped && !c.escape[p.id]) return { type: 'playCard', uid: rope };
-  if (hasClass(p, 'mage') && danger) {
+  if (hasClass(p, 'mage') && danger && !warlock) {
     const left = 3 - (c.escapeCount[p.id] || 0);
     const cheap = byWorth(p.hand).slice(0, Math.min(left, 2));
     if (left > 0 && cheap.length) return { type: 'ability', name: 'levitate', cards: cheap };
   }
   return { type: 'runAway' };
+}
+
+// призвать в свой бой монстра с руки, если и с ним победа остаётся с запасом
+function summonOwn(s, p) {
+  const c = s.combat;
+  if ((c.summoned || []).includes(p.id)) return null;
+  const mons = p.hand.filter(u => def(u).type === 'monster' && !def(u).boss).sort((a, b) => monsterBaseLevel(s, def(a)) - monsterBaseLevel(s, def(b)));
+  for (const u of mons) {
+    const a = { type: 'playCard', uid: u, into: true };
+    if (check(s, p.id, a)) continue;
+    const t = structuredClone(s);
+    act(t, p.id, a, { rng: () => 0.5, now: s.now });
+    const n2 = t.combat && combatNumbers(t);
+    if (n2 && n2.winning && n2.heroes - n2.monsters >= 3) return a;
+  }
+  return null;
 }
 
 function helperMove(s, p) {
@@ -213,6 +236,12 @@ function interfere(s, p) {
       const m = p.hand.filter(x => def(x).type === 'monster').sort((a, b) => (def(b).boss ? 1e4 : monsterBaseLevel(s, def(b))) - (def(a).boss ? 1e4 : monsterBaseLevel(s, def(a))))[0];
       // босс из темноты встанет с силой вдвое больше силы бойца
       if (m) opts.push({ v: def(m).boss ? 2 * heroStrength(s, f) : monsterBaseLevel(s, def(m)), a: { type: 'playCard', uid: u, with: m } });
+    }
+  }
+  if (hasClass(p, 'warlock') && !(c.summoned || []).includes(p.id)) {
+    for (const m of p.hand.filter(x => def(x).type === 'monster')) {
+      const v = def(m).boss ? 2 * heroStrength(s, f) : monsterBaseLevel(s, def(m)) + depthBonus(s);
+      opts.push({ v, a: { type: 'playCard', uid: m, into: true } });
     }
   }
   if (hasClass(p, 'rogue') && p.hand.length) {
@@ -282,8 +311,11 @@ function turnMove(s, p, rng) {
       const a = { type: 'ability', name: 'distill', cards: byWorth(p.hand).slice(0, DISTILL_COST) };
       if (ok(a)) return a;
     }
-    // рынок: покупаем, если отдаём барахло дешевле того, что берём
-    if (s.market && !s.turn.bought) { const a = marketBuy(s, p); if (a && ok(a)) return a; }
+    // продать запас: вещи, что лежат ненадетыми, — голды в кошелёк
+    const spare = p.carried.filter(u => def(u).value && def(u).rarity !== 'legendary');
+    if (spare.length && ok({ type: 'sell', uids: spare })) return { type: 'sell', uids: spare };
+    // рынок: уровень, проклятие для того, кто рвётся к победе, боевые карты про запас
+    { const a = shopMove(s, p, step); if (a && ok(a)) return a; }
     // вызвать на поединок того, у кого есть что забрать и кто заметно слабее
     const duelCard = p.hand.find(u => def(u).type === 'duel');
     if (duelCard && step !== 'charity') {
@@ -300,11 +332,6 @@ function turnMove(s, p, rng) {
       const top = leader(s, id);
       if (top && top.level >= p.level && ok({ type: 'playCard', uid: curse, target: top.id })) return { type: 'playCard', uid: curse, target: top.id };
     }
-    // продать ненужное
-    const sellable = byWorth([...p.carried, ...p.hand.filter(u => def(u).type === 'item')]).filter(u => def(u).value);
-    const pickSell = [];
-    for (const u of sellable) { pickSell.push(u); if (saleValue(s, p, pickSell).levels >= 1) break; }
-    if (pickSell.length && saleValue(s, p, pickSell).levels >= 1 && ok({ type: 'sell', uids: pickSell })) return { type: 'sell', uids: pickSell };
     // плут ворует
     if (hasClass(p, 'rogue') && step === 'pre' && p.hand.length > 3 && rng() < 0.25) {
       const cheap = byWorth(p.hand)[0];
@@ -393,18 +420,35 @@ function duelMove(s, p) {
   }
   return pass();
 }
-// подземный рынок: самая ценная карта, за которую можно отдать барахло из запаса и руки
-function marketBuy(s, p) {
-  const pool = byWorth([...p.carried, ...p.hand.filter(u => def(u).type === 'item')]).filter(u => def(u).value && def(u).rarity !== 'legendary');
-  const offers = [...s.market.cards].sort((a, b) => cardWorth(b) - cardWorth(a));
-  for (const u of offers) {
-    const price = marketPrice(def(u));
-    const pay = [];
-    let sum = 0;
-    for (const x of pool) { if (sum >= price) break; pay.push(x); sum += def(x).value; }
-    if (sum < price) continue;
-    const give = pay.reduce((a, x) => a + cardWorth(x), 0);
-    if (cardWorth(u) >= give * 0.8) return { type: 'buy', uid: u, pay };
+// подземный рынок: сначала уровень; на остальное тратим то, что сверх отложенного на уровень
+const isBoostCard = d => (d.type === 'oneshot' && d.effect === 'bonus') || d.type === 'buff';
+function shopMove(s, p, step) {
+  const ok = id => !check(s, p.id, { type: 'buy', id });
+  const price = id => shopPrice(s, def(id));
+  const W = winLevel(s), gold = p.gold || 0;
+  const levels = SHOP_IDS.filter(id => def(id).type === 'levelup').sort((a, b) => price(a) - price(b));
+  const lv = levels.find(ok);
+  if (lv) return { type: 'buy', id: lv };
+  if (p.hand.length >= handLimit(p, s)) return null; // лишнее всё равно уйдёт в конце хода
+  const levelsLeft = p.level < W - 1 && levels.some(id => shopStock(s, id) > 0);
+  const reserve = levelsLeft ? price(levels.find(id => shopStock(s, id) > 0)) : 0;
+  // проклятие с потерей уровня — тому, кто рвётся к победе (мстительный — обидчику)
+  if (step === 'pre' && !p.hand.some(u => def(u).type === 'curse')) {
+    const top = leader(s, p.id);
+    const foe = persona(p) === 'vengeful' ? worstEnemy(s, p) : null;
+    const threat = top && top.level >= W - 3 && top.level >= p.level;
+    const target = threat ? top : foe;
+    if (target && !target.dead) {
+      const c = SHOP_IDS.filter(id => def(id).type === 'curse' && def(id).fx.some(f => f.k === 'levels') && ok(id)).sort((a, b) => price(a) - price(b))[0];
+      if (c && (gold - price(c) >= reserve || (threat && top.level >= W - 2))) return { type: 'buy', id: c };
+    }
+  }
+  // боевые карты про запас, если в руке их почти нет (жадный копит на уровни)
+  const boosts = p.hand.filter(u => isBoostCard(def(u))).length;
+  if (boosts < 2 && persona(p) !== 'greedy') {
+    const best = SHOP_IDS.filter(id => isBoostCard(def(id)) && ok(id) && gold - price(id) >= reserve)
+      .sort((a, b) => def(b).bonus / price(b) - def(a).bonus / price(a))[0];
+    if (best) return { type: 'buy', id: best };
   }
   return null;
 }
@@ -418,7 +462,7 @@ function petScore(p) {
 function allyScore(p, d, uid) {
   if (d.fee) {
     const spare = [...p.hand, ...p.carried].filter(u => u !== uid && (def(u).value || 0) >= d.fee && def(u).type !== 'ally').length;
-    if (spare < 2) return -1;
+    if (spare < 2 && (p.gold || 0) < d.fee * 3) return -1;
   }
   return (d.bonus || 0) + (d.runBonus || 0) * 0.6 + (d.handBonus || 0) * 0.4 + (d.bigBonus || 0) * 0.5;
 }
@@ -452,7 +496,7 @@ function locScore(p, d) {
   if (d.lightBonus && p.equipped.some(u => (def(u).tags || []).includes('light'))) v += d.lightBonus;
   if (d.itemTag && p.equipped.some(u => (def(u).tags || []).includes(d.itemTag.tag))) v += d.itemTag.n;
   v += (d.treasureBonus || 0) * 0.8 + (d.levelBonus || 0) * 2 + (d.handBonus ? 0.5 : 0) + (d.escapeAll || 0) * 0.5 + (d.helperBonus ? 0.3 : 0);
-  if (d.saleRate && d.saleRate < 1000) v += 1;
+  v += (1 - (d.prices?.level ?? d.prices?.all ?? 1)) * 2; // дешёвые уровни на рынке
   if (d.noCurses) v += 0.5;
   for (const t of d.monsterTag || []) v -= t.n * 0.15;
   return v;

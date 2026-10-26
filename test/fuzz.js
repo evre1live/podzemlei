@@ -1,7 +1,7 @@
 // Фаззинг: случайные и мусорные действия от всех игроков не должны ронять движок.
 import { createGame, act, tick, view } from '../shared/engine.js';
 import { botDecide } from '../shared/bot.js';
-import { allUids, def } from '../shared/cards.js';
+import { allUids, def, SHOP_IDS } from '../shared/cards.js';
 
 function mulberry32(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
 const TYPES = ['kick', 'loot', 'lookForTrouble', 'endTurn', 'playCard', 'equip', 'unequip', 'autoEquip', 'discardInPlay', 'sell', 'gift', 'askHelp', 'answerHelp', 'cancelHelp', 'fight', 'runAway', 'ability', 'haunt', 'offerTrade', 'answerTrade', 'cancelTrade', 'bribe', 'trap', 'tame', 'buy', 'pass', '__proto__', 'toString', 'constructor', 'nope'];
@@ -15,7 +15,6 @@ function count(s) {
   if (s.trap) all.push(s.trap.uid);
   if (s.tame) all.push(s.tame.uid);
   if (s.duel) all.push(s.duel.card, ...s.duel.used);
-  if (s.market) all.push(...s.market.cards);
   if (s.combat) { for (const m of s.combat.monsters) all.push(m.uid, ...m.enh); all.push(...s.combat.used); }
   if (s.location) all.push(s.location);
   return all.length === TOTAL && new Set(all).size === TOTAL;
@@ -41,7 +40,9 @@ for (let g = 0; g < N; g++) {
         cards: [pickU()], name: ABIL[Math.floor(rng() * ABIL.length)], item: pickU(), offer: Math.floor(rng() * 4), accept: rng() < 0.5,
         want: rng() < 0.5 ? [pickU()] : [], id: Math.floor(rng() * 6), disarm: rng() < 0.5 ? true : junk(rng), pay: [pickU(), pickU()] };
       if (rng() < 0.2) a.side = ['from', 'to'][Math.floor(rng() * 2)];
-      if (rng() < 0.1 && s.market) a.uid = s.market.cards[0];
+      // рынок: настоящий товар (и кошелёк потолще, чтобы покупки случались) или мусор
+      if (a.type === 'buy') { a.id = rng() < 0.7 ? SHOP_IDS[Math.floor(rng() * SHOP_IDS.length)] : junk(rng); if (rng() < 0.3) p.gold = (p.gold || 0) + 1000; }
+      if (rng() < 0.1) a.into = rng() < 0.8 ? true : junk(rng);
       if (rng() < 0.3) { const k = Object.keys(a)[Math.floor(rng() * 12)]; a[k] = junk(rng); }
     }
     // иногда — честное предложение обмена, чтобы проверить перенос вещей

@@ -230,6 +230,9 @@ function load() {
         for (const u of r.game.rig.queue || []) r.game.decks.treasure.splice(Math.floor(Math.random() * (r.game.decks.treasure.length + 1)), 0, u);
         delete r.game.rig;
       }
+      // старые партии: прилавок прежнего рынка уходит в сброс клада, у героев появляется кошелёк
+      if (r.game?.market) { r.game.discard.treasure.push(...(r.game.market.cards || [])); delete r.game.market; }
+      for (const p of r.game?.players || []) p.gold ??= 0;
       // поединок после перезапуска досчитывается заново
       if (r.game?.duel) { r.game.duel.winStart = now(); r.game.duel.winAt = Math.max(r.game.duel.winAt || 0, now() + (r.game.opts?.winDelayMs || 10000)); r.game.duel.passed = []; }
       r.settings = { ...(r.settings || {}), winDelayMs: cleanDelay(r.settings?.winDelayMs), winLevel: cleanWin(r.settings?.winLevel), daily: !!r.settings?.daily };

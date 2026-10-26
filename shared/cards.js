@@ -43,22 +43,52 @@ export const tameBonus = d => Math.max(1, Math.ceil((d.level || 0) / 4));
 export const TRAP_ROLL = 4;
 export const TRAP_SKILL = 2;
 export const TRAP_FAIL_LEVELS = 1; // сорвалась при обезвреживании — ещё и уровень долой
-// Подземный рынок: открывается, когда подземелье уходит глубже, и стоит до конца круга.
-// Платят вещами (по их цене), сдачи нет; одна покупка за ход.
-export const MARKET_SIZE = 3;
+// Чернокнижник: приручает зверя уже при таком перевесе
+export const WARLOCK_TAME = 5;
 // Испытание дня: в этот день у всех одна и та же колода и одно условие дня
 export const DAILY = [
   { id: 'deep', name: 'Глубокий спуск', text: 'Партия начинается сразу с глубины 1: монстры +1.' },
   { id: 'rich', name: 'Богатый старт', text: 'Каждому на старте ещё 2 карты клада.' },
   { id: 'loc', name: 'С места в карьер', text: 'Партия начинается сразу в локации дня.' },
   { id: 'veteran', name: 'Бывалые', text: 'Все начинают со 2-го уровня.' },
-  { id: 'fair', name: 'Ярмарочный день', text: 'Подземный рынок открыт с первого круга.' },
+  { id: 'fair', name: 'Ярмарочный день', text: 'На подземном рынке всё на четверть дешевле.' },
   { id: 'beasts', name: 'Звериный день', text: 'Зверя можно приручить уже при перевесе 5.' },
 ];
 export const dailyOf = date => { let h = 7; for (const ch of String(date)) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return DAILY[h % DAILY.length]; };
 // дата испытания — по Москве, чтобы день у всех игроков менялся в одну полночь
 export const dailyDate = (t = Date.now()) => new Date(t + 3 * 3600 * 1000).toISOString().slice(0, 10);
-export const marketPrice = d => (d.type === 'levelup' ? 1000 : d.type === 'hoard' ? 600 : Math.max(400, (d.value || 0) + 200));
+
+// ───────── Кошелёк и подземный рынок ─────────
+// Голды копятся в кошельке: за проданные вещи и выполненные контракты. Тратятся на рынке.
+// Рынок открыт всегда: в свой ход вне боя можно купить разовые карты, зелья, проклятия и «Получи уровень» —
+// только те, что ещё лежат в колоде, поэтому их число ограничено. Уровень — не больше одного за ход.
+// У каждой локации своя ценовая политика по разделам рынка (поле prices, all — на всё остальное).
+export const SHOP_CATS = { level: 'Уровни', curse: 'Проклятия', food: 'Еда и питьё', potion: 'Зелья', gear: 'Снаряжение', magic: 'Магия' };
+const SHOP_SHORT = { level: 'уровни', curse: 'проклятия', food: 'еда', potion: 'зелья', gear: 'снаряжение', magic: 'магия' };
+export const shopCat = d => (d.type === 'levelup' ? 'level' : d.type === 'curse' ? 'curse' : d.type === 'oneshot' || d.type === 'buff' ? d.shop || 'gear' : null);
+// цена без поправок: уровень — 1000, проклятие — по тому, как больно бьёт, разовые и зелья — вдвое дороже, чем их продают
+const CURSE_PRICE = { levels: 600, slot: 400, smallItem: 300, bestItems: 600, race: 500, class: 500, cards: 150, giveToTop: 400, nextCombat: 100, nextEscape: 100 };
+export const roundPrice = v => Math.max(50, Math.round(v / 50) * 50);
+export function shopBase(d) {
+  if (d.type === 'levelup') return 1000;
+  if (d.type === 'curse') {
+    let v = 0;
+    for (const f of d.fx) {
+      const k = f.k === 'slot' && f.slot === 'hands' ? 500 : CURSE_PRICE[f.k] || 300;
+      v += ['levels', 'cards', 'nextCombat', 'nextEscape'].includes(f.k) ? k * Math.abs(f.n || 1) : k;
+    }
+    return Math.max(200, roundPrice(v));
+  }
+  return Math.max(200, (d.value || 0) * 2);
+}
+// «Рынок: еда −50%, уровни +25%» — для текста локации
+export function priceSummary(pr) {
+  if (!pr) return '';
+  const pct = m => `${m < 1 ? '−' : '+'}${Math.round(Math.abs(1 - m) * 100)}%`;
+  const parts = Object.keys(SHOP_SHORT).filter(k => pr[k] != null).map(k => `${SHOP_SHORT[k]} ${pct(pr[k])}`);
+  if (pr.all != null) parts.push(`${parts.length ? 'всё остальное' : 'всё'} ${pct(pr.all)}`);
+  return parts.length ? `Рынок: ${parts.join(', ')}.` : '';
+}
 
 // Глубина: каждые every кругов подземелье уходит глубже, и все монстры, кроме боссов, получают +1 к силе за каждую глубину.
 // Глубже max не спускаемся: иначе монстры со временем становятся непобедимыми и партия не кончается.
@@ -73,22 +103,22 @@ export const TRADE_TIMEOUT_MS = 30000;
 // Характеры ботов
 export const PERSONAS = { cautious: 'осторожный', greedy: 'жадный', vengeful: 'мстительный' };
 
-// Контракты — тайные цели. Выполнил — награда и новый контракт; самому отстающему ещё карта клада.
-// ev — какое событие двигает счётчик, need — сколько раз, reward — уровень (не победный) или карты клада.
+// Контракты — тайные цели. Выполнил — голды в кошелёк и новый контракт; самому отстающему ещё карта клада.
+// ev — какое событие двигает счётчик, need — сколько раз, reward — голды (gold), уровень (levels) или карты клада (treasures).
 export const CONTRACTS = [
-  { id: 'q_undead', name: 'Охотник на нежить', text: 'Победи 2 монстров-нежить.', ev: 'kill', tag: 'undead', need: 2, reward: { levels: 1 } },
-  { id: 'q_big', name: 'Крупная дичь', text: 'Победи монстра 12-го уровня или выше.', ev: 'kill', minLevel: 12, need: 1, reward: { levels: 1 } },
-  { id: 'q_solo', name: 'Одиночка', text: 'Победи 2 раза без помощника.', ev: 'killSolo', need: 2, reward: { levels: 1 } },
-  { id: 'q_help', name: 'Плечо друга', text: 'Помоги другому победить 2 раза.', ev: 'helpWin', need: 2, reward: { levels: 1 } },
-  { id: 'q_trouble', name: 'Искатель приключений', text: 'Найди неприятности и победи.', ev: 'troubleWin', need: 1, reward: { levels: 1 } },
-  { id: 'q_beasts', name: 'Зверолов', text: 'Победи 2 монстров-зверей: зверя, крысу или насекомое.', ev: 'kill', tags: ['beast', 'rat', 'insect'], need: 2, reward: { treasures: 2 } },
-  { id: 'q_sell', name: 'Барыга', text: 'Продай 3 вещи.', ev: 'sellItem', need: 3, reward: { treasures: 2 } },
-  { id: 'q_loot', name: 'Сталкер', text: 'Обшарь 3 комнаты.', ev: 'loot', need: 3, reward: { treasures: 2 } },
-  { id: 'q_flee', name: 'Ноги в руки', text: 'Удери от монстра 2 раза.', ev: 'escape', need: 2, reward: { treasures: 2 } },
-  { id: 'q_curse', name: 'Злой язык', text: 'Наложи 2 проклятия на соперников.', ev: 'curse', need: 2, reward: { treasures: 2 } },
-  { id: 'q_potion', name: 'Зельевар', text: 'Используй 3 разовые карты или зелья.', ev: 'oneshot', need: 3, reward: { treasures: 2 } },
-  { id: 'q_outfit', name: 'Модник', text: 'Надень разом головняк, броник и обувку.', ev: 'outfit', need: 1, reward: { treasures: 2 } },
-  { id: 'q_trade', name: 'Купец', text: 'Обменяйся вещами с другим игроком.', ev: 'trade', need: 1, reward: { treasures: 2 } },
+  { id: 'q_undead', name: 'Охотник на нежить', text: 'Победи 2 монстров-нежить.', ev: 'kill', tag: 'undead', need: 2, reward: { gold: 1000 } },
+  { id: 'q_big', name: 'Крупная дичь', text: 'Победи монстра 12-го уровня или выше.', ev: 'kill', minLevel: 12, need: 1, reward: { gold: 1000 } },
+  { id: 'q_solo', name: 'Одиночка', text: 'Победи 2 раза без помощника.', ev: 'killSolo', need: 2, reward: { gold: 1000 } },
+  { id: 'q_help', name: 'Плечо друга', text: 'Помоги другому победить 2 раза.', ev: 'helpWin', need: 2, reward: { gold: 1000 } },
+  { id: 'q_trouble', name: 'Искатель приключений', text: 'Найди неприятности и победи.', ev: 'troubleWin', need: 1, reward: { gold: 1000 } },
+  { id: 'q_beasts', name: 'Зверолов', text: 'Победи 2 монстров-зверей: зверя, крысу или насекомое.', ev: 'kill', tags: ['beast', 'rat', 'insect'], need: 2, reward: { gold: 600 } },
+  { id: 'q_sell', name: 'Барыга', text: 'Продай 3 вещи.', ev: 'sellItem', need: 3, reward: { gold: 600 } },
+  { id: 'q_loot', name: 'Сталкер', text: 'Обшарь 3 комнаты.', ev: 'loot', need: 3, reward: { gold: 600 } },
+  { id: 'q_flee', name: 'Ноги в руки', text: 'Удери от монстра 2 раза.', ev: 'escape', need: 2, reward: { gold: 600 } },
+  { id: 'q_curse', name: 'Злой язык', text: 'Наложи 2 проклятия на соперников.', ev: 'curse', need: 2, reward: { gold: 600 } },
+  { id: 'q_potion', name: 'Зельевар', text: 'Используй 3 разовые карты или зелья.', ev: 'oneshot', need: 3, reward: { gold: 600 } },
+  { id: 'q_outfit', name: 'Модник', text: 'Надень разом головняк, броник и обувку.', ev: 'outfit', need: 1, reward: { gold: 600 } },
+  { id: 'q_trade', name: 'Купец', text: 'Обменяйся вещами с другим игроком.', ev: 'trade', need: 1, reward: { gold: 600 } },
 ];
 export const CONTRACT_DEFS = Object.fromEntries(CONTRACTS.map(k => [k.id, k]));
 
@@ -98,7 +128,7 @@ export const SETS = {
   miner: { name: 'Шахтёрский', items: ['i_helmet', 'i_overalls', 'i_pick'], bonus: 3, run: 1, text: 'Каска шахтёра, Роба шахтёра и Кирка ударника вместе: +3 к силе и +1 к побегу.' },
   king: { name: 'Подгорного короля', items: ['i_kingcrown', 'i_kingmail', 'i_kinghammer'], bonus: 3, vsTag: { tag: 'fire', n: 5 }, text: 'Венец, кольчуга и молот подгорного короля вместе: +3 к силе, против огненных ещё +5.' },
 };
-export const rewardText = r => (r.levels ? `+${r.levels} уровень` : `${r.treasures} карты клада`);
+export const rewardText = r => (r.gold ? `${r.gold} голдов в кошелёк` : r.levels ? `+${r.levels} уровень` : `${r.treasures} карты клада`);
 const BOSS = (id, name, extra) => ({
   id, deck: 'door', type: 'monster', boss: true, name, level: BOSS_LEVEL, treasures: 5, levels: 2, copies: 1, rarity: 'epic',
   noPursue: BOSS_MIN_LEVEL - 1,
@@ -127,6 +157,7 @@ export const CARD_DEFS = [
   CLS('c_alchemist', 'alchemist', 'Алхимик', 2, 'Мастер зелий: твои разовые карты дают на 2 больше. Перегонка: раз в ход вне боя сбрось 3 карты и возьми карту клада.'),
   CLS('c_engineer', 'engineer', 'Механик', 2, 'Третья рука: можешь держать вещи на три руки. Наладчик: +1 к силе за каждую надетую большую вещь. Против механизмов +3.'),
   { ...CLS('c_witcher', 'witcher', 'Ведьмак', 2, '+3 к силе всегда. Мутаген: один раз за всю партию сбрось в бою 2 карты — ещё +6 к силе.'), rarity: 'epic', bg: 'dark' },
+  { ...CLS('c_warlock', 'warlock', 'Чернокнижник', 2, 'Тень: от любого монстра уходит без броска. Подчинение: приручает зверя при перевесе 5, а не 10. Призыв: раз за бой подкидывает монстра с руки в любой бой — свой или чужой — без «Из темноты вылезло…».'), rarity: 'epic', bg: 'dark' },
 
   { id: 'x_halfbreed', deck: 'door', type: 'halfbreed', name: 'Смешанная кровь', copies: 2, art: 'mix', rarity: 'rare',
     text: 'Можешь иметь две расы сразу и пользоваться обеими. Части Легендарного комплекта подходят тебе при любой расе.' },
@@ -506,45 +537,45 @@ export const CARD_DEFS = [
   // ───────────── ЛОКАЦИИ ─────────────
   // Пока локация лежит на столе, её правила действуют на всех. Новая локация заменяет старую.
   // Арт — живописные сцены из /loc/v1: кадр на карте и фон всего стола.
-  { id: 'loc_tavern', deck: 'door', type: 'location', name: 'Таверна «Хмельной кабан»', copies: 2, art: 'loc_tavern', rarity: 'rare',
+  { id: 'loc_tavern', deck: 'door', type: 'location', prices: { food: 0.5, level: 1.25 }, priceNote: 'Трактирщик наливает за полцены, а умных книжек тут не держат.', name: 'Таверна «Хмельной кабан»', copies: 2, art: 'loc_tavern', rarity: 'rare',
     handBonus: 2, helperBonus: 1,
     text: 'В руке можно держать на 2 карты больше. Помощник в бою получает ещё +1 клад.' },
-  { id: 'loc_dungeon', deck: 'door', type: 'location', name: 'Сокровищница темницы', copies: 2, art: 'loc_dungeon', rarity: 'epic',
+  { id: 'loc_dungeon', deck: 'door', type: 'location', prices: { curse: 0.7, magic: 0.8, level: 1.2 }, priceNote: 'Скупщики краденого: проклятия и свитки дешевле, зато стража берёт мзду за каждый уровень.', name: 'Сокровищница темницы', copies: 2, art: 'loc_dungeon', rarity: 'epic',
     treasureBonus: 1, monsterTag: [{ tag: 'undead', n: 2 }, { tag: 'rat', n: 2 }], heroMod: [{ cls: 'rogue', n: 2 }],
     text: 'За каждую победу — ещё карта клада. Нежить и крысы +2. Плуты +2 к силе.' },
-  { id: 'loc_glade', deck: 'door', type: 'location', name: 'Поляна светлячков', copies: 2, art: 'loc_glade', rarity: 'rare',
+  { id: 'loc_glade', deck: 'door', type: 'location', prices: { potion: 0.6, food: 0.8, curse: 1.5 }, priceNote: 'Травы растут под ногами — зелья дешёвые. Тёмную магию на светлой поляне не любят.', name: 'Поляна светлячков', copies: 2, art: 'loc_glade', rarity: 'rare',
     heroAll: 1, lightBonus: 3, monsterTag: [{ tag: 'fungus', n: 3 }],
     text: 'Всем героям +1, светильники ещё +3. Грибы +3.' },
-  { id: 'loc_forge', deck: 'door', type: 'location', name: 'Кузня подгорного короля', copies: 2, art: 'loc_forge', rarity: 'epic',
+  { id: 'loc_forge', deck: 'door', type: 'location', prices: { gear: 0.6, food: 1.25, magic: 1.25 }, priceNote: 'Кузнецы отдают снаряжение почти даром, а еду и свитки везут издалека.', name: 'Кузня подгорного короля', copies: 2, art: 'loc_forge', rarity: 'epic',
     treasureBonus: 1, monsterTag: [{ tag: 'fire', n: 4 }], heroMod: [{ race: 'dwarf', n: 2 }, { cls: 'engineer', n: 2 }],
     text: 'За каждую победу — ещё карта клада. Огненные монстры +4. Гномы и механики +2.' },
-  { id: 'loc_ice', deck: 'door', type: 'location', name: 'Ледяная цитадель', copies: 2, art: 'loc_ice', rarity: 'rare',
+  { id: 'loc_ice', deck: 'door', type: 'location', prices: { food: 1.5, potion: 1.25, curse: 0.8 }, priceNote: 'В мороз горячее на вес золота, зато проклятия во льду хорошо хранятся.', name: 'Ледяная цитадель', copies: 2, art: 'loc_ice', rarity: 'rare',
     escapeAll: -1, monsterTag: [{ tag: 'fire', n: -5 }, { tag: 'insect', n: -3 }], heroMod: [{ race: 'dwarf', n: 1 }, { race: 'molefolk', n: 1 }],
     text: 'Огненные монстры −5, насекомые −3. Гномы и кротолюды +1. Скользко: всем −1 к побегу.' },
-  { id: 'loc_graveyard', deck: 'door', type: 'location', name: 'Кладбище горгулий', copies: 2, art: 'loc_graveyard', rarity: 'rare',
+  { id: 'loc_graveyard', deck: 'door', type: 'location', prices: { curse: 0.6, potion: 1.5 }, priceNote: 'Некроманты сбывают проклятия, а святая вода и зелья тут в дефиците.', name: 'Кладбище горгулий', copies: 2, art: 'loc_graveyard', rarity: 'rare',
     monsterTag: [{ tag: 'undead', n: 3 }], heroMod: [{ cls: 'cleric', n: 3 }, { cls: 'witcher', n: 2 }],
     text: 'Нежить +3. Жрецы +3, ведьмаки +2 к силе.' },
-  { id: 'loc_sky', deck: 'door', type: 'location', name: 'Небесная цитадель', copies: 2, art: 'loc_sky', rarity: 'epic',
+  { id: 'loc_sky', deck: 'door', type: 'location', prices: { level: 1.5, magic: 0.7 }, priceNote: 'Наверх подниматься дорого: уровни в полтора раза дороже. Небесные свитки — дешевле.', name: 'Небесная цитадель', copies: 2, art: 'loc_sky', rarity: 'epic',
     levelBonus: 1, monsterAll: 2,
     text: 'Каждая победа даёт ещё +1 уровень. Монстры в грозу злее: +2.' },
-  { id: 'loc_cove', deck: 'door', type: 'location', name: 'Бухта гоблинов-пиратов', copies: 2, art: 'loc_cove', rarity: 'rare',
+  { id: 'loc_cove', deck: 'door', type: 'location', prices: { food: 0.6, all: 0.85 }, priceNote: 'Пиратская контрабанда: всё дешевле, а ром почти даром.', name: 'Бухта гоблинов-пиратов', copies: 2, art: 'loc_cove', rarity: 'rare',
     escapeAll: 2, monsterTag: [{ tag: 'water', n: 2 }], heroMod: [{ race: 'goblin', n: 2 }],
     text: 'Всем +2 к побегу. Водные монстры +2. Гоблины +2 к силе.' },
-  { id: 'loc_library', deck: 'door', type: 'location', name: 'Звёздная библиотека', copies: 2, art: 'loc_library', rarity: 'epic',
+  { id: 'loc_library', deck: 'door', type: 'location', prices: { level: 0.7, magic: 0.6, food: 1.5 }, priceNote: 'Знание — сила: уровни и свитки дешевле. Еду в читальном зале продают только из-под полы.', name: 'Звёздная библиотека', copies: 2, art: 'loc_library', rarity: 'epic',
     heroAll: 2, heroMod: [{ cls: 'mage', n: 2 }],
     text: 'Всем героям +2, магам ещё +2.' },
-  { id: 'loc_oasis', deck: 'door', type: 'location', name: 'Оазис джинна', copies: 2, art: 'loc_oasis', rarity: 'rare',
-    saleRate: 700, noCurses: true,
-    text: 'Уровень за каждые 700 голдов, а не 1000. Проклятия не действуют.' },
-  { id: 'loc_flooded', deck: 'door', type: 'location', name: 'Затопленная станция', copies: 2, art: 'loc_flooded', rarity: 'rare',
+  { id: 'loc_oasis', deck: 'door', type: 'location', prices: { level: 0.7, curse: 0.5, food: 1.5 }, priceNote: 'Джинн исполняет желания — уровни дешевле. Проклятия здесь не действуют, их сбывают за бесценок. Вода в пустыне дорогая.', name: 'Оазис джинна', copies: 2, art: 'loc_oasis', rarity: 'rare',
+    noCurses: true,
+    text: 'Проклятия не действуют.' },
+  { id: 'loc_flooded', deck: 'door', type: 'location', prices: { gear: 1.5, food: 1.25, potion: 0.8 }, priceNote: 'Все хотят выбраться: верёвки и дымовые шашки нарасхват, еда размокла.', name: 'Затопленная станция', copies: 2, art: 'loc_flooded', rarity: 'rare',
     escapeAll: -1, monsterTag: [{ tag: 'water', n: 3 }, { tag: 'metro', n: 2 }], itemTag: { tag: 'water', n: 2 },
     text: 'Вода по пояс: всем −1 к побегу. Водные монстры +3, жители метро +2. В непромокаемом +2 к силе.' },
-  { id: 'loc_grove', deck: 'door', type: 'location', name: 'Грибная роща', copies: 2, art: 'loc_grove', rarity: 'rare',
+  { id: 'loc_grove', deck: 'door', type: 'location', prices: { food: 0.6, potion: 0.7, magic: 1.25 }, priceNote: 'Грибы маринуют прямо здесь, алхимики варят зелья — дёшево. Свитки отсыревают.', name: 'Грибная роща', copies: 2, art: 'loc_grove', rarity: 'rare',
     handBonus: 1, monsterTag: [{ tag: 'fungus', n: 4 }], heroMod: [{ cls: 'alchemist', n: 2 }, { race: 'halfling', n: 1 }],
     text: 'Грибов полно: в руке на карту больше. Грибные монстры +4. Алхимики +2, полурослики +1.' },
-  { id: 'loc_koschei', deck: 'door', type: 'location', name: 'Логово Кощея', copies: 2, art: 'loc_koschei', rarity: 'epic',
-    treasureBonus: 1, saleRate: 800, monsterTag: [{ tag: 'undead', n: 2 }],
-    text: 'Кощей чахнет над златом: за победу ещё карта клада, уровень за каждые 800 голдов. Нежить +2.' },
+  { id: 'loc_koschei', deck: 'door', type: 'location', prices: { level: 0.8, curse: 0.7, all: 1.25 }, priceNote: 'Кощей чахнет над златом и дерёт втридорога, но уровни и проклятия у него дешевле.', name: 'Логово Кощея', copies: 2, art: 'loc_koschei', rarity: 'epic',
+    treasureBonus: 1, monsterTag: [{ tag: 'undead', n: 2 }],
+    text: 'Кощей чахнет над златом: за победу ещё карта клада. Нежить +2.' },
 
   // ───────────── СОБЫТИЯ ─────────────
   // Срабатывают сразу, если их вытащили, выбив дверь. Из руки играются в свой ход вне боя.
@@ -721,6 +752,8 @@ export const CARD_DEFS = [
     text: 'Питомец. В твой ход ты видишь, что лежит за следующей дверью. Спасёт от одной расплаты.' },
   { id: 'p_owl', deck: 'treasure', type: 'item', slot: 'pet', name: 'Сова-проводница', bonus: 1, value: 300, art: 'pet_owl', runBonus: 2,
     text: 'Питомец. Знает обходные пути: +2 к побегу. Спасёт от одной расплаты.' },
+  { id: 'p_roach', deck: 'treasure', type: 'item', slot: 'pet', name: 'Конь Плотва', bonus: 4, value: 600, art: 'pet_roach', rarity: 'epic',
+    clsBonus: { cls: 'witcher', n: 2 }, text: 'Питомец. +4 к силе, а у ведьмака ещё +2. Спасёт от одной расплаты.' },
   { id: 'p_cat', deck: 'treasure', type: 'item', slot: 'pet', name: 'Кот-диггер', bonus: 2, value: 400, art: 'pet_cat', rarity: 'rare',
     vsTag: { tag: 'rat', n: 3 }, text: 'Питомец. Против крыс ещё +3. Спасёт от одной расплаты.' },
 
@@ -732,40 +765,40 @@ export const CARD_DEFS = [
   { id: 'a_guide', deck: 'treasure', type: 'ally', name: 'Проводник Митрич', value: 300, art: 'guide', runBonus: 2,
     text: 'Спутник. Знает все лазы: +2 к побегу.' },
   { id: 'a_merc', deck: 'treasure', type: 'ally', name: 'Наёмник Кондрат', value: 400, art: 'merc', bonus: 3, fee: 200, rarity: 'rare',
-    text: 'Спутник. +3 к силе. В начале твоего хода плати: сбрось из руки или с запасных вещей карту ценой от 200 голдов, иначе он уходит.' },
+    text: 'Спутник. +3 к силе. В начале твоего хода плати 200 голдов из кошелька, а если их нет — карту ценой от 200 голдов из руки или запаса. Нечем платить — уходит.' },
 
   // ───────────── КЛАД: РАЗОВЫЕ ─────────────
-  { id: 'o_pickles', deck: 'treasure', type: 'oneshot', effect: 'bonus', bonus: 3, value: 100, copies: 2, art: 'jar',
+  { id: 'o_pickles', deck: 'treasure', shop: 'food', type: 'oneshot', effect: 'bonus', bonus: 3, value: 100, copies: 2, art: 'jar',
     name: 'Банка маринованных грибов', text: 'Разовая. В любом бою: +3 любой стороне.' },
-  { id: 'o_kvass', deck: 'treasure', type: 'oneshot', effect: 'bonus', bonus: 2, value: 100, copies: 2, art: 'bottle',
+  { id: 'o_kvass', deck: 'treasure', shop: 'food', type: 'oneshot', effect: 'bonus', bonus: 2, value: 100, copies: 2, art: 'bottle',
     name: 'Квас «Богатырский»', text: 'Разовая. В любом бою: +2 любой стороне.' },
-  { id: 'o_shawarma', deck: 'treasure', type: 'oneshot', effect: 'bonus', bonus: 5, value: 300, art: 'wrap', rarity: 'rare',
+  { id: 'o_shawarma', deck: 'treasure', shop: 'food', type: 'oneshot', effect: 'bonus', bonus: 5, value: 300, art: 'wrap', rarity: 'rare',
     name: 'Огненная шаурма', text: 'Разовая. В любом бою: +5 любой стороне.' },
-  { id: 'o_cola', deck: 'treasure', type: 'oneshot', effect: 'bonus', bonus: 3, value: 200, art: 'can',
+  { id: 'o_cola', deck: 'treasure', shop: 'food', type: 'oneshot', effect: 'bonus', bonus: 3, value: 200, art: 'can',
     name: 'Ледяная газировка', text: 'Разовая. В любом бою: +3 любой стороне.' },
-  { id: 'o_firecracker', deck: 'treasure', type: 'oneshot', effect: 'bonus', bonus: 4, value: 300, art: 'boom',
+  { id: 'o_firecracker', deck: 'treasure', shop: 'gear', type: 'oneshot', effect: 'bonus', bonus: 4, value: 300, art: 'boom',
     name: 'Петарда «Ракета»', text: 'Разовая. В любом бою: +4 любой стороне.' },
-  { id: 'o_holywater', deck: 'treasure', type: 'oneshot', effect: 'bonus', bonus: 2, value: 300, copies: 2, art: 'holywater',
+  { id: 'o_holywater', deck: 'treasure', shop: 'potion', type: 'oneshot', effect: 'bonus', bonus: 2, value: 300, copies: 2, art: 'holywater',
     tagBonus: { tag: 'undead', n: 6 },
     name: 'Святая вода', text: 'Разовая. +2 любой стороне, а героям против нежити — +8.' },
-  { id: 'o_rope', deck: 'treasure', type: 'oneshot', effect: 'escapeBonus', bonus: 3, value: 200, art: 'rope',
+  { id: 'o_rope', deck: 'treasure', shop: 'gear', type: 'oneshot', effect: 'escapeBonus', bonus: 3, value: 200, art: 'rope',
     name: 'Верёвка с кошкой', text: 'Разовая. Участник боя: +3 к побегу в этом бою.' },
-  { id: 'o_smoke', deck: 'treasure', type: 'oneshot', effect: 'escape', value: 200, copies: 2, art: 'smoke',
+  { id: 'o_smoke', deck: 'treasure', shop: 'gear', type: 'oneshot', effect: 'escape', value: 200, copies: 2, art: 'smoke',
     name: 'Дымовая шашка', text: 'Разовая. Участник боя: все герои сбегают без расплаты и без наград.' },
-  { id: 'o_petrify', deck: 'treasure', type: 'oneshot', effect: 'remove', value: 300, copies: 2, art: 'scroll', rarity: 'rare',
+  { id: 'o_petrify', deck: 'treasure', shop: 'magic', type: 'oneshot', effect: 'remove', value: 300, copies: 2, art: 'scroll', rarity: 'rare',
     name: 'Свиток окаменения', text: 'Разовая. В любом бою: убери одного монстра. Ни уровня, ни клада за него.' },
-  { id: 'o_slave', deck: 'treasure', type: 'oneshot', effect: 'enslave', value: 300, copies: 2, art: 'shackles', rarity: 'rare',
+  { id: 'o_slave', deck: 'treasure', shop: 'magic', type: 'oneshot', effect: 'enslave', value: 300, copies: 2, art: 'shackles', rarity: 'rare',
     name: 'Ты мой раб', text: 'Сыграй в своём бою: выбери любого игрока — он обязан вступить в бой на твоей стороне. Отказаться нельзя, клада ему не положено.' },
-  { id: 'o_ward', deck: 'treasure', type: 'oneshot', effect: 'ward', value: 300, copies: 2, art: 'amulet',
+  { id: 'o_ward', deck: 'treasure', shop: 'magic', type: 'oneshot', effect: 'ward', value: 300, copies: 2, art: 'amulet',
     name: 'Куриный бог', text: 'Держи в руке: первое проклятие на тебя срабатывает впустую, а камушек уходит в сброс.' },
 
   // ───────────── КЛАД: БАФФЫ ─────────────
   // Играются когда угодно на себя: сила добавляется в текущем бою или в следующем.
-  { id: 'b_courage', deck: 'treasure', type: 'buff', name: 'Зелье храбрости', bonus: 3, value: 200, art: 'potion',
+  { id: 'b_courage', deck: 'treasure', shop: 'potion', type: 'buff', name: 'Зелье храбрости', bonus: 3, value: 200, art: 'potion',
     text: '+3 к силе в этом или следующем бою.' },
-  { id: 'b_energy', deck: 'treasure', type: 'buff', name: 'Энергетик «Забой»', bonus: 2, value: 100, copies: 2, art: 'energy',
+  { id: 'b_energy', deck: 'treasure', shop: 'food', type: 'buff', name: 'Энергетик «Забой»', bonus: 2, value: 100, copies: 2, art: 'energy',
     text: '+2 к силе в этом или следующем бою.' },
-  { id: 'b_pies', deck: 'treasure', type: 'buff', name: 'Бабушкины пирожки', bonus: 4, value: 300, art: 'pies', rarity: 'rare',
+  { id: 'b_pies', deck: 'treasure', shop: 'food', type: 'buff', name: 'Бабушкины пирожки', bonus: 4, value: 300, art: 'pies', rarity: 'rare',
     text: '+4 к силе в этом или следующем бою. С капустой.' },
 
   // ───────────── КЛАД: УРОВНИ И ПРОЧЕЕ ─────────────
@@ -782,7 +815,10 @@ export const CARD_DEFS = [
     text: 'Сыграй в свой ход вне боя: возьми 2 карты клада. Не больше одного схрона за ход.' },
 ];
 
+for (const d of CARD_DEFS) if (d.type === 'location' && d.prices) d.text = `${d.text} ${priceSummary(d.prices)}`;
 export const DEFS = Object.fromEntries(CARD_DEFS.map(d => [d.id, d]));
+// что продаётся на рынке: разовые, зелья, проклятия и «Получи уровень»
+export const SHOP_IDS = CARD_DEFS.filter(d => shopCat(d)).map(d => d.id);
 
 // Тексты некоторых карт зависят от длины партии: {win} — уровень победы, {lux} — порог «налога на роскошь».
 // В браузере идёт одна партия, поэтому значения хранятся глобально; сервер подставляет их сам для каждой партии.
@@ -806,7 +842,7 @@ export function allUids(deck) {
 }
 
 export const RACE_NAMES = { elf: 'Эльф', dwarf: 'Гном', halfling: 'Полурослик', orc: 'Орк', goblin: 'Гоблин', molefolk: 'Кротолюд', human: 'Человек' };
-export const CLASS_NAMES = { warrior: 'Воин', mage: 'Маг', cleric: 'Жрец', rogue: 'Плут', bard: 'Бард', alchemist: 'Алхимик', engineer: 'Механик', witcher: 'Ведьмак' };
+export const CLASS_NAMES = { warrior: 'Воин', mage: 'Маг', cleric: 'Жрец', rogue: 'Плут', bard: 'Бард', alchemist: 'Алхимик', engineer: 'Механик', witcher: 'Ведьмак', warlock: 'Чернокнижник' };
 export const SLOT_NAMES = { head: 'Головняк', armor: 'Броник', feet: 'Обувка', hand: 'В руки', none: 'Прочее', pet: 'Питомец' };
 export const TAG_NAMES = { undead: 'нежить', rat: 'крыса', fungus: 'гриб', water: 'водный', fire: 'огненный', insect: 'насекомое', metro: 'житель метро', rock: 'каменный',
   beast: 'зверь', machine: 'механизм', gas: 'газ' };

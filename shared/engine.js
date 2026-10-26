@@ -2,7 +2,7 @@
 // Сервер хранит состояние, вызывает act()/tick() и рассылает view() каждому игроку.
 import { def, allUids, RACE_NAMES, CLASS_NAMES, ruleText, BOSS_MULT, BOSS_MIN_LEVEL, BOSS_FLOOR, TROUBLE_BONUS, WITCHER_BONUS, MUTAGEN_BONUS, LULLABY_PENALTY, LULLABY_MAX, DISTILL_COST,
   DEPTH, DEPTH_TREASURE_EVERY, DEATH_LEVELS, GHOST_BONUS, CONTRACTS, CONTRACT_DEFS, SETS, rewardText,
-  TAME_MARGIN, tameBonus, TRAP_ROLL, TRAP_SKILL, TRAP_FAIL_LEVELS, MARKET_SIZE, marketPrice, dailyOf } from './cards.js';
+  TAME_MARGIN, WARLOCK_TAME, tameBonus, TRAP_ROLL, TRAP_SKILL, TRAP_FAIL_LEVELS, SHOP_IDS, shopCat, shopBase, roundPrice, dailyOf } from './cards.js';
 
 export const WIN_LEVEL = 10;
 // до какого уровня идёт партия: 10 по умолчанию, в лобби можно выбрать 15 или 20
@@ -34,13 +34,13 @@ export function createGame(seats, opts = {}, rng = Math.random) {
       id: x.id, name: x.name, color: x.color || null, avatar: x.avatar ?? i, isBot: !!x.isBot, seat: i,
       level: 1, races: [], classes: [], halfbreed: null, supermunch: null,
       equipped: [], carried: [], hand: [], nextCombat: 0, nextEscape: 0, dead: false, needsRevive: false, mutagenUsed: false,
-      persona: x.isBot && x.persona ? x.persona : null, contract: null, contractsDone: 0, ally: null, beast: null,
+      persona: x.isBot && x.persona ? x.persona : null, contract: null, contractsDone: 0, ally: null, beast: null, gold: 0,
     })),
     decks: { door: shuffle(allUids('door'), rng), treasure: shuffle(allUids('treasure'), rng) },
     discard: { door: [], treasure: [] },
     turn: { idx: 0, pid: null, step: 'pre', n: 0, halflingSold: false },
     combat: null, reveal: null, winners: [], location: null,
-    round: 0, depth: 0, trades: [], tradeSeq: 0, grudges: {}, trap: null, tame: null, duel: null, market: null,
+    round: 0, depth: 0, trades: [], tradeSeq: 0, grudges: {}, trap: null, tame: null, duel: null,
   };
   if (!WIN_LEVELS.includes(s.opts.winLevel)) s.opts.winLevel = WIN_LEVEL;
   for (const p of s.players) {
@@ -54,7 +54,8 @@ export function createGame(seats, opts = {}, rng = Math.random) {
 }
 
 // ───────────────────────── испытание дня ─────────────────────────
-export const tameMargin = s => (s.opts?.dailyId === 'beasts' ? 5 : TAME_MARGIN);
+// чернокнижник подчиняет зверя при меньшем перевесе
+export const tameMargin = (s, p = null) => Math.min(s.opts?.dailyId === 'beasts' ? 5 : TAME_MARGIN, p && hasClass(p, 'warlock') ? WARLOCK_TAME : Infinity);
 function applyDaily(s, rng) {
   const d = dailyOf(s.opts.daily);
   s.opts.dailyId = d.id;
@@ -68,7 +69,7 @@ function applyDaily(s, rng) {
       break;
     }
     case 'veteran': for (const p of s.players) p.level = 2; break;
-    case 'fair': openMarket(s, rng); break;
+    case 'fair': break; // цены на рынке ниже — считает shopPrice
   }
 }
 
@@ -484,36 +485,26 @@ export const depthBonus = s => s.depth || 0;
 export const depthTreasure = s => Math.floor((s.depth || 0) / DEPTH_TREASURE_EVERY);
 function newRound(s, rng) {
   s.round = (s.round || 0) + 1;
-  if (s.market && s.round > s.market.until) closeMarket(s);
   if (s.round % depthEvery(s) || (s.depth || 0) >= depthMax(s)) return;
   s.depth = (s.depth || 0) + 1;
   fx(s, { kind: 'depth', depth: s.depth, treasure: depthTreasure(s) });
   log(s, `⛏ Подземелье уходит глубже: глубина ${s.depth}${s.depth >= depthMax(s) ? ' — это дно' : ''}, монстры +${depthBonus(s)}${depthTreasure(s) ? `, за победу +${depthTreasure(s)} клада` : ''}.`, 'event');
-  openMarket(s, rng);
 }
 
 // ───────────────────────── подземный рынок ─────────────────────────
-// С каждой новой глубиной на круг открывается рынок: несколько карт клада в открытую, платят вещами.
-function openMarket(s, rng) {
-  const cards = [];
-  for (let tries = 0; cards.length < MARKET_SIZE && tries < MARKET_SIZE + 6; tries++) {
-    const u = draw(s, 'treasure', rng);
-    if (!u) break;
-    if (isLegend(u)) { s.decks.treasure.unshift(u); continue; } // легендарки на рынок не выносят
-    cards.push(u);
-  }
-  if (!cards.length) return;
-  s.market = { cards, until: s.round };
-  fx(s, { kind: 'market', cards: [...cards] });
-  log(s, `🛒 Открылся подземный рынок: ${cards.map(u => q(def(u).name)).join(', ')}. До конца круга, платят вещами.`, 'event');
+// Открыт всегда: в свой ход вне боя можно купить разовые карты, зелья, проклятия и «Получи уровень» за голды из кошелька.
+// Товар — только карты, которые ещё лежат в колоде (не в сбросе и не на руках), поэтому его число ограничено.
+// Цену меняет локация (у каждой своя политика по разделам рынка) и «Ярмарочный день».
+export function shopPrice(s, d) {
+  const pr = locationOf(s)?.prices || {};
+  let m = pr[shopCat(d)] ?? pr.all ?? 1;
+  if (s.opts?.dailyId === 'fair') m *= 0.75;
+  // ниже цены продажи не опускается: купить и тут же продать с выгодой нельзя
+  return Math.max(roundPrice(shopBase(d) * m), (d.value || 0) + 50);
 }
-function closeMarket(s) {
-  for (const u of s.market.cards) toDiscard(s, u);
-  if (s.market.cards.length) log(s, 'Подземный рынок свернулся до следующей глубины.', 'info');
-  s.market = null;
-}
-// чем платить: карты с ценой — из руки или со стола, кроме легендарных
-const payable = (p, u) => (p.hand.includes(u) || inPlayItems(p).includes(u)) && !!def(u).value && !isLegend(u);
+const stockUid = (s, id) => s.decks[def(id).deck].find(u => baseId(u) === id) || null;
+export const shopStock = (s, id) => s.decks[def(id).deck].reduce((n, u) => n + (baseId(u) === id ? 1 : 0), 0);
+export const shopList = s => SHOP_IDS.map(id => { const d = def(id); return { id, cat: shopCat(d), price: shopPrice(s, d), base: shopBase(d), stock: shopStock(s, id) }; });
 
 // ───────────────────────── поединок ─────────────────────────
 // Сила в поединке: уровень, вещи, расовые и классовые бонусы и «в следующем бою».
@@ -572,7 +563,8 @@ function contractEvent(s, p, ev, data, rng) {
   const others = s.players.filter(x => x !== p);
   const lowest = others.length && p.level <= Math.min(...others.map(x => x.level));
   let got;
-  if (k.reward.levels && p.level + k.reward.levels < winLevel(s)) { setLevel(s, p, p.level + k.reward.levels); got = rewardText(k.reward); }
+  if (k.reward.gold) { p.gold = (p.gold || 0) + k.reward.gold; got = rewardText(k.reward); }
+  else if (k.reward.levels && p.level + k.reward.levels < winLevel(s)) { setLevel(s, p, p.level + k.reward.levels); got = rewardText(k.reward); }
   else { const t = k.reward.treasures || 2; for (let i = 0; i < t; i++) give(p, drawFor(s, p, rng)); got = rewardText({ treasures: t }); }
   if (lowest) { give(p, drawFor(s, p, rng)); got += ' и ещё карта клада отстающему'; }
   p.contractsDone = (p.contractsDone || 0) + 1;
@@ -616,6 +608,11 @@ function nextTurn(s, rng) { beginTurn(s, (s.turn.idx + 1) % s.players.length, rn
 // наёмнику платят в начале хода самой дешёвой картой ценой от fee (из руки или с запасных вещей), иначе он уходит
 function payFee(s, p) {
   const d = allyOf(p);
+  if ((p.gold || 0) >= d.fee) {
+    p.gold -= d.fee;
+    log(s, `${p.name} платит ${q(d.name)} ${d.fee} голдов из кошелька.`, 'info');
+    return;
+  }
   const pool = [...p.hand, ...p.carried].filter(u => (def(u).value || 0) >= d.fee && !isLegend(u))
     .sort((a, b) => (def(a).value - def(b).value) || (cardWorth(a) - cardWorth(b)));
   if (pool.length) {
@@ -875,7 +872,7 @@ function resolveVictory(s, rng) {
   if (h) contractEvent(s, h, 'helpWin', {}, rng);
   // зверя, побеждённого с большим перевесом, можно приручить до конца хода
   const margin = n.heroes - n.monsters;
-  const wild = margin >= tameMargin(s) ? c.monsters.filter(m => canTame(m.uid)).sort((a, b) => def(b.uid).level - def(a.uid).level)[0] : null;
+  const wild = margin >= tameMargin(s, f) ? c.monsters.filter(m => canTame(m.uid)).sort((a, b) => def(b.uid).level - def(a.uid).level)[0] : null;
   if (wild) {
     c.monsters = c.monsters.filter(x => x !== wild);
     wild.enh.forEach(u => toDiscard(s, u));
@@ -910,6 +907,12 @@ function resolveEscape(s, rng) {
       if (monTags(m.uid).some(t => itemList(p, 'calm').includes(t))) {
         fx(s, { kind: 'escaped', pid, card: m.uid, calm: true });
         log(s, `${q(d.name)} принимает ${p.name} за своего и не гонится.`, 'good');
+        continue;
+      }
+      if (hasClass(p, 'warlock')) {
+        fx(s, { kind: 'escaped', pid, card: m.uid, shadow: true });
+        log(s, `Чернокнижник ${p.name} уходит тенью от ${q(d.name)} — без броска.`, 'good');
+        contractEvent(s, p, 'escape', {}, rng);
         continue;
       }
       const noEsc = d.escape === false || m.enh.some(u => def(u).noEscape);
@@ -1153,6 +1156,14 @@ function playCheck(s, p, a) {
       if (d.effect === 'remove') return Number.isInteger(a.monster) && c.monsters[a.monster] ? null : 'Выберите монстра';
       return 'Нельзя';
     case 'monster': {
+      // чернокнижник подкидывает монстра с руки в любой бой — свой или чужой — раз за бой
+      if (a.into) {
+        if (!hasClass(p, 'warlock')) return 'Без «Из темноты вылезло…» монстра в бой подкидывает только чернокнижник';
+        if (!c) return 'Сейчас нет боя';
+        if ((c.summoned || []).includes(p.id)) return 'Призыв — раз за бой';
+        if (participants(s).some(id => itemFlag(P(s, id), 'noWandering'))) return 'Щит-турникет: в этот бой монстров по одному';
+        return null;
+      }
       // за дверью никого — можно позвать на бой своего монстра с руки
       if (!manageErr(s, p) && s.turn.step === 'post') return null;
       return 'Монстра с руки зовут на бой в свой ход, когда за дверью никого не было, или подбрасывают в чужой бой картой «Из темноты вылезло…»';
@@ -1169,6 +1180,7 @@ H.playCard = {
     without(p.hand, a.uid);
     switch (d.type) {
       case 'monster': {
+        if (a.into) { summonMonster(s, p, a.uid, rng); return; }
         s.reveal = { uid: a.uid, by: p.id, seq: ++s.revealSeq };
         fx(s, { kind: 'reveal', pid: p.id, card: a.uid });
         log(s, `${p.name} зовёт на бой монстра с руки!`, 'combat');
@@ -1300,6 +1312,20 @@ H.playCard = {
   },
 };
 
+// призыв чернокнижника: монстр с руки встаёт в бой на стороне подземелья
+function summonMonster(s, p, uid, rng) {
+  const c = s.combat, d = def(uid);
+  (c.summoned ||= []).push(p.id);
+  const wm = { uid, enh: [] };
+  if (d.boss) wm.power = bossPower(s, P(s, c.fighter));
+  c.monsters.push(wm);
+  if (d.onAppear) bossAppear(s, d, P(s, c.fighter), rng);
+  const own = isParticipant(s, p.id);
+  if (!own) grudge(s, c.fighter, p.id);
+  log(s, `Чернокнижник ${p.name} призывает ${q(d.name)} в ${own ? 'свой' : 'чужой'} бой (${wm.power ? `босс, сила ${wm.power}` : `ур. ${monsterBaseLevel(s, d)}`})!`, 'combat');
+  fx(s, { kind: 'wandering', pid: p.id, card: uid, summon: true, ...(wm.power ? { power: wm.power } : {}) });
+}
+
 function legendFx(s, p, uid) {
   if (!isLegend(uid)) return;
   p.legendSeen = p.legendSeen || [];
@@ -1342,13 +1368,16 @@ H.discardInPlay = {
   },
 };
 
+// продажа: голды идут в кошелёк. Гоблин выторговывает +200 за каждую вещь, полурослик раз в ход продаёт одну вещь вдвое дороже
+// (обе скидки — только на вещи, не на разовые карты и зелья)
 export function saleValue(s, p, uids) {
-  const vals = uids.map(u => (def(u).value || 0) + (hasRace(p, 'goblin') ? 200 : 0));
+  const isItem = u => def(u).type === 'item';
+  const vals = uids.map(u => (def(u).value || 0) + (hasRace(p, 'goblin') && isItem(u) ? 200 : 0));
   let total = vals.reduce((a, b) => a + b, 0);
   let doubled = false;
-  if (hasRace(p, 'halfling') && !s.turn.halflingSold && vals.length) { total += Math.max(...vals); doubled = true; }
-  const rate = locationOf(s)?.saleRate || 1000;
-  return { total, doubled, rate, levels: Math.floor(total / rate) };
+  const best = Math.max(0, ...vals.filter((v, i) => isItem(uids[i])));
+  if (hasRace(p, 'halfling') && !s.turn.halflingSold && best > 0) { total += best; doubled = true; }
+  return { total, doubled };
 }
 H.sell = {
   check(s, p, a) {
@@ -1359,17 +1388,16 @@ H.sell = {
       if (!p.hand.includes(x) && !inPlayItems(p).includes(x)) return 'Можно продавать только свои вещи';
       if (!def(x).value) return `${q(def(x).name)} ничего не стоит`;
     }
-    const { total, rate, levels: lv } = saleValue(s, p, u);
-    if (lv < 1) return `Нужно минимум ${rate} голдов, у вас ${total}`;
-    if (p.level + lv >= winLevel(s)) return `Продажей нельзя дойти до ${winLevel(s)}-го уровня`;
     return null;
   },
   run(s, p, a, rng) {
-    const { total, doubled, levels: lv } = saleValue(s, p, a.uids);
+    const { total, doubled } = saleValue(s, p, a.uids);
     for (const x of a.uids) { if (!without(p.hand, x)) removeItem(p, x); toDiscard(s, x); }
+    normalize(s, p);
     if (doubled) s.turn.halflingSold = true;
-    setLevel(s, p, p.level + lv);
-    log(s, `${p.name} продаёт ${a.uids.length} вещ. за ${total} голдов${doubled ? ' (полурослик торгуется вдвое)' : ''}: +${lv} ур.`, 'good');
+    p.gold = (p.gold || 0) + total;
+    fx(s, { kind: 'gold', pid: p.id, n: total });
+    log(s, `${p.name} продаёт ${a.uids.length === 1 ? q(def(a.uids[0]).name) : `${a.uids.length} вещ.`} за ${total} голдов${doubled ? ' (полурослик торгуется вдвое)' : ''} — в кошельке ${p.gold}.`, 'good');
     contractEvent(s, p, 'sellItem', { n: a.uids.length }, rng);
   },
 };
@@ -1524,27 +1552,28 @@ H.trap = {
   },
 };
 
-// подземный рынок: купить карту, заплатив вещами не дешевле её цены
+// подземный рынок: купить карту из колоды за голды из кошелька
 H.buy = {
   check(s, p, a) {
     const e = manageErr(s, p); if (e) return e;
-    if (!s.market?.cards.includes(a.uid)) return 'Такой карты на рынке нет';
-    if (s.turn.bought) return 'На рынке — одна покупка за ход';
-    const pay = a.pay || [];
-    if (!pay.length || new Set(pay).size !== pay.length) return 'Выберите, чем платить';
-    for (const u of pay) if (!payable(p, u)) return `${q(def(u).name)} в уплату не берут`;
-    const sum = pay.reduce((t, u) => t + def(u).value, 0), price = marketPrice(def(a.uid));
-    return sum < price ? `Нужно ${price} голдов, набрано ${sum}` : null;
+    if (!SHOP_IDS.includes(a.id)) return 'Такого на рынке не продают';
+    const d = def(a.id);
+    if (!stockUid(s, a.id)) return 'Распродано: в колоде таких больше нет';
+    if (d.type === 'levelup') {
+      if (s.turn.boughtLevel) return 'Уровень на рынке — один за ход';
+      if (p.level >= winLevel(s) - 1) return 'Последний уровень — только убийством монстра';
+    }
+    const price = shopPrice(s, d);
+    return (p.gold || 0) < price ? `Нужно ${price} голдов, в кошельке ${p.gold || 0}` : null;
   },
   run(s, p, a) {
-    for (const u of a.pay) { if (!without(p.hand, u)) removeItem(p, u); toDiscard(s, u); }
-    normalize(s, p);
-    without(s.market.cards, a.uid);
-    p.hand.push(a.uid);
-    s.turn.bought = true;
-    if (!s.market.cards.length) s.market = null;
-    fx(s, { kind: 'buy', pid: p.id, card: a.uid });
-    log(s, `🛒 ${p.name} покупает на рынке ${q(def(a.uid).name)}, отдав ${a.pay.map(u => q(def(u).name)).join(', ')}.`, 'good');
+    const d = def(a.id), price = shopPrice(s, d), u = stockUid(s, a.id);
+    without(s.decks[d.deck], u);
+    p.gold -= price;
+    p.hand.push(u);
+    if (d.type === 'levelup') s.turn.boughtLevel = true;
+    fx(s, { kind: 'buy', pid: p.id, card: u, price });
+    log(s, `🛒 ${p.name} покупает на рынке ${q(d.name)} за ${price} голдов.`, 'good');
   },
 };
 
@@ -1857,6 +1886,7 @@ function badShape(a) {
   for (const k of ['cards', 'uids', 'give', 'pay']) {
     if (a[k] !== undefined && (!Array.isArray(a[k]) || a[k].length > 40 || a[k].some(x => typeof x !== 'string'))) return true;
   }
+  if (a.into !== undefined && typeof a.into !== 'boolean') return true;
   for (const k of ['uid', 'target', 'with', 'to', 'item', 'name']) {
     if (a[k] !== undefined && a[k] !== null && typeof a[k] !== 'string') return true;
   }
@@ -1904,7 +1934,8 @@ export function playOptions(s, pid, uid) {
   const out = [];
   const tryA = a => { if (!check(s, pid, a)) out.push(a); };
   const d = def(uid);
-  if (d.type === 'monster') { tryA({ type: 'playCard', uid }); return out; } // свой бой после пустой двери; в чужой — с «Из темноты вылезло…»
+  // свой бой после пустой двери; в чужой — с «Из темноты вылезло…», а чернокнижник подкидывает и без неё
+  if (d.type === 'monster') { tryA({ type: 'playCard', uid }); tryA({ type: 'playCard', uid, into: true }); return out; }
   if (d.type === 'curse' || d.type === 'trap' || d.type === 'duel' || (d.type === 'oneshot' && d.effect === 'enslave')) { s.players.forEach(x => tryA({ type: 'playCard', uid, target: x.id })); return out; }
   if (d.type === 'enhancer' || (d.type === 'oneshot' && d.effect === 'remove')) {
     (s.combat?.monsters || []).forEach((m, i) => tryA({ type: 'playCard', uid, monster: i }));
@@ -1946,7 +1977,8 @@ export function hints(s, pid) {
     autoEquip: ok({ type: 'autoEquip' }),
     bribe: s.combat?.fighter === pid && s.combat.monsters.some(m => def(m.uid).bribe) ? inPlayItems(p).filter(u => ok({ type: 'bribe', item: u })) : [],
     tame: ok({ type: 'tame' }) ? s.tame.uid : null,
-    buy: !!s.market && !manageErr(s, p) && !s.turn.bought,
+    buy: !manageErr(s, p),
+    shop: SHOP_IDS.filter(id => ok({ type: 'buy', id })),
     trap: ok({ type: 'trap' }) ? { uid: s.trap.uid, need: trapNeed(p) } : null,
     manage: !manageErr(s, p),
     haunt: { player: ok({ type: 'haunt', side: 'player' }), monster: ok({ type: 'haunt', side: 'monster' }) },
@@ -1987,7 +2019,7 @@ export function view(s, pid) {
     phase: s.phase, version: s.version, turn: { ...s.turn }, winners: [...s.winners],
     reveal: s.reveal, opts: { winDelayMs: s.opts.winDelayMs, winLevel: winLevel(s), daily: s.opts.daily || null, dailyId: s.opts.dailyId || null }, location: s.location,
     trap: s.trap ? { ...s.trap } : null, tame: s.tame ? { ...s.tame } : null,
-    market: s.market ? { cards: [...s.market.cards], until: s.market.until, prices: Object.fromEntries(s.market.cards.map(u => [u, marketPrice(def(u))])) } : null,
+    shop: { items: shopList(s), note: locationOf(s)?.priceNote || null, fair: s.opts?.dailyId === 'fair' },
     duel: s.duel ? { from: s.duel.from, to: s.duel.to, card: s.duel.card, mods: s.duel.mods.map(m => ({ ...m })), passed: [...s.duel.passed], winAt: s.duel.winAt, winStart: s.duel.winStart,
       numbers: duelNumbers(s), prize: { from: duelPrize(P(s, s.duel.from)), to: duelPrize(P(s, s.duel.to)) } } : null,
     log: s.log.slice(-80), fx: s.fx.slice(-20),
@@ -2004,7 +2036,7 @@ export function view(s, pid) {
       level: p.level, races: [...p.races], classes: [...p.classes], halfbreed: p.halfbreed, supermunch: p.supermunch,
       equipped: [...p.equipped], carried: [...p.carried], nextCombat: p.nextCombat, nextEscape: p.nextEscape || 0,
       dead: p.dead, handCount: p.hand.length, handLimit: handLimit(p, s), handsLimit: handsLimit(p), mutagenUsed: !!p.mutagenUsed,
-      power: powerOf(s, p), runBonus: runBonusOf(s, p), sets: setsOf(p), ghost: isGhost(p), ally: p.ally || null, beast: p.beast || null, persona: p.persona || null, contractsDone: p.contractsDone || 0,
+      power: powerOf(s, p), runBonus: runBonusOf(s, p), gold: p.gold || 0, sets: setsOf(p), ghost: isGhost(p), ally: p.ally || null, beast: p.beast || null, persona: p.persona || null, contractsDone: p.contractsDone || 0,
       hand: p.id === pid ? [...p.hand] : undefined,
       contract: p.id === pid && p.contract && CONTRACT_DEFS[p.contract.id] ? { ...CONTRACT_DEFS[p.contract.id], progress: p.contract.progress, rewardText: rewardText(CONTRACT_DEFS[p.contract.id].reward) } : undefined,
     })),
@@ -2019,6 +2051,6 @@ export function view(s, pid) {
     me: me ? pid : null,
     hints: me ? hints(s, pid) : null,
     peek: me && myTurn(s, me) && !s.combat && s.turn.step === 'pre' && itemFlag(me, 'peek') ? s.decks.door.at(-1) || null : null,
-    sale: me && s.phase === 'playing' ? { rate: locationOf(s)?.saleRate || 1000, goblin: hasRace(me, 'goblin'), halfling: hasRace(me, 'halfling') && !s.turn.halflingSold } : null,
+    sale: me && s.phase === 'playing' ? { goblin: hasRace(me, 'goblin'), halfling: hasRace(me, 'halfling') && !s.turn.halflingSold } : null,
   };
 }
