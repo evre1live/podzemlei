@@ -2116,3 +2116,21 @@ input[type=text], input[type=password], select, .g-search, .g-sort select,
 /* названия комнаты в полосе больше нет — локации хватает места на полное название */
 .game .g-head .loc-banner b { max-width: 30ch !important; }
 @media (max-width: 700px) { .game .g-head .loc-banner b { max-width: 18ch !important; } }
+
+/* ───────── верхняя полоса на телефоне — одна строка ─────────
+   «Правила» и «Меню» становятся значками, у цели и глубины остаются значок и число, у локации — миниатюра
+   (нажатие покажет её карту). Если плашек больше обычного, строку можно пролистать пальцем, но не переносим. */
+.game .g-head .hud-btn .gi { display: none; }
+@media (max-width: 700px) {
+  .game .g-head { flex-wrap: nowrap; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; gap: 5px; padding: 6px 6px; }
+  .game .g-head::-webkit-scrollbar { display: none; }
+  .game .g-head > * { flex: none; }
+  .game .g-head .spacer { flex: 1 0 4px; }
+  .game .g-head .lbl { display: none; }
+  .game .g-head .loc-banner > span { display: none; }
+  .game .g-head .loc-banner { padding: 0 3px; }
+  .game .g-head :is(.goal-pill, .depth-pill, .daily-pill, .market-pill, .watch-pill) { padding: 0 8px; gap: 5px; }
+  .game .g-head .hud-btn .gi { display: block; width: 18px; height: 18px; }
+  .game .g-head .hud-btn, .game .g-head .btn.icon-btn { min-width: 32px; padding: 0 7px; }
+  .game .g-head .side-toggle { padding: 0 9px; }
+}
