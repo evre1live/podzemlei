@@ -470,6 +470,35 @@ t('пустая дверь: монстр с руки вместо неприят
   assert.ok(!b1.boss && b1.min > 0 && b1.max > 6 && b1.max < 22);
 });
 
+t('обмен и контракт не ломают номера событий: анимации не повторяются', () => {
+  const s = fresh(); const a = P(s, 'p0'), b = P(s, 'p1');
+  a.contract = { id: 'q_trade', progress: 0 }; a.level = 5; // «Купец» выполнится прямо на обмене
+  // клиент: помнит последний номер и играет только новые события — как handleFx
+  let last = null; const played = [];
+  const client = () => {
+    const list = view(s, 'p1').fx;
+    const maxId = list.reduce((m, f) => Math.max(m, f.id || 0), 0);
+    if (last === null) { last = maxId; return; }
+    for (const f of list.filter(f => f.id > last)) played.push(f.id);
+    last = Math.max(last, maxId);
+  };
+  client();
+  fight(s, 'm_roach#0'); s.combat.winAt = 1; tick(s, { rng, now: 2 }); client(); // пара обычных событий в журнале
+  assert.equal(s.combat, null);
+  s.turn.step = 'charity';
+  a.carried.push(take(s, 'i_shovel#0')); b.carried.push(take(s, 'i_ladle#0'));
+  assert.equal(A(s, 'p0', { type: 'offerTrade', to: 'p1', give: ['i_shovel#0'], want: ['i_ladle#0'] }).ok, true); client();
+  const o = s.trades[0];
+  assert.equal(A(s, 'p1', { type: 'answerTrade', id: o.id, accept: true }).ok, true); client();
+  fight(s, 'm_roach#1', 'p0'); client();
+  const ids = s.fx.map(f => f.id);
+  assert.ok(ids.every((x, i) => typeof x === 'number' && (i === 0 || x > ids[i - 1])), 'номера событий растут: ' + ids.join(','));
+  assert.equal(new Set(played).size, played.length, 'ни одно событие не сыграно дважды');
+  assert.ok(s.fx.some(f => f.kind === 'tradeOffer' && f.trade === o.id));
+  assert.ok(s.fx.some(f => f.kind === 'trade'));
+  assert.ok(!s.fx.some(f => f.kind === 'contract') || s.fx.filter(f => f.kind === 'contract').every(f => typeof f.id === 'number'));
+});
+
 t('Золотой Дракон: +7, не крадётся и не улетает при расплате', () => {
   const s = fresh(); const p = P(s, 'p0'); p.level = 2;
   p.hand.push(take(s, 'p_golddragon#0'));

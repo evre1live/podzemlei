@@ -1611,10 +1611,11 @@ function handleFx(first) {
   const g = S.game;
   if (!g) return [];
   const list = g.fx || [];
-  const maxId = list.length ? list[list.length - 1].id : 0;
+  // по самому большому номеру, а не по последней записи: так одна кривая запись не заставит переиграть весь журнал
+  const maxId = list.reduce((m, f) => Math.max(m, f.id || 0), 0);
   if (S.ui.lastFx === null || first) { S.ui.lastFx = maxId; S.ui.lastLoc = g.location; return []; }
   const fresh = list.filter(f => f.id > S.ui.lastFx);
-  S.ui.lastFx = maxId;
+  S.ui.lastFx = Math.max(S.ui.lastFx, maxId);
   if (cine.on) { cine.prehide(fresh); return fresh; }
   for (const f of fresh) {
     if (f.kind === 'dice') S.ui.dieQueue.push(f);

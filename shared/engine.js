@@ -79,7 +79,7 @@ function log(s, text, kind = 'info') {
   if (s.log.length > 150) s.log.splice(0, s.log.length - 150);
 }
 function fx(s, o) {
-  s.fx.push({ id: ++s.fxSeq, ...o });
+  s.fx.push({ ...o, id: ++s.fxSeq }); // номер события всегда свой: поле id в данных события его не перебивает
   if (s.fx.length > 30) s.fx.splice(0, s.fx.length - 30);
 }
 function draw(s, deck, rng) {
@@ -576,7 +576,7 @@ function contractEvent(s, p, ev, data, rng) {
   else { const t = k.reward.treasures || 2; for (let i = 0; i < t; i++) give(p, drawFor(s, p, rng)); got = rewardText({ treasures: t }); }
   if (lowest) { give(p, drawFor(s, p, rng)); got += ' и ещё карта клада отстающему'; }
   p.contractsDone = (p.contractsDone || 0) + 1;
-  fx(s, { kind: 'contract', pid: p.id, id: k.id, reward: got });
+  fx(s, { kind: 'contract', pid: p.id, contract: k.id, reward: got });
   log(s, `📜 ${p.name} выполняет контракт ${q(k.name)} (${k.text.replace(/\.$/, '').toLowerCase()}): ${got}.`, 'good');
   p.contract = newContract(s, p, rng, k.id);
 }
@@ -1414,7 +1414,7 @@ H.offerTrade = {
     s.tradeSeq = (s.tradeSeq || 0) + 1; // в партиях, сохранённых до обновления, счётчика ещё нет
     const o = { id: s.tradeSeq, from: p.id, to: a.to, give: [...(a.give || [])], want: [...(a.want || [])], at: s.now };
     s.trades.push(o);
-    fx(s, { kind: 'tradeOffer', pid: p.id, to: a.to, id: o.id });
+    fx(s, { kind: 'tradeOffer', pid: p.id, to: a.to, trade: o.id });
     log(s, `${p.name} предлагает обмен ${P(s, a.to).name}.`, 'info');
   },
 };
