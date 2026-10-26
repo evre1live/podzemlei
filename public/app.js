@@ -49,7 +49,8 @@ function toast(text, ok = false) {
   if (!ok) sfx.play('error');
   el.textContent = text;
   $('#toasts').append(el);
-  setTimeout(() => el.remove(), 3200);
+  // длинное сообщение висит дольше, чтобы его успели прочитать
+  setTimeout(() => el.remove(), Math.min(9000, Math.max(3200, String(text || '').length * 60)));
 }
 const call = (ev, p) => new Promise(res => socket.emit(ev, p, r => res(r || { ok: false, error: 'Нет ответа от сервера' })));
 async function act(a) {
@@ -114,8 +115,11 @@ socket.on('connect', async () => {
   }
   const lst = await call('lobby:watch');
   if (lst.ok) { S.rooms = lst.rooms; if (S.screen === 'home') renderRooms(); }
-  if (S.pendingRoom && !S.room) openJoinModal(S.pendingRoom);
-  else if (S.pendingWatch && !S.room) tryWatch(S.pendingWatch);
+  if (S.pendingRoom && !S.room) {
+    const pk = await call('room:peek', { roomId: S.pendingRoom });
+    if (pk.ok && !pk.exists) roomGone(S.pendingRoom);
+    else if (S.pendingRoom && !S.room) openJoinModal(S.pendingRoom);
+  } else if (S.pendingWatch && !S.room) tryWatch(S.pendingWatch);
 });
 socket.on('watch:end', ({ reason }) => {
   vc.leave();
@@ -323,6 +327,17 @@ async function tryJoin(code, password) {
   saveToken(r.roomId, r.token);
   S.pendingRoom = null;
   closeOverlay();
+}
+
+// ссылка ведёт в комнату, которой уже нет (закрыли или сервер перезапускался)
+function roomGone(code) {
+  S.pendingRoom = null; setUrl(null);
+  showOverlay(`
+    <div class="modal" role="dialog" aria-label="Комната не найдена">
+      <h2>Комната ${esc(code)} не найдена</h2>
+      <p class="muted" style="margin:0">Её закрыли или сервер перезапускался. Создайте новую комнату и отправьте друзьям свежую ссылку.</p>
+      <div class="row"><button class="btn primary" type="button" data-act="closeOverlay">Понятно</button></div>
+    </div>`);
 }
 
 function openJoinModal(code, row) {

@@ -34,6 +34,15 @@ await startServer();
 const A = await client();
 const res = await A.call('room:create', { name: 'Тест', password: 'кирка', playerName: 'Аня', maxPlayers: 4 });
 assert.ok(res.ok); const code = res.roomId; ok('комната создана: ' + code);
+{
+  const P = await client();
+  assert.equal((await P.call('room:peek', { roomId: code.toLowerCase() })).exists, true);
+  const gone = await P.call('room:peek', { roomId: 'NOPE1' });
+  assert.equal(gone.exists, false); assert.match(gone.gone, /свежую ссылку/);
+  assert.match((await P.call('room:join', { roomId: 'NOPE1', playerName: 'Х' })).error, /перезапускался/);
+  P.close();
+  ok('старая ссылка: сразу видно, что комнаты больше нет');
+}
 
 const B = await client();
 let r = await B.call('room:join', { roomId: code, password: 'лопата', playerName: 'Боря' });

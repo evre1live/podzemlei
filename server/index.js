@@ -515,6 +515,13 @@ io.on('connection', socket => {
     broadcastRoom(r);
   });
 
+  // жива ли комната по ссылке — чтобы сразу сказать, что ссылка устарела
+  socket.on('room:peek', (p = {}, cb) => {
+    cb = cbOf(cb);
+    if (limited()) return cb({ ok: false, error: 'Слишком часто' });
+    cb({ ok: true, exists: rooms.has(String(p.roomId || '').toUpperCase().trim()), gone: GONE });
+  });
+
   socket.on('room:join', (p = {}, cb) => {
     cb = cbOf(cb);
     if (limited()) return cb({ ok: false, error: 'Слишком часто' });
