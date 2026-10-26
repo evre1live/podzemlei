@@ -42,7 +42,6 @@ export function createGame(seats, opts = {}, rng = Math.random) {
     combat: null, reveal: null, winners: [], location: null,
     round: 0, depth: 0, trades: [], tradeSeq: 0, grudges: {}, trap: null, tame: null, duel: null, market: null,
   };
-  setupRig(s, rng);
   if (!WIN_LEVELS.includes(s.opts.winLevel)) s.opts.winLevel = WIN_LEVEL;
   for (const p of s.players) {
     for (let i = 0; i < startCards(s); i++) { give(p, draw(s, 'door', rng)); give(p, draw(s, 'treasure', rng)); }
@@ -62,7 +61,7 @@ function applyDaily(s, rng) {
   log(s, `📅 Испытание дня ${s.opts.daily}: «${d.name}». ${d.text} Колода сегодня у всех одна.`, 'sys');
   switch (d.id) {
     case 'deep': s.depth = 1; break;
-    case 'rich': for (const p of s.players) { give(p, drawT(s, p, rng)); give(p, drawT(s, p, rng)); } break;
+    case 'rich': for (const p of s.players) { give(p, draw(s, 'treasure', rng)); give(p, draw(s, 'treasure', rng)); } break;
     case 'loc': {
       const locs = s.decks.door.filter(u => def(u).type === 'location');
       if (locs.length) { const u = pick(locs, rng); without(s.decks.door, u); s.location = u; log(s, `Партия начинается в локации ${q(def(u).name)}: ${fillText(s, def(u).text)}`, 'event'); }
@@ -94,30 +93,6 @@ function draw(s, deck, rng) {
 function give(p, uid) { if (uid) p.hand.push(uid); }
 const isLegend = uid => def(uid).rarity === 'legendary';
 
-// Маленький секрет хозяина игры: героя с ником «Еврей» или «EVRE1» легендарки находят сами.
-// Обе карты убираются из колоды и по ходу партии приходят ему среди обычного клада.
-// Если такого героя за столом нет, легендарки лежат в колоде как все и достаются кому повезёт.
-const RIG_NAMES = ['еврей', 'evre1'];
-const normName = n => String(n || '').trim().toLowerCase().replace(/ё/g, 'е');
-function setupRig(s, rng) {
-  const lucky = s.players.find(p => RIG_NAMES.includes(normName(p.name)));
-  const legend = s.decks.treasure.filter(isLegend);
-  if (!lucky || !legend.length) return;
-  s.decks.treasure = s.decks.treasure.filter(u => !isLegend(u));
-  // сначала доспехи, потом шлем и меч — легендарный комплект собирается по порядку, дракон последним
-  const order = u => ({ armor: 0, head: 1, hand: 2 }[def(u).slot] ?? 3);
-  legend.sort((a, b) => order(a) - order(b));
-  s.rig = { pid: lucky.id, queue: legend, got: 0, next: 2 + Math.floor(rng() * 3), turns: 0, dueTurn: 4 };
-}
-// карта клада для конкретного героя (с учётом секрета)
-function drawT(s, p, rng) {
-  const r = s.rig;
-  if (r && p && r.pid === p.id && r.queue.length) {
-    r.got++;
-    if (r.got >= r.next) { r.next = r.got + 2 + Math.floor(rng() * 3); r.dueTurn = r.turns + 3; return r.queue.shift(); }
-  }
-  return draw(s, 'treasure', rng);
-}
 function toDiscard(s, uid) { if (!uid) return; s.discard[def(uid).deck].push(uid); if (s.splits?.[uid]) delete s.splits[uid]; }
 
 // ───────────────────────── свойства героя ─────────────────────────
@@ -143,8 +118,10 @@ const combatHasTag = (s, tag) => !!s.combat && s.combat.monsters.some(m => (def(
 function reqError(p, d) {
   const r = d.req;
   if (!r) return null;
-  if (r.race === 'human' && !hasRace(p, 'human')) return 'Только для человека — сбросьте расу';
-  if (r.race && !hasRace(p, r.race)) return `Только для: ${RACE_NAMES[r.race]}`;
+  // легендарный комплект: человеку, а со «Смешанной кровью» — любой расе
+  if (r.race === 'human' && r.mix && !hasRace(p, 'human') && !p.halfbreed) return 'Только для человека или героя со «Смешанной кровью»';
+  if (r.race === 'human' && !r.mix && !hasRace(p, 'human')) return 'Только для человека — сбросьте расу';
+  if (r.race && r.race !== 'human' && !hasRace(p, r.race)) return `Только для: ${RACE_NAMES[r.race]}`;
   if (r.notRace && hasRace(p, r.notRace)) return `Не для: ${RACE_NAMES[r.notRace]}`;
   if (r.cls && !hasClass(p, r.cls)) return `Только для: ${CLASS_NAMES[r.cls]}`;
   return null;
@@ -422,7 +399,7 @@ function resolveEvent(s, p, uid, rng) {
       for (const x of alive) if (hasClass(x, 'cleric') || hasClass(x, 'bard')) { setLevel(s, x, x.level + 1); log(s, `${x.name} получает уровень.`, 'good'); }
       break;
     case 'fair':
-      for (const x of alive) give(x, drawT(s, x, rng));
+      for (const x of alive) give(x, draw(s, 'treasure', rng));
       break;
     case 'draft': {
       const picks = alive.map(x => (x.hand.length ? pick(x.hand, rng) : null));
@@ -562,8 +539,8 @@ function contractEvent(s, p, ev, data, rng) {
   const lowest = others.length && p.level <= Math.min(...others.map(x => x.level));
   let got;
   if (k.reward.levels && p.level + k.reward.levels < winLevel(s)) { setLevel(s, p, p.level + k.reward.levels); got = rewardText(k.reward); }
-  else { const t = k.reward.treasures || 2; for (let i = 0; i < t; i++) give(p, drawT(s, p, rng)); got = rewardText({ treasures: t }); }
-  if (lowest) { give(p, drawT(s, p, rng)); got += ' и ещё карта клада отстающему'; }
+  else { const t = k.reward.treasures || 2; for (let i = 0; i < t; i++) give(p, draw(s, 'treasure', rng)); got = rewardText({ treasures: t }); }
+  if (lowest) { give(p, draw(s, 'treasure', rng)); got += ' и ещё карта клада отстающему'; }
   p.contractsDone = (p.contractsDone || 0) + 1;
   fx(s, { kind: 'contract', pid: p.id, id: k.id, reward: got });
   log(s, `📜 ${p.name} выполняет контракт ${q(k.name)} (${k.text.replace(/\.$/, '').toLowerCase()}): ${got}.`, 'good');
@@ -594,16 +571,11 @@ function beginTurn(s, idx, rng) {
   // зверь, которого так и не приручили, уходит в темноту
   if (s.tame) { log(s, `${q(def(s.tame.uid).name)} не дождался хозяина и ушёл в темноту.`, 'info'); toDiscard(s, s.tame.uid); s.tame = null; }
   if (p.needsRevive) {
-    for (let i = 0; i < 4; i++) { give(p, draw(s, 'door', rng)); give(p, drawT(s, p, rng)); }
+    for (let i = 0; i < 4; i++) { give(p, draw(s, 'door', rng)); give(p, draw(s, 'treasure', rng)); }
     p.needsRevive = false;
     log(s, `${p.name} возвращается из мёртвых с новыми картами.`, 'good');
   }
   if (allyN(p, 'fee')) payFee(s, p);
-  if (s.rig && s.rig.pid === p.id && s.rig.queue.length) {
-    s.rig.turns++;
-    // если клад долго не идёт, легендарка тихо находится сама в начале хода
-    if (s.rig.turns >= s.rig.dueTurn) { give(p, s.rig.queue.shift()); s.rig.dueTurn = s.rig.turns + 3; s.rig.next = s.rig.got + 2 + Math.floor(rng() * 3); }
-  }
   log(s, `Ход: ${p.name}.`, 'turn');
 }
 function nextTurn(s, rng) { beginTurn(s, (s.turn.idx + 1) % s.players.length, rng); }
@@ -815,22 +787,11 @@ function shareTreasure(s, count, rng, want = 0) {
   const f = P(s, c.fighter);
   const h = c.helper ? P(s, c.helper) : null;
   if (!h) want = 0;
-  let rigP = s.rig ? [f, h].find(x => x && x.id === s.rig.pid) : null;
-  if (rigP && rigP === h && Math.min(want, count) === 0) rigP = null;
   const drawn = [];
-  for (let i = 0; i < count; i++) { const u = rigP ? drawT(s, rigP, rng) : draw(s, 'treasure', rng); if (u) drawn.push(u); }
+  for (let i = 0; i < count; i++) { const u = draw(s, 'treasure', rng); if (u) drawn.push(u); }
   shuffle(drawn, rng);
   const share = h ? Math.min(want, drawn.length) : 0;
   const hp = drawn.slice(0, share), fp = drawn.slice(share);
-  if (rigP) {
-    // легендарка остаётся у того, кому предназначена
-    const mine = rigP === f ? fp : hp, other = rigP === f ? hp : fp;
-    for (let i = 0; i < other.length; i++) {
-      if (!isLegend(other[i])) continue;
-      const j = mine.findIndex(u => !isLegend(u));
-      if (j >= 0) [other[i], mine[j]] = [mine[j], other[i]];
-    }
-  }
   if (h) h.hand.push(...hp);
   f.hand.push(...fp);
   return { total: drawn.length, share };
@@ -1196,7 +1157,7 @@ H.playCard = {
         log(s, `${p.name}: ${q(d.name)} — +${d.bonus} к силе ${isParticipant(s, p.id) ? 'прямо сейчас' : 'в следующем бою'}.`, 'good');
         break;
       case 'hoard':
-        give(p, drawT(s, p, rng)); give(p, drawT(s, p, rng));
+        give(p, draw(s, 'treasure', rng)); give(p, draw(s, 'treasure', rng));
         toDiscard(s, a.uid);
         s.turn.hoardPlayed = true;
         log(s, `${p.name} находит схрон: +2 карты клада.`, 'good');
@@ -1777,7 +1738,7 @@ H.ability = {
         break;
       case 'distill':
         s.turn.distilled = true;
-        give(p, drawT(s, p, rng));
+        give(p, draw(s, 'treasure', rng));
         log(s, `${p.name} перегоняет ${DISTILL_COST} карты в карту клада.`, 'good');
         break;
       case 'lure': {

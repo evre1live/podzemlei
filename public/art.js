@@ -269,7 +269,7 @@ const ICON_OF = {
   m_manticore: 'scorpion-tail', m_hydra: 'hydra', m_kraken: 'kraken-tentacle', m_lucifer: 'daemon-skull', m_hades: 'horned-skull', m_anubis: 'anubis',
   m_rusteater: 'rusty-sword', m_viy: 'eyeball', m_chudo: 'hydra', m_ghosttrain: 'subway-train', m_ratking: 'rat', m_swarm: 'fly', m_mimicdoor: 'door',
   m_midnight: 'floating-ghost', m_bannik: 'water-drop', m_morena: 'snowflake-1', m_chernobog: 'daemon-skull',
-  i_ares: 'crested-helmet', i_excalibur: 'broadsword', i_overalls: 'breastplate', i_kingmail: 'breastplate', i_kingcrown: 'crown', i_kinghammer: 'war-pick',
+  i_ares: 'crested-helmet', i_epochboots: 'boots', i_excalibur: 'broadsword', i_overalls: 'breastplate', i_kingmail: 'breastplate', i_kingcrown: 'crown', i_kinghammer: 'war-pick',
   i_gasmask: 'gas-mask', i_canary: 'mining-helmet', i_ushanka: 'crested-helmet', i_ratcloak: 'cloak', i_firesuit: 'fire-extinguisher', i_trays: 'breastplate',
   i_rollers: 'running-shoe', i_valenki: 'boots', i_waders: 'rubber-boot', i_samovar: 'flame', i_turnshield: 'security-gate', i_kladenets: 'broadsword',
   p_raven: 'all-seeing-eye', p_owl: 'paw-print',

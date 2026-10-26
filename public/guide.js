@@ -96,7 +96,7 @@ function facts(d) {
     f.push(['Цена', d.value ? `${d.value} голдов` : 'не продаётся']);
     if (d.req) {
       const r = d.req;
-      f.push(['Кому', r.race === 'human' ? 'только человеку (герою без расы)' : r.race ? `только: ${RACE_NAMES[r.race]}` : r.cls ? `только: ${CLASS_NAMES[r.cls]}` : r.notRace ? `всем, кроме: ${RACE_NAMES[r.notRace]}` : '']);
+      f.push(['Кому', r.race === 'human' && r.mix ? 'человеку (герою без расы) или герою со «Смешанной кровью» — тогда любой расе' : r.race === 'human' ? 'только человеку (герою без расы)' : r.race ? `только: ${RACE_NAMES[r.race]}` : r.cls ? `только: ${CLASS_NAMES[r.cls]}` : r.notRace ? `всем, кроме: ${RACE_NAMES[r.notRace]}` : '']);
     }
     if (d.tags?.includes('light')) f.push(['Особое', 'источник света']);
     if (d.vsTag) f.push(['Против', `${TAG_NAMES[d.vsTag.tag]}: ещё ${sign(d.vsTag.n)}`]);

@@ -15,7 +15,6 @@ function countCards(s) {
   if (s.market) all.push(...s.market.cards);
   if (s.combat) { for (const m of s.combat.monsters) all.push(m.uid, ...m.enh); all.push(...s.combat.used); }
   if (s.location) all.push(s.location);
-  if (s.rig) all.push(...s.rig.queue);
   return all;
 }
 

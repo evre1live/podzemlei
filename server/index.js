@@ -198,6 +198,11 @@ function load() {
     for (const r of data) {
       r.members.forEach(m => { m.socketId = null; m.connected = false; m.lastSeen = now(); });
       if (r.game?.combat) r.game.combat.winAt = null;
+      // старые партии: отложенные легендарки возвращаются в колоду клада вперемешку
+      if (r.game?.rig) {
+        for (const u of r.game.rig.queue || []) r.game.decks.treasure.splice(Math.floor(Math.random() * (r.game.decks.treasure.length + 1)), 0, u);
+        delete r.game.rig;
+      }
       // поединок после перезапуска досчитывается заново
       if (r.game?.duel) { r.game.duel.winStart = now(); r.game.duel.winAt = Math.max(r.game.duel.winAt || 0, now() + (r.game.opts?.winDelayMs || 10000)); r.game.duel.passed = []; }
       r.settings = { ...(r.settings || {}), winDelayMs: cleanDelay(r.settings?.winDelayMs), winLevel: cleanWin(r.settings?.winLevel), daily: !!r.settings?.daily };

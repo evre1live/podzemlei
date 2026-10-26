@@ -94,7 +94,7 @@ export const CONTRACT_DEFS = Object.fromEntries(CONTRACTS.map(k => [k.id, k]));
 
 // Комплекты снаряжения: все вещи комплекта надеты — сверху бонус (bonus — к силе, run — к побегу, vsTag — против меток монстров).
 export const SETS = {
-  legend: { name: 'Легендарный', items: ['i_godarmor', 'i_ares', 'i_excalibur'], bonus: 10, text: 'Доспехи Бога, Шлем Ареса и Меч Экскалибур вместе: ещё +10 к силе.' },
+  legend: { name: 'Легендарный', items: ['i_ares', 'i_godarmor', 'i_epochboots'], bonus: 7, text: 'Шлем Ареса, Доспехи Бога и Сапоги эпохи вместе: ещё +7 к силе. Носит только человек или герой со «Смешанной кровью».' },
   miner: { name: 'Шахтёрский', items: ['i_helmet', 'i_overalls', 'i_pick'], bonus: 3, run: 1, text: 'Каска шахтёра, Роба шахтёра и Кирка ударника вместе: +3 к силе и +1 к побегу.' },
   king: { name: 'Подгорного короля', items: ['i_kingcrown', 'i_kingmail', 'i_kinghammer'], bonus: 3, vsTag: { tag: 'fire', n: 5 }, text: 'Венец, кольчуга и молот подгорного короля вместе: +3 к силе, против огненных ещё +5.' },
 };
@@ -129,7 +129,7 @@ export const CARD_DEFS = [
   { ...CLS('c_witcher', 'witcher', 'Ведьмак', 2, '+3 к силе всегда. Мутаген: один раз за всю партию сбрось в бою 2 карты — ещё +6 к силе.'), rarity: 'epic', bg: 'dark' },
 
   { id: 'x_halfbreed', deck: 'door', type: 'halfbreed', name: 'Смешанная кровь', copies: 2, art: 'mix', rarity: 'rare',
-    text: 'Можешь иметь две расы сразу и пользоваться обеими.' },
+    text: 'Можешь иметь две расы сразу и пользоваться обеими. Части Легендарного комплекта подходят тебе при любой расе.' },
   { id: 'x_super', deck: 'door', type: 'supermunch', name: 'Совместитель', copies: 2, art: 'badge', rarity: 'rare',
     text: 'Можешь иметь два класса сразу. Две зарплаты, одна жизнь.' },
 
@@ -616,11 +616,11 @@ export const CARD_DEFS = [
   { id: 'i_diver', deck: 'treasure', type: 'item', name: 'Скафандр водолаза', slot: 'armor', bonus: 3, value: 600, big: true, art: 'diver', tags: ['water'],
     runBonus: -1, text: '−1 к побегу: в нём не побегаешь.' },
   { id: 'i_godarmor', deck: 'treasure', type: 'item', name: 'Доспехи Бога', slot: 'armor', bonus: 10, value: 0, art: 'godarmor',
-    rarity: 'legendary', noSteal: true, req: { race: 'human' }, set: 'legend',
-    text: 'Легендарная броня. Носит только человек — герой без расы. Плут не может её украсть. Комплект «Легендарный».' },
+    rarity: 'legendary', noSteal: true, req: { race: 'human', mix: true }, set: 'legend',
+    text: 'Легендарная броня. Носит только человек (герой без расы) или герой со «Смешанной кровью». Плут не может её украсть. Комплект «Легендарный».' },
   { id: 'i_ares', deck: 'treasure', type: 'item', name: 'Шлем Ареса', slot: 'head', bonus: 7, value: 0, art: 'ares',
-    rarity: 'legendary', noSteal: true, set: 'legend',
-    text: 'Легендарный шлем бога войны. Плут не может его украсть. Комплект «Легендарный»: с Доспехами Бога и Мечом Экскалибур ещё +10.' },
+    rarity: 'legendary', noSteal: true, req: { race: 'human', mix: true }, set: 'legend',
+    text: 'Легендарный шлем бога войны. Носит только человек или герой со «Смешанной кровью». Плут не может его украсть. Комплект «Легендарный»: с Доспехами Бога и Сапогами эпохи ещё +7.' },
   { id: 'i_overalls', deck: 'treasure', type: 'item', name: 'Роба шахтёра', slot: 'armor', bonus: 2, value: 400, art: 'overalls', set: 'miner',
     text: 'Брезент, лямки, карманы для всего. Комплект «Шахтёрский».' },
   { id: 'i_kingmail', deck: 'treasure', type: 'item', name: 'Кольчуга подгорного короля', slot: 'armor', bonus: 3, value: 600, art: 'kingmail', rarity: 'rare', set: 'king',
@@ -647,12 +647,15 @@ export const CARD_DEFS = [
     text: 'В Ледяной цитадели ещё +3.' },
   { id: 'i_waders', deck: 'treasure', type: 'item', name: 'Болотные сапоги', slot: 'feet', bonus: 1, value: 300, art: 'waders', foeMod: { tag: 'water', n: -3 }, tags: ['water'],
     text: 'Непромокаемые. Водные монстры против тебя −3.' },
+  { id: 'i_epochboots', deck: 'treasure', type: 'item', name: 'Сапоги эпохи', slot: 'feet', bonus: 5, value: 0, art: 'epochboots',
+    rarity: 'legendary', noSteal: true, req: { race: 'human', mix: true }, set: 'legend',
+    text: 'Легендарные золотые сапоги: в них шагают сквозь века. Носит только человек или герой со «Смешанной кровью». Плут не может их украсть. Комплект «Легендарный».' },
   { id: 'i_shovel', deck: 'treasure', type: 'item', name: 'Совковая лопата', slot: 'hand', hands: 1, bonus: 2, value: 200, copies: 2, art: 'shovel' },
   { id: 'i_pick', deck: 'treasure', type: 'item', name: 'Кирка ударника', slot: 'hand', hands: 2, bonus: 3, value: 400, art: 'pick', set: 'miner',
     text: 'Комплект «Шахтёрский».' },
   { id: 'i_excalibur', deck: 'treasure', type: 'item', name: 'Меч Экскалибур', slot: 'hand', hands: 2, bonus: 7, value: 0, art: 'excalibur',
-    rarity: 'legendary', noSteal: true, set: 'legend',
-    text: 'Легендарный меч из камня. Держится обеими руками. Плут не может его украсть. Комплект «Легендарный».' },
+    rarity: 'legendary', noSteal: true,
+    text: 'Легендарный меч из камня. Держится обеими руками. Плут не может его украсть.' },
   { id: 'i_kinghammer', deck: 'treasure', type: 'item', name: 'Молот подгорного короля', slot: 'hand', hands: 1, bonus: 3, value: 600, art: 'kinghammer', rarity: 'rare', set: 'king',
     text: 'Бьёт, как обвал. Комплект «Подгорного короля».' },
   { id: 'i_jackhammer', deck: 'treasure', type: 'item', name: 'Отбойный молоток', slot: 'hand', hands: 2, bonus: 5, value: 800, big: true, art: 'hammer', rarity: 'rare' },
