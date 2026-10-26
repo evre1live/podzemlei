@@ -1128,7 +1128,7 @@ H.playCard = {
       case 'item':
         if (!equipError(p, a.uid)) { p.equipped.push(a.uid); legendFx(s, p, a.uid); } else p.carried.push(a.uid);
         checkOutfit(s, p, rng);
-        log(s, `${p.name} выкладывает ${q(d.name)}${isLegend(a.uid) ? ' — легендарная вещь!' : ''}.`, isLegend(a.uid) ? 'win' : 'info');
+        log(s, `${p.name} выкладывает ${q(d.name)}${isLegend(a.uid) ? ' — легендарная вещь!' : '.'}`, isLegend(a.uid) ? 'win' : 'info');
         break;
       case 'ally':
         if (p.ally) { toDiscard(s, p.ally); log(s, `${q(def(p.ally).name)} уходит от ${p.name}: место занято.`, 'info'); }
