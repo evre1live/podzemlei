@@ -85,6 +85,20 @@ const voiceBans = new Map();    // код комнаты → Map(ключ → и
 const voiceForced = new Map();  // код комнаты → Set(ключ): кому хозяин выключил микрофон
 const bag = (m, id, make) => { let v = m.get(id); if (!v) m.set(id, v = make()); return v; };
 // убрать сокет из голосового чата его комнаты и предупредить остальных
+// Серверы для поиска прямой связи. STUN есть всегда; свой TURN можно подключить переменными окружения:
+// TURN_URLS (через запятую, например turn:turn.example.com:3478,turns:turn.example.com:443?transport=tcp)
+// и либо TURN_USERNAME + TURN_CREDENTIAL, либо TURN_SECRET (общий секрет coturn — тогда пароли временные).
+// Без TURN голос, который не прошёл напрямую, идёт через сам сервер игры (см. voice:frame).
+const TURN_URLS = String(process.env.TURN_URLS || '').split(',').map(s => s.trim()).filter(Boolean);
+function iceServers() {
+  const list = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }];
+  if (!TURN_URLS.length) return list;
+  if (process.env.TURN_SECRET) {
+    const username = `${Math.floor(Date.now() / 1000) + 12 * 3600}:podzemlei`;
+    list.push({ urls: TURN_URLS, username, credential: crypto.createHmac('sha1', process.env.TURN_SECRET).update(username).digest('base64') });
+  } else list.push({ urls: TURN_URLS, username: process.env.TURN_USERNAME || '', credential: process.env.TURN_CREDENTIAL || '' });
+  return list;
+}
 function voiceLeave(sock) {
   const id = sock.data.voiceRoom;
   if (!id) return;
@@ -392,7 +406,7 @@ io.on('connection', socket => {
     socket.data.voiceRoom = room.id;
     socket.join('voice:' + room.id);
     // новичок сам зовёт тех, кто уже в чате: так у каждой пары ровно один зачинщик
-    cb({ ok: true, me: socket.id, peers: [...vm.keys()].filter(id => id !== socket.id), forced });
+    cb({ ok: true, me: socket.id, peers: [...vm.keys()].filter(id => id !== socket.id), forced, ice: iceServers() });
     broadcastRoom(room);
   });
   socket.on('voice:leave', (_, cb) => { leaveVoice(); cbOf(cb)({ ok: true }); });
@@ -403,6 +417,19 @@ io.on('connection', socket => {
     const to = String(p.to || '');
     if (!vm?.has(socket.id) || !vm.has(to) || !p.data || typeof p.data !== 'object') return;
     io.to(to).emit('voice:signal', { from: socket.id, data: p.data });
+  });
+  // ретранслятор: браузеры не смогли связаться напрямую — кусочки голоса (40 мс, ~640 байт) идут через сервер
+  let frBucket = 100, frLast = now();
+  socket.on('voice:frame', (p = {}) => {
+    const t = now(); frBucket = Math.min(100, frBucket + (t - frLast) / 20); frLast = t; // до 50 кусочков в секунду
+    if (frBucket < 1) return; frBucket -= 1;
+    const vm = voice.get(socket.data.voiceRoom);
+    const me = vm?.get(socket.id);
+    if (!me || me.muted || me.forced) return;
+    const d = p.d;
+    if (!d || !(Buffer.isBuffer(d) || d instanceof ArrayBuffer) || d.byteLength === 0 || d.byteLength > 4096) return;
+    const to = Array.isArray(p.to) ? p.to.slice(0, VOICE_MAX) : [];
+    for (const id of to) if (typeof id === 'string' && id !== socket.id && vm.has(id)) io.to(id).volatile.emit('voice:frame', { from: socket.id, d });
   });
   socket.on('voice:mute', (p = {}, cb) => {
     cb = cbOf(cb);

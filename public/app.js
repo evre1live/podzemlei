@@ -2162,7 +2162,8 @@ function drawVoicePanel() {
   const row = p => {
     const me = p.id === V.me;
     const st = V.peers.get(p.id)?.state;
-    const status = p.forced ? 'микрофон выключил хозяин' : p.muted ? 'микрофон выключен' : st === 'failed' ? 'нет связи' : vc.isSpeaking(p.id) ? 'говорит' : 'в чате';
+    const via = st === 'relay' ? ' · через сервер' : '';
+    const status = p.forced ? 'микрофон выключил хозяин' : p.muted ? 'микрофон выключен' + via : st === 'failed' ? 'нет связи' : (vc.isSpeaking(p.id) ? 'говорит' : 'в чате') + via;
     return `<div class="v-row${vc.isSpeaking(p.id) ? ' speaking' : ''}" data-vpeer="${esc(p.id)}">
       <span class="v-dot" style="--c:${esc(p.color)}">${MIC(p.muted)}</span>
       <span class="v-who"><b>${esc(p.name)}</b>${me ? ' <small>это вы</small>' : ''}<br><small class="muted">${p.spectator ? 'зритель' : 'за столом'} · ${status}</small></span>
