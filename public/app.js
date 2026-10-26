@@ -430,6 +430,7 @@ function bindChat() {
     i.value = '';
     const r = await call('chat', { text });
     if (!r.ok && r.error) toast(r.error);
+    else if (r.note) toast(r.note);
   });
 }
 function renderChat() {

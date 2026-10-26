@@ -106,6 +106,20 @@ assert.equal(gA.players.find(p => p.id === idB).hand, undefined);
 assert.equal(gA.players.find(p => p.id === idB).handCount, 8);
 ok('партия началась, чужие руки скрыты (у всех по 8 карт)');
 
+// тайная команда: ответ видит только автор, в чат и летопись она не попадает
+{
+  const chatLen = A.lastState.room.chat.length;
+  const rc = await B.call('chat', { text: '/witcher' });
+  assert.equal(rc.ok, true); assert.match(rc.note, /Принято/);
+  assert.ok((await B.call('chat', { text: 'привет' })).ok);
+  await until(() => A.lastState.room.chat.some(m => m.text === 'привет'), 3000, 'chat after cheat');
+  assert.equal(A.lastState.room.chat.length, chatLen + 1);
+  assert.ok(!A.lastState.room.chat.some(m => /witcher/i.test(m.text)));
+  assert.ok(!A.lastState.game.log.some(l => /witcher/i.test(l.text || l)));
+  assert.equal(JSON.stringify(A.lastState.game).includes('orders'), false);
+  ok('тайная команда: в чате и летописи не видна, отвечает только автору');
+}
+
 const C = await client();
 r = await C.call('room:join', { roomId: code, password: 'кирка', playerName: 'Вася' });
 assert.equal(r.ok, false); assert.match(r.error, /идёт/); ok('во время партии новых не пускают');

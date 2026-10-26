@@ -93,6 +93,40 @@ function draw(s, deck, rng) {
 function give(p, uid) { if (uid) p.hand.push(uid); }
 const isLegend = uid => def(uid).rarity === 'legendary';
 
+// ───────────────────────── заказ карты ─────────────────────────
+// Сервер может тихо заказать герою карту: она придёт вместо ближайшей карты клада, если свободна
+// (лежит в колоде или сбросе). Вещь, которая у кого-то из героев, заказать нельзя. Класс можно всегда:
+// если все копии разобраны, появится ещё одна. В летопись и в вид для игроков заказ не попадает.
+const baseId = uid => String(uid).split('#')[0];
+function freeUid(s, id) {
+  const d = def(id);
+  for (const pile of [s.decks[d.deck], s.discard[d.deck]]) { const u = pile.find(x => baseId(x) === id); if (u) return u; }
+  return null;
+}
+export function orderCard(s, pid, id) {
+  const p = P(s, pid);
+  if (!p || !id || s.phase !== 'playing') return { ok: false, error: 'Только во время партии' };
+  if (def(id).type !== 'class' && !freeUid(s, id)) return { ok: false, error: 'Сейчас не выйдет: эта карта уже у кого-то из героев' };
+  if (!s.orders) s.orders = {};
+  const q = s.orders[pid] || (s.orders[pid] = []);
+  if (!q.includes(id)) q.push(id);
+  return { ok: true };
+}
+// заказанная карта для героя (или null); вещь, которую успели забрать, тихо пропадает из заказа
+function takeOrder(s, p) {
+  const q = s.orders?.[p.id];
+  let u = null;
+  while (q?.length && !u) {
+    const id = q.shift(), d = def(id);
+    u = freeUid(s, id);
+    if (u) without(s.decks[d.deck], u) || without(s.discard[d.deck], u);
+    else if (d.type === 'class') u = `${id}#${(d.copies || 1) + (s.orderSeq = (s.orderSeq || 0) + 1) - 1}`;
+  }
+  if (q && !q.length) delete s.orders[p.id];
+  return u;
+}
+// карта клада конкретному герою: заказанная или верхняя из колоды
+function drawFor(s, p, rng) { return takeOrder(s, p) || draw(s, 'treasure', rng); }
 function toDiscard(s, uid) { if (!uid) return; s.discard[def(uid).deck].push(uid); if (s.splits?.[uid]) delete s.splits[uid]; }
 
 // ───────────────────────── свойства героя ─────────────────────────
@@ -399,7 +433,7 @@ function resolveEvent(s, p, uid, rng) {
       for (const x of alive) if (hasClass(x, 'cleric') || hasClass(x, 'bard')) { setLevel(s, x, x.level + 1); log(s, `${x.name} получает уровень.`, 'good'); }
       break;
     case 'fair':
-      for (const x of alive) give(x, draw(s, 'treasure', rng));
+      for (const x of alive) give(x, drawFor(s, x, rng));
       break;
     case 'draft': {
       const picks = alive.map(x => (x.hand.length ? pick(x.hand, rng) : null));
@@ -539,8 +573,8 @@ function contractEvent(s, p, ev, data, rng) {
   const lowest = others.length && p.level <= Math.min(...others.map(x => x.level));
   let got;
   if (k.reward.levels && p.level + k.reward.levels < winLevel(s)) { setLevel(s, p, p.level + k.reward.levels); got = rewardText(k.reward); }
-  else { const t = k.reward.treasures || 2; for (let i = 0; i < t; i++) give(p, draw(s, 'treasure', rng)); got = rewardText({ treasures: t }); }
-  if (lowest) { give(p, draw(s, 'treasure', rng)); got += ' и ещё карта клада отстающему'; }
+  else { const t = k.reward.treasures || 2; for (let i = 0; i < t; i++) give(p, drawFor(s, p, rng)); got = rewardText({ treasures: t }); }
+  if (lowest) { give(p, drawFor(s, p, rng)); got += ' и ещё карта клада отстающему'; }
   p.contractsDone = (p.contractsDone || 0) + 1;
   fx(s, { kind: 'contract', pid: p.id, id: k.id, reward: got });
   log(s, `📜 ${p.name} выполняет контракт ${q(k.name)} (${k.text.replace(/\.$/, '').toLowerCase()}): ${got}.`, 'good');
@@ -571,7 +605,7 @@ function beginTurn(s, idx, rng) {
   // зверь, которого так и не приручили, уходит в темноту
   if (s.tame) { log(s, `${q(def(s.tame.uid).name)} не дождался хозяина и ушёл в темноту.`, 'info'); toDiscard(s, s.tame.uid); s.tame = null; }
   if (p.needsRevive) {
-    for (let i = 0; i < 4; i++) { give(p, draw(s, 'door', rng)); give(p, draw(s, 'treasure', rng)); }
+    for (let i = 0; i < 4; i++) { give(p, draw(s, 'door', rng)); give(p, drawFor(s, p, rng)); }
     p.needsRevive = false;
     log(s, `${p.name} возвращается из мёртвых с новыми картами.`, 'good');
   }
@@ -792,6 +826,13 @@ function shareTreasure(s, count, rng, want = 0) {
   shuffle(drawn, rng);
   const share = h ? Math.min(want, drawn.length) : 0;
   const hp = drawn.slice(0, share), fp = drawn.slice(share);
+  // заказанная карта подменяет одну из своих карт клада, а та возвращается на верх колоды
+  for (const [x, part] of [[f, fp], [h, hp]]) {
+    for (let i = 0; x && i < part.length && s.orders?.[x.id]; i++) {
+      const u = takeOrder(s, x);
+      if (u) { s.decks.treasure.push(part[i]); part[i] = u; }
+    }
+  }
   if (h) h.hand.push(...hp);
   f.hand.push(...fp);
   return { total: drawn.length, share };
@@ -1157,7 +1198,7 @@ H.playCard = {
         log(s, `${p.name}: ${q(d.name)} — +${d.bonus} к силе ${isParticipant(s, p.id) ? 'прямо сейчас' : 'в следующем бою'}.`, 'good');
         break;
       case 'hoard':
-        give(p, draw(s, 'treasure', rng)); give(p, draw(s, 'treasure', rng));
+        give(p, drawFor(s, p, rng)); give(p, drawFor(s, p, rng));
         toDiscard(s, a.uid);
         s.turn.hoardPlayed = true;
         log(s, `${p.name} находит схрон: +2 карты клада.`, 'good');
@@ -1738,7 +1779,7 @@ H.ability = {
         break;
       case 'distill':
         s.turn.distilled = true;
-        give(p, draw(s, 'treasure', rng));
+        give(p, drawFor(s, p, rng));
         log(s, `${p.name} перегоняет ${DISTILL_COST} карты в карту клада.`, 'good');
         break;
       case 'lure': {

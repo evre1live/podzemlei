@@ -1,6 +1,7 @@
 // Точечные проверки правил.
 import assert from 'node:assert/strict';
-import { createGame, act, tick, view, combatNumbers, P, saleValue, fillText } from '../shared/engine.js';
+import { createGame, act, tick, view, combatNumbers, P, saleValue, fillText, orderCard } from '../shared/engine.js';
+import { cheatCard } from '../server/cheats.js';
 import { botDecide } from '../shared/bot.js';
 import { def, dailyOf } from '../shared/cards.js';
 import { AVATAR_PARTS, cleanAvatar, avatarFromSeed, portraitId, pickCode, avatarInGame, gameRaces } from '../shared/avatar.js';
@@ -382,6 +383,56 @@ t('Легендарный комплект: только человеку, со 
   h.hand.push(take(s2, 'i_epochboots#0'));
   A(s2, 'p0', { type: 'playCard', uid: 'i_epochboots#0' });
   assert.ok(h.equipped.includes('i_epochboots#0'));
+});
+
+t('тайные команды: карта приходит вместо ближайшей карты клада и никому не видна', () => {
+  assert.equal(cheatCard('/GODMODE'), 'i_godarmor');
+  assert.equal(cheatCard(' /ageboots '), 'i_epochboots');
+  assert.equal(cheatCard('/WITCHER'), 'c_witcher');
+  assert.equal(cheatCard('/EXC'), 'i_excalibur');
+  assert.equal(cheatCard('/GOLDENDRAGON'), 'p_golddragon');
+  assert.equal(cheatCard('/ARES'), 'i_ares');
+  assert.equal(cheatCard('/hello'), null);
+  assert.equal(cheatCard('привет /ARES'), null);
+  const s = fresh(); const p = P(s, 'p0'); const o = P(s, 'p1');
+  const ownerOf = id => s.players.find(x => [...x.hand, ...x.equipped, ...x.carried].some(u => u.startsWith(id + '#')));
+  // сначала все легендарки — в колоду
+  for (const x of s.players) for (const z of ['hand', 'equipped', 'carried']) { const keep = x[z].filter(u => def(u).rarity !== 'legendary'); s.decks.treasure.push(...x[z].filter(u => def(u).rarity === 'legendary')); x[z] = keep; }
+  const logLen = s.log.length;
+  assert.equal(orderCard(s, 'p0', cheatCard('/GODMODE')).ok, true);
+  assert.equal(s.log.length, logLen, 'в летописи ничего');
+  assert.equal(JSON.stringify(view(s, 'p1')).includes('orders'), false, 'соперникам не видно');
+  const before = p.hand.length;
+  s.turn = { idx: 0, pid: 'p0', step: 'pre', n: 3, hoardPlayed: false };
+  p.hand.push(take(s, 'h_hoard#0'));
+  assert.equal(A(s, 'p0', { type: 'playCard', uid: 'h_hoard#0' }).ok, true);
+  assert.equal(p.hand.length, before + 2, 'карт столько же, сколько обычно');
+  assert.ok(p.hand.includes('i_godarmor#0'));
+  assert.equal(s.orders?.p0, undefined);
+  // вещь на руке у другого героя — не выйдет
+  o.hand.push(take(s, 'i_ares#0'));
+  assert.match(orderCard(s, 'p0', cheatCard('/ARES')).error, /уже у кого-то/);
+  // класс — в любом случае: обе копии Ведьмака у соперника, приходит ещё одна
+  o.hand.push(take(s, 'c_witcher#0'), take(s, 'c_witcher#1'));
+  assert.equal(orderCard(s, 'p0', cheatCard('/WITCHER')).ok, true);
+  assert.equal(orderCard(s, 'p0', cheatCard('/EXC')).ok, true);
+  // победа в бою: обе заказанные карты подменяют клад
+  s.turn = { idx: 0, pid: 'p0', step: 'pre', n: 4 };
+  p.level = 5;
+  fight(s, 'm_roach#0');
+  s.combat.winAt = 1; tick(s, { rng, now: 2 });
+  assert.equal(s.combat, null);
+  const w = p.hand.find(u => u.startsWith('c_witcher#'));
+  assert.ok(w && !['c_witcher#0', 'c_witcher#1'].includes(w) && def(w).cls === 'witcher', 'новая копия Ведьмака');
+  // таракан даёт одну карту клада — Экскалибур ждёт следующей
+  assert.ok(!p.hand.includes('i_excalibur#0'));
+  assert.deepEqual(s.orders.p0, ['i_excalibur']);
+  s.turn = { idx: 0, pid: 'p0', step: 'pre', n: 5, hoardPlayed: false };
+  p.hand.push(take(s, 'h_hoard#1'));
+  assert.equal(A(s, 'p0', { type: 'playCard', uid: 'h_hoard#1' }).ok, true);
+  assert.ok(p.hand.includes('i_excalibur#0'));
+  assert.equal(ownerOf('i_excalibur'), p);
+  assert.equal(s.orders?.p0, undefined);
 });
 
 t('Золотой Дракон: +7, не крадётся и не улетает при расплате', () => {

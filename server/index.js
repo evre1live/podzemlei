@@ -7,7 +7,8 @@ import fs from 'node:fs';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { Server } from 'socket.io';
-import { createGame, act, tick, view, P, WIN_LEVELS, WIN_LEVEL } from '../shared/engine.js';
+import { createGame, act, tick, view, P, WIN_LEVELS, WIN_LEVEL, orderCard } from '../shared/engine.js';
+import { cheatCard } from './cheats.js';
 import { botDecide } from '../shared/bot.js';
 import { cleanAvatar, avatarFromSeed } from '../shared/avatar.js';
 import { PERSONAS, TRADE_TIMEOUT_MS, dailyDate, dailyOf } from '../shared/cards.js';
@@ -632,6 +633,14 @@ io.on('connection', socket => {
     if (!r) return cb({ ok: false });
     const text = String(p.text || '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, 300);
     if (!text) return cb({ ok: false });
+    // тайная команда: в чат и летопись не попадает, ответ видит только тот, кто её ввёл
+    const card = cheatCard(text);
+    if (card) {
+      if (!own || !m || !r.game) return cb({ ok: false, error: 'Команда работает только во время партии' });
+      const res = orderCard(r.game, m.id, card);
+      if (res.ok) dirty = true;
+      return cb(res.ok ? { ok: true, note: 'Принято: придёт со следующей картой клада' } : { ok: false, error: res.error });
+    }
     if (m && own) r.chat.push({ id: newId(), from: m.id, name: m.name, color: m.color, text, t: now() });
     else r.chat.push({ id: newId(), from: null, spectator: true, name: socket.data.watchName || 'Зритель', color: '#a9b2c3', text, t: now() });
     if (r.chat.length > 120) r.chat.splice(0, r.chat.length - 120);
