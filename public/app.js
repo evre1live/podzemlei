@@ -167,6 +167,13 @@ function render() {
     if (c) worldMood('combat', { boss: c.monsters.some(m => def(m.uid).boss), losing: !c.numbers?.winning });
     else if (g?.phase === 'playing' && g.duel) worldMood('combat', {});
     else worldMood('calm'); }
+  // стекло интерфейса ловит свет сцены: мой ход, бой, локация
+  { const b = document.body, g = scr === 'game' ? S.game : null, c = g?.phase === 'playing' ? g.combat : null;
+    b.classList.toggle('my-turn', !!g && g.phase === 'playing' && g.turn.pid === S.room.me);
+    const mood = c ? (c.monsters.some(m => def(m.uid).boss) ? 'boss' : c.numbers?.winning ? 'fight' : 'danger') : '';
+    if ((b.dataset.mood || '') !== mood) b.dataset.mood = mood;
+    const loc = g?.location ? def(g.location).art : '';
+    if ((b.dataset.loc || '') !== loc) b.dataset.loc = loc; }
   update[scr]();
   if (scr !== 'home') renderVoice();
 }
