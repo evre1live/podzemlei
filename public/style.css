@@ -2077,3 +2077,5 @@ input[type=text], input[type=password], select, .g-search, .g-sort select,
 .heroes-row.duo .hero-pill.medal .hm-str { width: 32px; height: 32px; right: -13px; }
 .heroes-row.duo .hero-pill.medal .hm-str span { font-size: 14px; }
 .heroes-row.duo .hero-pill.medal .hm-lvl { left: -11px; min-width: 26px; height: 30px; font-size: 15px; }
+/* медальон выше прежней плашки — на телефоне сцене нужен воздух сверху */
+@media (max-width: 900px) { .cave-stage .stage-inner { padding-top: 10px; } }
