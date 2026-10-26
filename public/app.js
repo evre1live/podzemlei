@@ -523,11 +523,11 @@ update.game = () => {
     ti.style.setProperty('--who', tp?.color || '#d6a85a');
     ti.classList.toggle('mine', g.phase === 'playing' && tp?.id === r.me);
     ti.classList.toggle('over', g.phase === 'ended'); }
-  $('#goalpill').innerHTML = `${ico('flag-objective')}<span class="lbl">Цель: </span>${winLvl()}<span class="lbl"> ур.</span>`;
+  $('#goalpill').innerHTML = `${ico('flag-objective')}<span><span class="lbl">Цель: </span>${winLvl()}<span class="lbl"> ур.</span></span>`;
   $('#depthpill').innerHTML = depthPill(g.depth);
   const dl = g.opts?.daily ? dailyOf(g.opts.daily) : null;
   $('#dailypill').innerHTML = dl ? `<span class="daily-pill" title="${esc(`Испытание дня ${g.opts.daily}: ${dl.text} Колода сегодня у всех одна.`)}">${ico('calendar')}<span class="lbl">${esc(dl.name)}</span></span>` : '';
-  $('#marketpill').innerHTML = g.market && g.phase === 'playing' ? `<button class="market-pill" data-act="market" title="Подземный рынок: карты клада в открытую до конца круга, платят вещами">${ico('shop')}<span class="lbl">Рынок · </span>${g.market.cards.length}</button>` : '';
+  $('#marketpill').innerHTML = g.market && g.phase === 'playing' ? `<button class="market-pill" data-act="market" title="Подземный рынок: карты клада в открытую до конца круга, платят вещами">${ico('shop')}<span><span class="lbl">Рынок · </span>${g.market.cards.length}</span></button>` : '';
   const wn = r.watchers || 0;
   $('#watchpill').innerHTML = r.spectator ? `<span class="watch-pill on" title="Вы видите стол, бои и летопись, но не чужие карты на руках">${EYE}Вы зритель${wn > 1 ? ` · ещё ${wn - 1}` : ''}</span>`
     : wn ? `<span class="watch-pill" title="Столько людей смотрят партию со стороны">${EYE}${wn}</span>` : '';
@@ -1350,7 +1350,7 @@ function depthPill(dp) {
   const bottom = dp.level >= dp.max;
   const next = bottom ? 'Глубже некуда — это дно.' : `До спуска ${dp.turnsLeft} ${plural(dp.turnsLeft, 'ход', 'хода', 'ходов')}.`;
   const tip = `Каждые ${dp.every} ${plural(dp.every, 'круг', 'круга', 'кругов')} подземелье уходит глубже: монстры +1 к силе (боссов это не касается), дно — глубина ${dp.max}. С каждой ${DEPTH_TREASURE_EVERY}-й глубины победа даёт лишнюю карту клада. ${next}`;
-  return `<span class="depth-pill${dp.level ? ' deep' : ''}" title="${esc(tip)}">${ico('stairs')}${dp.level ? `<span class="lbl">Глубина </span>${dp.level}<span class="lbl"> · +${dp.bonus}${dp.treasure ? ` · клад +${dp.treasure}` : ''}</span>` : '<span class="lbl">Поверхность</span>'}</span>`;
+  return `<span class="depth-pill${dp.level ? ' deep' : ''}" title="${esc(tip)}">${ico('stairs')}${dp.level ? `<span><span class="lbl">Глубина </span>${dp.level}<span class="lbl"> · +${dp.bonus}${dp.treasure ? ` · клад +${dp.treasure}` : ''}</span></span>` : '<span class="lbl">Поверхность</span>'}</span>`;
 }
 function contractHTML(p) {
   const k = p.contract;
