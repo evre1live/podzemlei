@@ -1,7 +1,7 @@
 // «Под Землёй» — клиент.
 import { def, RACE_NAMES, CLASS_NAMES, SETS, setRuleVars, ruleText, BOSS_FLOOR, TROUBLE_BONUS, LULLABY_PENALTY, MUTAGEN_BONUS, DISTILL_COST,
   PERSONAS, GHOST_BONUS, DEATH_LEVELS, DEPTH, DEPTH_TREASURE_EVERY, TRADE_TIMEOUT_MS, TAME_MARGIN, tameBonus, TRAP_FAIL_LEVELS, MARKET_SIZE, dailyOf, dailyDate } from '/shared/cards.js';
-import { esc, cardHTML, chipHTML, avatarSVG, iconSVG, cardBackSVG, locationSVG, cardIcon } from '/art.js';
+import { esc, cardHTML, chipHTML, avatarSVG, iconSVG, cardBackSVG, locationSVG, cardIcon, cardText } from '/art.js';
 import { fx } from '/fx.js';
 import { sfx } from '/sfx.js';
 import { setWorld, worldMood } from '/world.js';
@@ -1224,6 +1224,7 @@ function openCardPop(uid, zone) {
   showOverlay(`<div class="pop" role="dialog" aria-label="${esc(d.name)}">
     ${cardHTML(uid, { size: 'lg', tab: false })}
     <div class="pop-actions">
+      <div class="pop-info"><h3>${esc(d.name)}</h3><p class="pop-text">${cardText(d)}</p></div>
       ${groups.join('')}
       ${popOpts.map((o, i) => `<button class="btn ${o.cls}" data-popopt="${i}">${esc(o.label)}</button>`).join('')}
       <button class="btn ghost" data-act="closeOverlay">Закрыть</button>

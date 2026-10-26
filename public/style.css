@@ -1944,3 +1944,28 @@ input[type=text]:focus, input[type=password]:focus { outline: none; border-color
   .cave-stage, .has-world .cave-stage, .side, .has-world .side, .modal, .pop, .home .panel, .has-world .game .b-deep.mine, .has-world .game .g-head, .has-world .lobby .topbar,
   .opp, .has-world .opp, .seat, .has-world .seat, .room-row, .contract, .toast, .btn { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; background-color: rgb(var(--smoke) / .9) !important; }
 }
+
+/* ───────── окно карты: карта не сжимается, рядом — её название и полный текст крупно ───────── */
+.pop > .card, .g-zoom-in > .card { flex: none; }
+.pop-actions { min-width: min(260px, 100%); }
+.pop-info { display: grid; gap: 6px; padding-bottom: 6px; border-bottom: 1px solid rgb(255 255 255 / .08); }
+.pop-info h3 { font-family: var(--display); font-weight: 700; font-size: 22px; line-height: 1.15; color: var(--text); }
+.pop-text { margin: 0; font-family: var(--ui); font-size: 15px; line-height: 1.5; color: var(--text); text-wrap: pretty; }
+.pop-text .bad { color: var(--bad); }
+.pop-text .amb { color: var(--curse); }
+.pop-text .tags { display: inline-flex; flex-wrap: wrap; gap: 4px; margin-right: 4px; vertical-align: 1px; }
+.pop-text .tags i { font-style: normal; font-size: 11px; font-weight: 700; letter-spacing: .03em; padding: 1px 7px; border-radius: var(--ui-r); background: rgb(255 255 255 / .1); color: var(--text-2); }
+.pop-text .tags i.lo { background: rgb(160 40 50 / .55); color: #ffe3d6; }
+.pop-text .tags i.nh { background: rgb(90 60 140 / .55); color: #eadcff; }
+@media (max-width: 700px) { .pop-actions { width: 100%; } .pop-info h3 { font-size: 20px; } }
+
+/* ───────── единые углы: один минимальный радиус для всего интерфейса ───────── */
+:root { --ui-r: 4px; --r: 4px; }
+.btn, .modal, .pop, .g-zoom-in, .side, .has-world .side, .cave-stage, .has-world .cave-stage, .cave > .motes, .turn-sweep,
+.opp, .has-world .opp, .seat, .has-world .seat, .room-row, .contract, .g-contract, .empty, .home .panel,
+.has-world .game .b-deep.mine, .game.has-fan #modebar:not(:empty), .g-head, .topbar, .has-world .game .g-head, .has-world .lobby .topbar,
+input[type=text], input[type=password], select, .g-search, .g-sort select,
+.seg, .slot, .trait, .chip, .modebar, .ghost-note, .trade-wait, .helpwait, .deck > span, .loc-banner, .pick, .toast,
+.av-tabs, .av-chip, .av-mark, .set-row, .g-entry, .v-row, .g-cats button,
+.watch-pill, .status, .badge, .hero-pill, .verdict, .mod, .market-pill, .daily-pill, .flag, .tug, .goal-pill, .depth-pill, .code-pill, .locpill,
+.contract .c-prog, .pow, .fx-banner, .emptyseat { border-radius: var(--ui-r) !important; }
