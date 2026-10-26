@@ -362,26 +362,21 @@ t('Доспехи Бога: +10 только человеку, плут не к�
 t('Легендарный комплект: только человеку, со «Смешанной кровью» — любой расе', () => {
   const s = fresh(); const p = P(s, 'p0');
   p.races.push(take(s, 'r_elf#0'));
-  for (const id of ['i_ares', 'i_godarmor', 'i_epochboots']) {
+  for (const id of ['i_ares', 'i_godarmor', 'i_epochboots', 'i_excalibur']) {
     p.hand.push(take(s, id + '#0'));
     assert.equal(A(s, 'p0', { type: 'playCard', uid: id + '#0' }).ok, true);
     assert.ok(p.carried.includes(id + '#0'), id + ': эльфу без Смешанной крови не надеть — лежит в запасе');
   }
   assert.match(A(s, 'p0', { type: 'equip', uid: 'i_ares#0' }).error || '', /Смешанной кровью/);
-  // Экскалибур — не часть комплекта, его держит любая раса
-  p.hand.push(take(s, 'i_excalibur#0'));
-  A(s, 'p0', { type: 'playCard', uid: 'i_excalibur#0' });
-  assert.ok(p.equipped.includes('i_excalibur#0'));
   // «Смешанная кровь» открывает комплект любой расе
   p.hand.push(take(s, 'x_halfbreed#0'));
   assert.equal(A(s, 'p0', { type: 'playCard', uid: 'x_halfbreed#0' }).ok, true);
   A(s, 'p0', { type: 'autoEquip' });
-  assert.ok(['i_ares#0', 'i_godarmor#0', 'i_epochboots#0'].every(u => p.equipped.includes(u)));
+  assert.ok(['i_ares#0', 'i_godarmor#0', 'i_epochboots#0', 'i_excalibur#0'].every(u => p.equipped.includes(u)));
   assert.deepEqual(view(s, 'p0').players[0].sets, ['legend']);
   // потерял «Смешанную кровь» — части комплекта снимаются
   assert.equal(A(s, 'p0', { type: 'discardInPlay', uid: 'x_halfbreed#0' }).ok, true);
-  assert.ok(['i_ares#0', 'i_godarmor#0', 'i_epochboots#0'].every(u => p.carried.includes(u)));
-  assert.ok(p.equipped.includes('i_excalibur#0'));
+  assert.ok(['i_ares#0', 'i_godarmor#0', 'i_epochboots#0', 'i_excalibur#0'].every(u => p.carried.includes(u)));
   // человеку (без расы) можно и так
   const s2 = fresh(); const h = P(s2, 'p0');
   h.hand.push(take(s2, 'i_epochboots#0'));
@@ -883,18 +878,15 @@ t('бот выкладывает выгодную локацию', () => {
 t('комплекты: легендарный +7 сверху, шахтёрский +3 и побег, подгорного короля против огненных', () => {
   const s = fresh(); const p = P(s, 'p0'); p.level = 3;
   const eq = id => { p.hand.push(take(s, id + '#0')); assert.equal(A(s, 'p0', { type: 'playCard', uid: id + '#0' }).ok, true); };
-  eq('i_godarmor'); eq('i_ares');
-  assert.deepEqual(p.equipped, ['i_godarmor#0', 'i_ares#0']);
-  assert.equal(view(s, 'p0').players[0].power, 3 + 10 + 7);
-  eq('i_epochboots');
-  assert.deepEqual(view(s, 'p0').players[0].sets, ['legend']);
-  assert.equal(view(s, 'p0').players[0].power, 3 + 10 + 7 + 5 + 7);
-  // Экскалибур в комплект больше не входит, но остаётся легендарным мечом на две руки
+  eq('i_godarmor'); eq('i_ares'); eq('i_epochboots');
+  assert.deepEqual(p.equipped, ['i_godarmor#0', 'i_ares#0', 'i_epochboots#0']);
+  assert.deepEqual(view(s, 'p0').players[0].sets, [], 'без Экскалибура комплект не собран');
+  assert.equal(view(s, 'p0').players[0].power, 3 + 10 + 7 + 5);
   eq('i_excalibur');
+  assert.deepEqual(view(s, 'p0').players[0].sets, ['legend']);
   assert.equal(view(s, 'p0').players[0].power, 3 + 10 + 7 + 5 + 7 + 7);
   assert.equal(def('i_excalibur#0').hands, 2);
-  assert.equal(def('i_excalibur#0').set, undefined);
-  assert.ok(['i_ares', 'i_excalibur', 'i_epochboots'].every(id => def(id).noSteal && def(id).rarity === 'legendary'));
+  assert.ok(['i_ares', 'i_godarmor', 'i_epochboots', 'i_excalibur'].every(id => def(id).noSteal && def(id).rarity === 'legendary' && def(id).set === 'legend'));
   assert.equal(def('i_epochboots').slot, 'feet');
   // снял одну вещь — комплект распался
   s.turn.step = 'pre';

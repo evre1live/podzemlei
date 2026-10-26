@@ -94,7 +94,7 @@ export const CONTRACT_DEFS = Object.fromEntries(CONTRACTS.map(k => [k.id, k]));
 
 // Комплекты снаряжения: все вещи комплекта надеты — сверху бонус (bonus — к силе, run — к побегу, vsTag — против меток монстров).
 export const SETS = {
-  legend: { name: 'Легендарный', items: ['i_ares', 'i_godarmor', 'i_epochboots'], bonus: 7, text: 'Шлем Ареса, Доспехи Бога и Сапоги эпохи вместе: ещё +7 к силе. Носит только человек или герой со «Смешанной кровью».' },
+  legend: { name: 'Легендарный', items: ['i_ares', 'i_godarmor', 'i_epochboots', 'i_excalibur'], bonus: 7, text: 'Шлем Ареса, Доспехи Бога, Сапоги эпохи и Меч Экскалибур вместе: ещё +7 к силе. Носит только человек или герой со «Смешанной кровью».' },
   miner: { name: 'Шахтёрский', items: ['i_helmet', 'i_overalls', 'i_pick'], bonus: 3, run: 1, text: 'Каска шахтёра, Роба шахтёра и Кирка ударника вместе: +3 к силе и +1 к побегу.' },
   king: { name: 'Подгорного короля', items: ['i_kingcrown', 'i_kingmail', 'i_kinghammer'], bonus: 3, vsTag: { tag: 'fire', n: 5 }, text: 'Венец, кольчуга и молот подгорного короля вместе: +3 к силе, против огненных ещё +5.' },
 };
@@ -654,8 +654,8 @@ export const CARD_DEFS = [
   { id: 'i_pick', deck: 'treasure', type: 'item', name: 'Кирка ударника', slot: 'hand', hands: 2, bonus: 3, value: 400, art: 'pick', set: 'miner',
     text: 'Комплект «Шахтёрский».' },
   { id: 'i_excalibur', deck: 'treasure', type: 'item', name: 'Меч Экскалибур', slot: 'hand', hands: 2, bonus: 7, value: 0, art: 'excalibur',
-    rarity: 'legendary', noSteal: true,
-    text: 'Легендарный меч из камня. Держится обеими руками. Плут не может его украсть.' },
+    rarity: 'legendary', noSteal: true, req: { race: 'human', mix: true }, set: 'legend',
+    text: 'Только человеку или со «Смешанной кровью». Не крадётся. Комплект «Легендарный».' },
   { id: 'i_kinghammer', deck: 'treasure', type: 'item', name: 'Молот подгорного короля', slot: 'hand', hands: 1, bonus: 3, value: 600, art: 'kinghammer', rarity: 'rare', set: 'king',
     text: 'Бьёт, как обвал. Комплект «Подгорного короля».' },
   { id: 'i_jackhammer', deck: 'treasure', type: 'item', name: 'Отбойный молоток', slot: 'hand', hands: 2, bonus: 5, value: 800, big: true, art: 'hammer', rarity: 'rare' },
