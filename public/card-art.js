@@ -2,7 +2,7 @@
 export const CARD_IMG = new Map([
   ['a_guide', 'f895fe83'], ['a_merc', 'a68453ed'], ['a_porter', 'f1dbdd7d'], ['b_courage', '759421bc'], ['b_energy', 'ae510134'], ['b_pies', '1961b926'],
   ['back_door', 'a40b94f2'], ['back_treasure', '1487fcf3'], ['c_alchemist', 'd408129d'], ['c_bard', 'f60245ae'], ['c_cleric', '38e11b19'], ['c_engineer', '4b82602d'],
-  ['c_mage', '171b976b'], ['c_rogue', 'f396e660'], ['c_warrior', '1e66494c'], ['c_witcher', '5fa91fa7'], ['d_duel', '8d3d33a1'], ['e_armored', '4bfbcd24'],
+  ['c_mage', '171b976b'], ['c_rogue', 'f396e660'], ['c_warrior', '1e66494c'], ['c_witcher', 'fdf602a3'], ['d_duel', '8d3d33a1'], ['e_armored', '4bfbcd24'],
   ['e_baby', '15447a6c'], ['e_cold', '59beb832'], ['e_decrepit', '58b15bac'], ['e_hungry', '2ffe0ddb'], ['e_morning', 'b71d3189'], ['e_pack', 'c6a39c7e'],
   ['e_rabid', '5af776e8'], ['e_seasoned', 'd02c9614'], ['ev_draft', '2eb4e378'], ['ev_fair', '6ac58699'], ['ev_flood', 'e34c827f'], ['ev_light', 'e2e64b90'],
   ['ev_luxtax', '77711f21'], ['ev_quake', '28f59e83'], ['ev_rollcall', 'b3a11f65'], ['ev_shift', '4dc67971'], ['ev_union', '4e97fd03'], ['h_hoard', 'c98eaff7'],
