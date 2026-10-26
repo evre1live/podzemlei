@@ -575,6 +575,16 @@ function oppHTML(p) {
 }
 
 // геральдический щит: золотая кайма, эмаль стороны (герои — патина, монстры — кровь), заклёпки и блик
+// герой в бою — медальон: портрет в кованом золотом кольце, слева на кольце — уровень, справа — сила;
+// под кольцом имя на шестигранной табличке (как названия на картах)
+function heroMedal(p, { str, sub = '', vmember = false, foe = false } = {}) {
+  const a = gAva(p);
+  return `<div class="hero-pill medal${a.frame ? ' framed' : ''}${foe ? ' foe' : ''}" data-pid="${p.id}"${vmember ? ` data-vmember="${p.id}"` : ''} style="--seat:${p.color}">
+    <span class="ring"><span class="ava">${avatarSVG(a, p.color)}</span>
+      <b class="hm-lvl" title="Уровень ${p.level}">${p.level}</b>
+      <b class="hm-str" title="Сила ${str}">${ico('crossed-swords')}<span>${str}</span></b></span>
+    <span class="hp-plate"><b>${esc(p.name)}</b></span>${sub ? `<small class="hp-sub">${sub}</small>` : ''}</div>`;
+}
 const SHIELD = side => {
   const [a, b, c] = side === 'mon' ? ['#c2412f', '#6e160e', '#2a0503'] : ['#4f9a84', '#1f5545', '#081d17'];
   return `<svg viewBox="0 0 100 116" aria-hidden="true"><defs>
@@ -728,10 +738,7 @@ function fightHTML() {
   const prev = S.ui.fightNums?.key === fk ? S.ui.fightNums : null;
   const tk = n.heroes + n.monsters > 0 ? Math.max(0.04, Math.min(0.96, n.heroes / (n.heroes + n.monsters))) : 0.5;
   S.ui.fightNums = { key: fk, heroes: n.heroes, monsters: n.monsters, k: tk, win: n.winning };
-  const heroes = [c.fighter, c.helper].filter(Boolean).map(id => {
-    const p = pl(id);
-    return `<div class="hero-pill" data-pid="${p.id}" data-vmember="${p.id}" style="--seat:${p.color}"><span class="ava">${avatarSVG(gAva(p), p.color)}</span><span><b>${esc(p.name)}</b><br><small>сила ${c.heroStrengths[id]}</small></span></div>`;
-  }).join('');
+  const heroes = [c.fighter, c.helper].filter(Boolean).map(id => heroMedal(pl(id), { str: c.heroStrengths[id], vmember: true })).join('');
   const pm = [];
   for (const m of c.mods) pm.push({ side: m.side, t: `${m.anon ? '' : esc(pname(m.by)) + ': '}${esc(m.uid ? def(m.uid).name : m.label || 'эффект')} ${m.n > 0 ? '+' : '−'}${Math.abs(m.n)}` });
   for (const id of [c.fighter, c.helper].filter(Boolean)) { const v = pl(id)?.nextCombat; if (v) pm.push({ side: 'player', t: `${esc(pname(id))}: ${v > 0 ? 'зелье +' + v : 'слабость −' + Math.abs(v)}` }); }
@@ -776,7 +783,7 @@ function fightHTML() {
   if (c.winAt && c.passed?.length) b.push(`<span class="hint passed">Не мешают: ${c.passed.map(id => esc(pname(id))).join(', ')}</span>`);
   return `
     <div class="fight" style="--ha:${n.winning ? 0.34 : 0.12};--ma:${n.winning ? 0.12 : 0.36}">
-      <div class="side-col hero"><div class="side-main"><div class="shield hero${n.winning ? ' lead' : ''}" id="shieldHero" title="Сила героев">${SHIELD('hero')}<b data-roll="${n.heroes}">${prev ? prev.heroes : n.heroes}</b></div><div class="heroes-row">${heroes}</div></div><div class="mods">${mods('player')}</div></div>
+      <div class="side-col hero"><div class="side-main"><div class="shield hero${n.winning ? ' lead' : ''}" id="shieldHero" title="Сила героев">${SHIELD('hero')}<b data-roll="${n.heroes}">${prev ? prev.heroes : n.heroes}</b></div><div class="heroes-row${c.helper ? ' duo' : ''}">${heroes}</div></div><div class="mods">${mods('player')}</div></div>
       <div class="versus">${center}${verdict}</div>
       <div class="side-col mon"><div class="side-main"><div class="shield mon${n.winning ? '' : ' lead'}" id="shieldMon" title="Сила монстров">${SHIELD('mon')}<b data-roll="${n.monsters}">${prev ? prev.monsters : n.monsters}</b></div><div class="monsters-row">${monsters}</div></div><div class="mods">${mods('monster')}</div></div>
     </div>
@@ -795,7 +802,7 @@ function duelHTML() {
     if (p.nextCombat) ms.push(`<span class="mod ${hero ? 'p' : 'm'}">${p.nextCombat > 0 ? 'зелье +' + p.nextCombat : 'слабость −' + Math.abs(p.nextCombat)}</span>`);
     return `<div class="side-col ${hero ? 'hero' : 'mon'}"><div class="side-main">
       <div class="shield ${hero ? 'hero' : 'mon'}${n.winner === id ? ' lead' : ''}" id="${hero ? 'shieldHero' : 'shieldMon'}" title="Сила ${esc(p.name)}">${SHIELD(hero ? 'hero' : 'mon')}<b>${n[key]}</b></div>
-      <div class="heroes-row"><div class="hero-pill" data-pid="${p.id}" style="--seat:${p.color}"><span class="ava">${avatarSVG(gAva(p), p.color)}</span><span><b>${esc(p.name)}</b><br><small>${hero ? 'вызывает' : 'принимает вызов'}</small></span></div></div></div>
+      <div class="heroes-row">${heroMedal(p, { str: n[key], sub: hero ? 'вызывает' : 'принимает вызов', foe: !hero })}</div></div>
       <div class="mods">${ms.join('')}</div>
       <div class="duel-prize">${prize ? `Проиграет — отдаст <b data-uid="${esc(prize)}" data-zone="view">«${esc(def(prize).name)}»</b>` : 'Отдать нечего'}</div></div>`;
   };

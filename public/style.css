@@ -2027,3 +2027,53 @@ input[type=text], input[type=password], select, .g-search, .g-sort select,
 .game .g-head { gap: 6px; }
 .game .g-head :is(.turninfo, .goal-pill, .depth-pill, .daily-pill, .market-pill, .watch-pill) { padding: 0 11px; }
 @media (max-width: 1500px) { .game .g-head .voice-open span { display: none; } .game .g-head .voice-ctl .voice-open { padding-inline: 10px; } .game .g-head .loc-banner b { max-width: 16ch; overflow: hidden; text-overflow: ellipsis; } }
+
+/* ───────── герой в бою: медальон ─────────
+   Портрет в кованом золотом кольце с двумя камнями цвета героя, под ним имя на шестигранной табличке
+   (как названия на картах), ниже — сила. Двое героев (с помощником) стоят рядом и чуть мельче. */
+.hero-pill.medal { display: grid; justify-items: center; gap: 0; padding: 0; background: none !important; border: 0; box-shadow: none; border-radius: 0 !important; -webkit-backdrop-filter: none; backdrop-filter: none; --rs: 96px; }
+.hero-pill.medal .ring { position: relative; width: var(--rs); height: var(--rs); border-radius: 50%; padding: 5px;
+  background: conic-gradient(from 210deg, #6b4a1c, #f5d690, #a87a2e, #fff0c0, #7a5520, #e9c27a, #6b4a1c);
+  box-shadow: 0 0 0 2px #0a0806, 0 10px 24px rgb(0 0 0 / .55), 0 0 26px rgb(var(--torch) / .28); }
+/* на кольце: слева уровень (золотой флажок, как везде в игре), справа сила (эмалевый кружок под цвет щита) */
+.hero-pill.medal .hm-lvl, .hero-pill.medal .hm-str { position: absolute; top: 50%; z-index: 3; display: grid; place-items: center; font-variant-numeric: lining-nums tabular-nums; }
+.hero-pill.medal .hm-lvl { left: -14px; translate: 0 -55%; min-width: 30px; height: 34px; padding: 0 6px 7px;
+  clip-path: polygon(0 0, 100% 0, 100% 64%, 50% 100%, 0 64%); background: linear-gradient(180deg, #f3d08a, #c4923f 70%, #a8762c);
+  color: #1b1407; font: 700 17px/1 var(--display); filter: drop-shadow(0 0 1px #000) drop-shadow(0 2px 3px rgb(0 0 0 / .6)); }
+.hero-pill.medal .hm-str { right: -16px; translate: 0 -50%; width: 38px; height: 38px; border-radius: 50%;
+  background: radial-gradient(circle at 40% 30%, #6fc2a8, #2a7560 55%, #0d2f26); color: #fff;
+  box-shadow: 0 0 0 2px #d9d6d0, 0 0 0 3.5px #0a0806, 0 3px 8px rgb(0 0 0 / .6), inset 0 2px 3px rgb(255 255 255 / .25); }
+.hero-pill.medal.foe .hm-str { background: radial-gradient(circle at 40% 30%, #e0624a, #8f2a1c 55%, #3a0a05); }
+.hero-pill.medal .hm-str .gi { position: absolute; inset: 7px; width: auto; height: auto; color: #fff; opacity: .2; }
+.hero-pill.medal .hm-str span { position: relative; font: 700 16px/1 var(--display); text-shadow: 0 1px 2px rgb(0 0 0 / .7); }
+.hero-pill.medal .ava { display: block; width: 100%; height: 100%; border-radius: 50%; overflow: hidden; border: 0;
+  box-shadow: inset 0 0 0 2px var(--seat), 0 0 0 2px #0a0806; background: #0e0d0c; }
+.hero-pill.medal .ava svg { width: 100%; height: 100%; display: block; }
+/* у героя своя рамка медальона — она и есть кольцо, золотое не добавляем */
+.hero-pill.medal.framed .ring { background: none; padding: 0; box-shadow: 0 10px 24px rgb(0 0 0 / .55), 0 0 26px rgb(var(--torch) / .28); }
+.hero-pill.medal.framed .ava { box-shadow: none; background: none; }
+
+.hero-pill.medal .hp-plate { position: relative; z-index: 2; margin-top: -13px; min-width: 132px; max-width: 200px; padding: 6px 24px 5px; text-align: center;
+  clip-path: polygon(13px 0, calc(100% - 13px) 0, 100% 50%, calc(100% - 13px) 100%, 13px 100%, 0 50%);
+  background: linear-gradient(180deg, rgb(242 194 122 / .75), rgb(150 100 40 / .75)); }
+.hero-pill.medal .hp-plate::before { content: ''; position: absolute; inset: 1.5px; z-index: -1; clip-path: polygon(12px 0, calc(100% - 12px) 0, 100% 50%, calc(100% - 12px) 100%, 12px 100%, 0 50%);
+  background: linear-gradient(180deg, #3a3036, #17121a); }
+.hero-pill.medal .hp-plate b { display: block; font-family: var(--display); font-weight: 700; font-size: 18px; line-height: 1.15; color: #fff6e4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 1px 2px #000; }
+.hero-pill.medal .hp-sub { margin-top: 6px; display: inline-flex; align-items: center; gap: 6px; font: 600 14px/1 var(--ui); color: #f2d79f; text-shadow: 0 1px 2px #000; }
+.hero-pill.medal .hp-sub .gi { width: 15px; height: 15px; color: #f2c27a; }
+.heroes-row.duo { flex-direction: row; gap: 30px; }
+.hero-pill.medal .hp-plate { margin-top: -11px; }
+.heroes-row.duo .hero-pill.medal { --rs: 78px; }
+.heroes-row.duo .hero-pill.medal .hp-plate { min-width: 108px; max-width: 150px; padding-inline: 18px; }
+.heroes-row.duo .hero-pill.medal .hp-plate b { font-size: 15.5px; }
+@media (max-width: 700px) {
+  .hero-pill.medal { --rs: 80px; }
+  .hero-pill.medal .hp-plate { min-width: 112px; padding-inline: 18px; }
+  .hero-pill.medal .hp-plate b { font-size: 16px; }
+  .heroes-row.duo .hero-pill.medal { --rs: 66px; }
+  .hero-pill.medal .hm-str { width: 34px; height: 34px; right: -14px; }
+  .hero-pill.medal .hm-lvl { left: -12px; }
+}
+.heroes-row.duo .hero-pill.medal .hm-str { width: 32px; height: 32px; right: -13px; }
+.heroes-row.duo .hero-pill.medal .hm-str span { font-size: 14px; }
+.heroes-row.duo .hero-pill.medal .hm-lvl { left: -11px; min-width: 26px; height: 30px; font-size: 15px; }
