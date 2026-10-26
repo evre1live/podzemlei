@@ -2145,3 +2145,9 @@ input[type=text], input[type=password], select, .g-search, .g-sort select,
   .game .g-head > .hud-chips { flex: 1 1 auto; gap: 5px; -webkit-mask: linear-gradient(90deg, #000 calc(100% - 18px), transparent); mask: linear-gradient(90deg, #000 calc(100% - 18px), transparent); padding-right: 14px; }
   .game .g-head > .spacer { display: none; }
 }
+@media (max-width: 700px) {
+  /* на узком экране сначала то, на что нажимают: локация и открытый рынок; испытание дня — в конце ленты */
+  .game .g-head .hud-chips .loc-banner { order: -3; }
+  .game .g-head .hud-chips .market-pill { order: -2; }
+  .game .g-head .hud-chips .daily-pill { order: 5; }
+}
