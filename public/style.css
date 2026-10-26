@@ -2113,3 +2113,6 @@ input[type=text], input[type=password], select, .g-search, .g-sort select,
   [data-vmember].speaking :is(.ava, .me-ava), .hero-pill.medal.speaking .ring { animation: none; outline-offset: 4px; box-shadow: 0 0 0 3px #8ff0d2, 0 0 18px rgb(143 240 210 / .8); }
   [data-vmember].speaking :is(.oname, .sname, .me-name)::after { animation: none; }
 }
+/* названия комнаты в полосе больше нет — локации хватает места на полное название */
+.game .g-head .loc-banner b { max-width: 30ch !important; }
+@media (max-width: 700px) { .game .g-head .loc-banner b { max-width: 18ch !important; } }
