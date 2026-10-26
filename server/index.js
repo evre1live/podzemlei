@@ -193,7 +193,18 @@ function save() {
     fs.renameSync(SAVE_FILE + '.tmp', SAVE_FILE);
   } catch (e) { console.error('save failed', e.message); }
 }
+// Разовое закрытие всех комнат: смените PURGE_ID и выложите — при первом запуске сохранённые комнаты не поднимутся,
+// игроки вернутся на главную с сообщением «Комната не найдена». Отметка о выполненной очистке лежит рядом с сохранением.
+const PURGE_ID = '2026-10-26-close-all';
+function purgeOnce() {
+  const mark = path.join(DATA_DIR, `purged-${PURGE_ID}`);
+  if (fs.existsSync(mark)) return false;
+  try { fs.mkdirSync(DATA_DIR, { recursive: true }); fs.rmSync(SAVE_FILE, { force: true }); fs.writeFileSync(mark, new Date().toISOString()); } catch (e) { console.error('purge failed', e.message); }
+  console.log(`Все комнаты закрыты (очистка ${PURGE_ID})`);
+  return true;
+}
 function load() {
+  if (purgeOnce()) return;
   try {
     const data = JSON.parse(fs.readFileSync(SAVE_FILE, 'utf8'));
     for (const r of data) {
