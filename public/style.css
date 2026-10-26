@@ -2061,10 +2061,10 @@ input[type=text], input[type=password], select, .g-search, .g-sort select,
 .hero-pill.medal .hp-plate b { display: block; font-family: var(--display); font-weight: 700; font-size: 18px; line-height: 1.15; color: #fff6e4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 1px 2px #000; }
 .hero-pill.medal .hp-sub { margin-top: 6px; display: inline-flex; align-items: center; gap: 6px; font: 600 14px/1 var(--ui); color: #f2d79f; text-shadow: 0 1px 2px #000; }
 .hero-pill.medal .hp-sub .gi { width: 15px; height: 15px; color: #f2c27a; }
-.heroes-row.duo { flex-direction: row; flex-wrap: nowrap; gap: 30px; }
+.heroes-row.duo { flex-direction: row; flex-wrap: nowrap; gap: 24px; }
 .hero-pill.medal .hp-plate { margin-top: -11px; }
-.heroes-row.duo .hero-pill.medal { --rs: 78px; }
-.heroes-row.duo .hero-pill.medal .hp-plate { min-width: 108px; max-width: 150px; padding-inline: 18px; }
+.heroes-row.duo .hero-pill.medal { --rs: 72px; }
+.heroes-row.duo .hero-pill.medal .hp-plate { min-width: 100px; max-width: 136px; padding-inline: 16px; }
 .heroes-row.duo .hero-pill.medal .hp-plate b { font-size: 15.5px; }
 @media (max-width: 700px) {
   .hero-pill.medal { --rs: 80px; }
