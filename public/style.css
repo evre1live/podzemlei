@@ -868,7 +868,7 @@ label { display: grid; gap: 6px; font-size: 14px; color: var(--muted); }
 .w-static { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 .w-fx { position: absolute; inset: 0; overflow: hidden; }
 .w-fx > * { position: absolute; display: block; }
-.w-vignette { position: absolute; inset: 0; background: radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,.55) 100%); }
+.w-vignette { position: absolute; inset: 0; background: radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,.45) 100%); }
 
 .w-river { left: 0; right: 0; overflow: hidden; }
 .w-wave { position: absolute; left: 0; top: 0; height: 100%; width: calc(100% + 400px); background-repeat: repeat-x; --tw: 400px; animation: wFlowX linear infinite; }
@@ -1275,7 +1275,7 @@ body.has-world { background: #120e22; }
 
 /* живописные локации: картинка-фон во весь экран, поверх — лёгкая анимация */
 .w-img { position: absolute; inset: 0; background-size: cover; background-position: center; }
-.w-img::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(10,8,20,.14), rgba(10,8,20,.3)); }
+.w-img::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(10,8,20,.06), rgba(10,8,20,.22)); }
 .w-late { inset: 0; }
 .w-late > * { animation-delay: -4.6s !important; }
 
@@ -1802,8 +1802,8 @@ label { color: var(--text-2); font-size: 14px; }
   --smoke: 16 12 22;        /* дымчатый кварц */
   --torch: 242 194 122;     /* свет факела на кромке — меняется вместе со сценой */
   --water: 127 182 198;     /* холодный отблеск снизу */
-  --glass-blur: 18px;
-  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .045 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  --glass-blur: 7px;
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .016 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   --rim:
     inset 0 1px 0 rgb(var(--torch) / .55),
     inset 1px 0 0 rgb(255 255 255 / .09),
@@ -1831,9 +1831,9 @@ body[data-mood="boss"] { --torch: 200 140 255; --water: 255 90 120; }
 .home .panel,
 .has-world .game .b-deep.mine,
 .has-world .game .g-head, .has-world .lobby .topbar {
-  background: linear-gradient(180deg, rgb(255 255 255 / .075), rgb(255 255 255 / 0) 40%), var(--grain), rgb(var(--smoke) / .4);
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(165%) brightness(.92);
-  backdrop-filter: blur(var(--glass-blur)) saturate(165%) brightness(.92);
+  background: linear-gradient(180deg, rgb(255 255 255 / .06), rgb(255 255 255 / 0) 40%), var(--grain), rgb(var(--smoke) / .2);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(175%) brightness(.86);
+  backdrop-filter: blur(var(--glass-blur)) saturate(175%) brightness(.86);
   border: 1px solid rgb(255 255 255 / .07);
   box-shadow: var(--rim), 0 1px 0 rgb(0 0 0 / .3), 0 18px 44px -10px rgb(0 0 0 / .5);
   transition: box-shadow .8s ease;
@@ -1844,22 +1844,22 @@ body[data-mood="boss"] { --torch: 200 140 255; --water: 255 90 120; }
   background: var(--corner-tl) top 7px left 7px / 22px no-repeat, var(--corner-tr) top 7px right 7px / 22px no-repeat,
     var(--corner-bl) bottom 7px left 7px / 22px no-repeat, var(--corner-br) bottom 7px right 7px / 22px no-repeat,
     radial-gradient(ellipse 70% 60% at 50% 42%, rgb(var(--torch) / .07), transparent 70%),
-    linear-gradient(180deg, rgb(255 255 255 / .06), rgb(255 255 255 / 0) 34%), var(--grain), rgb(var(--smoke) / .26);
-  -webkit-backdrop-filter: blur(6px) saturate(150%);
-  backdrop-filter: blur(6px) saturate(150%);
+    linear-gradient(180deg, rgb(255 255 255 / .05), rgb(255 255 255 / 0) 34%), var(--grain), rgb(var(--smoke) / .1);
+  -webkit-backdrop-filter: blur(2px) saturate(150%);
+  backdrop-filter: blur(2px) saturate(150%);
 }
-.has-world .side, .side { border-radius: 16px; background: linear-gradient(180deg, rgb(255 255 255 / .07), rgb(255 255 255 / 0) 30%), var(--grain), rgb(var(--smoke) / .5); }
-.modal, .pop, .g-zoom-in { border-radius: 18px; background: linear-gradient(180deg, rgb(255 255 255 / .09), rgb(255 255 255 / 0) 38%), var(--grain), rgb(var(--smoke) / .66); --glass-blur: 28px; }
+.has-world .side, .side { border-radius: 16px; background: linear-gradient(180deg, rgb(255 255 255 / .06), rgb(255 255 255 / 0) 30%), var(--grain), rgb(var(--smoke) / .36); --glass-blur: 10px; }
+.modal, .pop, .g-zoom-in { border-radius: 18px; background: linear-gradient(180deg, rgb(255 255 255 / .08), rgb(255 255 255 / 0) 38%), var(--grain), rgb(var(--smoke) / .5); --glass-blur: 14px; }
 /* окна с длинным текстом (правила, меню) — стекло плотнее, чтобы фон не мешал читать */
-.modal.rules, .modal[style*="max-width:640px"], .modal.wide { background: linear-gradient(180deg, rgb(255 255 255 / .08), rgb(255 255 255 / 0) 30%), var(--grain), rgb(var(--smoke) / .93); --glass-blur: 40px; }
-.pop-back { background: radial-gradient(ellipse at center, rgb(10 8 14 / .32), rgb(6 4 10 / .66)); -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px); }
+.modal.rules, .modal[style*="max-width:640px"], .modal.wide { background: linear-gradient(180deg, rgb(255 255 255 / .07), rgb(255 255 255 / 0) 30%), var(--grain), rgb(var(--smoke) / .8); --glass-blur: 20px; }
+.pop-back { background: radial-gradient(ellipse at center, rgb(10 8 14 / .26), rgb(6 4 10 / .58)); -webkit-backdrop-filter: blur(1px); backdrop-filter: blur(1px); }
 .home .panel { padding: 22px 22px 24px; border-radius: 18px; }
 .home .home-main { background: linear-gradient(180deg, transparent, rgb(10 10 12 / .35) 40%); }
 
 /* полоса заголовка и моя полка — плавающие пластины над подземельем */
 .has-world .game .b-surface, .has-world .lobby .b-surface { background: transparent; box-shadow: none; }
 .has-world .game .grassline, .has-world .lobby .grassline { display: none; }
-.has-world .game .g-head, .has-world .lobby .topbar { margin: 8px 10px 0; border-radius: 14px; --glass-blur: 14px; }
+.has-world .game .g-head, .has-world .lobby .topbar { margin: 8px 10px 0; border-radius: 14px; --glass-blur: 6px; }
 .has-world .game .b-clay, .has-world .lobby .b-clay { background: transparent; box-shadow: none; }
 .has-world .lobby .b-deep { background: transparent; }
 .has-world .game .b-deep.mine { margin: 0 10px 10px; border-radius: 18px; }
@@ -1870,33 +1870,33 @@ body.my-turn.has-world .game .b-deep.mine {
 
 /* плитка: соперники, места в лобби, комнаты, контракты */
 .has-world .opp, .opp, .has-world .seat, .seat, .room-row, .contract, .empty {
-  background: linear-gradient(180deg, rgb(255 255 255 / .07), rgb(255 255 255 / 0) 45%), rgb(var(--smoke) / .42);
-  -webkit-backdrop-filter: blur(12px) saturate(160%);
-  backdrop-filter: blur(12px) saturate(160%);
+  background: linear-gradient(180deg, rgb(255 255 255 / .06), rgb(255 255 255 / 0) 45%), rgb(var(--smoke) / .26);
+  -webkit-backdrop-filter: blur(5px) saturate(170%) brightness(.88);
+  backdrop-filter: blur(5px) saturate(170%) brightness(.88);
   border: 1px solid rgb(255 255 255 / .07); border-radius: 14px;
   box-shadow: var(--rim), 0 12px 28px -12px rgb(0 0 0 / .55);
 }
 .opp.turn, .has-world .opp.turn {
-  background: radial-gradient(120% 90% at 30% 0%, rgb(var(--torch) / .2), transparent 70%), linear-gradient(180deg, rgb(255 255 255 / .08), rgb(255 255 255 / 0) 45%), rgb(var(--smoke) / .4);
+  background: radial-gradient(120% 90% at 30% 0%, rgb(var(--torch) / .2), transparent 70%), linear-gradient(180deg, rgb(255 255 255 / .07), rgb(255 255 255 / 0) 45%), rgb(var(--smoke) / .24);
   border-color: rgb(var(--torch) / .5);
   box-shadow: var(--rim), 0 0 0 1px rgb(var(--torch) / .25), 0 0 26px -6px rgb(var(--torch) / .45), 0 12px 28px -12px rgb(0 0 0 / .55);
 }
 .seat.me { border-color: rgb(var(--torch) / .55); box-shadow: var(--rim), 0 0 0 1px rgb(var(--torch) / .22), 0 0 24px -8px rgb(var(--torch) / .45), 0 12px 28px -12px rgb(0 0 0 / .55); }
-.seat.emptyseat, .empty { background: rgb(var(--smoke) / .16); border: 1px dashed rgb(255 255 255 / .2); box-shadow: none; }
-.room-row:hover, .room-row:focus-within { background: linear-gradient(180deg, rgb(255 255 255 / .1), rgb(255 255 255 / .02) 50%), rgb(var(--smoke) / .38); border-color: rgb(var(--torch) / .45); }
-.room-row.live { background: linear-gradient(90deg, rgb(var(--torch) / .14), transparent 60%), rgb(var(--smoke) / .42); }
+.seat.emptyseat, .empty { background: rgb(var(--smoke) / .1); border: 1px dashed rgb(255 255 255 / .2); box-shadow: none; }
+.room-row:hover, .room-row:focus-within { background: linear-gradient(180deg, rgb(255 255 255 / .1), rgb(255 255 255 / .02) 50%), rgb(var(--smoke) / .24); border-color: rgb(var(--torch) / .45); }
+.room-row.live { background: linear-gradient(90deg, rgb(var(--torch) / .14), transparent 60%), rgb(var(--smoke) / .26); }
 .contract { border-radius: 12px; }
 
 /* бусины: кнопки, слоты, черты, поля ввода */
 .btn {
   border-radius: 999px; border: 1px solid rgb(255 255 255 / .14);
-  background: linear-gradient(180deg, rgb(255 255 255 / .16), rgb(255 255 255 / .03) 52%, rgb(255 255 255 / .06)), rgb(var(--smoke) / .5);
-  -webkit-backdrop-filter: blur(10px) saturate(160%); backdrop-filter: blur(10px) saturate(160%);
+  background: linear-gradient(180deg, rgb(255 255 255 / .16), rgb(255 255 255 / .03) 52%, rgb(255 255 255 / .06)), rgb(var(--smoke) / .34);
+  -webkit-backdrop-filter: blur(5px) saturate(170%); backdrop-filter: blur(5px) saturate(170%);
   box-shadow: inset 0 1px 0 rgb(255 255 255 / .28), inset 0 -1px 0 rgb(var(--water) / .18), 0 1px 0 rgb(0 0 0 / .4), 0 6px 16px -6px rgb(0 0 0 / .55);
 }
-.btn:hover:not(:disabled) { background: linear-gradient(180deg, rgb(255 255 255 / .22), rgb(255 255 255 / .05) 52%, rgb(255 255 255 / .08)), rgb(var(--smoke) / .42); border-color: rgb(var(--torch) / .5); }
+.btn:hover:not(:disabled) { background: linear-gradient(180deg, rgb(255 255 255 / .22), rgb(255 255 255 / .05) 52%, rgb(255 255 255 / .08)), rgb(var(--smoke) / .28); border-color: rgb(var(--torch) / .5); }
 .btn:active:not(:disabled) { transform: translateY(1px) scale(.985); box-shadow: inset 0 2px 8px rgb(0 0 0 / .45), inset 0 -1px 0 rgb(var(--water) / .2); }
-.btn.ghost { background: linear-gradient(180deg, rgb(255 255 255 / .1), rgb(255 255 255 / .02) 55%), rgb(var(--smoke) / .28); border-color: rgb(255 255 255 / .12); box-shadow: inset 0 1px 0 rgb(255 255 255 / .18), 0 4px 12px -6px rgb(0 0 0 / .5); }
+.btn.ghost { background: linear-gradient(180deg, rgb(255 255 255 / .1), rgb(255 255 255 / .02) 55%), rgb(var(--smoke) / .2); border-color: rgb(255 255 255 / .12); box-shadow: inset 0 1px 0 rgb(255 255 255 / .18), 0 4px 12px -6px rgb(0 0 0 / .5); }
 /* жидкое золото: главное действие */
 .btn.primary {
   color: #2a1a06; border-color: rgb(255 226 160 / .7);
@@ -1913,28 +1913,33 @@ input[type=text], input[type=password], select {
   box-shadow: inset 0 2px 6px rgb(0 0 0 / .4), inset 0 -1px 0 rgb(var(--water) / .16), 0 1px 0 rgb(255 255 255 / .05);
 }
 input[type=text]:focus, input[type=password]:focus { outline: none; border-color: rgb(var(--torch) / .6); box-shadow: inset 0 2px 6px rgb(0 0 0 / .4), 0 0 0 3px rgb(var(--torch) / .18); }
-.slot { border-radius: 10px; background: rgb(0 0 0 / .2); box-shadow: inset 0 1px 3px rgb(0 0 0 / .4), inset 0 -1px 0 rgb(255 255 255 / .06); }
+.slot { border-radius: 10px; background: rgb(0 0 0 / .13); box-shadow: inset 0 1px 3px rgb(0 0 0 / .4), inset 0 -1px 0 rgb(255 255 255 / .06); }
 .trait { border-radius: 999px; background: linear-gradient(180deg, rgb(255 255 255 / .12), rgb(255 255 255 / .02)), rgb(var(--smoke) / .35); border: 1px solid rgb(255 255 255 / .1); box-shadow: inset 0 1px 0 rgb(255 255 255 / .14); }
 .seg button { background: rgb(255 255 255 / .05); }
 .seg button[aria-pressed=true] { background: linear-gradient(180deg, rgb(255 250 230 / .6), rgb(255 255 255 / 0) 55%), linear-gradient(180deg, #f0c66f, #c8892f); color: #2a1a06; }
-.toast { border-radius: 14px; background: linear-gradient(180deg, rgb(255 255 255 / .08), rgb(255 255 255 / 0) 50%), rgb(var(--smoke) / .72); -webkit-backdrop-filter: blur(16px) saturate(160%); backdrop-filter: blur(16px) saturate(160%); border: 1px solid rgb(255 255 255 / .1); border-left: 3px solid #e0604a; box-shadow: var(--rim), 0 14px 34px -10px rgb(0 0 0 / .6); }
+.toast { border-radius: 14px; background: linear-gradient(180deg, rgb(255 255 255 / .08), rgb(255 255 255 / 0) 50%), rgb(var(--smoke) / .62); -webkit-backdrop-filter: blur(10px) saturate(170%); backdrop-filter: blur(10px) saturate(170%); border: 1px solid rgb(255 255 255 / .1); border-left: 3px solid #e0604a; box-shadow: var(--rim), 0 14px 34px -10px rgb(0 0 0 / .6); }
 .toast.ok { border-left-color: var(--good); }
 .tabs { border-bottom-color: rgb(255 255 255 / .08); }
 .chatform { border-top-color: rgb(255 255 255 / .08); }
-/* текст на стекле не теряется на светлом фоне */
-.cave-stage h2, .stage-msg p, .feed, .opp .oname, .me-name, .g-head .rtitle, .g-head .turninfo { text-shadow: 0 1px 2px rgb(0 0 0 / .6); }
+/* текст на прозрачном стекле не теряется на светлом фоне: мягкая тень под буквами у всего текста на пластинах;
+   у карт — своя печать, им тень не нужна */
+.cave-stage, .side, .modal, .pop, .g-zoom-in, .home .panel, .b-deep.mine, .g-head, .topbar, .opp, .seat, .room-row, .contract, .toast, .btn:not(.primary), .trait {
+  text-shadow: 0 1px 2px rgb(0 0 0 / .75), 0 0 10px rgb(0 0 0 / .4);
+}
+.cave-stage h2, .stage-msg p, .feed, .opp .oname, .me-name, .g-head .rtitle, .g-head .turninfo { text-shadow: 0 1px 2px rgb(0 0 0 / .8), 0 0 12px rgb(0 0 0 / .45); }
+.card, .card-mini, input, select, textarea { text-shadow: none; }
 
 /* телефоны: стекло тоньше и легче для видеокарты */
 @media (max-width: 700px) {
-  :root { --glass-blur: 12px; }
+  :root { --glass-blur: 5px; }
   .has-world .game .g-head, .has-world .lobby .topbar { margin: 6px 6px 0; border-radius: 12px; }
   .has-world .game .b-deep.mine { margin: 0 6px 6px; border-radius: 16px; }
-  .cave .sidepanel.open { background: linear-gradient(180deg, rgb(255 255 255 / .08), rgb(255 255 255 / 0) 30%), var(--grain), rgb(var(--smoke) / .72); }
+  .cave .sidepanel.open { background: linear-gradient(180deg, rgb(255 255 255 / .07), rgb(255 255 255 / 0) 30%), var(--grain), rgb(var(--smoke) / .6); }
 }
 /* рука веером на телефоне закреплена у края экрана: размытие у полки сделало бы её «своей» и сдвинуло веер,
    поэтому здесь полка — плотное стекло без размытия */
 @media (max-width: 900px) {
-  .has-world .game.has-fan .b-deep.mine { -webkit-backdrop-filter: none; backdrop-filter: none; background: linear-gradient(180deg, rgb(255 255 255 / .07), rgb(255 255 255 / 0) 30%), var(--grain), rgb(var(--smoke) / .78); }
+  .has-world .game.has-fan .b-deep.mine { -webkit-backdrop-filter: none; backdrop-filter: none; background: linear-gradient(180deg, rgb(255 255 255 / .07), rgb(255 255 255 / 0) 30%), var(--grain), rgb(var(--smoke) / .6); }
   .game.has-fan #modebar:not(:empty) { border-radius: 14px; background: linear-gradient(180deg, rgb(255 255 255 / .08), rgb(255 255 255 / 0) 40%), rgb(var(--smoke) / .9); box-shadow: var(--rim), 0 10px 30px rgb(0 0 0 / .5); }
 }
 /* без размытия (старые браузеры) и для тех, кто просит меньше прозрачности, — стекло плотнее */
