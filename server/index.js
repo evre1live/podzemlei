@@ -18,6 +18,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
 const PORT = Number(process.env.PORT || 3000);
 const DATA_DIR = process.env.DATA_DIR || path.join(ROOT, 'data');
+const GONE = 'Комната не найдена: её закрыли или сервер перезапускался. Создайте новую комнату и отправьте друзьям свежую ссылку.';
 const SAVE_FILE = path.join(DATA_DIR, 'rooms.json');
 const MAX_ROOMS = Number(process.env.MAX_ROOMS || 300);
 const BOT_DELAY_MS = Number(process.env.BOT_DELAY_MS || 1100);
@@ -366,7 +367,7 @@ io.on('connection', socket => {
     cb = cbOf(cb);
     if (limited()) return cb({ ok: false, error: 'Слишком часто' });
     const r = rooms.get(String(p.roomId || '').toUpperCase().trim());
-    if (!r) return cb({ ok: false, error: 'Комната не найдена' });
+    if (!r) return cb({ ok: false, error: GONE });
     if (ctx().m) return cb({ ok: false, error: 'Сначала выйдите из своей комнаты' });
     const t = now();
     badPw = badPw.filter(x => t - x < 60000);
@@ -518,7 +519,7 @@ io.on('connection', socket => {
     cb = cbOf(cb);
     if (limited()) return cb({ ok: false, error: 'Слишком часто' });
     const r = rooms.get(String(p.roomId || '').toUpperCase().trim());
-    if (!r) return cb({ ok: false, error: 'Комната не найдена' });
+    if (!r) return cb({ ok: false, error: GONE });
     // переподключение по токену
     if (p.token) {
       const m = r.members.find(x => x.token && x.token === p.token);
@@ -737,6 +738,12 @@ setInterval(() => {
 function shutdown() { dirty = true; save(); process.exit(0); }
 process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
+
+// Бесплатный Render усыпляет сервер через 15 минут без входящего трафика, а вместе с ним пропадают комнаты:
+// например, комнату создали, ссылку отправили, вкладку закрыли — и друг через полчаса попадает в пустоту.
+// Пока на сервере есть хоть одна комната, он сам заходит к себе по внешнему адресу раз в 10 минут.
+const SELF_URL = String(process.env.RENDER_EXTERNAL_URL || process.env.KEEPALIVE_URL || '').replace(/\/$/, '');
+if (SELF_URL) setInterval(() => { if (rooms.size) fetch(`${SELF_URL}/healthz?keepalive=1`).catch(() => {}); }, Number(process.env.KEEPALIVE_MS || 10 * 60 * 1000)).unref();
 
 load();
 server.listen(PORT, () => console.log(`«Под Землёй» слушает порт ${PORT}`));
