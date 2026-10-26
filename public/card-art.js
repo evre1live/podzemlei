@@ -8,7 +8,7 @@ export const CARD_IMG = new Map([
   ['ev_luxtax', '77711f21'], ['ev_quake', '28f59e83'], ['ev_rollcall', 'b3a11f65'], ['ev_shift', '4dc67971'], ['ev_union', '4e97fd03'], ['h_hoard', 'c98eaff7'],
   ['i_ares', '19cd9cd2'], ['i_barrel', '3f8eeb30'], ['i_boots', 'd235fbb1'], ['i_bow', '040edf9c'], ['i_canary', '33717524'], ['i_censer', '4844a60a'],
   ['i_charm', '2ae44792'], ['i_claws', '81ba0e2b'], ['i_crowbar', '3aef1685'], ['i_crown', '2f3efe1d'], ['i_diver', '4156550c'], ['i_drill', 'ed345349'],
-  ['i_epochboots', '0f2ac9b2'], ['i_excalibur', '1bbd91cb'], ['i_extinguisher', 'ce68953e'], ['i_firesuit', 'e9c4ff12'], ['i_flashlight', '19a11198'], ['i_flasks', '865a5533'],
+  ['i_epochboots', '5d10915d'], ['i_excalibur', '1bbd91cb'], ['i_extinguisher', 'ce68953e'], ['i_firesuit', 'e9c4ff12'], ['i_flashlight', '19a11198'], ['i_flasks', '865a5533'],
   ['i_gasmask', '0489d2a6'], ['i_godarmor', '381812e8'], ['i_hardlamp', 'e63cc77d'], ['i_hatch', '518cefb4'], ['i_headlamp', '8b069531'], ['i_helmet', '35bf28cb'],
   ['i_jackhammer', '9ac860c1'], ['i_kingcrown', '52336c93'], ['i_kinghammer', '28695f5f'], ['i_kingmail', 'c839224d'], ['i_kladenets', '61154600'], ['i_knuckles', 'fd930c26'],
   ['i_ladle', '068de8d5'], ['i_lute', '6e44617e'], ['i_overalls', '86ef9324'], ['i_pick', 'c7b93b09'], ['i_quilt', '276daf06'], ['i_rail', 'e3b6e5cd'],

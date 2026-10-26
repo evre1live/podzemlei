@@ -405,6 +405,8 @@ label { display: grid; gap: 6px; font-size: 14px; color: var(--muted); }
 .card .c-pic > svg, .card .c-pic > img { position: absolute; inset: 0; width: 100%; height: 100%; display: block; object-fit: cover; }
 /* живопись квадратная, окно шире — лица и головы обычно в верхней трети */
 .card .c-pic > img.c-img { object-position: 50% 32%; }
+/* у Сапог эпохи голенища высокие — окно чуть выше, чтобы верх сапог не срезался */
+.card[data-uid^="i_epochboots"] .c-pic > img.c-img { object-position: 50% 16%; }
 /* эмблема вместо рисунка: чеканный золотой знак на тёмной коже, подсвеченной цветом категории */
 .card .emb { position: absolute; inset: 0; display: grid; place-items: center;
   background: radial-gradient(circle at 50% 46%, color-mix(in srgb, var(--acc) 55%, transparent) 0, transparent 62%), radial-gradient(ellipse at 50% 110%, rgba(0,0,0,.7), transparent 60%), url(/ui/v1/leather.webp) center / 128px; }
