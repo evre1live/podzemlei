@@ -612,20 +612,54 @@ function applyVol() {
   const v = st.on ? 0.15 + st.vol * 0.85 : 0;
   E.master.gain.setTargetAtTime(st.on ? v * v : 0, ac.currentTime, 0.05);
 }
-function unlock() {
-  if (!ac) {
-    const Ctx = window.AudioContext || window.webkitAudioContext;
-    if (!Ctx) return;
-    try { ac = new Ctx({ latencyHint: 'interactive' }); } catch { return; }
-    E = makeEngine(ac, ac.destination);
-    E.master.gain.value = 0;
-    applyVol();
-    loadBank(ac);
-    if (st.on && st.amb) ambStart();
-  }
-  if (ac.state === 'suspended') ac.resume().catch(() => {});
+// Браузер может остановить звук: вкладку свернули, переключились в другое приложение, телефон прервал
+// аудиосессию (звонок, музыка, микрофон голосового чата). Safari тогда ставит состояние «interrupted»,
+// Chrome — «suspended», а иногда контекст числится работающим, но его часы стоят. Поэтому звук будится
+// при каждом касании, возвращении во вкладку и фокусе окна, а зависший или закрытый контекст создаётся заново —
+// записанные звуки остаются в памяти и подходят новому контексту.
+function build() {
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  if (!Ctx) return false;
+  try { ac = new Ctx({ latencyHint: 'interactive' }); } catch { ac = null; E = null; return false; }
+  E = makeEngine(ac, ac.destination);
+  E.master.gain.value = 0;
+  applyVol();
+  loadBank(ac);
+  const me = ac;
+  // прервали, пока страница на виду (например, закончился звонок) — пробуем вернуть звук
+  me.onstatechange = () => { if (me === ac && !document.hidden && me.state !== 'running' && me.state !== 'closed') setTimeout(wake, 250); };
+  if (st.on && st.amb && !document.hidden) ambStart();
+  return true;
 }
+let probe = 0, rebuiltAt = 0;
+function wake(gesture = false) {
+  if (!ac || ac.state === 'closed') { if (!build()) return; }
+  if (document.hidden) return;
+  if (ac.state !== 'running') ac.resume().catch(() => {});
+  // часы контекста должны идти; стоят — контекст завис, меняем его на новый (не чаще раза в 4 секунды).
+  // После касания контекст обязан проснуться; если он так и остался прерванным — тоже меняем.
+  clearTimeout(probe);
+  const c0 = ac, t0 = ac.currentTime;
+  probe = setTimeout(() => {
+    if (c0 !== ac || document.hidden) return;
+    const stuck = ac.state === 'running' ? ac.currentTime === t0 : gesture && ac.state !== 'closed';
+    if (!stuck) return;
+    if (performance.now() - rebuiltAt < 4000) return;
+    rebuiltAt = performance.now();
+    rebuild();
+  }, 700);
+}
+function rebuild() {
+  const old = ac;
+  ambKill();
+  ac = null; E = null;
+  try { old?.close(); } catch { /* уже закрыт */ }
+  if (build()) wake();
+}
+function unlock() { wake(true); }
 for (const ev of ['pointerdown', 'keydown', 'touchend', 'click']) addEventListener(ev, unlock, { capture: true, passive: true });
+addEventListener('focus', () => { if (ac) wake(); });
+addEventListener('pageshow', () => { if (ac) wake(); });
 
 // атмосфера пещеры: низкий гул, ветер в тоннеле, редкие капли
 let amb = null;
@@ -659,6 +693,14 @@ function ambStart() {
   };
   amb.timer = setTimeout(drip, rnd(800, 2500));
 }
+// сразу заглушить гул без затухания (контекст меняется)
+function ambKill() {
+  if (!amb) return;
+  const a = amb; amb = null;
+  clearTimeout(a.timer);
+  a.nodes.forEach(n => { try { n.stop(); } catch { /* уже остановлен */ } });
+  try { a.bus.disconnect(); } catch { /* уже отключён */ }
+}
 function ambStop() {
   if (!amb) return;
   const a = amb; amb = null;
@@ -670,24 +712,29 @@ function ambStop() {
   setTimeout(() => { a.nodes.forEach(n => { try { n.stop(); } catch { /* уже остановлен */ } }); a.bus.disconnect(); }, 700);
 }
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden) ambStop();
-  else if (st.on && st.amb) ambStart();
+  if (document.hidden) { ambStop(); return; }
+  if (!ac) return;
+  wake();
+  if (st.on && st.amb) ambStart();
 });
 
 export const sfx = {
   // o.delay — задержка в секундах; o.always — играть даже во вкладке на фоне; o.gap — защита от повторов, мс
   play(name, o = {}) {
-    if (!st.on || !E || ac.state === 'closed') return;
+    if (!st.on || !ac) return;
     if (document.hidden && !o.always) return;
+    if (ac.state !== 'running') wake();
+    if (!E || ac.state === 'closed') return;
     const fn = recipe(name);
     if (!fn) return;
     const now = performance.now();
     if (last[name] && now - last[name] < (o.gap ?? 45)) return;
     last[name] = now;
-    if (ac.state === 'suspended') ac.resume().catch(() => {});
     try { fn(E, ac.currentTime + 0.01 + (o.delay || 0), o); } catch { /* звук — не главное */ }
   },
-  get state() { return { ...st, ready: !!E }; },
+  get state() { return { ...st, ready: !!E, ctx: ac?.state || null }; },
+  // для проверки: живой звуковой контекст
+  get ctx() { return ac; },
   set(p) {
     Object.assign(st, p);
     save();

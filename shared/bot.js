@@ -3,7 +3,7 @@ import { def, TROUBLE_BONUS, MUTAGEN_BONUS, LULLABY_PENALTY, LULLABY_MAX, DISTIL
 import {
   P, check, combatNumbers, playOptions, handLimit, hasClass, hasRace, cardWorth,
   equipError, participants, heroStrength, levelOnlyFight, winLevel, luxLevel, saleValue, monsterBaseLevel, powerOf, locationOf,
-  isGhost, grudgeOf, trapNeed, duelNumbers, duelStrength, duelPrize,
+  isGhost, grudgeOf, trapNeed, duelNumbers, duelStrength, duelPrize, troubleBand,
 } from './engine.js';
 import { GHOST_BONUS } from './cards.js';
 
@@ -335,9 +335,20 @@ function turnMove(s, p, rng) {
   }
   if (step === 'pre') return { type: 'kick' };
   if (step === 'post') {
-    // неприятности — это случайный монстр из колоды: идём, только если большинство монстров там нам по силам
     const power = powerOf(s, p) + (p.nextCombat || 0);
-    const pool = s.decks.door.filter(u => def(u).type === 'monster');
+    // монстр с руки: зовём самого слабого, если он нам наверняка по силам; иначе обшариваем комнату
+    const mine = p.hand.filter(u => def(u).type === 'monster' && ok({ type: 'playCard', uid: u }));
+    if (mine.length) {
+      const margin = { cautious: 4, greedy: 1, vengeful: 2, normal: 2 }[persona(p)] ?? 2;
+      const easy = mine.filter(u => !def(u).boss && !def(u).levelOnly && monsterBaseLevel(s, def(u)) + margin < power)
+        .sort((x, y) => monsterBaseLevel(s, def(x)) - monsterBaseLevel(s, def(y)));
+      return easy.length ? { type: 'playCard', uid: easy[0] } : { type: 'loot' };
+    }
+    // неприятности — случайный монстр из колоды в окне глубины: идём, только если большинство из них нам по силам
+    const band = troubleBand(s);
+    const all = s.decks.door.filter(u => def(u).type === 'monster');
+    const inBand = all.filter(u => (def(u).boss ? band.boss : def(u).level >= band.min && def(u).level <= band.max));
+    const pool = inBand.length ? inBand : all;
     const beatable = pool.filter(u => !def(u).boss && !def(u).levelOnly && monsterBaseLevel(s, def(u)) + 1 + TROUBLE_BONUS < power).length;
     if (pool.length >= 4 && beatable / pool.length >= TROUBLE_RATIO[persona(p)] && ok({ type: 'lookForTrouble' })) return { type: 'lookForTrouble' };
     return { type: 'loot' };

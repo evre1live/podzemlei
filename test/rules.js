@@ -1,6 +1,6 @@
 // Точечные проверки правил.
 import assert from 'node:assert/strict';
-import { createGame, act, tick, view, combatNumbers, P, saleValue, fillText, orderCard } from '../shared/engine.js';
+import { createGame, act, tick, view, combatNumbers, P, saleValue, fillText, orderCard, playOptions, troubleBand } from '../shared/engine.js';
 import { cheatCard } from '../server/cheats.js';
 import { botDecide } from '../shared/bot.js';
 import { def, dailyOf } from '../shared/cards.js';
@@ -435,6 +435,41 @@ t('тайные команды: карта приходит вместо бли�
   assert.equal(s.orders?.p0, undefined);
 });
 
+t('пустая дверь: монстр с руки вместо неприятностей, неприятности — по глубине', () => {
+  const s = fresh(); const p = P(s, 'p0'); p.level = 3;
+  s.turn = { idx: 0, pid: 'p0', step: 'post', n: 2 };
+  p.hand.push(take(s, 'm_roach#0'));
+  // монстр на руке — искать неприятности нельзя, зато можно позвать его
+  assert.match(A(s, 'p0', { type: 'lookForTrouble' }).error, /На руке есть монстры/);
+  assert.deepEqual(playOptions(s, 'p0', 'm_roach#0'), [{ type: 'playCard', uid: 'm_roach#0' }]);
+  assert.equal(A(s, 'p0', { type: 'playCard', uid: 'm_roach#0' }).ok, true);
+  assert.equal(s.combat.monsters[0].uid, 'm_roach#0');
+  assert.equal(s.combat.mods.length, 0, 'свой монстр не разбужен');
+  assert.equal(s.combat.trouble, true);
+  assert.ok(!p.hand.includes('m_roach#0'));
+  // до двери и в чужой ход свой монстр в бой не идёт
+  const s2 = fresh(); const q = P(s2, 'p0');
+  q.hand.push(take(s2, 'm_roach#0'));
+  assert.match(A(s2, 'p0', { type: 'playCard', uid: 'm_roach#0' }).error, /за дверью никого/);
+  // монстров на руке нет — неприятности: у поверхности мелочь (до 6-го уровня), без боссов
+  for (let i = 0; i < 25; i++) {
+    const s3 = fresh(); const r = P(s3, 'p0'); r.level = 3;
+    for (const x of s3.players) { s3.discard.door.push(...x.hand.filter(u => def(u).type === 'monster')); x.hand = x.hand.filter(u => def(u).type !== 'monster'); }
+    s3.turn = { idx: 0, pid: 'p0', step: 'post', n: 2 };
+    assert.equal(A(s3, 'p0', { type: 'lookForTrouble' }).ok, true);
+    const d = def(s3.combat.monsters[0].uid);
+    assert.ok(!d.boss && d.level <= 6, 'у поверхности ' + d.name + ' ур. ' + d.level);
+    assert.ok(s3.combat.mods.some(m => m.label === 'Разбуженный монстр'));
+  }
+  // на дне окно уровней сдвигается вниз-вверх и пускает боссов
+  const s4 = fresh(); s4.depth = 3;
+  const b = troubleBand(s4);
+  assert.ok(b.boss && b.min >= 8 && b.max >= 22);
+  const s5 = fresh(); s5.depth = 1;
+  const b1 = troubleBand(s5);
+  assert.ok(!b1.boss && b1.min > 0 && b1.max > 6 && b1.max < 22);
+});
+
 t('Золотой Дракон: +7, не крадётся и не улетает при расплате', () => {
   const s = fresh(); const p = P(s, 'p0'); p.level = 2;
   p.hand.push(take(s, 'p_golddragon#0'));
@@ -641,17 +676,17 @@ t('босс из темноты встаёт с силой вдвое больш
   assert.equal(combatNumbers(s).monsters, 2 + 30);
 });
 
-t('«Искать неприятности»: бой со случайным монстром из колоды, а не с руки', () => {
+t('«Искать неприятности»: только без монстров на руке, монстр — случайный из колоды', () => {
   const s = fresh(); const p = P(s, 'p0'); p.level = 3;
   s.turn.step = 'post';
   const handMon = take(s, 'm_troll#0'); p.hand.push(handMon);
+  assert.match(A(s, 'p0', { type: 'lookForTrouble' }).error, /На руке есть монстры/);
+  s.discard.door.push(handMon); p.hand = p.hand.filter(u => u !== handMon);
   // монстры с засадой могут выбить карты из руки — для этой проверки уберём их в сброс
   for (let i = s.decks.door.length - 1; i >= 0; i--) if (def(s.decks.door[i]).ambush) s.discard.door.push(...s.decks.door.splice(i, 1));
   const deckMons = s.decks.door.filter(u => def(u).type === 'monster').length;
   assert.equal(A(s, 'p0', { type: 'lookForTrouble' }).ok, true);
   assert.ok(s.combat);
-  assert.notEqual(s.combat.monsters[0].uid, handMon);
-  assert.ok(p.hand.includes(handMon));
   assert.equal(s.decks.door.filter(u => def(u).type === 'monster').length, deckMons - 1);
 });
 
@@ -1263,13 +1298,15 @@ t('подземный рынок: открывается с новой глуб�
   assert.equal(s.depth, 1); assert.ok(s.market); assert.equal(s.market.cards.length, 3);
   const [u] = s.market.cards;
   const price = view(s, 'p0').market.prices[u];
-  p.carried.push(take(s, 'i_jackhammer#0'), take(s, 'i_diver#0'));
+  // платим двумя дорогими вещами, которых нет на прилавке
+  const [c1, c2] = ['i_jackhammer#0', 'i_diver#0', 'i_drill#0', 'i_kinghammer#0'].filter(x => !s.market.cards.includes(x));
+  p.carried.push(take(s, c1), take(s, c2));
   assert.equal(view(s, 'p0').hints.buy, true);
   assert.match(A(s, 'p0', { type: 'buy', uid: u, pay: ['i_ladle#0'] }).error, /уплату|не берут|Выберите/);
-  const pay = def('i_jackhammer').value >= price ? ['i_jackhammer#0'] : ['i_jackhammer#0', 'i_diver#0'];
+  const pay = def(c1).value >= price ? [c1] : [c1, c2];
   assert.equal(A(s, 'p0', { type: 'buy', uid: u, pay }).ok, true);
   assert.ok(p.hand.includes(u));
-  assert.match(A(s, 'p0', { type: 'buy', uid: s.market.cards[0], pay: ['i_diver#0'] }).error || '', /одна покупка|Такой карты/);
+  assert.match(A(s, 'p0', { type: 'buy', uid: s.market.cards[0], pay: [c2] }).error || '', /одна покупка|Такой карты/);
   // через круг рынок сворачивается
   for (let i = 0; i < 3; i++) { s.turn.step = 'charity'; A(s, s.turn.pid, { type: 'endTurn' }); }
   assert.equal(s.market, null);

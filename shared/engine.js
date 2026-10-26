@@ -1002,21 +1002,36 @@ H.kick = {
   },
 };
 
-// монстр наугад из колоды проходов, а если там пусто — из сброса
-function randomMonster(s, rng) {
+// Неприятности ищут по глубине: у поверхности выходит мелочь, чем глубже — тем крупнее монстры,
+// боссы — только в самой глубине. Окно уровней растёт от «0–6» наверху до «8 и выше» на дне.
+export function troubleBand(s) {
+  const f = Math.min(1, (s.depth || 0) / Math.max(1, depthMax(s)));
+  return { min: Math.floor(8 * f), max: Math.round(6 + 16 * f) + (f >= 1 ? 99 : 0), boss: f >= 2 / 3 };
+}
+const troubleLevel = d => (d.boss ? 99 : d.level || 0);
+// монстр наугад из колоды проходов (а если там пусто — из сброса) в окне глубины;
+// если в окне никого, берётся ближайший к нему по уровню
+function troubleMonster(s, rng) {
+  const b = troubleBand(s);
   for (const pile of [s.decks.door, s.discard.door]) {
     const list = pile.filter(u => def(u).type === 'monster');
-    if (list.length) { const u = pick(list, rng); without(pile, u); return u; }
+    if (!list.length) continue;
+    const fit = list.filter(u => { const d = def(u); return d.boss ? b.boss : d.level >= b.min && d.level <= b.max; });
+    const dist = u => { const L = troubleLevel(def(u)); return L < b.min ? b.min - L : L > b.max ? L - b.max : 0; };
+    const near = fit.length ? fit : (() => { const m = Math.min(...list.map(dist)); return list.filter(u => dist(u) === m); })();
+    const u = pick(near, rng); without(pile, u); return u;
   }
   return null;
 }
+const handMonsters = p => p.hand.filter(u => def(u).type === 'monster');
 H.lookForTrouble = {
   check(s, p) {
     return manageErr(s, p) || (s.turn.step !== 'post' ? 'Искать неприятности можно после выбитой двери без монстра' : null)
+      || (handMonsters(p).length ? 'На руке есть монстры — сразитесь с одним из них' : null)
       || (![...s.decks.door, ...s.discard.door].some(u => def(u).type === 'monster') ? 'Монстры в колоде кончились' : null);
   },
   run(s, p, a, rng) {
-    const uid = randomMonster(s, rng);
+    const uid = troubleMonster(s, rng);
     s.reveal = { uid, by: p.id, seq: ++s.revealSeq };
     fx(s, { kind: 'reveal', pid: p.id, card: uid });
     log(s, `${p.name} ищет неприятности — и находит!`, 'combat');
@@ -1137,8 +1152,11 @@ function playCheck(s, p, a) {
       if (d.effect === 'escape' || d.effect === 'escapeBonus') return isParticipant(s, p.id) ? null : 'Только участник боя';
       if (d.effect === 'remove') return Number.isInteger(a.monster) && c.monsters[a.monster] ? null : 'Выберите монстра';
       return 'Нельзя';
-    case 'monster':
-      return 'Монстра из руки подбрасывают в чужой бой картой «Из темноты вылезло…»';
+    case 'monster': {
+      // за дверью никого — можно позвать на бой своего монстра с руки
+      if (!manageErr(s, p) && s.turn.step === 'post') return null;
+      return 'Монстра с руки зовут на бой в свой ход, когда за дверью никого не было, или подбрасывают в чужой бой картой «Из темноты вылезло…»';
+    }
     default: return 'Эту карту нельзя сыграть';
   }
 }
@@ -1150,6 +1168,14 @@ H.playCard = {
     const c = s.combat;
     without(p.hand, a.uid);
     switch (d.type) {
+      case 'monster': {
+        s.reveal = { uid: a.uid, by: p.id, seq: ++s.revealSeq };
+        fx(s, { kind: 'reveal', pid: p.id, card: a.uid });
+        log(s, `${p.name} зовёт на бой монстра с руки!`, 'combat');
+        startCombat(s, p, a.uid, rng);
+        if (s.combat) s.combat.trouble = true;
+        return;
+      }
       case 'race': {
         const cap = p.halfbreed ? 2 : 1;
         if (p.races.length >= cap) toDiscard(s, p.races.shift());
@@ -1878,7 +1904,7 @@ export function playOptions(s, pid, uid) {
   const out = [];
   const tryA = a => { if (!check(s, pid, a)) out.push(a); };
   const d = def(uid);
-  if (d.type === 'monster') return out; // монстр из руки идёт в бой только с картой «Из темноты вылезло…»
+  if (d.type === 'monster') { tryA({ type: 'playCard', uid }); return out; } // свой бой после пустой двери; в чужой — с «Из темноты вылезло…»
   if (d.type === 'curse' || d.type === 'trap' || d.type === 'duel' || (d.type === 'oneshot' && d.effect === 'enslave')) { s.players.forEach(x => tryA({ type: 'playCard', uid, target: x.id })); return out; }
   if (d.type === 'enhancer' || (d.type === 'oneshot' && d.effect === 'remove')) {
     (s.combat?.monsters || []).forEach((m, i) => tryA({ type: 'playCard', uid, monster: i }));
