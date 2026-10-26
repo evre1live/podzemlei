@@ -2134,3 +2134,14 @@ input[type=text], input[type=password], select, .g-search, .g-sort select,
   .game .g-head .hud-btn, .game .g-head .btn.icon-btn { min-width: 32px; padding: 0 7px; }
   .game .g-head .side-toggle { padding: 0 9px; }
 }
+/* плашки — в своей ленте: при нехватке места пролистываются, а кнопки справа всегда на месте */
+.game .g-head .hud-chips { display: flex; align-items: center; gap: 6px; min-width: 0; flex: 0 1 auto; overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain; }
+.game .g-head .hud-chips::-webkit-scrollbar { display: none; }
+.game .g-head .hud-chips > * { flex: none; }
+.game .g-head .hud-chips > :is(#depthpill, #marketpill, #dailypill, #locpill, #watchpill) { display: contents; }
+.game .g-head .hud-chips > :is(#depthpill, #marketpill, #dailypill, #locpill, #watchpill):empty { display: none; }
+@media (max-width: 700px) {
+  .game .g-head { overflow: visible; }
+  .game .g-head > .hud-chips { flex: 1 1 auto; gap: 5px; -webkit-mask: linear-gradient(90deg, #000 calc(100% - 18px), transparent); mask: linear-gradient(90deg, #000 calc(100% - 18px), transparent); padding-right: 14px; }
+  .game .g-head > .spacer { display: none; }
+}

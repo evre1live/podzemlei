@@ -456,13 +456,15 @@ mount.game = () => {
   <div class="game">
     <div class="band b-surface"><div class="grassline"></div>
       <div class="g-head">
-        <span id="locpill" class="locpill"></span>
-        <span class="turninfo" id="turninfo"></span>
-        <span class="goal-pill" id="goalpill" title="Уровень победы"></span>
-        <span id="depthpill"></span>
-        <span id="marketpill"></span>
-        <span id="dailypill"></span>
-        <span id="watchpill"></span>
+        <div class="hud-chips">
+          <span id="locpill" class="locpill"></span>
+          <span class="turninfo" id="turninfo"></span>
+          <span class="goal-pill" id="goalpill" title="Уровень победы"></span>
+          <span id="depthpill"></span>
+          <span id="marketpill"></span>
+          <span id="dailypill"></span>
+          <span id="watchpill"></span>
+        </div>
         <span class="spacer"></span>
         <span class="voice-ctl"></span>
         <button class="btn ghost small side-toggle" data-act="sideToggle"><span class="long-label">Летопись и чат</span><span class="short">Чат</span></button>
@@ -524,8 +526,8 @@ update.game = () => {
   $('#goalpill').innerHTML = `${ico('flag-objective')}<span class="lbl">Цель: </span>${winLvl()}<span class="lbl"> ур.</span>`;
   $('#depthpill').innerHTML = depthPill(g.depth);
   const dl = g.opts?.daily ? dailyOf(g.opts.daily) : null;
-  $('#dailypill').innerHTML = dl ? `<span class="daily-pill" title="${esc(`Испытание дня ${g.opts.daily}: ${dl.text} Колода сегодня у всех одна.`)}">${ico('calendar')}${esc(dl.name)}</span>` : '';
-  $('#marketpill').innerHTML = g.market && g.phase === 'playing' ? `<button class="market-pill" data-act="market" title="Подземный рынок: карты клада в открытую до конца круга, платят вещами">${ico('shop')}Рынок · ${g.market.cards.length}</button>` : '';
+  $('#dailypill').innerHTML = dl ? `<span class="daily-pill" title="${esc(`Испытание дня ${g.opts.daily}: ${dl.text} Колода сегодня у всех одна.`)}">${ico('calendar')}<span class="lbl">${esc(dl.name)}</span></span>` : '';
+  $('#marketpill').innerHTML = g.market && g.phase === 'playing' ? `<button class="market-pill" data-act="market" title="Подземный рынок: карты клада в открытую до конца круга, платят вещами">${ico('shop')}<span class="lbl">Рынок · </span>${g.market.cards.length}</button>` : '';
   const wn = r.watchers || 0;
   $('#watchpill').innerHTML = r.spectator ? `<span class="watch-pill on" title="Вы видите стол, бои и летопись, но не чужие карты на руках">${EYE}Вы зритель${wn > 1 ? ` · ещё ${wn - 1}` : ''}</span>`
     : wn ? `<span class="watch-pill" title="Столько людей смотрят партию со стороны">${EYE}${wn}</span>` : '';
