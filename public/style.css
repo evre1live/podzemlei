@@ -2023,3 +2023,7 @@ input[type=text], input[type=password], select, .g-search, .g-sort select,
 }
 @media (prefers-reduced-motion: reduce) { .game .g-head .turninfo.mine::before { animation: none; } }
 @media (max-width: 520px) { .game .g-head .turninfo { display: none; } }
+/* плотнее, чтобы и с рынком, испытанием и локацией полоса оставалась в одну строку */
+.game .g-head { gap: 6px; }
+.game .g-head :is(.turninfo, .goal-pill, .depth-pill, .daily-pill, .market-pill, .watch-pill) { padding: 0 11px; }
+@media (max-width: 1500px) { .game .g-head .voice-open span { display: none; } .game .g-head .voice-ctl .voice-open { padding-inline: 10px; } .game .g-head .loc-banner b { max-width: 16ch; overflow: hidden; text-overflow: ellipsis; } }

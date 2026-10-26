@@ -1341,7 +1341,7 @@ function depthPill(dp) {
   const bottom = dp.level >= dp.max;
   const next = bottom ? 'Глубже некуда — это дно.' : `До спуска ${dp.turnsLeft} ${plural(dp.turnsLeft, 'ход', 'хода', 'ходов')}.`;
   const tip = `Каждые ${dp.every} ${plural(dp.every, 'круг', 'круга', 'кругов')} подземелье уходит глубже: монстры +1 к силе (боссов это не касается), дно — глубина ${dp.max}. С каждой ${DEPTH_TREASURE_EVERY}-й глубины победа даёт лишнюю карту клада. ${next}`;
-  return `<span class="depth-pill${dp.level ? ' deep' : ''}" title="${esc(tip)}">${ico('stairs')}${dp.level ? `Глубина ${dp.level} · монстры +${dp.bonus}${dp.treasure ? ` · клад +${dp.treasure}` : ''}` : 'Поверхность'}</span>`;
+  return `<span class="depth-pill${dp.level ? ' deep' : ''}" title="${esc(tip)}">${ico('stairs')}${dp.level ? `Глубина ${dp.level} · +${dp.bonus}${dp.treasure ? ` · клад +${dp.treasure}` : ''}` : 'Поверхность'}</span>`;
 }
 function contractHTML(p) {
   const k = p.contract;
