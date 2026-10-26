@@ -517,8 +517,12 @@ update.game = () => {
   const r = S.room;
   $('#rtitle').textContent = r.name;
   const tp = pl(g.turn.pid);
-  $('#turninfo').textContent = g.phase === 'ended' ? 'Партия окончена' : tp ? (tp.id === r.me ? 'Ваш ход' : `Ходит ${tp.name}`) : '';
-  $('#goalpill').textContent = `Цель: ${winLvl()} ур.`;
+  { const ti = $('#turninfo');
+    ti.textContent = g.phase === 'ended' ? 'Партия окончена' : tp ? (tp.id === r.me ? 'Ваш ход' : `Ходит ${tp.name}`) : '';
+    ti.style.setProperty('--who', tp?.color || '#d6a85a');
+    ti.classList.toggle('mine', g.phase === 'playing' && tp?.id === r.me);
+    ti.classList.toggle('over', g.phase === 'ended'); }
+  $('#goalpill').innerHTML = `${ico('flag-objective')}Цель: ${winLvl()} ур.`;
   $('#depthpill').innerHTML = depthPill(g.depth);
   const dl = g.opts?.daily ? dailyOf(g.opts.daily) : null;
   $('#dailypill').innerHTML = dl ? `<span class="daily-pill" title="${esc(`Испытание дня ${g.opts.daily}: ${dl.text} Колода сегодня у всех одна.`)}">${ico('calendar')}${esc(dl.name)}</span>` : '';
