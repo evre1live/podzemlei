@@ -456,13 +456,12 @@ mount.game = () => {
   <div class="game">
     <div class="band b-surface"><div class="grassline"></div>
       <div class="g-head">
-        <span class="rtitle" id="rtitle"></span>
+        <span id="locpill" class="locpill"></span>
         <span class="turninfo" id="turninfo"></span>
         <span class="goal-pill" id="goalpill" title="Уровень победы"></span>
         <span id="depthpill"></span>
         <span id="marketpill"></span>
         <span id="dailypill"></span>
-        <span id="locpill" class="locpill"></span>
         <span id="watchpill"></span>
         <span class="spacer"></span>
         <span class="voice-ctl"></span>
@@ -515,7 +514,7 @@ function renderTabs() {
 update.game = () => {
   const g = S.game;
   const r = S.room;
-  $('#rtitle').textContent = r.name;
+  document.title = `${r.name} — Под Землёй`;
   const tp = pl(g.turn.pid);
   { const ti = $('#turninfo');
     ti.textContent = g.phase === 'ended' ? 'Партия окончена' : tp ? (tp.id === r.me ? 'Ваш ход' : `Ходит ${tp.name}`) : '';
@@ -610,7 +609,8 @@ function renderStage() {
   const key = loc ? g.location : '';
   if (lp.dataset.key !== key) {
     lp.dataset.key = key;
-    lp.innerHTML = loc ? `<button class="loc-banner" id="locBanner" data-uid="${esc(g.location)}" data-zone="view" title="${esc(loc.text)}">${locationSVG(loc.art)}<span><small>Локация</small><b>${esc(loc.name)}</b></span></button>` : '';
+    lp.innerHTML = loc ? `<button class="loc-banner" id="locBanner" data-uid="${esc(g.location)}" data-zone="view" title="${esc(loc.text)}">${locationSVG(loc.art)}<span><small>Локация</small><b>${esc(loc.name)}</b></span></button>`
+      : `<span class="loc-banner is-default" title="Подземелье: особых правил нет. Карта локации перенесёт весь стол в новое место."><img src="/loc/v1/default.webp" alt="" decoding="async"><span><small>Локация</small><b>Подземелье</b></span></span>`;
   }
   if (g.combat) { el.innerHTML = decks + `<div class="stage-inner">${fightHTML()}</div>`; afterStage(); return; }
   if (g.duel && g.phase === 'playing') { el.innerHTML = decks + `<div class="stage-inner">${duelHTML()}</div>`; afterStage(); return; }
@@ -2137,8 +2137,8 @@ function renderVoice() {
   const n = voicePeers().length;
   document.querySelectorAll('.voice-ctl').forEach(el => {
     el.innerHTML = V.joined
-      ? `<button class="btn small icon-btn voice-mic ${V.muted ? 'off' : 'on'}${V.selfSpeaking ? ' talking' : ''}" data-act="voiceMute" title="${V.forced ? 'Хозяин выключил вам микрофон' : V.muted ? 'Включить микрофон' : 'Выключить микрофон'}" aria-label="${V.muted ? 'Включить микрофон' : 'Выключить микрофон'}">${MIC(V.muted)}</button><button class="btn ghost small voice-open" data-act="voicePanel" title="Голосовой чат">Голос · ${n}</button>`
-      : `<button class="btn ghost small voice-open" data-act="voicePanel" title="Голосовой чат">${MIC(false)}<span>${V.joining ? 'Подключаемся…' : n ? `Голос · ${n}` : 'Голос'}</span></button>`;
+      ? `<button class="btn small icon-btn voice-mic ${V.muted ? 'off' : 'on'}${V.selfSpeaking ? ' talking' : ''}" data-act="voiceMute" title="${V.forced ? 'Хозяин выключил вам микрофон' : V.muted ? 'Включить микрофон' : 'Выключить микрофон'}" aria-label="${V.muted ? 'Включить микрофон' : 'Выключить микрофон'}">${MIC(V.muted)}</button><button class="btn ghost small icon-btn voice-open" data-act="voicePanel" title="Голосовой чат: ${n} ${plural(n, 'человек', 'человека', 'человек')}" aria-label="Голосовой чат">${ico('talk')}<i class="vbadge">${n}</i></button>`
+      : `<button class="btn ghost small icon-btn voice-open${V.joining ? ' joining' : ''}" data-act="voicePanel" title="${V.joining ? 'Подключаемся к голосовому чату…' : n ? `Голосовой чат: ${n} ${plural(n, 'человек', 'человека', 'человек')}` : 'Голосовой чат'}" aria-label="Голосовой чат">${MIC(false)}${n ? `<i class="vbadge">${n}</i>` : ''}</button>`;
   });
   // кто говорит — светится аватарка; кто в чате — значок микрофона
   const byMember = new Map(voicePeers().filter(p => p.memberId).map(p => [p.memberId, p]));
