@@ -2379,3 +2379,21 @@ button.pandora:not(.ready) .pb-cap { color: var(--text-2); }
 /* золотая заставка: сокровища, «Шопоголик» */
 .fx-banner.legend { border-color: rgb(242 207 120 / .8); box-shadow: 0 0 0 4px rgba(0,0,0,.35), 0 18px 50px rgba(0,0,0,.55), 0 0 60px rgb(242 190 90 / .5); }
 .fx-banner.legend b { background: linear-gradient(90deg, #fff3c4, #f2c45e, #fff3c4); -webkit-background-clip: text; background-clip: text; color: transparent; text-shadow: none; filter: drop-shadow(0 2px 0 #3a2508); }
+/* пакостник: лиловый «маскарад» — видит только сам зритель с /IAMGOD */
+.game .g-head .market-pill.trick { --acc: 196 150 255; background: linear-gradient(180deg, rgb(230 210 255 / .16), rgb(255 255 255 / .02)), rgb(70 36 110 / .55); border-color: rgb(196 150 255 / .7); box-shadow: 0 0 12px -2px rgb(170 110 255 / .55); }
+.game .g-head .watch-pill.on.trick { --acc: 196 150 255; background: linear-gradient(180deg, rgb(255 255 255 / .1), rgb(255 255 255 / .02)), rgb(90 46 140 / .6); color: #f1e6ff; }
+.watch-pill.trick .gi { width: 16px; height: 16px; margin-right: 4px; }
+.trick-head { display: inline-flex; align-items: center; gap: 6px; color: #e3d0ff; font-weight: 600; }
+.trick-head .gi, .trick-note .gi { width: 18px; height: 18px; flex: none; color: #c79bff; }
+.trick-wallet { color: #ffe7a8; }
+.trick-wallet .gi { width: 16px; height: 16px; color: #f2c45e; margin-right: 4px; vertical-align: -3px; }
+.shop-head .wallet.trick { color: #f1e6ff; box-shadow: inset 0 0 0 1px rgb(196 150 255 / .6); background: rgb(90 46 140 / .45); }
+.shop-head .wallet.trick .gi { color: #c79bff; }
+.trick-note { display: flex; gap: 8px; align-items: center; margin: 0; padding: 7px 10px; border-radius: 8px; font-size: 13px; color: var(--text-2, #cfc6da); background: rgb(150 100 230 / .14); box-shadow: inset 0 0 0 1px rgb(196 150 255 / .35); }
+.trick-by { display: grid; gap: 6px; }
+.trick-by > .muted { font-size: 13px; }
+.trick-seg { display: flex; flex-wrap: wrap; }
+.trick-seg button { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; min-height: 36px; font-size: 13.5px; flex: 1 1 auto; }
+.trick-seg .ava { width: 22px; height: 22px; border-radius: 50%; overflow: hidden; display: inline-block; box-shadow: 0 0 0 2px var(--seat, #888); }
+.trick-seg .ava svg { width: 100%; height: 100%; display: block; }
+#trickPop .btn.primary[style*="--seat"] { box-shadow: inset 4px 0 0 var(--seat); }

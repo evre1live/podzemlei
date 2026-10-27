@@ -1,9 +1,9 @@
 // Точечные проверки правил.
 import assert from 'node:assert/strict';
-import { createGame, act, tick, view, combatNumbers, P, saleValue, fillText, orderCard, grantCard, playOptions, troubleBand, shopPrice } from '../shared/engine.js';
+import { createGame, act, tick, view, combatNumbers, P, saleValue, fillText, orderCard, grantCard, playOptions, troubleBand, shopPrice, trickStart, trickBuy, trickPlay, trickOptions, trickOf } from '../shared/engine.js';
 import { cheatCard, cheatCardNow, cheatGold } from '../server/cheats.js';
 import { botDecide } from '../shared/bot.js';
-import { def, dailyOf } from '../shared/cards.js';
+import { def, dailyOf, SHOP_IDS } from '../shared/cards.js';
 import { AVATAR_PARTS, cleanAvatar, avatarFromSeed, portraitId, pickCode, avatarInGame, gameRaces } from '../shared/avatar.js';
 
 let seed = 7; const rng = () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
@@ -1675,6 +1675,34 @@ t('тайные команды с NOW: карта сразу в руку, соп
   assert.ok(!s.log.some(l => /тайн|NOW/i.test(l.text)));
   // старая команда без NOW работает по-прежнему: карта придёт со следующим кладом
   assert.equal(orderCard(s, 'p0', 'p_roach').ok, true); assert.ok(!p.hand.some(u => u.startsWith('p_roach')));
+});
+
+t('пакостник: 77777 голдов, покупает на рынке и играет от имени игроков; игрокам его не видно', () => {
+  const s = fresh(); const p = P(s, 'p0'), q = P(s, 'p1'), r = P(s, 'p2');
+  assert.equal(trickStart(s, 'c:x').ok, true);
+  assert.equal(trickOf(s, 'c:x').gold, 77777);
+  assert.ok(!JSON.stringify(view(s, 'p0')).includes('77777') && !JSON.stringify(view(s, null)).includes('tricksters'));
+  const cid = SHOP_IDS.find(id => def(id).type === 'curse' && def(id).fx.length === 1 && def(id).fx[0].k === 'levels' && def(id).fx[0].n === 1);
+  const b = trickBuy(s, 'c:x', cid);
+  assert.equal(b.ok, true); assert.equal(trickOf(s, 'c:x').gold, 77777 - b.price);
+  assert.ok(!s.decks.door.includes(b.uid));
+  q.level = 5;
+  const o = trickOptions(s, 'c:x')[0].opts.find(x => x.a.target === 'p1');
+  assert.ok(o.puppets.length && !o.puppets.includes('p1'), 'сама жертва куклой не бывает');
+  const pr = trickPlay(s, 'c:x', o.a, null, { rng, now: 1000 });
+  assert.equal(pr.ok, true); assert.notEqual(pr.puppet, 'p1');
+  assert.equal(q.level, 4);
+  assert.ok(s.log.some(l => l.text.includes(P(s, pr.puppet).name) && l.text.includes(def(cid).name)), 'в летописи — от имени игрока');
+  assert.deepEqual(trickOf(s, 'c:x').hand, []);
+  assert.ok(!P(s, pr.puppet).hand.includes(b.uid));
+  // «Получи уровень» от имени выбранного игрока
+  const lv = trickBuy(s, 'c:x', 'l_map');
+  assert.equal(lv.ok, true);
+  const lvl = r.level;
+  assert.equal(trickPlay(s, 'c:x', { uid: lv.uid }, 'p2', { rng, now: 1000 }).ok, true);
+  assert.equal(r.level, lvl + 1);
+  assert.match(trickPlay(s, 'c:x', { uid: lv.uid }, null, { rng, now: 1000 }).error, /нет/);
+  assert.match(trickBuy(s, 'c:нет', 'l_map').error, /не включён/);
 });
 
 t('тайная команда /GET5000: +5000 голдов', () => {

@@ -7,8 +7,8 @@ import fs from 'node:fs';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { Server } from 'socket.io';
-import { createGame, act, tick, view, P, WIN_LEVELS, WIN_LEVEL, orderCard, grantCard } from '../shared/engine.js';
-import { cheatCard, cheatCardNow, cheatGold } from './cheats.js';
+import { createGame, act, tick, view, P, WIN_LEVELS, WIN_LEVEL, orderCard, grantCard, trickStart, trickBuy, trickPlay, trickOptions, trickOf } from '../shared/engine.js';
+import { cheatCard, cheatCardNow, cheatGold, isTrickCmd } from './cheats.js';
 import { botDecide } from '../shared/bot.js';
 import { cleanAvatar, avatarFromSeed } from '../shared/avatar.js';
 import { PERSONAS, TRADE_TIMEOUT_MS, dailyDate, dailyOf } from '../shared/cards.js';
@@ -156,7 +156,20 @@ function broadcastRoom(r) {
   }
   // зрители видят стол, бои и летопись, но ни одной чужой руки
   if (watchCount(r)) io.to('watch:' + r.id).emit('room:state', { room: lobbyInfo(r, null), game: r.game ? view(r.game, null) : null, serverTime: now() });
+  sendTricks(r);
   pushLobby();
+}
+// режим пакостника: зритель с /IAMGOD держит свой кошелёк и рукав; видит их только он сам
+const trickKey = sock => 's:' + (sock.data.cid || sock.id);
+function sendTricks(r) {
+  const T = r.game?.tricksters;
+  const ids = T && io.sockets.adapter.rooms.get('watch:' + r.id);
+  if (!ids) return;
+  for (const sid of ids) {
+    const sock = io.sockets.sockets.get(sid);
+    const t = sock && trickOf(r.game, trickKey(sock));
+    if (t) sock.emit('trick:state', { room: r.id, gold: t.gold, hand: [...t.hand], live: r.game.phase === 'playing' });
+  }
 }
 // комната закрывается: зрителей вежливо выпроваживаем
 function dropRoom(r, reason = 'Комната закрылась') {
@@ -750,6 +763,16 @@ io.on('connection', socket => {
       cb({ ok: true, note: `Принято: +${goldCheat} голдов в кошелёк` });
       return broadcastRoom(r);
     }
+    if (isTrickCmd(text)) {
+      if (own && m) return cb({ ok: false, error: 'Эта команда — только для зрителей' });
+      if (!r.game) return cb({ ok: false, error: 'Команда работает только во время партии' });
+      const had = !!trickOf(r.game, trickKey(socket));
+      const res = trickStart(r.game, trickKey(socket));
+      if (!res.ok) return cb(res);
+      dirty = true;
+      cb({ ok: true, trick: true, note: had ? 'Вы уже пакостник: кошелёк и рукав при вас' : 'Режим пакостника: 77 777 голдов. Покупайте на рынке и подбрасывайте карты — в летописи их сыграют игроки' });
+      return sendTricks(r);
+    }
     // любой текст через «/» — служебный: в чат не попадает, даже если такой команды нет или она не сработала
     if (text.startsWith('/')) return cb({ ok: false, error: 'Сообщения со «/» в чат не отправляются' });
     if (m && own) r.chat.push({ id: newId(), from: m.id, name: m.name, color: m.color, text, t: now() });
@@ -775,6 +798,52 @@ io.on('connection', socket => {
       if (res.ok) { r.lastActive = now(); r.nextBotAt = Math.max(r.nextBotAt || 0, now() + 600 + cinePad(r.game, fx0)); broadcastRoom(r); }
     } catch (e) {
       console.error('act error', e);
+      cb({ ok: false, error: 'Ошибка сервера' });
+    }
+  });
+
+  // ───── пакостник ─────
+  function trickRoom() {
+    if (ctx().m) return null;
+    const w = rooms.get(socket.data.watchId);
+    return w?.game && trickOf(w.game, trickKey(socket)) ? w : null;
+  }
+  const NO_TRICK = { ok: false, error: 'Пакостить можно только зрителем во время партии' };
+  socket.on('trick:buy', (p = {}, cb) => {
+    cb = cbOf(cb);
+    if (limited()) return cb({ ok: false, error: 'Слишком часто' });
+    const r = trickRoom();
+    if (!r) return cb(NO_TRICK);
+    const res = trickBuy(r.game, trickKey(socket), String(p.id || ''));
+    cb(res);
+    if (res.ok) { dirty = true; broadcastRoom(r); }
+  });
+  socket.on('trick:opts', (p = {}, cb) => {
+    cb = cbOf(cb);
+    if (limited()) return cb({ ok: false, error: 'Слишком часто' });
+    const r = trickRoom();
+    if (!r) return cb(NO_TRICK);
+    try {
+      const o = trickOptions(r.game, trickKey(socket), String(p.uid || ''))[0];
+      cb(o ? { ok: true, opts: o.opts } : { ok: false, error: 'Этой карты у вас нет' });
+    } catch (e) { console.error('trick opts', e); cb({ ok: false, error: 'Ошибка сервера' }); }
+  });
+  socket.on('trick:play', (p = {}, cb) => {
+    cb = cbOf(cb);
+    if (limited()) return cb({ ok: false, error: 'Слишком часто' });
+    const r = trickRoom();
+    if (!r) return cb(NO_TRICK);
+    let a;
+    try { a = JSON.parse(JSON.stringify(p.a)); } catch { return cb({ ok: false, error: 'Плохие данные' }); }
+    if (!a || typeof a !== 'object' || Array.isArray(a)) return cb({ ok: false, error: 'Плохие данные' });
+    const puppet = typeof p.puppet === 'string' && p.puppet ? p.puppet : null;
+    try {
+      const fx0 = r.game.fx?.at(-1)?.id || 0;
+      const res = trickPlay(r.game, trickKey(socket), a, puppet, { rng, now: now() });
+      cb(res.ok ? { ok: true, puppet: res.puppet, name: P(r.game, res.puppet)?.name || '' } : res);
+      if (res.ok) { r.lastActive = now(); r.nextBotAt = Math.max(r.nextBotAt || 0, now() + 600 + cinePad(r.game, fx0)); broadcastRoom(r); }
+    } catch (e) {
+      console.error('trick error', e);
       cb({ ok: false, error: 'Ошибка сервера' });
     }
   });

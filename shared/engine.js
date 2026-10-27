@@ -2093,6 +2093,86 @@ function badShape(a) {
   return false;
 }
 
+// ───────────────────────── пакостник ─────────────────────────
+// Зритель с тайной командой получает TRICK_GOLD голдов, покупает карты на рынке и разыгрывает их.
+// Карта разыгрывается от имени кого-то из игроков («куклы»): в летописи и эффектах это его ход.
+// Пакостник, его голды и карты в рукаве в вид для игроков не попадают.
+export const TRICK_GOLD = 77777;
+export const trickOf = (s, key) => s.tricksters?.[key] || null;
+export function trickStart(s, key) {
+  if (s.phase !== 'playing') return { ok: false, error: 'Команда работает только во время партии' };
+  s.tricksters ||= {};
+  if (!s.tricksters[key]) s.tricksters[key] = { gold: TRICK_GOLD, hand: [] };
+  return { ok: true };
+}
+export function trickBuy(s, key, id) {
+  const t = trickOf(s, key);
+  if (!t) return { ok: false, error: 'Режим пакостника не включён' };
+  if (s.phase !== 'playing') return { ok: false, error: 'Партия окончена' };
+  if (!SHOP_IDS.includes(id)) return { ok: false, error: 'Такого на рынке не продают' };
+  const d = def(id), u = stockUid(s, id);
+  if (!u) return { ok: false, error: 'Распродано: в колоде таких больше нет' };
+  const price = shopPrice(s, d);
+  if (t.gold < price) return { ok: false, error: `Нужно ${price} голдов, у вас ${t.gold}` };
+  without(s.decks[d.deck], u);
+  t.gold -= price; t.hand.push(u);
+  s.version++;
+  return { ok: true, uid: u, price };
+}
+const trickSig = a => JSON.stringify([a.target || null, a.with || null, a.side || null, Number.isInteger(a.monster) ? a.monster : null, !!a.into]);
+// что можно сделать каждой картой из рукава и от чьего имени (на себя «кукла» карту не играет — это выдало бы подмену).
+// В руку куклы карты кладутся лишь на время проверки; «Из темноты вылезло…» выпускает только монстров из рукава —
+// чужую руку пакостник не видит и подсмотреть через подсказки не может.
+const trickExtras = (t, uid) => def(uid).type === 'wandering' ? t.hand.filter(u => u !== uid && def(u).type === 'monster') : [];
+export function trickOptions(s, key, only = null) {
+  const t = trickOf(s, key);
+  if (!t || s.phase !== 'playing') return [];
+  return t.hand.filter(uid => !only || uid === only).map(uid => {
+    const by = new Map(), extra = trickExtras(t, uid);
+    for (const p of s.players) {
+      if (p.dead) continue;
+      const put = [uid, ...extra];
+      p.hand.push(...put);
+      let opts = [];
+      try { opts = playOptions(s, p.id, uid); } finally { for (const u of put) p.hand.splice(p.hand.lastIndexOf(u), 1); }
+      for (const a of opts) {
+        if (a.target === p.id || a.with === p.id) continue;
+        if (a.with && !P(s, a.with) && !extra.includes(a.with)) continue;
+        const k = trickSig(a);
+        if (!by.has(k)) by.set(k, { a: { ...a }, puppets: [] });
+        by.get(k).puppets.push(p.id);
+      }
+    }
+    return { uid, opts: [...by.values()] };
+  });
+}
+export function trickPlay(s, key, a, puppetId = null, { rng = Math.random, now = Date.now() } = {}) {
+  const t = trickOf(s, key);
+  if (!t) return { ok: false, error: 'Режим пакостника не включён' };
+  if (!a || typeof a !== 'object' || !t.hand.includes(a.uid)) return { ok: false, error: 'Этой карты у вас нет' };
+  const pa = { ...a, type: 'playCard' };
+  if (badShape(pa)) return { ok: false, error: 'Плохие данные' };
+  // второй картой может быть только монстр из того же рукава (для «Из темноты вылезло…»)
+  const extra = a.with && !P(s, a.with) ? a.with : null;
+  if (extra && !trickExtras(t, a.uid).includes(extra)) return { ok: false, error: 'Этой карты у вас нет' };
+  const put = [a.uid, ...(extra ? [extra] : [])];
+  let cands = s.players.filter(p => !p.dead && p.id !== a.target && p.id !== a.with);
+  if (puppetId) cands = cands.filter(p => p.id === puppetId);
+  for (let i = cands.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [cands[i], cands[j]] = [cands[j], cands[i]]; }
+  let err = puppetId ? 'От имени этого игрока так нельзя' : 'Сейчас эту карту никто из игроков сыграть не может';
+  for (const p of cands) {
+    p.hand.push(...put);
+    const e = check(s, p.id, pa);
+    if (e) { for (const u of put) p.hand.splice(p.hand.lastIndexOf(u), 1); if (puppetId) err = e; continue; }
+    for (const u of put) without(t.hand, u);
+    act(s, p.id, pa, { rng, now });
+    // всё, что не ушло в игру, — в сброс: в руке куклы чужих карт не остаётся
+    for (const u of put) if (p.hand.includes(u)) { without(p.hand, u); toDiscard(s, u); }
+    return { ok: true, puppet: p.id };
+  }
+  return { ok: false, error: err };
+}
+
 export function check(s, pid, a) {
   if (badShape(a)) return 'Плохие данные';
   if (s.phase !== 'playing') return 'Партия окончена';

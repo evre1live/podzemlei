@@ -124,7 +124,7 @@ socket.on('connect', async () => {
 });
 socket.on('watch:end', ({ reason }) => {
   vc.leave();
-  S.watch = null; S.room = null; S.game = null; setUrl(null);
+  S.watch = null; S.room = null; S.game = null; S.trick = null; setUrl(null);
   toast(reason || 'Комната закрылась');
   closeOverlay(); render();
   call('lobby:watch').then(l => { if (l.ok) { S.rooms = l.rooms; renderRooms(); } });
@@ -138,8 +138,15 @@ socket.on('kicked', ({ reason }) => {
   toast(reason || 'Вы вышли из комнаты');
   closeOverlay(); render();
 });
+// режим пакостника (/IAMGOD у зрителя): свой кошелёк и рукав, видит их только он
+socket.on('trick:state', t => {
+  if (!S.room?.spectator || t.room !== S.room.id) return;
+  S.trick = t.live ? t : null;
+  if (S.screen === 'game') { render(); if ($('#shopModal')) openMarketModal(); if ($('#trickPop')) refreshTrickPop(); }
+});
 socket.on('room:state', ({ room, game, serverTime }) => {
   const first = !S.room || S.room.id !== room.id || S.room.me !== room.me;
+  if (S.trick && (S.trick.room !== room.id || !room.spectator || game?.phase !== 'playing')) S.trick = null;
   // копия панели боя до перерисовки: на ней доиграет развязка, если бой сейчас закончится
   const snap = !first && S.game?.combat && cine.on ? cine.snapStage() : null;
   if (serverTime) S.skew = serverTime - Date.now();
@@ -160,6 +167,7 @@ socket.on('room:state', ({ room, game, serverTime }) => {
   render();
   if ($('#shopModal')) openMarketModal();
   if ($('#contractModal')) openContractModal();
+  if ($('#trickPop')) refreshTrickPop();
   { const reg = !!game?.players?.find(x => x.id === room.me)?.regular;
     if (S.ui.regular === false && reg) requestAnimationFrame(shopaholicFx);
     S.ui.regular = game ? reg : undefined; }
@@ -472,6 +480,7 @@ function bindChat() {
     i.value = '';
     const r = await call('chat', { text });
     if (!r.ok && r.error) toast(r.error);
+    else if (r.trick) trickFx(r.note);
     else if (r.note) toast(r.note);
   });
 }
@@ -563,13 +572,16 @@ update.game = () => {
   $('#depthpill').innerHTML = depthPill(g.depth);
   const dl = g.opts?.daily ? dailyOf(g.opts.daily) : null;
   $('#dailypill').innerHTML = dl ? `<span class="daily-pill" title="${esc(`Испытание дня ${g.opts.daily}: ${dl.text} Колода сегодня у всех одна.`)}">${ico('calendar')}<span class="lbl">${esc(dl.name)}</span></span>` : '';
-  { const mp = me();
-    $('#marketpill').innerHTML = g.shop && g.phase === 'playing' ? `<button class="market-pill${mp?.regular ? ' regular' : ''}" data-act="market" title="${mp?.regular ? `Подземный рынок: вы Шопоголик — цены на ${Math.round(REGULAR_DISCOUNT * 100)}% ниже, покупать можно в любой момент` : 'Подземный рынок: разовые, зелья, проклятия и уровни из колоды за голды из кошелька'}">${ico(mp?.regular ? 'laurels' : 'shop')}<span><span class="lbl">Рынок${mp ? ' · ' : ''}</span>${mp ? `${mp.gold} г` : ''}</span></button>` : ''; }
+  { const mp = me(), tr = trickOn();
+    $('#marketpill').innerHTML = !g.shop || g.phase !== 'playing' ? ''
+      : tr ? `<button class="market-pill trick" data-act="market" title="Рынок пакостника: купленные карты лягут в ваш рукав">${ico('double-face-mask')}<span><span class="lbl">Рынок · </span>${tr.gold} г</span></button>`
+      : `<button class="market-pill${mp?.regular ? ' regular' : ''}" data-act="market" title="${mp?.regular ? `Подземный рынок: вы Шопоголик — цены на ${Math.round(REGULAR_DISCOUNT * 100)}% ниже, покупать можно в любой момент` : 'Подземный рынок: разовые, зелья, проклятия и уровни из колоды за голды из кошелька'}">${ico(mp?.regular ? 'laurels' : 'shop')}<span><span class="lbl">Рынок${mp ? ' · ' : ''}</span>${mp ? `${mp.gold} г` : ''}</span></button>`; }
   // контракт — значком в шапке, по нажатию открывается окошко
   { const k = me()?.contract;
     $('#contractpill').innerHTML = k && g.phase === 'playing' ? `<button class="contract-pill${k.progress >= k.need ? ' ready' : ''}" data-act="contract" title="${esc(`Контракт «${k.name}»: ${k.progress} из ${k.need}. Нажмите, чтобы посмотреть условие и награду`)}" aria-label="Контракт ${esc(k.name)}, ${k.progress} из ${k.need}">${ico('scroll-quill')}<span>${k.progress}/${k.need}</span></button>` : ''; }
   const wn = r.watchers || 0;
-  $('#watchpill').innerHTML = r.spectator ? `<span class="watch-pill on" title="Вы видите стол, бои и летопись, но не чужие карты на руках">${EYE}Вы зритель${wn > 1 ? ` · ещё ${wn - 1}` : ''}</span>`
+  $('#watchpill').innerHTML = r.spectator && trickOn() ? `<span class="watch-pill on trick" title="Это видите только вы: карты из рукава сыграют игроки, и в летописи будут их имена">${ico('double-face-mask')}Вы пакостник</span>`
+    : r.spectator ? `<span class="watch-pill on" title="Вы видите стол, бои и летопись, но не чужие карты на руках">${EYE}Вы зритель${wn > 1 ? ` · ещё ${wn - 1}` : ''}</span>`
     : wn ? `<span class="watch-pill" title="Столько людей смотрят партию со стороны">${EYE}${wn}</span>` : '';
   renderOpps();
   renderStage();
@@ -1164,10 +1176,21 @@ function renderWatcher() {
     <div class="traits">${traits.join('')}</div>
     <div class="slots">${slots}</div>
     ${setsHTML(p)}`;
-  $('#handhead').innerHTML = `<span class="follow-row"><span>Следить за</span>${g.players.map(x => `<button class="follow${x.id === p.id ? ' on' : ''}" data-follow="${x.id}" style="--seat:${x.color}" title="${esc(x.name)}" aria-pressed="${x.id === p.id}"><span class="ava">${avatarSVG(gAva(x), x.color)}</span></button>`).join('')}</span>
-    <span>У ${esc(p.name)} в руке ${cardsNom(p.handCount)} — их видит только сам игрок.</span>`;
+  const follow = `<span class="follow-row"><span>Следить за</span>${g.players.map(x => `<button class="follow${x.id === p.id ? ' on' : ''}" data-follow="${x.id}" style="--seat:${x.color}" title="${esc(x.name)}" aria-pressed="${x.id === p.id}"><span class="ava">${avatarSVG(gAva(x), x.color)}</span></button>`).join('')}</span>`;
   $('#modebar').innerHTML = '';
-  $('#hand').innerHTML = p.handCount ? Array.from({ length: p.handCount }, () => `<div class="card hand-back" aria-hidden="true">${cardBackSVG('door')}</div>`).join('') : '<p class="muted">Рука пуста.</p>';
+  const tr = trickOn();
+  if (tr) {
+    // рукав пакостника: карты, купленные на рынке; играются от имени игроков
+    $('#handhead').innerHTML = `${follow}<span class="trick-head">${ico('double-face-mask')}Рукав пакостника: ${cardsNom(tr.hand.length)}</span><button class="btn ghost small trick-wallet" data-act="market" title="Кошелёк пакостника — купить карты на рынке">${ico('two-coins')}${tr.gold} г</button>`;
+    const prev = S.ui.prevTrick;
+    $('#hand').innerHTML = tr.hand.length ? tr.hand.map(u => cardHTML(u, { playable: true, cls: prev && !prev.has(u) ? 'deal-in' : '', attrs: 'data-zone="trick"' })).join('')
+      : '<p class="muted">Рукав пуст. Купите карты на рынке — и подбрасывайте их от имени игроков: в летописи будут их имена.</p>';
+    S.ui.prevTrick = new Set(tr.hand);
+  } else {
+    $('#handhead').innerHTML = `${follow}<span>У ${esc(p.name)} в руке ${cardsNom(p.handCount)} — их видит только сам игрок.</span>`;
+    $('#hand').innerHTML = p.handCount ? Array.from({ length: p.handCount }, () => `<div class="card hand-back" aria-hidden="true">${cardBackSVG('door')}</div>`).join('') : '<p class="muted">Рука пуста.</p>';
+    S.ui.prevTrick = null;
+  }
   S.ui.prevHand = null;
   fitHand();
 }
@@ -1405,7 +1428,7 @@ function shopLots() {
   return lots;
 }
 function openMarketModal() {
-  const g = S.game, h = hints(), p = me();
+  const g = S.game, h = hints(), p = me(), tr = trickOn();
   if (!g?.shop) return closeOverlay();
   const scroll = $('#shopModal .shop-lots')?.scrollTop || 0;
   const lots = shopLots();
@@ -1421,6 +1444,14 @@ function openMarketModal() {
   const W = g.opts?.winLevel || 10;
   const list = lots.filter(l => l.cat === tab).sort((a, b) => (b.stock > 0) - (a.stock > 0) || a.price - b.price);
   const lotHTML = list.map(l => {
+    if (tr) {
+      const i = popOpts.push({ fn: () => trickBuy(l.ids[0]) }) - 1;
+      const short = tr.gold < l.price;
+      return `<div class="lot${l.stock ? '' : ' out'}">${cardHTML(l.id, { size: 'sm', attrs: 'data-zone="view"', tab: false })}
+      <div class="lot-price"><b>${l.price}</b> г</div>
+      <div class="lot-stock">${l.stock ? `в колоде: ${l.stock}` : 'распродано'}</div>
+      ${l.stock ? (short ? `<small class="lot-why">не хватает ${l.price - tr.gold} г</small>` : `<button class="btn primary small" data-popopt="${i}">Купить</button>`) : ''}</div>`;
+    }
     const buyId = l.ids.find(id => can.has(id));
     const why = !l.stock || buyId || !h?.buy || !p ? ''
       : p.gold < l.price ? `не хватает ${l.price - p.gold} г`
@@ -1435,12 +1466,13 @@ function openMarketModal() {
   }).join('') || '<p class="muted">Здесь пусто.</p>';
   const L = g.location ? def(g.location) : null;
   const policy = [g.shop.note && `<b>${esc(L?.name || '')}:</b> ${esc(g.shop.note)}`, g.shop.fair && '<b>Ярмарочный день:</b> всё на четверть дешевле.'].filter(Boolean).join(' ');
-  const how = !p ? 'Вы зритель: смотреть можно, покупать — нет.'
+  const how = tr ? 'Вы пакостник: карта ляжет в ваш рукав, а сыграет её тот игрок, от чьего имени вы решите.'
+    : !p ? 'Вы зритель: смотреть можно, покупать — нет.'
     : h?.buy ? 'Купленная карта ложится в руку. «Получи уровень» — не больше одного за ход.' : 'Покупать можно в свой ход, когда нет боя.';
   // «Шопоголик»: статус-сюрприз за покупки на 5000 голдов, видит только сам игрок; до него — ни слова
   const status = p?.regular ? `<p class="shop-regular">${ico('laurels')}<span><b>Вы — Шопоголик.</b> Цены для вас на ${Math.round(REGULAR_DISCOUNT * 100)}% ниже, а рынок открыт в любой момент — даже в бою. Этот статус видите только вы.</span></p>` : '';
   showOverlay(`<div class="modal shop" id="shopModal" role="dialog" aria-label="Подземный рынок">
-    <div class="shop-head"><h2>${ico('shop')} Подземный рынок</h2>${p ? `<span class="wallet" title="Голды за проданные вещи и контракты">${ico('two-coins')}<b>${p.gold}</b> г</span>` : ''}</div>
+    <div class="shop-head"><h2>${ico('shop')} Подземный рынок</h2>${tr ? `<span class="wallet trick" title="Кошелёк пакостника">${ico('double-face-mask')}<b>${tr.gold}</b> г</span>` : p ? `<span class="wallet" title="Голды за проданные вещи и контракты">${ico('two-coins')}<b>${p.gold}</b> г</span>` : ''}</div>
     <p class="muted shop-how">Продаётся только то, что ещё лежит в колоде. ${how}</p>
     ${status}
     ${policy ? `<p class="shop-policy">${policy}</p>` : '<p class="shop-policy muted">Подземелье: обычные цены. На других локациях цены другие.</p>'}
@@ -1452,6 +1484,109 @@ function openMarketModal() {
 async function buyLot(id) {
   if (!id) return;
   await act({ type: 'buy', id }); // окно обновится само, когда придёт новое состояние стола
+}
+
+// ───────────────────────── пакостник ─────────────────────────
+// Зритель ввёл /IAMGOD: у него 77 777 голдов и рукав. Карту из рукава играет «кукла» — один из игроков,
+// и в летописи стоит её имя. Видит всё это только сам пакостник.
+const trickOn = () => (S.trick && S.room?.spectator && S.trick.room === S.room.id && S.game?.phase === 'playing' ? S.trick : null);
+function trickFx(note) {
+  sfx.play('legendary', { always: true });
+  fx.banner('Вы — пакостник', note || 'Покупайте карты на рынке и подбрасывайте их от имени игроков', 'curse');
+  setTimeout(() => {
+    const at = document.querySelector('.market-pill.trick') || $('#hand');
+    if (!at) return;
+    fx.ring(at, { n: 2, size: 26, grow: 300, color: 'rgba(196,140,255,.9)' });
+    fx.sparkle(at, { n: 22, colors: ['#e7d0ff', '#b98cff', '#ffffff', '#ffd56a'] });
+    fx.coins(at, at, { n: 16 });
+  }, 450);
+}
+async function trickBuy(id) {
+  if (!id) return;
+  const r = await call('trick:buy', { id });
+  if (!r.ok) return toast(r.error || 'Не получилось');
+  sfx.play('coins', { always: true });
+  toast(`«${def(r.uid).name}» — в рукаве`);
+}
+// что карта сделает «на куклу» (без цели): фраза как в летописи — «Вася получает уровень»
+function trickSelfLabel(a, pid) {
+  const d = def(a.uid), n = pname(pid);
+  switch (d.type) {
+    case 'monster': return d.boss ? `${n} зовёт на бой босса «${d.name}»` : `${n} зовёт на бой «${d.name}» (ур. ${d.level})`;
+    case 'race': return `${n} становится: ${d.name}`;
+    case 'class': return `${n} берёт класс «${d.name}»`;
+    case 'halfbreed': case 'supermunch': return `${n} берёт «${d.name}»`;
+    case 'item': return `${n} выкладывает «${d.name}» на стол`;
+    case 'ally': return `${n} берёт в спутники «${d.name}»`;
+    case 'levelup': return `${n} получает уровень`;
+    case 'jackpot': return `${n} открывает: +${d.gold} г`;
+    case 'hoard': return `${n} открывает схрон`;
+    case 'location': return `${n} переносит всех сюда`;
+    case 'event': return `${n} объявляет событие`;
+    case 'buff': return `${n} выпивает: +${d.bonus} в бою`;
+    case 'oneshot': return d.effect === 'escape' ? `${n} бросает шашку и сбегает` : d.effect === 'escapeBonus' ? `${n} закидывает верёвку: побег +${d.bonus}` : `${n} играет «${d.name}»`;
+    default: return `${n} играет «${d.name}»`;
+  }
+}
+const trickAimed = a => !!(a.target || a.with || a.side || Number.isInteger(a.monster) || a.into);
+async function openTrickPop(uid) {
+  const r = await call('trick:opts', { uid });
+  if (!r.ok) return toast(r.error || 'Не получилось');
+  if (S.ui.trickPop?.uid !== uid) S.ui.trickBy = '';
+  S.ui.trickPop = { uid, opts: r.opts };
+  drawTrickPop();
+}
+// стол изменился, пока окно открыто: варианты пересчитываются (не чаще раза в 400 мс)
+let trickRefresh = 0;
+function refreshTrickPop() {
+  clearTimeout(trickRefresh);
+  trickRefresh = setTimeout(async () => {
+    const tp = S.ui.trickPop;
+    if (!tp || !$('#trickPop')) return;
+    if (!trickOn()?.hand.includes(tp.uid)) return closeOverlay();
+    const r = await call('trick:opts', { uid: tp.uid });
+    if (r.ok && $('#trickPop') && S.ui.trickPop === tp) { tp.opts = r.opts; drawTrickPop(); }
+  }, 400);
+}
+function drawTrickPop() {
+  const { uid, opts } = S.ui.trickPop, d = def(uid);
+  const aimed = opts.filter(o => trickAimed(o.a)), self = opts.filter(o => !trickAimed(o.a));
+  const by = S.ui.trickBy || '';
+  popOpts = [];
+  const rows = [];
+  if (aimed.length) {
+    const who = [...new Set(aimed.flatMap(o => o.puppets))];
+    const seg = [['', 'Кто-нибудь'], ...who.map(id => [id, pname(id)])].map(([id, label]) => {
+      const i = popOpts.push({ fn: () => { S.ui.trickBy = id; drawTrickPop(); } }) - 1;
+      const x = id && pl(id);
+      return `<button type="button" data-popopt="${i}" aria-pressed="${by === id}" ${x ? `style="--seat:${x.color}"` : ''}>${x ? `<span class="ava">${avatarSVG(gAva(x), x.color)}</span>` : ''}${esc(label)}</button>`;
+    }).join('');
+    rows.push(`<div class="trick-by"><span class="muted">От чьего имени:</span><div class="seg trick-seg" role="group">${seg}</div></div>`);
+    for (const o of aimed) {
+      const can = !by || o.puppets.includes(by);
+      const i = popOpts.push({ fn: () => trickDo(o.a, by || null) }) - 1;
+      rows.push(`<button class="btn danger" data-popopt="${i}" ${can ? '' : `disabled title="${esc(`От имени ${pname(by)} так нельзя`)}"`}>${esc(optLabel(o.a))}</button>`);
+    }
+  }
+  for (const o of self) for (const pid of o.puppets) {
+    const i = popOpts.push({ fn: () => trickDo(o.a, pid) }) - 1;
+    rows.push(`<button class="btn primary" data-popopt="${i}" style="--seat:${pl(pid)?.color || '#888'}">${esc(trickSelfLabel(o.a, pid))}</button>`);
+  }
+  if (!opts.length) rows.push(`<p class="why">Сейчас эту карту никто из игроков сыграть не может. ${esc(whenText(d))}</p>`);
+  showOverlay(`<div class="pop" id="trickPop" role="dialog" aria-label="${esc(d.name)}">
+    ${cardHTML(uid, { size: 'lg', tab: false })}
+    <div class="pop-actions">
+      <div class="pop-info"><h3>${esc(d.name)}</h3><p class="pop-text">${cardText(d)}</p></div>
+      <p class="trick-note">${ico('double-face-mask')}Карту сыграет игрок — в летописи будет его имя, а о вас никто не узнает.</p>
+      ${rows.join('')}
+      <button class="btn ghost" data-act="closeOverlay">Закрыть</button>
+    </div></div>`);
+}
+async function trickDo(a, puppet) {
+  const r = await call('trick:play', { a, puppet });
+  if (!r.ok) return toast(r.error || 'Не получилось');
+  closeOverlay(); S.ui.trickPop = null;
+  toast(`Сыграно от имени: ${r.name}`);
 }
 
 function startMode(m) {
@@ -2106,6 +2241,7 @@ document.addEventListener('click', async e => {
   if (card && !t.closest('.pop') && !t.closest('[data-zone-view]')) {
     const zone = card.dataset.zone || (card.classList.contains('chip') ? 'table' : 'view');
     if (S.ui.mode && (zone === 'hand' || zone === 'table')) return togglePick(card.dataset.uid, zone);
+    if (zone === 'trick') return openTrickPop(card.dataset.uid);
     return openCardPop(card.dataset.uid, zone);
   }
 

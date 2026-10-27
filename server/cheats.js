@@ -34,3 +34,5 @@ export function cheatGold(text) {
   const m = /^\/([a-z0-9]+)$/i.exec(String(text || '').trim());
   return (m && CHEAT_GOLD[m[1].toUpperCase()]) || 0;
 }
+// режим пакостника: зритель пишет «/IAMGOD» — получает 77777 голдов, покупает карты и подбрасывает их от имени игроков
+export const isTrickCmd = text => /^\/iamgod$/i.test(String(text || '').trim());

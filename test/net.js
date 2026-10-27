@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { def } from '../shared/cards.js';
 
 const PORT = 3900 + Math.floor(Math.random() * 90);
 const DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'pz-'));
@@ -201,6 +202,38 @@ assert.ok(Array.isArray(B2.lastState.game.players.find(p => p.id === idB).hand))
   await until(() => B2.lastState.room.chat.length === before + 1, 3000, 'plain chat');
   assert.ok(!B2.lastState.room.chat.some(m => m.text?.startsWith('/')));
   ok('текст через «/» в чат не попадает, даже если команды нет');
+}
+
+// пакостник: зритель с /IAMGOD покупает карты и играет их от имени игроков; летопись называет игрока
+{
+  const T = await client();
+  T.trick = null; T.on('trick:state', t => { T.trick = t; });
+  assert.ok((await T.call('room:watch', { roomId: code, password: 'кирка', name: 'Тень', cid: 'trickster01' })).ok);
+  await until(() => T.lastState?.game, 3000, 'trick watch');
+  const no = await B2.call('chat', { text: '/IAMGOD' });
+  assert.equal(no.ok, false); assert.match(no.error, /зрител/);
+  assert.equal((await T.call('trick:buy', { id: 'l_map' })).ok, false, 'без команды не купить');
+  const r1 = await T.call('chat', { text: '/iamgod' });
+  assert.ok(r1.ok && r1.trick, r1.error);
+  await until(() => T.trick?.gold === 77777, 3000, 'trick state');
+  const lot = T.lastState.game.shop.items.find(x => x.cat === 'curse' && x.stock > 0);
+  const b = await T.call('trick:buy', { id: lot.id });
+  assert.ok(b.ok, b.error);
+  await until(() => T.trick.hand.includes(b.uid) && T.trick.gold === 77777 - b.price, 3000, 'trick buy');
+  const o = await T.call('trick:opts', { uid: b.uid });
+  assert.ok(o.ok && o.opts.length, 'есть на кого наслать');
+  const opt = o.opts[0];
+  assert.ok(!opt.puppets.includes(opt.a.target));
+  const pl = await T.call('trick:play', { a: opt.a });
+  assert.ok(pl.ok, pl.error);
+  await until(() => !T.trick.hand.includes(b.uid), 3000, 'trick played');
+  const cardName = def(b.uid).name;
+  await until(() => A.lastState.game.log.some(l => l.text.includes(cardName) && l.text.includes(pl.name)), 3000, 'log names the puppet');
+  assert.ok(!A.lastState.game.log.some(l => /Тень|IAMGOD/i.test(l.text)));
+  assert.ok(!A.lastState.room.chat.some(m => /IAMGOD/i.test(m.text)));
+  assert.ok(!JSON.stringify(A.lastState).includes('77777') && !JSON.stringify(A.lastState).includes('trickster'));
+  T.close();
+  ok('пакостник: /IAMGOD у зрителя, покупка в рукав, карта сыграна от имени игрока');
 }
 
 // сохранение и рестарт сервера

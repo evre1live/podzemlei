@@ -1,5 +1,5 @@
 // Фаззинг: случайные и мусорные действия от всех игроков не должны ронять движок.
-import { createGame, act, tick, view } from '../shared/engine.js';
+import { createGame, act, tick, view, trickStart, trickBuy, trickOptions, trickPlay } from '../shared/engine.js';
 import { botDecide } from '../shared/bot.js';
 import { allUids, def, SHOP_IDS } from '../shared/cards.js';
 
@@ -17,6 +17,7 @@ function count(s) {
   if (s.duel) all.push(s.duel.card, ...s.duel.used);
   if (s.combat) { for (const m of s.combat.monsters) all.push(m.uid, ...m.enh); all.push(...s.combat.used); }
   if (s.location) all.push(s.location);
+  for (const t of Object.values(s.tricksters || {})) all.push(...t.hand);
   return all.length === TOTAL && new Set(all).size === TOTAL;
 }
 const N = Number(process.argv[2] || 300);
@@ -51,6 +52,18 @@ for (let g = 0; g < N; g++) {
       const me = s.players.find(x => x.id === pid), to = s.players[Math.floor(rng() * s.players.length)];
       const some = list => list.filter(() => rng() < 0.4);
       a = { type: 'offerTrade', to: to.id, give: some([...me.equipped, ...me.carried, ...me.hand.filter(u => def(u).type === 'item')]), want: some([...to.equipped, ...to.carried]) };
+    }
+    // пакостник-зритель: покупает на рынке и подбрасывает карты от имени игроков (иногда — мусор)
+    if (rng() < 0.06) {
+      trickStart(s, 'w');
+      if (rng() < 0.5) trickBuy(s, 'w', rng() < 0.8 ? SHOP_IDS[Math.floor(rng() * SHOP_IDS.length)] : junk(rng));
+      const opts = trickOptions(s, 'w').flatMap(x => x.opts);
+      const o = opts[Math.floor(rng() * opts.length)];
+      const ta = o && rng() < 0.85 ? o.a : { uid: rng() < 0.5 ? junk(rng) : ALL[Math.floor(rng() * ALL.length)], target: junk(rng), with: junk(rng) };
+      const pup = rng() < 0.5 ? null : rng() < 0.8 ? ids[Math.floor(rng() * ids.length)] : junk(rng);
+      const tr = trickPlay(s, 'w', ta, typeof pup === 'string' ? pup : null, { rng, now });
+      tr.ok ? ok++ : rejected++;
+      if (!count(s)) { console.log('CARD LEAK (пакостник)', g, i, JSON.stringify(ta)); process.exit(1); }
     }
     const r = act(s, pid, a, { rng, now });
     r.ok ? ok++ : rejected++;
