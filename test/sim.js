@@ -39,6 +39,8 @@ function scan(s) {
     if (l.text.startsWith('⚔ Поединок:')) { stats.duels++; if (l.kind === 'good') stats.duelsWonByChallenger++; }
     if (l.text.includes(' покупает на рынке ')) stats.buys++;
     if (l.text.includes(' уходит тенью от ')) stats.shadowEscapes++;
+    if (l.text.includes(' открывает Ящик Пандоры')) stats.pandora++;
+    if (l.text.includes('Ящик Пандоры забирает у')) stats.pandoraLoss++;
     if (l.text.includes(' платит ') && l.text.includes(' из кошелька')) stats.feesFromWallet++;
   }
   s._seen = s.logSeq;
@@ -46,7 +48,7 @@ function scan(s) {
 let ended = 0, stuck = 0, turnsTotal = 0, actions = 0, maxTurns = 0, errs = 0;
 const stats = { deaths: 0, wins: {} , help: 0, interfere: 0, steals: 0, bossMeet: 0, bossCalm: 0, bossEscaped: 0, bossKilled: 0, bossCaught: 0,
   tamed: 0, allies: 0, mercLeft: 0, trapsDisarmed: 0, trapsFailed: 0, trapsTaken: 0, trapsPlanted: 0, lures: 0,
-  duels: 0, duelsWonByChallenger: 0, buys: 0, shadowEscapes: 0, feesFromWallet: 0, summons: 0, summonsOwn: 0, sells: 0 };
+  duels: 0, duelsWonByChallenger: 0, buys: 0, shadowEscapes: 0, feesFromWallet: 0, summons: 0, summonsOwn: 0, sells: 0, pandora: 0, pandoraLoss: 0 };
 const eco = { goldSold: 0, goldContracts: 0, spent: {}, bought: {}, endGold: 0, players: 0 };
 const cls = {};
 for (let g = 0; g < N; g++) {

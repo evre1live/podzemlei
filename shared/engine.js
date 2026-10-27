@@ -2,7 +2,7 @@
 // Сервер хранит состояние, вызывает act()/tick() и рассылает view() каждому игроку.
 import { def, allUids, RACE_NAMES, CLASS_NAMES, ruleText, BOSS_MULT, BOSS_MIN_LEVEL, BOSS_FLOOR, TROUBLE_BONUS, WITCHER_BONUS, MUTAGEN_BONUS, LULLABY_PENALTY, LULLABY_MAX, DISTILL_COST,
   DEPTH, DEPTH_TREASURE_EVERY, DEATH_LEVELS, GHOST_BONUS, CONTRACTS, CONTRACT_DEFS, SETS, rewardText,
-  TAME_MARGIN, WARLOCK_TAME, tameBonus, TRAP_ROLL, TRAP_SKILL, TRAP_FAIL_LEVELS, SHOP_IDS, shopCat, shopBase, roundPrice, dailyOf } from './cards.js';
+  TAME_MARGIN, WARLOCK_TAME, PANDORA_COST, PANDORA_BONUS, PANDORA_ESCAPE, tameBonus, TRAP_ROLL, TRAP_SKILL, TRAP_FAIL_LEVELS, SHOP_IDS, shopCat, shopBase, roundPrice, dailyOf } from './cards.js';
 
 export const WIN_LEVEL = 10;
 // до какого уровня идёт партия: 10 по умолчанию, в лобби можно выбрать 15 или 20
@@ -917,7 +917,7 @@ function resolveEscape(s, rng) {
         continue;
       }
       const noEsc = d.escape === false || m.enh.some(u => def(u).noEscape);
-      const bonus = runBonusOf(s, p) + (c.escape[pid] || 0) + (d.escapeMod || 0);
+      const bonus = runBonusOf(s, p) + (c.escape[pid] || 0) + (d.escapeMod || 0) - (c.pandora ? PANDORA_ESCAPE : 0);
       let r = 0, ok = false;
       if (noEsc) log(s, `От ${q(d.name)} не убежать!`, 'bad');
       else {
@@ -936,6 +936,8 @@ function resolveEscape(s, rng) {
       }
       const sign = bonus ? (bonus > 0 ? '+' : '') + bonus : '';
       if (ok) { fx(s, { kind: 'escaped', pid, card: m.uid }); log(s, `${p.name} удирает от ${q(d.name)} (${r}${sign}).`, 'good'); contractEvent(s, p, 'escape', {}, rng); continue; }
+      // открытый Ящик Пандоры: не убежавший теряет все вещи и питомца (один раз за бой)
+      if (c.pandora && !(c.pandoraHit ||= []).includes(pid)) { c.pandoraHit.push(pid); pandoraLoss(s, p, rng); }
       if (monTags(m.uid).some(t => itemList(p, 'immune').includes(t))) {
         fx(s, { kind: 'escaped', pid, card: m.uid, calm: true });
         log(s, `${p.name} не убежал от ${q(d.name)}, но противогаз спас от расплаты.`, 'good');
@@ -1503,6 +1505,68 @@ H.haunt = {
   },
 };
 
+// ───────────────────────── Ящик Пандоры ─────────────────────────
+// В любом бою любой живой игрок может открыть ящик за голды: монстрам +10, героям −3 к побегу.
+// Кто из героев не убежит — теряет все вещи и питомца, их раздают другим игрокам наугад.
+H.pandora = {
+  check(s, p) {
+    if (p.dead) return 'Вы мертвы до начала следующего хода';
+    const c = s.combat;
+    if (!c) return 'Ящик Пандоры открывают только во время боя';
+    if (c.pandora) return 'Ящик Пандоры в этом бою уже открыт';
+    return (p.gold || 0) < PANDORA_COST ? `Нужно ${PANDORA_COST} голдов, в кошельке ${p.gold || 0}` : null;
+  },
+  run(s, p) {
+    const c = s.combat;
+    p.gold -= PANDORA_COST;
+    c.pandora = { by: p.id };
+    c.mods.push({ side: 'monster', n: PANDORA_BONUS, by: p.id, uid: null, label: 'Ящик Пандоры' });
+    if (!isParticipant(s, p.id)) grudge(s, c.fighter, p.id);
+    fx(s, { kind: 'pandora', pid: p.id, to: c.fighter });
+    log(s, `📦 ${p.name} открывает Ящик Пандоры за ${PANDORA_COST} голдов: монстрам +${PANDORA_BONUS}, героям −${PANDORA_ESCAPE} к побегу. Кто не убежит — лишится всех вещей и питомца!`, 'curse');
+  },
+};
+function pandoraLoss(s, p, rng) {
+  const lost = [...p.equipped, ...p.carried, ...(p.beast ? [p.beast] : [])];
+  p.equipped = []; p.carried = []; p.beast = null;
+  let to = s.players.filter(x => x !== p && !x.dead);
+  if (!to.length) to = s.players.filter(x => x !== p);
+  const got = {};
+  for (const u of lost) {
+    const x = to.length ? pick(to, rng) : null;
+    if (!x) { toDiscard(s, u); continue; }
+    if (def(u).type === 'monster') {
+      // приручённый зверь идёт к новому хозяину, а если у того уже есть свой — убегает
+      if (x.beast) { toDiscard(s, u); continue; }
+      for (const v of x.equipped.filter(y => def(y).slot === 'pet')) { without(x.equipped, v); x.carried.push(v); }
+      x.beast = u;
+    } else x.carried.push(u);
+    (got[x.id] ||= []).push(u);
+  }
+  for (const x of s.players) normalize(s, x);
+  fx(s, { kind: 'pandoraLoss', pid: p.id, n: lost.length, to: Object.keys(got) });
+  log(s, lost.length
+    ? `📦 Ящик Пандоры забирает у ${p.name} всё: ${Object.entries(got).map(([id, l]) => `${P(s, id).name} — ${l.map(u => q(def(u).name)).join(', ')}`).join('; ')}.`
+    : `📦 Ящик Пандоры ищет у ${p.name} вещи — но там пусто.`, 'bad');
+}
+
+// ───────────────────────── голды друг другу ─────────────────────────
+// Передать голды из кошелька любому игроку можно в любой момент партии.
+H.giveGold = {
+  check(s, p, a) {
+    const t = P(s, a.to);
+    if (!t || t === p) return 'Кому передать голды?';
+    if (!Number.isInteger(a.n) || a.n < 1) return 'Сколько передать?';
+    return (p.gold || 0) < a.n ? `В кошельке только ${p.gold || 0} голдов` : null;
+  },
+  run(s, p, a) {
+    const t = P(s, a.to);
+    p.gold -= a.n; t.gold = (t.gold || 0) + a.n;
+    fx(s, { kind: 'giveGold', pid: p.id, to: t.id, n: a.n });
+    log(s, `💰 ${p.name} передаёт ${t.name} ${a.n} голдов.`, 'info');
+  },
+};
+
 // Ржавник: брось ему вещь — уползёт жевать, бой без наград
 H.bribe = {
   check(s, p, a) {
@@ -1893,6 +1957,7 @@ function badShape(a) {
   }
   if (a.monster !== undefined && !Number.isInteger(a.monster)) return true;
   if (a.offer !== undefined && !Number.isInteger(a.offer)) return true;
+  if (a.n !== undefined && !Number.isInteger(a.n)) return true;
   return false;
 }
 
@@ -1978,6 +2043,7 @@ export function hints(s, pid) {
     autoEquip: ok({ type: 'autoEquip' }),
     bribe: s.combat?.fighter === pid && s.combat.monsters.some(m => def(m.uid).bribe) ? inPlayItems(p).filter(u => ok({ type: 'bribe', item: u })) : [],
     tame: ok({ type: 'tame' }) ? s.tame.uid : null,
+    pandora: ok({ type: 'pandora' }),
     buy: !manageErr(s, p),
     shop: SHOP_IDS.filter(id => ok({ type: 'buy', id })),
     trap: ok({ type: 'trap' }) ? { uid: s.trap.uid, need: trapNeed(p) } : null,
@@ -2045,6 +2111,7 @@ export function view(s, pid) {
       fighter: c.fighter, helper: c.helper, helpOffer: c.helpOffer, helpReq: c.helpReq,
       monsters: c.monsters.map(m => ({ uid: m.uid, enh: [...m.enh], strength: monsterStrength(s, m), treasure: monsterTreasure(s, m),
         level: monsterBaseLevel(s, def(m.uid)) - SPLIT_STEP * (s.splits?.[m.uid] || 0), noEscape: def(m.uid).escape === false || m.enh.some(u => def(u).noEscape) })),
+      pandora: c.pandora ? { ...c.pandora } : null, pandoraCost: PANDORA_COST,
       mods: c.mods, backstabs: c.backstabs, rage: c.rage, turnUndead: c.turnUndead, escape: c.escape,
       winAt: c.winAt, winStart: c.winStart || null, passed: [...(c.passed || [])], numbers: combatNumbers(s),
       heroStrengths: Object.fromEntries(participants(s).map(id => [id, heroStrength(s, P(s, id))])),

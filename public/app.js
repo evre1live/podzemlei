@@ -1,6 +1,6 @@
 // «Под Землёй» — клиент.
 import { def, RACE_NAMES, CLASS_NAMES, SETS, setRuleVars, ruleText, BOSS_FLOOR, TROUBLE_BONUS, LULLABY_PENALTY, MUTAGEN_BONUS, DISTILL_COST,
-  PERSONAS, GHOST_BONUS, DEATH_LEVELS, DEPTH, DEPTH_TREASURE_EVERY, TRADE_TIMEOUT_MS, TAME_MARGIN, WARLOCK_TAME, tameBonus, TRAP_FAIL_LEVELS, SHOP_CATS, dailyOf, dailyDate } from '/shared/cards.js';
+  PERSONAS, GHOST_BONUS, DEATH_LEVELS, DEPTH, DEPTH_TREASURE_EVERY, TRADE_TIMEOUT_MS, TAME_MARGIN, WARLOCK_TAME, PANDORA_COST, PANDORA_BONUS, PANDORA_ESCAPE, tameBonus, TRAP_FAIL_LEVELS, SHOP_CATS, dailyOf, dailyDate } from '/shared/cards.js';
 import { esc, cardHTML, chipHTML, avatarSVG, iconSVG, cardBackSVG, locationSVG, cardIcon, cardText } from '/art.js';
 import { fx } from '/fx.js';
 import { sfx } from '/sfx.js';
@@ -733,6 +733,80 @@ function actionButtons() {
 }
 
 const SWORDS = ico('crossed-swords');
+// Ящик Пандоры: резная шкатулка тёмного дерева в золотой оковке; из-под крышки сочится лиловый свет, открытая — бьёт столбом
+function pandoraSVG(open = false, id = 'pb') {
+  const lid = open ? `transform="translate(0 -15) rotate(-9 16 44)"` : '';
+  return `<svg class="pb-svg" viewBox="0 0 120 108" aria-hidden="true">
+  <defs>
+    <linearGradient id="${id}W" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6a2a3e"/><stop offset=".55" stop-color="#3a1424"/><stop offset="1" stop-color="#1c0912"/></linearGradient>
+    <linearGradient id="${id}L" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7d3550"/><stop offset="1" stop-color="#3b1526"/></linearGradient>
+    <linearGradient id="${id}G" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff4c4"/><stop offset=".35" stop-color="#f1c460"/><stop offset=".7" stop-color="#b9842c"/><stop offset="1" stop-color="#6e4612"/></linearGradient>
+    <radialGradient id="${id}K" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#ffe9ff"/><stop offset=".45" stop-color="#c77dff"/><stop offset="1" stop-color="#5a1a8c" stop-opacity="0"/></radialGradient>
+    <linearGradient id="${id}B" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#e7b6ff" stop-opacity=".95"/><stop offset=".5" stop-color="#9d4dff" stop-opacity=".45"/><stop offset="1" stop-color="#9d4dff" stop-opacity="0"/></linearGradient>
+    <filter id="${id}F" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="2.4"/></filter>
+  </defs>
+  ${open ? `<path class="pb-beam" d="M22 46 L8 0 H112 L98 46 Z" fill="url(#${id}B)"/><g class="pb-motes" fill="#f3d9ff"><circle cx="40" cy="22" r="1.6"/><circle cx="62" cy="10" r="1.2"/><circle cx="80" cy="26" r="1.8"/><circle cx="52" cy="34" r="1.1"/><circle cx="72" cy="4" r="1"/></g>` : ''}
+  <ellipse cx="60" cy="100" rx="46" ry="6" fill="rgba(0,0,0,.45)"/>
+  <path d="M14 48 H106 V88 Q106 94 100 94 H20 Q14 94 14 88 Z" fill="url(#${id}W)" stroke="#120609" stroke-width="2"/>
+  <path d="M18 52 H102 V86 H18 Z" fill="none" stroke="url(#${id}G)" stroke-width="1.4" opacity=".55"/>
+  <path d="M38 62 q5 -5 10 0 t10 0 M64 62 q5 -5 10 0 t10 0" fill="none" stroke="#f1c460" stroke-width="1" opacity=".35"/>
+  <rect x="27" y="48" width="7" height="46" fill="url(#${id}G)" stroke="#4a2c08" stroke-width=".8"/>
+  <rect x="86" y="48" width="7" height="46" fill="url(#${id}G)" stroke="#4a2c08" stroke-width=".8"/>
+  <path d="M14 82 L26 94 H14 Z M106 82 L94 94 H106 Z" fill="url(#${id}G)" stroke="#4a2c08" stroke-width=".8"/>
+  <path d="M50 52 H70 V66 Q70 76 60 80 Q50 76 50 66 Z" fill="url(#${id}G)" stroke="#4a2c08" stroke-width="1.2"/>
+  <circle cx="60" cy="63" r="6.5" fill="url(#${id}K)" class="pb-key"/>
+  <path d="M58.4 61 a1.8 1.8 0 1 1 3.2 0 L62.4 68 H57.6 Z" fill="#1c0912"/>
+  <path class="pb-seam" d="M16 48 H104" stroke="#d79bff" stroke-width="${open ? 5 : 3}" filter="url(#${id}F)"/>
+  <g ${lid}>
+    <path d="M14 48 V36 Q14 22 28 20 H92 Q106 22 106 36 V48 Z" fill="url(#${id}L)" stroke="#120609" stroke-width="2"/>
+    <path d="M20 44 V37 Q20 27 30 26 H90 Q100 27 100 37 V44" fill="none" stroke="url(#${id}G)" stroke-width="1.4" opacity=".6"/>
+    <rect x="27" y="20.5" width="7" height="27.5" fill="url(#${id}G)" stroke="#4a2c08" stroke-width=".8"/>
+    <rect x="86" y="20.5" width="7" height="27.5" fill="url(#${id}G)" stroke="#4a2c08" stroke-width=".8"/>
+    <path d="M14 46 H106" stroke="url(#${id}G)" stroke-width="3"/>
+    <path d="M60 25 l6 7 l-6 7 l-6 -7 Z" fill="#b0207a" stroke="url(#${id}G)" stroke-width="1.6"/>
+    <path d="M58 29 l2 -2 l2 2" stroke="#ffc6ea" stroke-width="1" fill="none"/>
+    <path d="M40 34 q4 -4 8 0 M72 34 q4 -4 8 0" fill="none" stroke="#f1c460" stroke-width="1" opacity=".45"/>
+  </g>
+</svg>`;
+}
+// шкатулка в бою: закрытая — кнопка (кто может заплатить), открытая — кто её открыл
+function pandoraHTML(c, h) {
+  if (c.pandora) return `<div class="pandora open" title="Ящик Пандоры открыт: монстрам +${PANDORA_BONUS}, героям −${PANDORA_ESCAPE} к побегу. Кто не убежит — лишится всех вещей и питомца">${pandoraSVG(true)}<span class="pb-cap">Открыл ${esc(pname(c.pandora.by))}</span></div>`;
+  const p = me();
+  if (!p) return `<div class="pandora" title="Ящик Пандоры: открыть может любой игрок за ${PANDORA_COST} г">${pandoraSVG()}<span class="pb-cap">${PANDORA_COST} г</span></div>`;
+  return `<button type="button" class="pandora${h?.pandora ? ' ready' : ''}" data-act="pandora" title="Ящик Пандоры: открыть за ${PANDORA_COST} г">${pandoraSVG()}<span class="pb-cap">${PANDORA_COST} г</span></button>`;
+}
+function openPandoraModal() {
+  const c = S.game?.combat, h = hints(), p = me();
+  if (!c || !p) return;
+  const why = c.pandora ? 'В этом бою ящик уже открыт.' : p.dead ? 'Мёртвые ящики не открывают.' : p.gold < PANDORA_COST ? `Нужно ${PANDORA_COST} г, а в кошельке ${p.gold} г.` : '';
+  popOpts = [{ fn: async () => { const r = await act({ type: 'pandora' }); if (r.ok) closeOverlay(); } }];
+  const self = c.fighter === p.id || c.helper === p.id;
+  showOverlay(`<div class="modal pandora-modal" role="dialog" aria-label="Ящик Пандоры">
+    <div class="pb-big">${pandoraSVG(false, 'pbm')}</div>
+    <h2>Ящик Пандоры</h2>
+    <p>Откройте его за <b>${PANDORA_COST} голдов</b> — и в этом бою монстрам <b>+${PANDORA_BONUS}</b>, а героям <b>−${PANDORA_ESCAPE} к побегу</b>. Кто из героев не убежит, лишится <b>всех вещей и питомца</b>: их раздадут другим игрокам наугад. Чернокнижник уходит тенью и ничего не теряет. В одном бою — один ящик.</p>
+    ${self ? `<p class="warn-note">Это ваш собственный бой — ящик ударит по вам.</p>` : ''}
+    ${why ? `<p class="muted">${esc(why)}</p>` : ''}
+    <div class="row"><button class="btn danger" data-popopt="0" ${h?.pandora ? '' : 'disabled'}>Открыть за ${PANDORA_COST} г</button><button class="btn ghost" data-act="closeOverlay">Не трогать</button></div>
+  </div>`);
+}
+// передать голды соседу по столу
+function openGoldModal(pid) {
+  const p = me(), t = pl(pid);
+  if (!p || !t) return;
+  const max = p.gold || 0;
+  const send = async n => { n = Math.floor(Number(n)); if (!(n >= 1)) return toast('Сколько передать?'); const r = await act({ type: 'giveGold', to: pid, n }); if (r.ok) closeOverlay(); };
+  popOpts = [{ fn: () => send($('#ggN').value) }, ...[100, 500, 1000].map(v => ({ fn: () => { $('#ggN').value = Math.min(v, max); } })), { fn: () => { $('#ggN').value = max; } }];
+  showOverlay(`<div class="modal gold-modal" role="dialog" aria-label="Передать голды">
+    <h2>${ico('two-coins')} Голды для ${esc(t.name)}</h2>
+    <p class="muted" style="margin:0">В вашем кошельке ${max} г. Передать можно в любой момент партии.</p>
+    <label>Сколько<input type="text" inputmode="numeric" id="ggN" value="${Math.min(500, max)}" autocomplete="off"></label>
+    <div class="seg gg-quick" role="group">${[100, 500, 1000].map((v, i) => `<button type="button" data-popopt="${i + 1}" ${v > max ? 'disabled' : ''}>${v}</button>`).join('')}<button type="button" data-popopt="4">Все</button></div>
+    <div class="row"><button class="btn primary" data-popopt="0" ${max ? '' : 'disabled'}>Передать</button><button class="btn ghost" data-act="closeOverlay">Отмена</button></div>
+  </div>`);
+  $('#ggN')?.select();
+}
 // в летописи эмодзи из движка заменяются гравированными значками
 const LOG_ICON = { '💀': 'skull-crossed-bones', '⛏': 'stairs', '📜': 'scroll-quill', '👹': 'horned-skull', '⚔️': 'crossed-swords', '⚔': 'crossed-swords', '🏆': 'trophy', '🤝': 'shaking-hands', '👻': 'ghost', '🛒': 'shop', '📅': 'calendar' };
 const logText = t => esc(t).replace(/💀|⛏|📜|👹|⚔️|⚔|🏆|🤝|👻|🛒|📅/g, m => ico(LOG_ICON[m], 'li'));
@@ -765,6 +839,7 @@ function fightHTML() {
   for (const [id, v] of Object.entries(c.turnUndead || {})) if (v) pm.push({ side: 'player', t: `${esc(pname(id))}: изгнание +${v}` });
   for (const bs of c.backstabs) pm.push({ side: 'monster', t: `${esc(pname(bs.by))} бьёт в спину ${esc(pname(bs.on))}: −2` });
   for (const [id, v] of Object.entries(c.escape || {})) if (v) pm.push({ side: 'player', t: `${esc(pname(id))}: левитация, побег +${v}` });
+  if (c.pandora) pm.push({ side: 'player', t: `Ящик Пандоры: побег −${PANDORA_ESCAPE}` });
   const mods = side => pm.filter(x => x.side === side).map(x => `<span class="mod ${side === 'player' ? 'p' : 'm'}">${x.t}</span>`).join('');
   const monsters = c.monsters.map((m, i) => `
     <div class="mon-wrap">
@@ -808,7 +883,8 @@ function fightHTML() {
     </div>
     <div class="tug" style="--k:${(prev ? prev.k : tk).toFixed(3)}" data-k="${tk.toFixed(3)}" title="Перевес сил: ${n.heroes} против ${n.monsters}"><i class="tug-fill"></i><i class="tug-mark"></i></div>
     <div class="reward">За победу: +${n.levels} ${plural(n.levels, 'уровень', 'уровня', 'уровней')} и ${n.treasures} ${plural(n.treasures, 'карта', 'карты', 'карт')} клада${c.helper ? `: ${esc(pname(c.fighter))} — ${n.treasures - n.helperShare}, ${esc(pname(c.helper))} — ${n.helperShare}${n.helperExtra ? ` (обещано ${c.helpOffer}, ещё ${n.helperExtra} сверху из колоды)` : ''}` : ''}</div>
-    <div class="act-bar">${b.join('')}</div>`;
+    <div class="act-bar">${b.join('')}</div>
+    ${pandoraHTML(c, h)}`;
 }
 
 // поединок двух героев: щиты силы, бонусы сторон, отсчёт и что отдаст проигравший
@@ -1272,6 +1348,7 @@ function openOppPop(pid) {
     for (const t of h.abilities?.backstab || []) if (t === pid) popOpts.push({ label: 'Ударить в спину (−2)', fn: () => startMode({ kind: 'ability', name: 'backstab', target: pid, picked: [], max: 1 }), cls: 'danger' });
   }
   if (mine && h.tradeTargets?.includes(pid)) popOpts.push({ label: 'Предложить обмен', fn: () => openTrade(pid), cls: 'hero' });
+  if (mine && pid !== mine.id && mine.gold > 0) popOpts.push({ label: 'Передать голды', fn: () => openGoldModal(pid), cls: 'ghost' });
   const items = [...p.equipped.map(u => chipHTML(u)), ...(p.beast ? [beastChip(p.beast, 'view')] : []), ...(p.ally ? [allyChip(p.ally, 'view')] : []), ...p.carried.map(u => chipHTML(u, { cls: 'off' }))].join('') || '<p class="muted">Вещей нет.</p>';
   showOverlay(`<div class="modal" role="dialog" aria-label="${esc(p.name)}">
     <div class="row"><span class="me-ava" style="--seat:${p.color}">${avatarSVG(gAva(p), p.color)}</span><div><h2>${esc(p.name)}</h2><div class="me-stats"><span class="lvl">${p.level}</span><span class="pow">${ico('crossed-swords')}${p.power}</span><span class="gold" title="Кошелёк: голды за проданные вещи и контракты, тратятся на рынке">${ico('two-coins')}${p.gold || 0}</span><span class="badge">${esc(raceText(p))}, ${esc(classText(p))}</span><span class="handcount"><i></i>${p.handCount}</span></div></div></div>
@@ -1518,6 +1595,22 @@ function extraFx(fresh) {
       case 'gold':
         sfx.play('coins'); fx.float(ava, `+${f.n} г`, 'good'); fx.coins(ava, ava, { n: 5 });
         break;
+      case 'giveGold':
+        sfx.play('coins'); fx.coins(ava, avaOf(f.to), { n: 8 }); fx.float(avaOf(f.to) || ava, `+${f.n} г`, 'good');
+        if (f.to === S.room.me) toast(`${pname(f.pid)} передаёт вам ${f.n} г`, true);
+        break;
+      case 'pandora': {
+        sfx.play('portal'); sfx.play('bossRise', { delay: 0.25 });
+        fx.banner('Ящик Пандоры открыт!', `${pname(f.pid)}: монстрам +${PANDORA_BONUS}, героям −${PANDORA_ESCAPE} к побегу`, 'pandora');
+        const box = $('#stage .pandora'); if (box) { fx.ring(box, { n: 3, size: 30, grow: 520, color: 'rgba(200,125,255,.9)' }); fx.sparkle(box, { n: 14, colors: ['#f3d9ff', '#c77dff', '#ffd56a'] }); }
+        fx.shake($('#stage'), 'bump');
+        break;
+      }
+      case 'pandoraLoss':
+        sfx.play('shatter');
+        if (f.n) fx.banner(`${pname(f.pid)} теряет всё`, `Ящик Пандоры раздал ${f.n} ${plural(f.n, 'вещь', 'вещи', 'вещей')} другим игрокам`, 'pandora');
+        for (const id of f.to || []) fx.float(avaOf(id), 'Подарок ящика', 'good');
+        break;
       case 'buy':
         sfx.play('coins'); fx.float(ava, def(f.card).name, 'good'); fx.coins(ava, ava, { n: 6 });
         break;
@@ -1635,7 +1728,9 @@ const RULES = `<div class="modal rules" role="dialog" aria-label="Как игр�
   <h3>Поединок</h3>
   <p>Карта «Вызов на поединок» играется в свой ход вне боя: выберите соперника. Сравнивается сила — уровень, вещи и бонусы «в следующем бою»; остальные могут подкинуть разовые бонусы любой стороне, и тогда отсчёт начинается заново. При равенстве побеждает вызванный (а воин-зачинщик — и при равенстве). Проигравший отдаёт победителю свою лучшую вещь со стола, легендарки не отдаются.</p>
   <h3>Кошелёк и подземный рынок</h3>
-  <p>У каждого есть кошелёк: голды в него приходят за проданные вещи и выполненные контракты, сколько у кого — видно всем. Рынок открыт всегда — кнопка в шапке стола. В свой ход вне боя на голды можно купить разовые карты для боя, зелья, проклятия, чтобы наслать на соперников, и «Получи уровень» (не больше одного за ход, последний уровень так не взять). Продаётся только то, что ещё лежит в колоде, поэтому товар кончается. У каждой локации своя ценовая политика: в таверне еда за полцены, в Звёздной библиотеке дешевле уровни и свитки, на кладбище — проклятия, а в Небесной цитадели уровни в полтора раза дороже. Цены локации написаны на её карте.</p>
+  <p>У каждого есть кошелёк: голды в него приходят за проданные вещи и выполненные контракты, сколько у кого — видно всем. Рынок открыт всегда — кнопка в шапке стола. В свой ход вне боя на голды можно купить разовые карты для боя, зелья, проклятия, чтобы наслать на соперников, и «Получи уровень» (не больше одного за ход, последний уровень так не взять). Продаётся только то, что ещё лежит в колоде, поэтому товар кончается. У каждой локации своя ценовая политика: в таверне еда за полцены, в Звёздной библиотеке дешевле уровни и свитки, на кладбище — проклятия, а в Небесной цитадели уровни в полтора раза дороже. Цены локации написаны на её карте. Голды можно передать любому игроку в любой момент: нажмите на соперника и выберите «Передать голды».</p>
+  <h3>Ящик Пандоры</h3>
+  <p>Во время любого боя — своего или чужого — на столе стоит резная шкатулка. Любой игрок может открыть её за ${PANDORA_COST} голдов: в этом бою монстрам +${PANDORA_BONUS}, героям −${PANDORA_ESCAPE} к побегу, а кто из героев не убежит, лишится всех вещей и питомца — их раздадут другим игрокам наугад. Спутник остаётся. Чернокнижник уходит тенью и ничего не теряет. В одном бою — один ящик.</p>
   <h3>Ловушки</h3>
   <p>Ловушка за дверью срабатывает на того, кто её открыл. Можно рискнуть и обезвредить — на кубике 4+ (плуту и механику 2+): тогда ловушка ваша и её можно подложить сопернику. Сорвалась — расплата и ещё −1 уровень. Можно не рисковать и просто принять расплату. Подложенную ловушку соперник обезвреживает тем же броском, но без лишнего штрафа. Противогаз и каска с канарейкой спасают от газа.</p>
   <h3>Расы и классы</h3>
@@ -2021,6 +2116,7 @@ document.addEventListener('click', async e => {
       return act({ type: a });
     case 'disarm': return act({ type: 'trap', disarm: true });
     case 'market': return openMarketModal();
+    case 'pandora': return openPandoraModal();
     case 'takeTrap': return act({ type: 'trap', disarm: false });
     case 'bribe': {
       // какую вещь бросить монстру: любую со стола, кроме легендарных

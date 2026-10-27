@@ -1463,6 +1463,71 @@ t('чернокнижник подкидывает монстра с руки в
   assert.match(A(u, 'p1', { type: 'playCard', uid: 'm_mosquito#0', into: true }).error, /турникет/);
 });
 
+t('Ящик Пандоры: за 3000 голдов монстрам +10, героям −3 к побегу, раз за бой', () => {
+  const s = fresh(); const p = P(s, 'p0'), q = P(s, 'p1');
+  p.level = 5; fight(s, 'm_mole#0'); // 5 против 3
+  const before = combatNumbers(s).monsters;
+  assert.equal(view(s, 'p1').hints.pandora, false);
+  assert.match(A(s, 'p1', { type: 'pandora' }).error, /3000/);
+  q.gold = 3500;
+  assert.equal(view(s, 'p1').hints.pandora, true);
+  assert.equal(A(s, 'p1', { type: 'pandora' }).ok, true);
+  assert.equal(q.gold, 500);
+  assert.equal(combatNumbers(s).monsters, before + 10);
+  assert.ok(view(s, 'p0').combat.pandora);
+  P(s, 'p2').gold = 5000;
+  assert.match(A(s, 'p2', { type: 'pandora' }).error, /уже открыт/);
+  assert.match(A(s, 'p0', { type: 'kick' }).error || '', /боя/);
+  const t = fresh(); t.players[1].gold = 3000;
+  assert.match(A(t, 'p1', { type: 'pandora' }).error, /во время боя/);
+});
+
+t('Ящик Пандоры: не убежал — все вещи и питомец разлетаются по другим игрокам', () => {
+  const s = fresh(); const p = P(s, 'p0'), q = P(s, 'p1');
+  p.equipped.push(take(s, 'i_helmet#0'), take(s, 'p_rat#0')); p.carried.push(take(s, 'i_ladle#0')); p.ally = take(s, 'a_guide#0');
+  fight(s, 'm_gossip#0'); // 6 против 1
+  q.gold = 3000; A(s, 'p1', { type: 'pandora' });
+  // выпало 5: без ящика побег удался бы (5 + 2 от проводника), с ящиком 5 + 2 − 3 = 4 — мимо
+  assert.equal(dice(s, 'p0', { type: 'runAway' }, 0.7).ok, true);
+  assert.deepEqual(p.equipped, []); assert.deepEqual(p.carried, []);
+  assert.equal(p.ally, 'a_guide#0', 'спутник остаётся');
+  const others = [P(s, 'p1'), P(s, 'p2')].flatMap(x => [...x.equipped, ...x.carried]);
+  for (const u of ['i_helmet#0', 'p_rat#0', 'i_ladle#0']) assert.ok(others.includes(u), u + ' у кого-то из соперников');
+  assert.ok(s.log.some(l => /Ящик Пандоры забирает у/.test(l.text)));
+  assert.ok(s.fx.some(f => f.kind === 'pandoraLoss' && f.pid === 'p0'));
+  // убежал — ничего не теряет
+  const u = fresh(); const a = P(u, 'p0'); a.equipped.push(take(u, 'i_helmet#0'), take(u, 'i_runners#0'));
+  fight(u, 'm_gossip#0'); P(u, 'p1').gold = 3000; A(u, 'p1', { type: 'pandora' });
+  dice(u, 'p0', { type: 'runAway' }, 0.99); // 6 + 2 − 3 = 5
+  assert.equal(a.equipped.length, 2);
+  // приручённый зверь уходит к новому хозяину
+  const w = fresh(); const b = P(w, 'p0'); b.beast = take(w, 'm_mole#0');
+  fight(w, 'm_gossip#0'); P(w, 'p1').gold = 3000; A(w, 'p1', { type: 'pandora' });
+  dice(w, 'p0', { type: 'runAway' }, 0);
+  assert.equal(b.beast, null);
+  assert.ok(w.players.some(x => x.beast === 'm_mole#0'));
+  // чернокнижник уходит тенью и ничего не теряет
+  const z = fresh(); const k = P(z, 'p0'); k.classes.push(take(z, 'c_warlock#0')); k.equipped.push(take(z, 'i_helmet#0'));
+  fight(z, 'm_gossip#0'); P(z, 'p1').gold = 3000; A(z, 'p1', { type: 'pandora' });
+  dice(z, 'p0', { type: 'runAway' }, 0);
+  assert.deepEqual(k.equipped, ['i_helmet#0']);
+});
+
+t('голды друг другу: в любой момент, не больше, чем в кошельке', () => {
+  const s = fresh(); const p = P(s, 'p0'), q = P(s, 'p1');
+  q.gold = 700;
+  assert.equal(A(s, 'p1', { type: 'giveGold', to: 'p0', n: 500 }).ok, true, 'не в свой ход');
+  assert.equal(q.gold, 200); assert.equal(p.gold, 500);
+  assert.match(A(s, 'p1', { type: 'giveGold', to: 'p0', n: 300 }).error, /только 200/);
+  assert.match(A(s, 'p1', { type: 'giveGold', to: 'p1', n: 100 }).error, /Кому/);
+  assert.match(A(s, 'p1', { type: 'giveGold', to: 'p0', n: 0 }).error, /Сколько/);
+  assert.equal(A(s, 'p1', { type: 'giveGold', to: 'p0', n: 1.5 }).error, 'Плохие данные');
+  fight(s, 'm_mole#0');
+  assert.equal(A(s, 'p0', { type: 'giveGold', to: 'p2', n: 100 }).ok, true, 'и во время боя');
+  assert.equal(P(s, 'p2').gold, 100);
+  assert.ok(s.log.some(l => /передаёт .* 100 голдов/.test(l.text)));
+});
+
 t('Конь Плотва: +4, у ведьмака ещё +2, спасает от расплаты', () => {
   const s = fresh(); const p = P(s, 'p0');
   p.hand.push(take(s, 'p_roach#0'));
