@@ -1082,6 +1082,9 @@ function cheapest(list) { return [...list].sort((a, b) => cardWorth(a) - cardWor
 
 // ───────────────────────── проверки ─────────────────────────
 const myTurn = (s, p) => s.turn.pid === p.id;
+// «Пересменку» на Поверхности не объявить: только с глубины 1
+const surfaceBan = (s, d) => d.event === 'shift' && !(s.depth > 0);
+export const SURFACE_BAN_TEXT = 'На Поверхности пересменки нет — сыграть её можно с глубины 1';
 const manageErr = (s, p) => (!myTurn(s, p) ? 'Сейчас не ваш ход'
   : s.combat ? 'Нельзя во время боя'
   : s.duel ? 'Идёт поединок'
@@ -1113,6 +1116,11 @@ H.kick = {
       return;
     }
     if (d.type === 'location') { setLocation(s, p, uid); return; }
+    if (d.type === 'event' && surfaceBan(s, d)) {
+      p.hand.push(uid);
+      log(s, `${p.name} находит за дверью ${q(d.name)} — на Поверхности её не объявить, карта уходит в руку.`, 'event');
+      return;
+    }
     if (d.type === 'event') { resolveEvent(s, p, uid, rng); return; }
     p.hand.push(uid);
     log(s, `${p.name} выбивает дверь: ${q(d.name)} — в руку.`, 'info');
@@ -1238,7 +1246,7 @@ function playCheck(s, p, a) {
       return null;
     }
     case 'location': return manageErr(s, p);
-    case 'event': return manageErr(s, p);
+    case 'event': return manageErr(s, p) || (surfaceBan(s, d) ? SURFACE_BAN_TEXT : null);
     case 'buff': return c && isParticipant(s, p.id) && levelOnlyFight(s) ? 'Против этого монстра считается только уровень — зелье пропадёт зря' : null;
     case 'hoard': return manageErr(s, p) || (s.turn.hoardPlayed ? 'Схрон можно открыть только один раз за ход' : null);
     case 'levelup': return p.level >= winLevel(s) - 1 ? 'Последний уровень — только убийством монстра' : null;

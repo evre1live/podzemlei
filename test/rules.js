@@ -1831,10 +1831,28 @@ t('боты: вызывают слабого на поединок и подки
   assert.deepEqual(botDecide(s, 'p1', { rng, now: 1000 }), { type: 'playCard', uid: 'o_shawarma#0', side: 'to' });
 });
 
+t('«Пересменка» из двери на Поверхности уходит в руку, а в глубине срабатывает', () => {
+  let s = fresh(); let [a, b] = s.players;
+  s.decks.door.push(take(s, 'ev_shift#0'));
+  const bh = [...b.hand];
+  assert.equal(A(s, 'p0', { type: 'kick' }).ok, true);
+  assert.ok(a.hand.includes('ev_shift#0')); assert.deepEqual(b.hand, bh);
+  assert.ok(s.log.at(-1).text.includes('Поверхности'));
+  s = fresh(); [a, b] = s.players; s.depth = 2;
+  a.hand.push(take(s, 'o_kvass#0'));
+  s.decks.door.push(take(s, 'ev_shift#0'));
+  assert.equal(A(s, 'p0', { type: 'kick' }).ok, true);
+  assert.ok(b.hand.includes('o_kvass#0') && !a.hand.includes('ev_shift#0'));
+});
+
 t('события: пересменка, профсоюзное собрание, затопление', () => {
   let s = fresh(); const [a, b, c] = s.players;
   a.hand.push(take(s, 'o_kvass#0')); b.hand.push(take(s, 'o_cola#0'), take(s, 'b_energy#0'));
   a.hand.push(take(s, 'ev_shift#0'));
+  // на Поверхности (глубина 0) «Пересменку» не объявить
+  assert.match(A(s, 'p0', { type: 'playCard', uid: 'ev_shift#0' }).error, /Поверхност/);
+  assert.ok(a.hand.includes('ev_shift#0'));
+  s.depth = 1;
   assert.equal(A(s, 'p0', { type: 'playCard', uid: 'ev_shift#0' }).ok, true);
   assert.deepEqual(b.hand, ['o_kvass#0']); assert.deepEqual(c.hand, ['o_cola#0', 'b_energy#0']); assert.deepEqual(a.hand, []);
   s = fresh(); let [x, y, z] = s.players;

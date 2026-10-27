@@ -611,7 +611,7 @@ export const CARD_DEFS = [
   { id: 'ev_luxtax', deck: 'door', type: 'event', event: 'luxtax', name: 'Налог на роскошь', copies: 1, art: 'paper',
     text: 'Все игроки {lux}-го уровня и выше теряют уровень.' },
   { id: 'ev_shift', deck: 'door', type: 'event', event: 'shift', name: 'Пересменка', copies: 1, art: 'ev_shift',
-    text: 'Все передают всю руку соседу слева.' },
+    text: 'Все передают всю руку соседу слева. На Поверхности не играется.' },
   { id: 'ev_union', deck: 'door', type: 'event', event: 'union', name: 'Профсоюзное собрание', copies: 1, art: 'ev_union',
     text: 'Голосуют все, кто ниже лидера: если их больше половины стола, лидеры теряют уровень.' },
   { id: 'ev_flood', deck: 'door', type: 'event', event: 'flood', name: 'Затопление', copies: 1, art: 'ev_flood',
