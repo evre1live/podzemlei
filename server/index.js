@@ -750,6 +750,8 @@ io.on('connection', socket => {
       cb({ ok: true, note: `Принято: +${goldCheat} голдов в кошелёк` });
       return broadcastRoom(r);
     }
+    // любой текст через «/» — служебный: в чат не попадает, даже если такой команды нет или она не сработала
+    if (text.startsWith('/')) return cb({ ok: false, error: 'Сообщения со «/» в чат не отправляются' });
     if (m && own) r.chat.push({ id: newId(), from: m.id, name: m.name, color: m.color, text, t: now() });
     else r.chat.push({ id: newId(), from: null, spectator: true, name: socket.data.watchName || 'Зритель', color: '#a9b2c3', text, t: now() });
     if (r.chat.length > 120) r.chat.splice(0, r.chat.length - 120);

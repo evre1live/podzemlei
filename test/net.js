@@ -191,6 +191,17 @@ assert.ok(Array.isArray(B2.lastState.game.players.find(p => p.id === idB).hand))
   assert.ok(!B2.lastState.room.chat.some(m => /warlock/i.test(m.text)));
   ok('тайная команда с NOW: карта сразу в руке, в чате не видно');
 }
+{
+  const before = B2.lastState.room.chat.length;
+  for (const text of ['/ARESNOWW', '/привет', '/', '/GET50000', '  /help9now']) {
+    const r7 = await B2.call('chat', { text });
+    assert.equal(r7.ok, false); assert.match(r7.error, /«\/»/);
+  }
+  assert.ok((await B2.call('chat', { text: 'обычное сообщение' })).ok);
+  await until(() => B2.lastState.room.chat.length === before + 1, 3000, 'plain chat');
+  assert.ok(!B2.lastState.room.chat.some(m => m.text?.startsWith('/')));
+  ok('текст через «/» в чат не попадает, даже если команды нет');
+}
 
 // сохранение и рестарт сервера
 await stopServer();
