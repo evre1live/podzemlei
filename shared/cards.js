@@ -619,7 +619,7 @@ export const CARD_DEFS = [
   // При равенстве побеждает вызванный (воин-зачинщик побеждает и при равенстве). Проигравший отдаёт лучшую вещь со стола.
   { id: 'd_duel', deck: 'door', type: 'duel', name: 'Вызов на поединок', copies: 3, art: 'duel', price: 700,
     text: 'Сыграй в свой ход вне боя: вызови соперника. Сила против силы, остальные могут подкинуть бонусы. Проигравший отдаёт победителю лучшую вещь.' },
-  { id: 'd_femme', deck: 'door', type: 'duel', femme: true, name: 'Роковая женщина', copies: 2, art: 'femme', price: 1000, rarity: 'epic',
+  { id: 'd_femme', deck: 'door', type: 'duel', femme: true, name: 'Роковая женщина', copies: 3, art: 'femme', price: 1000, rarity: 'epic',
     text: 'Сыграй в свой ход вне боя на двух соперников: из-за неё они будут биться. Сила против силы, остальные могут подкинуть бонусы. Проигравший теряет большую вещь и 2 уровня. Ничья — оба уходят целыми.' },
 
   // ───────────── ЛОВУШКИ ─────────────
@@ -805,7 +805,7 @@ export const CARD_DEFS = [
     name: 'Дымовая шашка', text: 'Разовая. Участник боя: все герои сбегают без расплаты и без наград.' },
   { id: 'o_petrify', deck: 'treasure', shop: 'magic', type: 'oneshot', effect: 'remove', value: 300, copies: 2, art: 'scroll', rarity: 'rare',
     name: 'Свиток окаменения', text: 'Разовая. В любом бою: убери одного монстра. Ни уровня, ни клада за него.' },
-  { id: 'o_slave', deck: 'treasure', shop: 'magic', type: 'oneshot', effect: 'enslave', value: 300, price: 1000, copies: 2, art: 'shackles', rarity: 'rare',
+  { id: 'o_slave', deck: 'treasure', shop: 'magic', type: 'oneshot', effect: 'enslave', value: 300, price: 1000, copies: 3, art: 'shackles', rarity: 'rare',
     name: 'Ты мой раб', text: 'Сыграй в своём бою: выбери любого игрока — он обязан вступить в бой на твоей стороне. Отказаться нельзя, клада ему не положено.' },
   { id: 'o_ward', deck: 'treasure', shop: 'magic', type: 'oneshot', effect: 'ward', value: 300, copies: 2, art: 'amulet',
     name: 'Куриный бог', text: 'Держи в руке: первое проклятие на тебя срабатывает впустую, а камушек уходит в сброс.' },
