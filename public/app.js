@@ -159,6 +159,7 @@ socket.on('room:state', ({ room, game, serverTime }) => {
   const fresh = handleFx(first);
   render();
   if ($('#shopModal')) openMarketModal();
+  if ($('#contractModal')) openContractModal();
   renderVoice();
   if (fresh.length) requestAnimationFrame(() => runFx(fresh, snap));
 });
@@ -493,6 +494,7 @@ mount.game = () => {
           <span class="goal-pill" id="goalpill" title="Уровень победы"></span>
           <span id="depthpill"></span>
           <span id="marketpill"></span>
+          <span id="contractpill"></span>
           <span id="dailypill"></span>
           <span id="watchpill"></span>
         </div>
@@ -560,6 +562,9 @@ update.game = () => {
   $('#dailypill').innerHTML = dl ? `<span class="daily-pill" title="${esc(`Испытание дня ${g.opts.daily}: ${dl.text} Колода сегодня у всех одна.`)}">${ico('calendar')}<span class="lbl">${esc(dl.name)}</span></span>` : '';
   { const mp = me();
     $('#marketpill').innerHTML = g.shop && g.phase === 'playing' ? `<button class="market-pill" data-act="market" title="Подземный рынок: разовые, зелья, проклятия и уровни из колоды за голды из кошелька">${ico('shop')}<span><span class="lbl">Рынок${mp ? ' · ' : ''}</span>${mp ? `${mp.gold} г` : ''}</span></button>` : ''; }
+  // контракт — значком в шапке, по нажатию открывается окошко
+  { const k = me()?.contract;
+    $('#contractpill').innerHTML = k && g.phase === 'playing' ? `<button class="contract-pill${k.progress >= k.need ? ' ready' : ''}" data-act="contract" title="${esc(`Контракт «${k.name}»: ${k.progress} из ${k.need}. Нажмите, чтобы посмотреть условие и награду`)}" aria-label="Контракт ${esc(k.name)}, ${k.progress} из ${k.need}">${ico('scroll-quill')}<span>${k.progress}/${k.need}</span></button>` : ''; }
   const wn = r.watchers || 0;
   $('#watchpill').innerHTML = r.spectator ? `<span class="watch-pill on" title="Вы видите стол, бои и летопись, но не чужие карты на руках">${EYE}Вы зритель${wn > 1 ? ` · ещё ${wn - 1}` : ''}</span>`
     : wn ? `<span class="watch-pill" title="Столько людей смотрят партию со стороны">${EYE}${wn}</span>` : '';
@@ -593,14 +598,15 @@ function statusTags(p) {
   if (p.banished) t.push('<span class="badge warn" title="«Прощай навсегда»: выбыл из партии, пока кто-нибудь не откроет Ящик Пандоры">выбыл</span>');
   else if (p.dead) t.push('<span class="badge warn">погиб</span>');
   else if (p.ghost) t.push(`<span class="badge ghost" title="Погиб и ждёт своего хода. Раз за ход может подкинуть +${GHOST_BONUS} героям или монстрам в чужом бою">призрак</span>`);
-  if (p.isBot) t.push(`<span class="badge"${p.persona ? ` title="${esc(personaTip(p.persona))}"` : ''}>бот${p.persona ? ' · ' + esc(PERSONAS[p.persona] || '') : ''}</span>`);
+  if (p.isBot) t.push(`<span class="badge bot"${p.persona ? ` title="${esc(personaTip(p.persona))}"` : ''}>бот${p.persona ? ' · ' + esc(PERSONAS[p.persona] || '') : ''}</span>`);
   else if (mem?.autopilot) t.push('<span class="badge">автопилот</span>');
   else if (mem && !mem.connected) t.push('<span class="badge">нет связи</span>');
   return t.join('');
 }
 function oppHTML(p) {
   const g = S.game;
-  return `<button class="opp ${g.turn.pid === p.id ? 'turn' : ''} ${p.dead ? 'dead' : ''} ${p.ghost && !p.dead ? 'ghost' : ''}" data-opp="${p.id}" data-vmember="${p.id}" style="--seat:${p.color}" aria-label="${esc(p.name)}, уровень ${p.level}">
+  const botTip = p.isBot ? ` title="${esc(`${p.name} — бот.${p.persona ? ' ' + personaTip(p.persona) : ''}`)}"` : '';
+  return `<button class="opp ${g.turn.pid === p.id ? 'turn' : ''} ${p.dead ? 'dead' : ''} ${p.ghost && !p.dead ? 'ghost' : ''}" data-opp="${p.id}" data-vmember="${p.id}" style="--seat:${p.color}" aria-label="${esc(p.name)}, уровень ${p.level}"${botTip}>
     <div class="ava">${avatarSVG(gAva(p), p.color)}</div>
     <div class="oname">${esc(p.name)}</div>
     <div class="ometa"><span>${esc(raceText(p))}</span><span>${esc(classText(p))}</span></div>
@@ -964,7 +970,10 @@ const beastChip = (u, zone = 'ally') => `<button class="chip tamed" data-uid="${
 const allyChip = (u, zone = 'ally') => { const d = def(u); const v = d.bonus ? `+${d.bonus}` : d.runBonus ? `бег +${d.runBonus}` : d.handBonus ? `рука +${d.handBonus}` : ''; return `<button class="chip ally" data-uid="${esc(u)}" data-zone="${zone}" title="${esc(d.text)}">${ico(cardIcon(d), 'chip-ico')}<span class="chip-name">${esc(d.name)}</span>${v ? `<b>${v}</b>` : ''}</button>`; };
 const hasPetSlot = p => p.beast || p.equipped.some(u => def(u).slot === 'pet');
 const slotItems = (p, key, chip, zone) => p.equipped.filter(u => def(u).slot === key).map(chip).join('') + (key === 'pet' && p.beast ? beastChip(p.beast, zone) : '');
-const allySlot = (p, zone) => (p.ally ? `<div class="slot"><small>Спутник</small>${allyChip(p.ally, zone)}</div>` : '');
+// место на столе героя: вместо подписи — значок, подпись во всплывающей подсказке
+const SLOT_ICON = { head: 'crested-helmet', armor: 'breastplate', feet: 'boots', hand: 'mailed-fist', pet: 'paw-print', none: 'diamond-ring', ally: 'person', bag: 'knapsack' };
+const slotBox = (key, label, inner, extra = '') => `<div class="slot${inner ? '' : ' empty'}" data-slot="${key}"><small title="${esc(label)}">${ico(SLOT_ICON[key], '', label)}${extra}</small>${inner}</div>`;
+const allySlot = (p, zone) => (p.ally ? slotBox('ally', 'Спутник', allyChip(p.ally, zone)) : '');
 // комплекты снаряжения: собранные и начатые (надета хоть одна вещь)
 function setsHTML(p) {
   const have = new Set(p.equipped.map(u => def(u).id));
@@ -973,7 +982,8 @@ function setsHTML(p) {
     if (!n) return '';
     const done = (p.sets || []).includes(k);
     const missing = st.items.filter(id => !have.has(id)).map(id => def(id).name).join(', ');
-    return `<div class="set-row${done ? ' done' : ''}" title="${esc(st.text)}">${ico(done ? 'crown' : 'armor-upgrade')}<b>${esc(st.name)}</b><span>${done ? esc(st.text.split(': ').pop()) : `${n} из ${st.items.length} — не хватает: ${esc(missing)}`}</span></div>`;
+    // коротко: название и счёт; чего не хватает — во всплывающей подсказке
+    return `<div class="set-row${done ? ' done' : ''}" title="${esc(done ? st.text : `${st.text} Не хватает: ${missing}.`)}">${ico(done ? 'crown' : 'armor-upgrade')}<b>${esc(st.name)}</b><span>${done ? esc(st.text.split(': ').pop()) : `${n}/${st.items.length}`}</span></div>`;
   }).join('');
   return rows ? `<div class="sets">${rows}</div>` : '';
 }
@@ -1007,9 +1017,9 @@ function renderMine() {
   [p.halfbreed, p.supermunch].filter(Boolean).forEach(u => traits.push(`<button class="trait" data-uid="${u}" data-zone="trait">${iconSVG(def(u).art)}${esc(def(u).name)}</button>`));
 
   const slot = key => slotItems(p, key, u => chipHTML(u, { cls: picked.has(u) ? 'picked' : '' }), 'ally');
-  const slots = SLOT_ORDER.filter(([k]) => k !== 'pet' || hasPetSlot(p)).map(([k, label]) => `<div class="slot"><small>${k === 'hand' && p.handsLimit > 2 ? `${label} (${p.handsLimit})` : label}</small>${slot(k)}</div>`).join('')
+  const slots = SLOT_ORDER.filter(([k]) => k !== 'pet' || hasPetSlot(p)).map(([k, label]) => k === 'hand' && p.handsLimit > 2 ? slotBox(k, `${label}: ${p.handsLimit} руки`, slot(k), `<i>${p.handsLimit}</i>`) : slotBox(k, label, slot(k))).join('')
     + allySlot(p, 'ally')
-    + `<div class="slot"><small>Не надето</small>${p.carried.map(u => chipHTML(u, { cls: 'off' + (picked.has(u) ? ' picked' : '') })).join('')}</div>`;
+    + slotBox('bag', 'Не надето', p.carried.map(u => chipHTML(u, { cls: 'off' + (picked.has(u) ? ' picked' : '') })).join(''));
 
   const abil = Object.entries(ABIL).filter(([k, a]) => p.classes.some(u => def(u).cls === a.cls)).map(([k, a]) => {
     const v = h.abilities?.[k];
@@ -1026,13 +1036,11 @@ function renderMine() {
         ${p.nextCombat > 0 ? `<span class="badge good">+${p.nextCombat} в бою</span>` : p.nextCombat < 0 ? `<span class="badge warn">${p.nextCombat} в бою</span>` : ''}${p.nextEscape < 0 ? `<span class="badge warn">побег ${p.nextEscape}</span>` : ''}${p.banished ? '<span class="badge warn">вы выбыли из партии</span>' : p.dead ? '<span class="badge warn">вы погибли до следующего хода</span>' : ''}</div>
       </div>
     </div>
-    <div class="traits">${traits.join('')}</div>
+    <div class="traits">${traits.join('')}${abil ? `<span class="abilities">${abil}</span>` : ''}</div>
     ${p.banished ? `<div class="ghost-note banished">${ico('tombstone')} Вас настигло «Прощай навсегда»: вы выбыли из партии. Вернуть вас может только Ящик Пандоры — его можно открыть в любом бою за ${PANDORA_COST} г.</div>` : ''}
     ${p.ghost ? `<div class="ghost-note">${ico('ghost')} Вы призрак до своего хода: раз за ход можно подкинуть +${GHOST_BONUS} героям или монстрам в чужом бою.</div>` : ''}
-    ${contractHTML(p)}
     <div class="slots">${slots}</div>
     ${setsHTML(p)}
-    ${abil ? `<div class="abilities">${abil}</div>` : ''}
     ${tradeWaitHTML()}`;
 
   const over = p.hand.length - p.handLimit;
@@ -1138,9 +1146,9 @@ function renderWatcher() {
   const traits = [...p.races.map(trait), ...(p.races.length ? [] : ['<span class="trait none">Человек</span>']),
     ...p.classes.map(trait), ...(p.classes.length ? [] : ['<span class="trait none">Без класса</span>']), ...[p.halfbreed, p.supermunch].filter(Boolean).map(trait)];
   const slot = key => slotItems(p, key, u => chipHTML(u), 'view');
-  const slots = SLOT_ORDER.filter(([k]) => k !== 'pet' || hasPetSlot(p)).map(([k, label]) => `<div class="slot"><small>${label}</small>${slot(k)}</div>`).join('')
+  const slots = SLOT_ORDER.filter(([k]) => k !== 'pet' || hasPetSlot(p)).map(([k, label]) => slotBox(k, label, slot(k))).join('')
     + allySlot(p, 'view')
-    + `<div class="slot"><small>Не надето</small>${p.carried.map(u => chipHTML(u, { cls: 'off' })).join('')}</div>`;
+    + slotBox('bag', 'Не надето', p.carried.map(u => chipHTML(u, { cls: 'off' })).join(''));
   const run = 5 - p.runBonus;
   const now = g.turn.pid === p.id && g.phase === 'playing';
   el.innerHTML = `
@@ -1512,6 +1520,17 @@ function contractHTML(p) {
   return `<div class="contract" title="${esc(tip)}"><span class="c-ico" aria-hidden="true">${ico('scroll-quill')}</span><div class="c-body">
     <div class="c-head"><b>${esc(k.name)}</b><span class="c-prog">${k.progress}/${k.need}</span>${p.contractsDone ? `<span class="c-done" title="Выполнено контрактов">${ico('check-mark')}${p.contractsDone}</span>` : ''}</div>
     <div class="c-text">${esc(k.text)} Награда: ${esc(k.rewardText)}.</div></div></div>`;
+}
+// окошко контракта: условие, ход выполнения, награда
+function openContractModal() {
+  const p = me();
+  if (!p?.contract) return closeOverlay();
+  showOverlay(`<div class="modal contract-modal" id="contractModal" role="dialog" aria-label="Контракт">
+    <h2>Контракт</h2>
+    ${contractHTML(p)}
+    <p class="muted" style="margin:0">Это ваша тайная цель — соперники её не видят. Выполните — получите награду и сразу новый контракт. Самому отстающему за выполненный контракт ещё и карта клада.</p>
+    <div class="row"><button class="btn" type="button" data-act="closeOverlay">Закрыть</button></div>
+  </div>`);
 }
 function tradeWaitHTML() {
   const mine = (S.game.trades || []).filter(o => o.from === S.room.me);
@@ -2163,6 +2182,7 @@ document.addEventListener('click', async e => {
       return act({ type: a });
     case 'disarm': return act({ type: 'trap', disarm: true });
     case 'market': return openMarketModal();
+    case 'contract': return openContractModal();
     case 'pandora': return openPandoraModal();
     case 'takeTrap': return act({ type: 'trap', disarm: false });
     case 'bribe': {

@@ -356,6 +356,8 @@ label { display: grid; gap: 6px; font-size: 14px; color: var(--muted); }
 .card.t-duel { --m1: #b0626a; --m2: #5a2228; --m3: #1c0a0c; --gem: #e0404f; --gemhi: #ffc9cf; --acc: #c45a64; }
 .market-pill { font-size: 13px; font-weight: 700; padding: 3px 10px; border-radius: 99px; background: linear-gradient(180deg, rgba(200,150,60,.4), rgba(120,80,20,.5)); border: 1.5px solid #d9a83a; color: #fff0c8; white-space: nowrap; display: inline-flex; align-items: center; gap: 5px; cursor: pointer; }
 .market-pill .gi { width: 15px; height: 15px; }
+.contract-pill { font: inherit; color: var(--text); display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; cursor: pointer; }
+.contract-modal .contract { cursor: default; }
 .seg button .gi { width: 14px; height: 14px; margin-right: 3px; vertical-align: -2px; }
 .daily-pill { font-size: 13px; font-weight: 700; padding: 3px 10px; border-radius: 99px; background: rgba(210,120,60,.2); border: 1.5px solid rgba(230,150,90,.6); color: #ffd9bf; white-space: nowrap; display: inline-flex; align-items: center; gap: 5px; cursor: help; }
 .daily-pill .gi { width: 15px; height: 15px; }
@@ -1137,7 +1139,8 @@ body.has-world { background: #120e22; }
 .countdown.urgent .ring { stroke: #ff6a4a; }
 .countdown.urgent b { color: #ff8a66; }
 @keyframes beat { 0%, 100% { transform: scale(1); } 12% { transform: scale(1.18); } 24% { transform: scale(1); } 36% { transform: scale(1.1); } 50% { transform: scale(1); } }
-.cave.urgent::after { content: ''; position: absolute; inset: 0; z-index: 5; pointer-events: none; border-radius: inherit; box-shadow: inset 0 0 90px rgba(210,40,20,.6); animation: urgentPulse 1s ease-in-out infinite; }
+/* последние секунды отсчёта: края сцены наливаются красным (слой пылинок лежит ровно поверх сцены) */
+.cave.urgent > .motes::after { content: ''; position: absolute; inset: 0; z-index: 5; pointer-events: none; border-radius: inherit; box-shadow: inset 0 0 90px rgba(210,40,20,.6); animation: urgentPulse 1s ease-in-out infinite; }
 @keyframes urgentPulse { 0%, 100% { opacity: .3; } 14% { opacity: 1; } 40% { opacity: .45; } }
 @media (max-width: 900px) {
   .tug { width: 100%; }
@@ -1975,7 +1978,7 @@ input[type=text]:focus, input[type=password]:focus { outline: none; border-color
 input[type=text], input[type=password], select, .g-search, .g-sort select,
 .seg, .slot, .trait, .chip, .modebar, .ghost-note, .trade-wait, .helpwait, .deck > span, .loc-banner, .pick, .toast,
 .av-tabs, .av-chip, .av-mark, .set-row, .g-entry, .v-row, .g-cats button,
-.watch-pill, .status, .badge, .hero-pill, .verdict, .mod, .market-pill, .daily-pill, .flag, .tug, .goal-pill, .depth-pill, .code-pill, .locpill,
+.watch-pill, .status, .badge, .hero-pill, .verdict, .mod, .market-pill, .contract-pill, .daily-pill, .flag, .tug, .goal-pill, .depth-pill, .code-pill, .locpill,
 .contract .c-prog, .pow, .fx-banner, .emptyseat { border-radius: var(--ui-r) !important; }
 
 /* ───────── верхняя полоса: название и ровный ряд одинаковых стеклянных плашек ─────────
@@ -1984,7 +1987,7 @@ input[type=text], input[type=password], select, .g-search, .g-sort select,
 .game .g-head { align-items: center; justify-content: flex-start; gap: 8px; padding: 7px 10px 7px 16px; }
 .game .g-head .rtitle { font-family: var(--display); font-weight: 700; font-size: 21px; line-height: 1; white-space: nowrap;
   padding-right: 14px; margin-right: 2px; border-right: 1px solid rgb(255 255 255 / .12); }
-.game .g-head :is(.turninfo, .goal-pill, .depth-pill, .daily-pill, .market-pill, .watch-pill, .loc-banner) {
+.game .g-head :is(.turninfo, .goal-pill, .depth-pill, .daily-pill, .market-pill, .contract-pill, .watch-pill, .loc-banner) {
   --acc: 214 168 90;
   display: inline-flex; align-items: center; gap: 7px; height: 34px; min-height: 0; padding: 0 12px; margin: 0;
   font: 600 13.5px/1 var(--ui); letter-spacing: 0; color: var(--text); white-space: nowrap; cursor: default;
@@ -1993,7 +1996,7 @@ input[type=text], input[type=password], select, .g-search, .g-sort select,
   box-shadow: inset 0 1px 0 rgb(255 255 255 / .12), 0 2px 6px -3px rgb(0 0 0 / .5);
   text-shadow: 0 1px 1px rgb(0 0 0 / .5); filter: none;
 }
-.game .g-head :is(.goal-pill, .depth-pill, .daily-pill, .market-pill, .watch-pill) .gi { width: 16px; height: 16px; margin: 0; flex: none; color: rgb(var(--acc)); }
+.game .g-head :is(.goal-pill, .depth-pill, .daily-pill, .market-pill, .contract-pill, .watch-pill) .gi { width: 16px; height: 16px; margin: 0; flex: none; color: rgb(var(--acc)); }
 .game .g-head .turninfo:empty { display: none; }
 .game .g-head .goal-pill { --acc: 214 168 90; }
 .game .g-head .depth-pill { --acc: 150 176 230; cursor: help; }
@@ -2003,6 +2006,10 @@ input[type=text], input[type=password], select, .g-search, .g-sort select,
 .game .g-head .watch-pill.on { background: linear-gradient(180deg, rgb(255 255 255 / .1), rgb(255 255 255 / .02)), rgb(60 80 130 / .5); }
 .game .g-head .market-pill { --acc: 232 184 86; cursor: pointer; background: linear-gradient(180deg, rgb(255 236 190 / .16), rgb(255 255 255 / .02)), rgb(120 84 24 / .4); }
 .game .g-head .market-pill:hover { border-color: rgb(var(--acc) / .7); }
+/* контракт: свиток с ходом выполнения, по нажатию — окошко с условием и наградой */
+.game .g-head .contract-pill { --acc: 236 222 186; cursor: pointer; background: linear-gradient(180deg, rgb(246 231 193 / .16), rgb(255 255 255 / .02)), rgb(90 76 50 / .4); }
+.game .g-head .contract-pill:hover { border-color: rgb(var(--acc) / .7); }
+.game .g-head .contract-pill.ready { --acc: 127 205 168; border-color: rgb(var(--acc) / .6); }
 /* ход: точка цвета того, кто ходит; в мой ход плашка загорается золотом */
 .game .g-head .turninfo::before { content: ''; width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--who, #d6a85a); box-shadow: 0 0 0 2px rgb(0 0 0 / .35), 0 0 8px var(--who, #d6a85a); }
 .game .g-head .turninfo.mine { --acc: 242 194 122; color: #fff1d0; background: linear-gradient(180deg, rgb(255 236 190 / .22), rgb(255 255 255 / .02)), rgb(140 96 30 / .42); border-color: rgb(var(--acc) / .65); }
@@ -2025,7 +2032,7 @@ input[type=text], input[type=password], select, .g-search, .g-sort select,
 @media (max-width: 700px) {
   .game .g-head { padding: 6px 8px 6px 12px; gap: 6px; }
   .game .g-head .rtitle { font-size: 19px; padding-right: 10px; }
-  .game .g-head :is(.turninfo, .goal-pill, .depth-pill, .daily-pill, .market-pill, .watch-pill, .loc-banner) { height: 30px; padding: 0 10px; font-size: 12.5px; }
+  .game .g-head :is(.turninfo, .goal-pill, .depth-pill, .daily-pill, .market-pill, .contract-pill, .watch-pill, .loc-banner) { height: 30px; padding: 0 10px; font-size: 12.5px; }
   .game .g-head .loc-banner { padding-left: 3px; }
   .game .g-head .loc-banner svg { width: 30px; height: 22px; }
 }
@@ -2033,7 +2040,7 @@ input[type=text], input[type=password], select, .g-search, .g-sort select,
 @media (max-width: 520px) { .game .g-head .turninfo { display: none; } }
 /* плотнее, чтобы и с рынком, испытанием и локацией полоса оставалась в одну строку */
 .game .g-head { gap: 6px; }
-.game .g-head :is(.turninfo, .goal-pill, .depth-pill, .daily-pill, .market-pill, .watch-pill) { padding: 0 11px; }
+.game .g-head :is(.turninfo, .goal-pill, .depth-pill, .daily-pill, .market-pill, .contract-pill, .watch-pill) { padding: 0 11px; }
 @media (max-width: 1500px) { .game .g-head .voice-open span { display: none; } .game .g-head .voice-ctl .voice-open { padding-inline: 10px; } .game .g-head .loc-banner b { max-width: 16ch; overflow: hidden; text-overflow: ellipsis; } }
 
 /* ───────── герой в бою: медальон ─────────
@@ -2137,7 +2144,7 @@ input[type=text], input[type=password], select, .g-search, .g-sort select,
   .game .g-head .lbl { display: none; }
   .game .g-head .loc-banner > span { display: none; }
   .game .g-head .loc-banner { padding: 0 3px; }
-  .game .g-head :is(.goal-pill, .depth-pill, .daily-pill, .market-pill, .watch-pill) { padding: 0 8px; gap: 5px; }
+  .game .g-head :is(.goal-pill, .depth-pill, .daily-pill, .market-pill, .contract-pill, .watch-pill) { padding: 0 8px; gap: 5px; }
   .game .g-head .hud-btn .gi { display: block; width: 18px; height: 18px; }
   .game .g-head .hud-btn, .game .g-head .btn.icon-btn { min-width: 32px; padding: 0 7px; }
   .game .g-head .side-toggle { padding: 0 9px; }
@@ -2146,8 +2153,8 @@ input[type=text], input[type=password], select, .g-search, .g-sort select,
 .game .g-head .hud-chips { display: flex; align-items: center; gap: 6px; min-width: 0; flex: 0 1 auto; overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain; }
 .game .g-head .hud-chips::-webkit-scrollbar { display: none; }
 .game .g-head .hud-chips > * { flex: none; }
-.game .g-head .hud-chips > :is(#depthpill, #marketpill, #dailypill, #locpill, #watchpill) { display: contents; }
-.game .g-head .hud-chips > :is(#depthpill, #marketpill, #dailypill, #locpill, #watchpill):empty { display: none; }
+.game .g-head .hud-chips > :is(#depthpill, #marketpill, #contractpill, #dailypill, #locpill, #watchpill) { display: contents; }
+.game .g-head .hud-chips > :is(#depthpill, #marketpill, #contractpill, #dailypill, #locpill, #watchpill):empty { display: none; }
 @media (max-width: 700px) {
   .game .g-head { overflow: visible; }
   .game .g-head > .hud-chips { flex: 1 1 auto; gap: 5px; -webkit-mask: linear-gradient(90deg, #000 calc(100% - 18px), transparent); mask: linear-gradient(90deg, #000 calc(100% - 18px), transparent); padding-right: 14px; }
@@ -2157,6 +2164,7 @@ input[type=text], input[type=password], select, .g-search, .g-sort select,
   /* на узком экране сначала то, на что нажимают: локация и открытый рынок; испытание дня — в конце ленты */
   .game .g-head .hud-chips .loc-banner { order: -3; }
   .game .g-head .hud-chips .market-pill { order: -2; }
+  .game .g-head .hud-chips .contract-pill { order: -1; }
   .game .g-head .hud-chips .daily-pill { order: 5; }
 }
 
@@ -2264,3 +2272,79 @@ button.pandora:not(.ready) .pb-cap { color: var(--text-2); }
 /* фон главного меню: 4K на больших и плотных экранах */
 :root { --menu-img: url(/ui/v2/menu.webp); }
 @media (min-width: 1700px), (min-resolution: 1.5dppx) { :root { --menu-img: url(/ui/v2/menu@4k.webp); } }
+
+/* места на столе героя: слева значок места (подпись — во всплывающей подсказке), справа вещи */
+.slot { position: relative; padding: 3px 4px 3px 32px; min-height: 34px; align-content: center; gap: 3px; }
+.slot > small { position: absolute; left: 4px; top: 50%; transform: translateY(-50%); width: 24px; height: 24px; padding: 0; display: grid; place-items: center; letter-spacing: 0; text-transform: none; color: var(--text-2); cursor: help; }
+.slot > small .gi { width: 19px; height: 19px; }
+.slot > small i { position: absolute; right: -5px; bottom: -3px; font: 700 10px/1 var(--ui); font-style: normal; color: var(--text); background: #34343b; border-radius: 99px; padding: 1px 3px; }
+.slot.empty > small { color: rgb(255 255 255 / .22); }
+.slot.empty { background: rgb(0 0 0 / .1); }
+/* комплекты — короткими плашками в строку: название и счёт */
+.sets { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 0; }
+.set-row { flex-wrap: nowrap; padding: 3px 8px; gap: 5px; font-size: 12px; cursor: help; }
+.set-row span { white-space: nowrap; }
+.traits .abilities { display: contents; }
+
+/* ───────── стол на компьютере: три колонны ─────────
+   слева — мой герой и вещи во всю высоту, по центру — соперники, сцена и рука, справа — летопись и чат во всю высоту */
+@media (min-width: 901px) {
+  .game { grid-template-columns: clamp(236px, 17.5vw, 290px) minmax(0, 1fr) clamp(290px, 22vw, 360px);
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
+    grid-template-areas: "head head head" "me opps side" "me stage side" "me hand side";
+    gap: 8px 10px; padding: 0 10px 10px; }
+  .game > .band { min-width: 0; min-height: 0; }
+  .game > .b-surface { grid-area: head; }
+  .has-world .game .g-head, .game .g-head { margin: 8px 0 0; }
+  .game > .b-clay { grid-area: opps; background: transparent; box-shadow: none; }
+  .game > .cave, .game > .mine { display: contents; }
+  .game #stage, .game .cave > .motes { grid-area: stage; }
+  .game #sidepanel { grid-area: side; min-height: 0; }
+  .game #mecard { grid-area: me; }
+  .game .handzone { grid-area: hand; }
+  /* моя карточка и рука — отдельные стеклянные пластины */
+  .game #mecard, .game .handzone {
+    background: linear-gradient(180deg, rgb(255 255 255 / .06), rgb(255 255 255 / 0) 40%), var(--grain), rgb(var(--smoke) / .2);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(175%) brightness(.86); backdrop-filter: blur(var(--glass-blur)) saturate(175%) brightness(.86);
+    border: 1px solid rgb(255 255 255 / .07); border-radius: 16px;
+    box-shadow: var(--rim), 0 1px 0 rgb(0 0 0 / .3), 0 18px 44px -10px rgb(0 0 0 / .5);
+  }
+  body.my-turn .game #mecard, body.my-turn .game .handzone {
+    box-shadow: var(--rim), inset 0 1px 0 rgb(var(--torch) / .95), inset 0 22px 40px -26px rgb(var(--torch) / .55), 0 0 0 1px rgb(var(--torch) / .22), 0 18px 44px -10px rgb(0 0 0 / .5);
+  }
+  .game #mecard { align-content: start; gap: 7px; padding: 11px 9px 11px 11px; overflow-y: auto; scrollbar-width: thin; }
+  .game .handzone { padding: 8px 12px 0; gap: 4px; min-height: 0; }
+  .game .hand { padding: 8px 4px 10px; min-height: 0; }
+  .game .me-top { gap: 10px; }
+  .game .me-ava { width: 56px; height: 56px; border-width: 3px; }
+  .game .me-name { font-size: 20px; }
+  .game .me-stats { margin-top: 5px; gap: 6px; }
+  .game .slots { grid-template-columns: minmax(0, 1fr); gap: 3px; }
+  .game .slot { gap: 2px; padding: 2px 3px 2px 30px; min-height: 28px; }
+  .game .slot > small { left: 3px; }
+  .game .chip { min-height: 24px; padding: 0 6px; font-size: 13px; }
+  .game .chip .gi { width: 17px; height: 17px; }
+  .game .contract { padding: 6px 9px; }
+  .game .contract .c-text { font-size: 12px; line-height: 1.3; }
+  .game .contract .c-head b { font-size: 14px; }
+  .game .set-row { font-size: 11px; padding: 2px 6px; gap: 4px; }
+  .game .set-row .gi { width: 14px; height: 14px; }
+  /* соперники — плотные плашки: имя, раса и класс, цифры; характер бота — во всплывающей подсказке */
+  .game .opps { padding: 0; gap: 8px; overflow-x: auto; }
+  .game .opp { flex: 1 1 0; min-width: 168px; max-width: none; grid-template-columns: 44px minmax(0, 1fr); grid-template-rows: auto auto auto; gap: 2px 9px; padding: 6px 10px 7px; align-items: center; }
+  .game .opp .ava { width: 44px; height: 44px; grid-column: 1; grid-row: 1 / span 2; }
+  .game .opp .oname { grid-column: 2; grid-row: 1; font-size: 15px; line-height: 1.15; }
+  .game .opp .ometa { grid-column: 2; grid-row: 2; display: block; font-size: 11.5px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .game .opp .ometa span + span::before { content: ' · '; }
+  .game .opp .ostats { grid-column: 1 / -1; grid-row: 3; flex-wrap: nowrap; overflow: hidden; margin-top: 3px; font-size: 12.5px; gap: 5px; }
+  .game .opp .ostats .badge.bot { display: none; }
+  .game .opp .ostats .badge { white-space: nowrap; }
+  /* сцена: бой помещается целиком; колоды поменьше, Ящик Пандоры — в правом нижнем углу боя */
+  .game .cave-stage { padding: 10px 16px; overflow-x: hidden; }
+  .game .stage-inner { gap: 8px; }
+  .game .decks { transform: scale(.78); transform-origin: left bottom; left: 10px; bottom: 8px; }
+  #stage .pandora { top: auto; bottom: 0; right: 0; transform: scale(.85); transform-origin: right bottom; }
+}
+/* в местах героя значок места уже есть — свой значок вещи не повторяем, имени достаётся больше места */
+.slot .chip > .chip-ico { display: none; }
+@media (max-width: 900px) { .slot { padding-left: 28px; } .slot > small { left: 2px; } }
