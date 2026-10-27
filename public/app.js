@@ -240,15 +240,29 @@ mount.home = () => {
     if (!r.ok) return toast(r.error);
     saveToken(r.roomId, r.token);
   });
-  $('#codeForm').addEventListener('submit', e => {
+  $('#codeForm').addEventListener('submit', async e => {
     e.preventDefault();
-    const code = $('#codeInput').value.trim().toUpperCase();
-    if (code.length < 4) return toast('Введите код комнаты из ссылки');
-    tryJoin(code);
+    const code = await typedCode();
+    if (code) tryJoin(code);
   });
   renderRooms();
 };
 update.home = () => {};
+
+// код из поля «Код» на главной: сразу говорим, если такой комнаты нет
+async function typedCode() {
+  const inp = $('#codeInput');
+  const code = inp.value.trim().toUpperCase();
+  if (code.length < 4) { toast('Введите код комнаты из ссылки'); return null; }
+  const pk = await call('room:peek', { roomId: code, typed: true });
+  if (pk.closed !== undefined) {
+    inp.value = '';
+    toast(pk.closed ? `Закрыто комнат: ${pk.closed}` : 'Открытых комнат не было');
+    return null;
+  }
+  if (pk.ok && !pk.exists) { toast(`Комнаты ${code} нет. Проверьте код или попросите у друзей свежую ссылку.`); return null; }
+  return code;
+}
 
 function needName() {
   if (S.name.trim()) return true;
@@ -2093,9 +2107,7 @@ document.addEventListener('click', async e => {
       return;
     }
     case 'watchCode': {
-      const code = $('#codeInput').value.trim().toUpperCase();
-      if (code.length < 4) return toast('Введите код комнаты из ссылки');
-      return tryWatch(code);
+      return typedCode().then(code => code && tryWatch(code));
     }
     case 'sitDown': {
       if (!S.name.trim()) return openJoinModal(S.room.id, S.rooms.find(r => r.id === S.room.id));

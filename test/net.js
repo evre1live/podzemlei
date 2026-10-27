@@ -190,6 +190,30 @@ let ended = false; W.on('rooms', rs => { if (rs.find(x => x.id === code)?.status
 await until(() => ended, 90000, 'autopilot finish');
 ok('автопилот довёл партию до победы');
 
+// служебный код из главного меню закрывает все комнаты (в тесте — свой код через ADMIN_CODE)
+await stopServer();
+await startServer({ ADMIN_CODE: 'zz42zz' });
+{
+  const H = await client(), H2 = await client(), V = await client(), X = await client();
+  const made = await H.call('room:create', { name: 'Закроют', playerName: 'Хозяин' });
+  assert.ok(made.ok);
+  assert.ok((await H2.call('room:create', { name: 'Тайная', playerName: 'Второй', hidden: true })).ok);
+  await V.call('room:watch', { roomId: made.roomId, name: 'Зритель' });
+  let kicked = null, watchEnd = null;
+  H.on('kicked', e => { kicked = e.reason; }); V.on('watch:end', e => { watchEnd = e.reason; });
+  assert.equal((await X.call('room:peek', { roomId: 'ZZ42ZZ' })).closed, undefined, 'без typed код не срабатывает');
+  assert.equal((await X.call('room:peek', { roomId: '123456', typed: true })).closed, undefined);
+  const before = (await X.call('lobby:watch')).rooms.length; // скрытая комната в список не попадает
+  const res2 = await X.call('room:peek', { roomId: 'zz42zz', typed: true });
+  assert.equal(res2.closed, before + 1, 'закрыты все комнаты, и скрытые тоже');
+  await until(() => kicked && watchEnd, 3000, 'kicked');
+  assert.match(kicked, /закрыты/);
+  assert.equal((await X.call('lobby:watch')).rooms.length, 0);
+  assert.equal((await H.call('room:peek', { roomId: made.roomId })).exists, false);
+  H.close(); H2.close(); V.close(); X.close();
+  ok('код из меню закрыл все комнаты: игроки и зрители вернулись на главную');
+}
+
 await stopServer();
 fs.rmSync(DATA_DIR, { recursive: true, force: true });
 console.log(`Сеть: ${n} проверок пройдено.`);

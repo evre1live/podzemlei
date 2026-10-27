@@ -168,6 +168,40 @@ function dropRoom(r, reason = 'Комната закрылась') {
   rooms.delete(r.id); dirty = true; pushLobby();
 }
 
+// Закрыть разом все комнаты: игроков и зрителей возвращает на главную, голосовые чаты гаснут.
+function closeAllRooms(reason) {
+  const list = [...rooms.values()];
+  for (const r of list) {
+    for (const m of r.members) {
+      const sock = m.socketId && io.sockets.sockets.get(m.socketId);
+      if (!sock) continue;
+      sock.emit('kicked', { reason });
+      sock.leave('room:' + r.id);
+      sock.data.roomId = null; sock.data.memberId = null;
+      sock.join('lobby');
+    }
+    dropRoom(r, reason);
+  }
+  dirty = true; save();
+  return list.length;
+}
+
+// Служебный код из главного меню. Репозиторий открытый, поэтому здесь лежит только хэш кода.
+// Свой код можно задать переменной окружения ADMIN_CODE — тогда хэш ниже не используется.
+const ADMIN_SALT = 'c83855bc62aa5a3d6a17dee5dc93b469';
+const ADMIN_HASH = Buffer.from(process.env.ADMIN_CODE
+  ? crypto.scryptSync(String(process.env.ADMIN_CODE).toUpperCase().trim(), ADMIN_SALT, 32).toString('hex')
+  : 'e7b0a25c71a5556ed409fc6e58c356d49a5f334396f6f971edbc0dd8ee54bc9d', 'hex');
+let adminTries = [];
+function isAdminCode(code) {
+  // перебором не подобрать: на весь сервер не больше 30 проверок в минуту, лишние просто не проверяются
+  const t = now();
+  adminTries = adminTries.filter(x => t - x < 60000);
+  if (!code || code.length > 64 || adminTries.length >= 30) return Promise.resolve(false);
+  adminTries.push(t);
+  return new Promise(res => crypto.scrypt(code, ADMIN_SALT, 32, (err, h) => res(!err && crypto.timingSafeEqual(h, ADMIN_HASH))));
+}
+
 let lobbyTimer = null;
 function pushLobby() {
   if (lobbyTimer) return;
@@ -519,10 +553,18 @@ io.on('connection', socket => {
   });
 
   // жива ли комната по ссылке — чтобы сразу сказать, что ссылка устарела
-  socket.on('room:peek', (p = {}, cb) => {
+  // код, набранный руками в главном меню (typed), может оказаться служебным — тогда закрываются все комнаты
+  socket.on('room:peek', async (p = {}, cb) => {
     cb = cbOf(cb);
     if (limited()) return cb({ ok: false, error: 'Слишком часто' });
-    cb({ ok: true, exists: rooms.has(String(p.roomId || '').toUpperCase().trim()), gone: GONE });
+    const id = String(p.roomId || '').toUpperCase().trim();
+    if (rooms.has(id)) return cb({ ok: true, exists: true, gone: GONE });
+    if (p.typed && await isAdminCode(id)) {
+      const closed = closeAllRooms('Все комнаты закрыты. Создайте новую комнату и позовите друзей заново.');
+      console.log(`Код из меню: закрыто комнат — ${closed}`);
+      return cb({ ok: true, exists: false, closed });
+    }
+    cb({ ok: true, exists: false, gone: GONE });
   });
 
   socket.on('room:join', (p = {}, cb) => {
