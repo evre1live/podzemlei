@@ -433,7 +433,7 @@ export function cardHTML(uid, o = {}) {
 export function chipHTML(uid, o = {}) {
   const d = def(uid);
   const val = d.bonus ? `+${d.bonus}` : d.runBonus ? `бег +${d.runBonus}` : '';
-  return `<button class="chip ${o.cls || ''}${d.rarity && d.rarity !== 'common' ? ' r-' + d.rarity : ''}" data-uid="${esc(uid)}" title="${esc(d.name)}">${ico(cardIcon(d), 'chip-ico')}<span class="chip-name">${esc(d.name)}</span>${val ? `<b>${val}</b>` : ''}</button>`;
+  return `<button class="chip ${o.cls || ''}${d.rarity && d.rarity !== 'common' ? ' r-' + d.rarity : ''}" data-uid="${esc(uid)}"${o.zone ? ` data-zone="${esc(o.zone)}"` : ''} title="${esc(d.name)}">${ico(cardIcon(d), 'chip-ico')}<span class="chip-name">${esc(d.name)}</span>${val ? `<b>${val}</b>` : ''}</button>`;
 }
 
 export { TYPE_LABEL, SLOT_LABEL, RACE_NAMES, CLASS_NAMES };

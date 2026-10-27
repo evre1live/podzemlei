@@ -8,7 +8,7 @@ const TOTAL = allUids('door').length + allUids('treasure').length;
 
 function countCards(s) {
   const all = [...s.decks.door, ...s.decks.treasure, ...s.discard.door, ...s.discard.treasure];
-  for (const p of s.players) all.push(...p.hand, ...p.equipped, ...p.carried, ...p.races, ...p.classes, ...[p.halfbreed, p.supermunch, p.ally, p.beast].filter(Boolean));
+  for (const p of s.players) all.push(...p.hand, ...p.equipped, ...p.carried, ...(p.allyGear || []), ...p.races, ...p.classes, ...[p.halfbreed, p.supermunch, p.ally, p.beast].filter(Boolean));
   if (s.trap) all.push(s.trap.uid);
   if (s.tame) all.push(s.tame.uid);
   if (s.duel) all.push(s.duel.card, ...s.duel.used);
@@ -75,6 +75,7 @@ for (let g = 0; g < N; g++) {
       if (a.into) { stats.summons++; if (s.combat && (s.combat.fighter === p.id)) stats.summonsOwn++; }
       if (a.type === 'answerHelp' && a.accept) stats.help++;
       if (a.name === 'steal') stats.steals++;
+      if (a.type === 'allyWear') stats.allyWear = (stats.allyWear || 0) + 1;
       if (s.combat && p.id !== s.combat.fighter && p.id !== s.combat.helper && a.type === 'playCard') stats.interfere++;
       break;
     }

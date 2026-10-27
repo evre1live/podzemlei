@@ -2238,10 +2238,6 @@ button.pandora:not(.ready) .pb-cap { color: var(--text-2); }
 .pandora-modal .pb-big .pb-seam { animation: pbSeam 1.8s ease-in-out infinite; }
 .pandora-modal .row { justify-content: center; }
 .pandora-modal .warn-note { color: #ffb7a5; font-weight: 600; }
-.gold-modal { max-width: 420px; display: grid; gap: 10px; }
-.gold-modal h2 { display: flex; align-items: center; gap: 8px; margin: 0; }
-.gold-modal h2 .gi { width: 24px; height: 24px; color: #f2c45e; }
-.gold-modal .gg-quick { display: grid; grid-template-columns: repeat(4, 1fr); width: 100%; }
 /* на узком экране сцена тянется по высоте — шкатулка встаёт в общий поток под кнопками боя */
 @media (max-width: 900px) {
   #stage .pandora { position: static; flex-direction: row; gap: 10px; margin: 8px auto 0; align-self: center; }
@@ -2365,3 +2361,10 @@ button.pandora:not(.ready) .pb-cap { color: var(--text-2); }
 .slots .chip.off .chip-name { color: var(--muted); }
 .slots .chip.off b { color: rgb(127 205 168 / .55); }
 .slots .chip.picked { background: rgb(214 168 90 / .2); box-shadow: inset 0 0 0 1px rgb(214 168 90 / .6); }
+/* места спутника — под ним, с отступом и «веточкой» */
+.slots .slot.ally-gear { padding-left: 52px; min-height: 28px; border-top-color: rgb(255 255 255 / .035); }
+.slots .slot.ally-gear > small { left: 25px; top: 4px; width: 20px; height: 20px; }
+.slots .slot.ally-gear > small .gi { width: 12px; height: 12px; }
+.slots .slot.ally-gear::before { content: ''; position: absolute; left: 12px; top: -2px; height: 15px; width: 11px; border-left: 1px solid rgb(184 209 242 / .3); border-bottom: 1px solid rgb(184 209 242 / .3); border-bottom-left-radius: 6px; pointer-events: none; }
+.chip.ally-worn { box-shadow: inset 0 0 0 1px rgb(111 151 200 / .5); }
+@media (max-width: 900px) { .slots .slot[data-slot^="ally"] { grid-column: 1 / -1; } }

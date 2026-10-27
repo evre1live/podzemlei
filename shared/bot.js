@@ -291,6 +291,11 @@ function turnMove(s, p, rng) {
     const allies = p.hand.filter(u => def(u).type === 'ally' && ok({ type: 'playCard', uid: u })).map(u => ({ u, v: allyScore(p, def(u), u) })).sort((a, b) => b.v - a.v);
     if (allies[0] && allies[0].v > (p.ally ? allyScore(p, def(p.ally), p.ally) : 0)) return { type: 'playCard', uid: allies[0].u };
     if (greedyBonus(p) > curBonus(p) && ok({ type: 'autoEquip' })) return { type: 'autoEquip' };
+    // спутник носит вещи: отдаём ему лучшую из тех, что лежат без дела
+    if (p.ally) {
+      const spare = p.carried.filter(u => (def(u).bonus || 0) > 0 && ok({ type: 'allyWear', uid: u })).sort((a, b) => def(b).bonus - def(a).bonus);
+      if (spare[0]) return { type: 'allyWear', uid: spare[0] };
+    }
     // локация: выкладываем, если она нам выгоднее той, что лежит на столе
     const cur = s.location ? locScore(p, def(s.location)) : 0;
     const locs = p.hand.filter(u => def(u).type === 'location' && ok({ type: 'playCard', uid: u }))

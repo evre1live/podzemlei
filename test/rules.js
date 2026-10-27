@@ -1527,7 +1527,7 @@ t('«Прощай навсегда»: жертва теряет всё и выб
   assert.deepEqual([v.equipped, v.carried, v.hand], [[], [], []]); assert.equal(v.ally, null);
   assert.equal(v.gold, 700, 'кошелёк остаётся'); assert.equal(v.classes.length, 1, 'класс остаётся');
   assert.equal(view(s, 'p0').players[1].banished, true);
-  assert.match(A(s, 'p1', { type: 'giveGold', to: 'p0', n: 100 }).error, /выбыли/);
+  assert.match(A(s, 'p1', { type: 'autoEquip' }).error, /выбыли/);
   // ход жертвы пропускается
   s.turn.step = 'charity'; A(s, 'p0', { type: 'endTurn' });
   assert.equal(s.turn.pid, 'p2');
@@ -1540,7 +1540,7 @@ t('«Прощай навсегда»: жертва теряет всё и выб
   assert.equal(v.banished, false); assert.equal(v.dead, false); assert.equal(v.level, 1);
   assert.equal(v.hand.length, 8);
   assert.ok(s.log.some(l => /из небытия/.test(l.text)));
-  assert.equal(A(s, 'p1', { type: 'giveGold', to: 'p0', n: 100 }).ok, true, 'снова в игре');
+  assert.doesNotMatch(A(s, 'p1', { type: 'autoEquip' }).error || '', /выбыли/, 'снова в игре');
 });
 
 t('«Прощай навсегда»: из двери уходит в руку, на бойца — бой кончается и ход переходит, Куриный бог спасает', () => {
@@ -1578,21 +1578,55 @@ t('«Сокровища Атлантиды»: +10000 голдов, тайная 
   assert.equal(A(s, 'p0', { type: 'sell', uids: ['g_atlantis#0'] }).ok, false, 'не продаётся');
 });
 
-t('голды друг другу: в любой момент, не больше, чем в кошельке', () => {
-  const s = fresh(); const p = P(s, 'p0'), q = P(s, 'p1');
+t('голды друг другу передать нельзя', () => {
+  const s = fresh(); const q = P(s, 'p1');
   q.gold = 700;
-  assert.equal(A(s, 'p1', { type: 'giveGold', to: 'p0', n: 500 }).ok, true, 'не в свой ход');
-  assert.equal(q.gold, 200); assert.equal(p.gold, 500);
-  assert.match(A(s, 'p1', { type: 'giveGold', to: 'p0', n: 300 }).error, /только 200/);
-  assert.match(A(s, 'p1', { type: 'giveGold', to: 'p1', n: 100 }).error, /Кому/);
-  assert.match(A(s, 'p1', { type: 'giveGold', to: 'p0', n: 0 }).error, /Сколько/);
-  assert.equal(A(s, 'p1', { type: 'giveGold', to: 'p0', n: 1.5 }).error, 'Плохие данные');
-  fight(s, 'm_mole#0');
-  assert.equal(A(s, 'p0', { type: 'giveGold', to: 'p2', n: 100 }).ok, true, 'и во время боя');
-  assert.equal(P(s, 'p2').gold, 100);
-  assert.ok(s.log.some(l => /передаёт .* 100 голдов/.test(l.text)));
+  assert.equal(A(s, 'p1', { type: 'giveGold', to: 'p0', n: 100 }).error, 'Неизвестное действие');
+  assert.equal(q.gold, 700); assert.equal(P(s, 'p0').gold, 0);
 });
 
+t('спутник носит вещи: места выпадают случайно, бонус идёт герою, ограниченные вещи — только герою', () => {
+  const s = fresh(); const p = P(s, 'p0');
+  p.hand.push(take(s, 'a_guide#0'));
+  assert.equal(act(s, 'p0', { type: 'playCard', uid: 'a_guide#0' }, { rng: () => 0.1, now: 1000 }).ok, true);
+  assert.deepEqual(p.allySlots, ['hand', 'armor']);
+  assert.ok(s.log.some(l => /носит оружие и броник/.test(l.text)));
+  p.carried.push(take(s, 'i_helmet#0'), take(s, 'i_shovel#0'), take(s, 'i_quilt#0'), take(s, 'i_pick#0'), take(s, 'i_excalibur#0'));
+  const before = view(s, 'p0').players[0].power;
+  assert.match(A(s, 'p0', { type: 'allyWear', uid: 'i_helmet#0' }).error, /не носит/);
+  assert.equal(view(s, 'p0').hints.allyWear['i_shovel#0'], true);
+  assert.equal(A(s, 'p0', { type: 'allyWear', uid: 'i_shovel#0' }).ok, true);
+  assert.equal(A(s, 'p0', { type: 'allyWear', uid: 'i_quilt#0' }).ok, true);
+  assert.deepEqual(p.allyGear, ['i_shovel#0', 'i_quilt#0']);
+  assert.equal(view(s, 'p0').players[0].power, before + 2 + 1, 'бонусы вещей спутника — герою');
+  assert.deepEqual(view(s, 'p1').players[0].allyGear, ['i_shovel#0', 'i_quilt#0'], 'вещи спутника видят все');
+  assert.match(A(s, 'p0', { type: 'allyWear', uid: 'i_pick#0' }).error, /занято/);
+  assert.equal(A(s, 'p0', { type: 'allyTake', uid: 'i_shovel#0' }).ok, true);
+  assert.ok(p.carried.includes('i_shovel#0'));
+  assert.match(A(s, 'p0', { type: 'allyWear', uid: 'i_excalibur#0' }).error, /только сам герой/);
+  assert.equal(A(s, 'p0', { type: 'allyWear', uid: 'i_pick#0' }).ok, true, 'двуручное оружие спутнику можно');
+  // в бою снаряжение не меняют
+  fight(s, 'm_mole#0');
+  assert.ok(A(s, 'p0', { type: 'allyTake', uid: 'i_pick#0' }).error);
+});
+
+t('спутник с головняком; отпустили или ушёл наёмник — вещи вернулись герою; «все вещи» забирают и вещи спутника', () => {
+  const s = fresh(); const p = P(s, 'p0');
+  p.hand.push(take(s, 'a_merc#0'));
+  act(s, 'p0', { type: 'playCard', uid: 'a_merc#0' }, { rng: () => 0.9, now: 1000 });
+  assert.deepEqual(p.allySlots, ['hand', 'armor', 'head']);
+  p.carried.push(take(s, 'i_helmet#0'), take(s, 'i_shovel#0'));
+  assert.equal(A(s, 'p0', { type: 'allyWear', uid: 'i_helmet#0' }).ok, true);
+  assert.equal(A(s, 'p0', { type: 'discardInPlay', uid: 'a_merc#0' }).ok, true);
+  assert.equal(p.ally, null); assert.deepEqual(p.allyGear, []); assert.equal(p.allySlots, null);
+  assert.ok(p.carried.includes('i_helmet#0'), 'шлем вернулся герою');
+  // новый спутник прогоняет прежнего — вещи прежнего тоже возвращаются
+  p.hand.push(take(s, 'a_guide#0'), take(s, 'a_porter#0'));
+  act(s, 'p0', { type: 'playCard', uid: 'a_guide#0' }, { rng: () => 0.9, now: 1000 });
+  assert.equal(A(s, 'p0', { type: 'allyWear', uid: 'i_shovel#0' }).ok, true);
+  act(s, 'p0', { type: 'playCard', uid: 'a_porter#0' }, { rng: () => 0.1, now: 1000 });
+  assert.equal(p.ally, 'a_porter#0'); assert.deepEqual(p.allyGear, []); assert.ok(p.carried.includes('i_shovel#0'));
+});
 t('Конь Плотва: +4, у ведьмака ещё +2, спасает от расплаты', () => {
   const s = fresh(); const p = P(s, 'p0');
   p.hand.push(take(s, 'p_roach#0'));

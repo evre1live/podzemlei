@@ -1,6 +1,6 @@
 // «Под Землёй» — игровой движок. Чистые функции над JSON-состоянием.
 // Сервер хранит состояние, вызывает act()/tick() и рассылает view() каждому игроку.
-import { def, allUids, RACE_NAMES, CLASS_NAMES, ruleText, BOSS_MULT, BOSS_MIN_LEVEL, BOSS_FLOOR, TROUBLE_BONUS, WITCHER_BONUS, MUTAGEN_BONUS, LULLABY_PENALTY, LULLABY_MAX, DISTILL_COST,
+import { def, allUids, RACE_NAMES, CLASS_NAMES, ALLY_SLOT_TEXT, ruleText, BOSS_MULT, BOSS_MIN_LEVEL, BOSS_FLOOR, TROUBLE_BONUS, WITCHER_BONUS, MUTAGEN_BONUS, LULLABY_PENALTY, LULLABY_MAX, DISTILL_COST,
   DEPTH, DEPTH_TREASURE_EVERY, DEATH_LEVELS, GHOST_BONUS, CONTRACTS, CONTRACT_DEFS, SETS, rewardText,
   TAME_MARGIN, WARLOCK_TAME, PANDORA_COST, PANDORA_BONUS, PANDORA_ESCAPE, tameBonus, TRAP_ROLL, TRAP_SKILL, TRAP_FAIL_LEVELS, SHOP_IDS, shopCat, shopBase, roundPrice, dailyOf } from './cards.js';
 
@@ -34,7 +34,7 @@ export function createGame(seats, opts = {}, rng = Math.random) {
       id: x.id, name: x.name, color: x.color || null, avatar: x.avatar ?? i, isBot: !!x.isBot, seat: i,
       level: 1, races: [], classes: [], halfbreed: null, supermunch: null,
       equipped: [], carried: [], hand: [], nextCombat: 0, nextEscape: 0, dead: false, needsRevive: false, mutagenUsed: false,
-      persona: x.isBot && x.persona ? x.persona : null, contract: null, contractsDone: 0, ally: null, beast: null, gold: 0,
+      persona: x.isBot && x.persona ? x.persona : null, contract: null, contractsDone: 0, ally: null, allySlots: null, allyGear: [], beast: null, gold: 0,
     })),
     decks: { door: shuffle(allUids('door'), rng), treasure: shuffle(allUids('treasure'), rng) },
     discard: { door: [], treasure: [] },
@@ -139,6 +139,26 @@ export const hasClass = (p, c) => classKeys(p).includes(c);
 // спутник героя (Носильщик, Проводник, Наёмник) и его свойство
 const allyOf = p => (p.ally ? def(p.ally) : null);
 const allyN = (p, key) => allyOf(p)?.[key] || 0;
+// снаряжение спутника: места выпадают случайно, когда спутник приходит, — оружие и броник или оружие, броник и головняк.
+// Вещи на спутнике дают бонус герою; ограничения по расе и классу спутник не снимает — такие вещи носит только сам герой.
+export const ALLY_SLOT_SETS = [['hand', 'armor'], ['hand', 'armor', 'head']];
+export const allySlotsOf = p => (p.ally ? p.allySlots || ALLY_SLOT_SETS[0] : []);
+const rollAllySlots = rng => [...ALLY_SLOT_SETS[Math.floor(rng() * ALLY_SLOT_SETS.length) % ALLY_SLOT_SETS.length]];
+// спутник уходит: его вещи возвращаются герою в «Не надето»
+function releaseAlly(p) {
+  if (p.allyGear?.length) p.carried.push(...p.allyGear);
+  p.allyGear = []; p.allySlots = null;
+}
+export function allyWearError(p, uid) {
+  if (!p.ally) return 'Спутника нет';
+  const d = def(uid);
+  if (d.type !== 'item') return 'Спутнику можно отдать только вещь';
+  if (!allySlotsOf(p).includes(d.slot)) return `${def(p.ally).name} такое не носит`;
+  if (d.req) return 'Эту вещь носит только сам герой';
+  if (d.slot === 'hand' && (d.hands || 1) > 2) return 'Спутнику с такой вещью не управиться';
+  if ((p.allyGear || []).some(u => def(u).slot === d.slot)) return 'У спутника это место уже занято';
+  return null;
+}
 export const handLimit = (p, s = null) => (hasRace(p, 'dwarf') ? 6 : 5) + ((s && locationOf(s)?.handBonus) || 0) + allyN(p, 'handBonus');
 const bigLimit = p => (hasRace(p, 'dwarf') ? 99 : 1 + allyN(p, 'bigBonus'));
 const handsLimit = p => (hasClass(p, 'engineer') ? 3 : 2);
@@ -191,16 +211,19 @@ export function equipError(p, uid) {
   return null;
 }
 // бонус надетых вещей; в бою добавляются бонусы против тегов монстров
+function gearBonus(p, s, u) {
+  const d = def(u);
+  // гордый клинок не помогает против мелочи
+  if (s?.combat && d.minFoe && s.combat.monsters.length && s.combat.monsters.every(m => monsterBaseLevel(s, def(m.uid)) < d.minFoe)) return 0;
+  let v = d.bonus || 0;
+  if (d.clsBonus && hasClass(p, d.clsBonus.cls)) v += d.clsBonus.n;
+  if (s && d.vsTag && combatHasTag(s, d.vsTag.tag)) v += d.vsTag.n;
+  return v;
+}
 export function itemBonus(p, s = null) {
   let v = 0;
-  for (const u of p.equipped) {
-    const d = def(u);
-    // гордый клинок не помогает против мелочи
-    if (s?.combat && d.minFoe && s.combat.monsters.length && s.combat.monsters.every(m => monsterBaseLevel(s, def(m.uid)) < d.minFoe)) continue;
-    v += d.bonus || 0;
-    if (d.clsBonus && hasClass(p, d.clsBonus.cls)) v += d.clsBonus.n;
-    if (s && d.vsTag && combatHasTag(s, d.vsTag.tag)) v += d.vsTag.n;
-  }
+  for (const u of p.equipped) v += gearBonus(p, s, u);
+  for (const u of p.allyGear || []) v += gearBonus(p, s, u);
   for (const k of setsOf(p)) {
     const st = SETS[k];
     v += st.bonus || 0;
@@ -234,7 +257,7 @@ export function passiveBonus(s, p) {
 export const powerOf = (s, p) => p.level + itemBonus(p) + passiveBonus(s, p);
 export function runBonusOf(s, p) {
   let b = (hasRace(p, 'elf') ? 1 : 0) + (hasRace(p, 'molefolk') ? 2 : 0) + (p.nextEscape || 0);
-  for (const u of p.equipped) b += def(u).runBonus || 0;
+  for (const u of [...p.equipped, ...(p.allyGear || [])]) b += def(u).runBonus || 0;
   for (const k of setsOf(p)) b += SETS[k].run || 0;
   b += allyN(p, 'runBonus');
   b += locationOf(s)?.escapeAll || 0;
@@ -243,6 +266,8 @@ export function runBonusOf(s, p) {
 function removeItem(p, uid) { return without(p.equipped, uid) || without(p.carried, uid); }
 
 function normalize(s, p) {
+  if (!p.ally && p.allyGear?.length) releaseAlly(p);
+  if (!p.ally) p.allySlots = null;
   const rcap = p.halfbreed ? 2 : 1;
   while (p.races.length > rcap) toDiscard(s, p.races.pop());
   const ccap = p.supermunch ? 2 : 1;
@@ -310,9 +335,9 @@ function applyFx(s, p, list, rng) {
         break;
       }
       case 'allItems': {
-        const pool = inPlayItems(p);
+        const pool = [...inPlayItems(p), ...(p.allyGear || [])];
         for (const u of pool) toDiscard(s, u);
-        p.equipped = []; p.carried = [];
+        p.equipped = []; p.carried = []; p.allyGear = [];
         log(s, pool.length ? `${p.name} лишается всех вещей (${pool.length}).` : `${p.name} и так гол как сокол.`, 'bad');
         break;
       }
@@ -367,8 +392,8 @@ function applyFx(s, p, list, rng) {
 }
 
 function kill(s, p, rng) {
-  const pool = [...p.equipped, ...p.carried, ...p.hand, ...(p.ally ? [p.ally] : [])];
-  p.equipped = []; p.carried = []; p.hand = []; p.ally = null;
+  const pool = [...p.equipped, ...p.carried, ...p.hand, ...(p.ally ? [p.ally] : []), ...(p.allyGear || [])];
+  p.equipped = []; p.carried = []; p.hand = []; p.ally = null; p.allyGear = []; p.allySlots = null;
   // приручённый зверь дичает и убегает; несработавшая ловушка остаётся лежать
   if (p.beast) { toDiscard(s, p.beast); p.beast = null; }
   if (s.trap?.pid === p.id) { toDiscard(s, s.trap.uid); s.trap = null; if (s.turn.step === 'trap') s.turn.step = 'post'; }
@@ -389,8 +414,8 @@ function kill(s, p, rng) {
 
 // «Прощай навсегда»: всё имущество и уровни — в сброс, герой выбывает из партии до открытия Ящика Пандоры
 function banish(s, p, rng) {
-  for (const u of [...p.equipped, ...p.carried, ...p.hand, ...(p.ally ? [p.ally] : []), ...(p.beast ? [p.beast] : [])]) toDiscard(s, u);
-  p.equipped = []; p.carried = []; p.hand = []; p.ally = null; p.beast = null;
+  for (const u of [...p.equipped, ...p.carried, ...p.hand, ...(p.ally ? [p.ally] : []), ...(p.allyGear || []), ...(p.beast ? [p.beast] : [])]) toDiscard(s, u);
+  p.equipped = []; p.carried = []; p.hand = []; p.ally = null; p.allyGear = []; p.allySlots = null; p.beast = null;
   if (p.level !== 1) fx(s, { kind: 'levelDown', pid: p.id, from: p.level, to: 1 });
   p.level = 1; p.nextCombat = 0; p.nextEscape = 0;
   p.banished = true; p.dead = true; p.needsRevive = false;
@@ -662,7 +687,7 @@ function payFee(s, p) {
     log(s, `${p.name} платит ${q(d.name)}: ${q(def(u).name)}.`, 'info');
     return;
   }
-  toDiscard(s, p.ally); p.ally = null; normalize(s, p);
+  toDiscard(s, p.ally); releaseAlly(p); p.ally = null; normalize(s, p);
   fx(s, { kind: 'allyGone', pid: p.id });
   log(s, `Платить нечем — ${q(d.name)} уходит от ${p.name}.`, 'bad');
 }
@@ -1254,10 +1279,10 @@ H.playCard = {
         log(s, `${p.name} выкладывает ${q(d.name)}${isLegend(a.uid) ? ' — легендарная вещь!' : '.'}`, isLegend(a.uid) ? 'win' : 'info');
         break;
       case 'ally':
-        if (p.ally) { toDiscard(s, p.ally); log(s, `${q(def(p.ally).name)} уходит от ${p.name}: место занято.`, 'info'); }
-        p.ally = a.uid; normalize(s, p);
+        if (p.ally) { toDiscard(s, p.ally); releaseAlly(p); log(s, `${q(def(p.ally).name)} уходит от ${p.name}: место занято.`, 'info'); }
+        p.ally = a.uid; p.allySlots = rollAllySlots(rng); p.allyGear = []; normalize(s, p);
         fx(s, { kind: 'ally', pid: p.id, card: a.uid });
-        log(s, `${p.name} берёт в спутники ${q(d.name)}.`, 'good');
+        log(s, `${p.name} берёт в спутники ${q(d.name)} — ${ALLY_SLOT_TEXT(p.allySlots)}.`, 'good');
         break;
       case 'trap': grudge(s, a.target, p.id); trapOn(s, P(s, a.target), a.uid, rng, p); break;
       case 'duel': {
@@ -1391,6 +1416,17 @@ H.unequip = {
   check(s, p, a) { return manageErr(s, p) || (!p.equipped.includes(a.uid) ? 'Вещь не надета' : null); },
   run(s, p, a) { without(p.equipped, a.uid); p.carried.push(a.uid); },
 };
+H.allyWear = {
+  check(s, p, a) { return manageErr(s, p) || (!inPlayItems(p).includes(a.uid) ? 'Вещи нет у вас на столе' : allyWearError(p, a.uid)); },
+  run(s, p, a) {
+    removeItem(p, a.uid); (p.allyGear ||= []).push(a.uid); normalize(s, p);
+    log(s, `${p.name} отдаёт ${q(def(a.uid).name)} спутнику — ${q(def(p.ally).name)}.`, 'info');
+  },
+};
+H.allyTake = {
+  check(s, p, a) { return manageErr(s, p) || (!(p.allyGear || []).includes(a.uid) ? 'Этой вещи у спутника нет' : null); },
+  run(s, p, a) { without(p.allyGear, a.uid); p.carried.push(a.uid); },
+};
 H.autoEquip = {
   check(s, p) { return manageErr(s, p) || (!inPlayItems(p).length ? 'Нет вещей' : null); },
   run(s, p, a, rng) {
@@ -1408,7 +1444,7 @@ H.discardInPlay = {
   },
   run(s, p, a) {
     if (p.halfbreed === a.uid) p.halfbreed = null;
-    else if (p.ally === a.uid) p.ally = null;
+    else if (p.ally === a.uid) { releaseAlly(p); p.ally = null; }
     else if (p.beast === a.uid) p.beast = null;
     else if (p.supermunch === a.uid) p.supermunch = null;
     else if (!without(p.races, a.uid) && !without(p.classes, a.uid)) removeItem(p, a.uid);
@@ -1575,8 +1611,8 @@ H.pandora = {
   },
 };
 function pandoraLoss(s, p, rng) {
-  const lost = [...p.equipped, ...p.carried, ...(p.beast ? [p.beast] : [])];
-  p.equipped = []; p.carried = []; p.beast = null;
+  const lost = [...p.equipped, ...p.carried, ...(p.allyGear || []), ...(p.beast ? [p.beast] : [])];
+  p.equipped = []; p.carried = []; p.allyGear = []; p.beast = null;
   let to = s.players.filter(x => x !== p && !x.dead);
   if (!to.length) to = s.players.filter(x => x !== p);
   const got = {};
@@ -1597,23 +1633,6 @@ function pandoraLoss(s, p, rng) {
     ? `📦 Ящик Пандоры забирает у ${p.name} всё: ${Object.entries(got).map(([id, l]) => `${P(s, id).name} — ${l.map(u => q(def(u).name)).join(', ')}`).join('; ')}.`
     : `📦 Ящик Пандоры ищет у ${p.name} вещи — но там пусто.`, 'bad');
 }
-
-// ───────────────────────── голды друг другу ─────────────────────────
-// Передать голды из кошелька любому игроку можно в любой момент партии.
-H.giveGold = {
-  check(s, p, a) {
-    const t = P(s, a.to);
-    if (!t || t === p) return 'Кому передать голды?';
-    if (!Number.isInteger(a.n) || a.n < 1) return 'Сколько передать?';
-    return (p.gold || 0) < a.n ? `В кошельке только ${p.gold || 0} голдов` : null;
-  },
-  run(s, p, a) {
-    const t = P(s, a.to);
-    p.gold -= a.n; t.gold = (t.gold || 0) + a.n;
-    fx(s, { kind: 'giveGold', pid: p.id, to: t.id, n: a.n });
-    log(s, `💰 ${p.name} передаёт ${t.name} ${a.n} голдов.`, 'info');
-  },
-};
 
 // Ржавник: брось ему вещь — уползёт жевать, бой без наград
 H.bribe = {
@@ -1962,9 +1981,10 @@ H.ability = {
             for (const u of p.equipped.filter(x => def(x).slot === 'pet')) { without(p.equipped, u); p.carried.push(u); }
             p.beast = a.item;
           } else {
-            t.ally = null;
-            if (p.ally) toDiscard(s, p.ally);
-            p.ally = a.item;
+            const slots = t.allySlots;
+            releaseAlly(t); t.ally = null;
+            if (p.ally) { toDiscard(s, p.ally); releaseAlly(p); }
+            p.ally = a.item; p.allySlots = slots || rollAllySlots(rng); p.allyGear = [];
           }
           normalize(s, t); normalize(s, p);
           grudge(s, t.id, p.id);
@@ -2100,10 +2120,11 @@ export function hints(s, pid) {
     haunt: { player: ok({ type: 'haunt', side: 'player' }), monster: ok({ type: 'haunt', side: 'monster' }) },
     trade: !p.dead && !isParticipant(s, p.id),
     tradeTargets: s.players.filter(x => x !== p && !x.dead && !isParticipant(s, x.id) && !isParticipant(s, p.id) && !p.dead).map(x => x.id),
-    cards: {}, equip: {}, abilities: {},
+    cards: {}, equip: {}, allyWear: {}, abilities: {},
   };
   for (const u of p.hand) h.cards[u] = playOptions(s, pid, u);
   for (const u of p.carried) h.equip[u] = ok({ type: 'equip', uid: u });
+  if (p.ally) for (const u of inPlayItems(p)) h.allyWear[u] = ok({ type: 'allyWear', uid: u });
   const one = p.hand.slice(0, 1);
   const c = s.combat;
   if (hasClass(p, 'warrior')) h.abilities.rage = ok({ type: 'ability', name: 'rage', cards: one });
@@ -2152,7 +2173,7 @@ export function view(s, pid) {
       level: p.level, races: [...p.races], classes: [...p.classes], halfbreed: p.halfbreed, supermunch: p.supermunch,
       equipped: [...p.equipped], carried: [...p.carried], nextCombat: p.nextCombat, nextEscape: p.nextEscape || 0,
       dead: p.dead, handCount: p.hand.length, handLimit: handLimit(p, s), handsLimit: handsLimit(p), mutagenUsed: !!p.mutagenUsed,
-      power: powerOf(s, p), runBonus: runBonusOf(s, p), gold: p.gold || 0, banished: !!p.banished, sets: setsOf(p), ghost: isGhost(p), ally: p.ally || null, beast: p.beast || null, persona: p.persona || null, contractsDone: p.contractsDone || 0,
+      power: powerOf(s, p), runBonus: runBonusOf(s, p), gold: p.gold || 0, banished: !!p.banished, sets: setsOf(p), ghost: isGhost(p), ally: p.ally || null, allySlots: allySlotsOf(p), allyGear: p.allyGear || [], beast: p.beast || null, persona: p.persona || null, contractsDone: p.contractsDone || 0,
       hand: p.id === pid ? [...p.hand] : undefined,
       contract: p.id === pid && p.contract && CONTRACT_DEFS[p.contract.id] ? { ...CONTRACT_DEFS[p.contract.id], progress: p.contract.progress, rewardText: rewardText(CONTRACT_DEFS[p.contract.id].reward) } : undefined,
     })),

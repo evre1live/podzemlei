@@ -1,5 +1,5 @@
 // «Под Землёй» — клиент.
-import { def, RACE_NAMES, CLASS_NAMES, SETS, setRuleVars, ruleText, BOSS_FLOOR, TROUBLE_BONUS, LULLABY_PENALTY, MUTAGEN_BONUS, DISTILL_COST,
+import { def, RACE_NAMES, CLASS_NAMES, SETS, ALLY_SLOT_NAMES, ALLY_SLOT_TEXT, setRuleVars, ruleText, BOSS_FLOOR, TROUBLE_BONUS, LULLABY_PENALTY, MUTAGEN_BONUS, DISTILL_COST,
   PERSONAS, GHOST_BONUS, DEATH_LEVELS, DEPTH, DEPTH_TREASURE_EVERY, TRADE_TIMEOUT_MS, TAME_MARGIN, WARLOCK_TAME, PANDORA_COST, PANDORA_BONUS, PANDORA_ESCAPE, tameBonus, TRAP_FAIL_LEVELS, SHOP_CATS, dailyOf, dailyDate } from '/shared/cards.js';
 import { esc, cardHTML, chipHTML, avatarSVG, iconSVG, cardBackSVG, locationSVG, cardIcon, cardText } from '/art.js';
 import { fx } from '/fx.js';
@@ -813,22 +813,6 @@ function openPandoraModal() {
     <div class="row"><button class="btn danger" data-popopt="0" ${h?.pandora ? '' : 'disabled'}>Открыть за ${PANDORA_COST} г</button><button class="btn ghost" data-act="closeOverlay">Не трогать</button></div>
   </div>`);
 }
-// передать голды соседу по столу
-function openGoldModal(pid) {
-  const p = me(), t = pl(pid);
-  if (!p || !t) return;
-  const max = p.gold || 0;
-  const send = async n => { n = Math.floor(Number(n)); if (!(n >= 1)) return toast('Сколько передать?'); const r = await act({ type: 'giveGold', to: pid, n }); if (r.ok) closeOverlay(); };
-  popOpts = [{ fn: () => send($('#ggN').value) }, ...[100, 500, 1000].map(v => ({ fn: () => { $('#ggN').value = Math.min(v, max); } })), { fn: () => { $('#ggN').value = max; } }];
-  showOverlay(`<div class="modal gold-modal" role="dialog" aria-label="Передать голды">
-    <h2>${ico('two-coins')} Голды для ${esc(t.name)}</h2>
-    <p class="muted" style="margin:0">В вашем кошельке ${max} г. Передать можно в любой момент партии.</p>
-    <label>Сколько<input type="text" inputmode="numeric" id="ggN" value="${Math.min(500, max)}" autocomplete="off"></label>
-    <div class="seg gg-quick" role="group">${[100, 500, 1000].map((v, i) => `<button type="button" data-popopt="${i + 1}" ${v > max ? 'disabled' : ''}>${v}</button>`).join('')}<button type="button" data-popopt="4">Все</button></div>
-    <div class="row"><button class="btn primary" data-popopt="0" ${max ? '' : 'disabled'}>Передать</button><button class="btn ghost" data-act="closeOverlay">Отмена</button></div>
-  </div>`);
-  $('#ggN')?.select();
-}
 // в летописи эмодзи из движка заменяются гравированными значками
 const LOG_ICON = { '💀': 'skull-crossed-bones', '⛏': 'stairs', '📜': 'scroll-quill', '👹': 'horned-skull', '⚔️': 'crossed-swords', '⚔': 'crossed-swords', '🏆': 'trophy', '🤝': 'shaking-hands', '👻': 'ghost', '🛒': 'shop', '📅': 'calendar' };
 const logText = t => esc(t).replace(/💀|⛏|📜|👹|⚔️|⚔|🏆|🤝|👻|🛒|📅/g, m => ico(LOG_ICON[m], 'li'));
@@ -972,8 +956,18 @@ const hasPetSlot = p => p.beast || p.equipped.some(u => def(u).slot === 'pet');
 const slotItems = (p, key, chip, zone) => p.equipped.filter(u => def(u).slot === key).map(chip).join('') + (key === 'pet' && p.beast ? beastChip(p.beast, zone) : '');
 // место на столе героя: вместо подписи — значок, подпись во всплывающей подсказке
 const SLOT_ICON = { head: 'crested-helmet', armor: 'breastplate', feet: 'boots', hand: 'mailed-fist', pet: 'paw-print', none: 'diamond-ring', ally: 'person', bag: 'knapsack' };
-const slotBox = (key, label, inner, extra = '') => `<div class="slot${inner ? '' : ' vacant'}" data-slot="${key}"><small title="${esc(label)}">${ico(SLOT_ICON[key], '', label)}${extra}</small>${inner}</div>`;
-const allySlot = (p, zone) => (p.ally ? slotBox('ally', 'Спутник', allyChip(p.ally, zone)) : '');
+const slotBox = (key, label, inner, extra = '', icon = SLOT_ICON[key]) => `<div class="slot${inner ? '' : ' vacant'}${key.startsWith('ally-') ? ' ally-gear' : ''}" data-slot="${key}"><small title="${esc(label)}">${ico(icon, '', label)}${extra}</small>${inner}</div>`;
+// спутник и под ним — его места: оружие, броник и, если повезло, головняк
+const ALLY_GEAR_ICON = { hand: 'broadsword', armor: 'breastplate', head: 'crested-helmet' };
+const allySlot = (p, zone, picked = new Set()) => {
+  if (!p.ally) return '';
+  const slots = p.allySlots || [];
+  const gear = slots.map(k => {
+    const u = (p.allyGear || []).find(x => def(x).slot === k);
+    return slotBox(`ally-${k}`, `Спутник: ${ALLY_SLOT_NAMES[k]}`, u ? chipHTML(u, { zone: zone === 'view' ? 'view' : 'allygear', cls: picked.has(u) ? 'picked' : '' }) : '', '', ALLY_GEAR_ICON[k]);
+  }).join('');
+  return slotBox('ally', `Спутник: ${ALLY_SLOT_TEXT(slots)}`, allyChip(p.ally, zone)) + gear;
+};
 // комплекты снаряжения: собранные и начатые (надета хоть одна вещь)
 function setsHTML(p) {
   const have = new Set(p.equipped.map(u => def(u).id));
@@ -1018,7 +1012,7 @@ function renderMine() {
 
   const slot = key => slotItems(p, key, u => chipHTML(u, { cls: picked.has(u) ? 'picked' : '' }), 'ally');
   const slots = SLOT_ORDER.filter(([k]) => k !== 'pet' || hasPetSlot(p)).map(([k, label]) => k === 'hand' && p.handsLimit > 2 ? slotBox(k, `${label}: ${p.handsLimit} руки`, slot(k), `<i>${p.handsLimit}</i>`) : slotBox(k, label, slot(k))).join('')
-    + allySlot(p, 'ally')
+    + allySlot(p, 'ally', picked)
     + slotBox('bag', 'Не надето', p.carried.map(u => chipHTML(u, { cls: 'off' + (picked.has(u) ? ' picked' : '') })).join(''));
 
   const abil = Object.entries(ABIL).filter(([k, a]) => p.classes.some(u => def(u).cls === a.cls)).map(([k, a]) => {
@@ -1341,6 +1335,7 @@ function openCardPop(uid, zone) {
     if (p.carried.includes(uid) && h.equip?.[uid]) popOpts.push({ label: 'Надеть', action: { type: 'equip', uid }, cls: 'primary' });
     if (p.carried.includes(uid) && h.manage && !h.equip?.[uid]) groups.push(`<p class="why">Сейчас не надеть: ${esc(reqWhy(p, d.req) || 'слот занят — снимите другую вещь')}.</p>`);
     if (p.equipped.includes(uid) && h.manage) popOpts.push({ label: 'Снять', action: { type: 'unequip', uid }, cls: '' });
+    if (h.allyWear?.[uid]) popOpts.push({ label: `Отдать спутнику — ${def(p.ally).name}`, action: { type: 'allyWear', uid }, cls: '' });
     if (h.manage && d.value) popOpts.push({ label: 'Продать…', fn: () => startMode({ kind: 'sell', picked: [uid] }), cls: 'ghost' });
     const c = S.game.combat;
     const busy = c && (c.fighter === p.id || c.helper === p.id);
@@ -1348,6 +1343,10 @@ function openCardPop(uid, zone) {
     if (h.manage) popOpts.push({ label: 'Сбросить', action: { type: 'discardInPlay', uid }, cls: 'ghost' });
   }
   if (zone === 'trait' && p && h.manage) popOpts.push({ label: 'Сбросить', action: { type: 'discardInPlay', uid }, cls: 'ghost' });
+  if (zone === 'allygear' && p && (p.allyGear || []).includes(uid)) {
+    groups.push(`<p class="why">Эту вещь носит ваш спутник — ${esc(def(p.ally).name)}: её бонус идёт вам в силу.</p>`);
+    if (h.manage) popOpts.push({ label: 'Забрать у спутника', action: { type: 'allyTake', uid }, cls: '' });
+  }
   if (zone === 'ally' && p && (p.ally === uid || p.beast === uid)) {
     if (p.beast === uid) groups.push(`<p class="why">Приручённый зверь: +${tameBonus(d)} к силе, занимает место питомца и спасёт от одной расплаты.</p>`);
     if (h.manage) popOpts.push({ label: 'Отпустить', action: { type: 'discardInPlay', uid }, cls: 'ghost' });
@@ -1375,8 +1374,7 @@ function openOppPop(pid) {
     for (const t of h.abilities?.backstab || []) if (t === pid) popOpts.push({ label: 'Ударить в спину (−2)', fn: () => startMode({ kind: 'ability', name: 'backstab', target: pid, picked: [], max: 1 }), cls: 'danger' });
   }
   if (mine && h.tradeTargets?.includes(pid)) popOpts.push({ label: 'Предложить обмен', fn: () => openTrade(pid), cls: 'hero' });
-  if (mine && pid !== mine.id && mine.gold > 0) popOpts.push({ label: 'Передать голды', fn: () => openGoldModal(pid), cls: 'ghost' });
-  const items = [...p.equipped.map(u => chipHTML(u)), ...(p.beast ? [beastChip(p.beast, 'view')] : []), ...(p.ally ? [allyChip(p.ally, 'view')] : []), ...p.carried.map(u => chipHTML(u, { cls: 'off' }))].join('') || '<p class="muted">Вещей нет.</p>';
+  const items = [...p.equipped.map(u => chipHTML(u)), ...(p.beast ? [beastChip(p.beast, 'view')] : []), ...(p.ally ? [allyChip(p.ally, 'view')] : []), ...(p.allyGear || []).map(u => chipHTML(u, { cls: 'ally-worn', zone: 'view' })), ...p.carried.map(u => chipHTML(u, { cls: 'off' }))].join('') || '<p class="muted">Вещей нет.</p>';
   showOverlay(`<div class="modal" role="dialog" aria-label="${esc(p.name)}">
     <div class="row"><span class="me-ava" style="--seat:${p.color}">${avatarSVG(gAva(p), p.color)}</span><div><h2>${esc(p.name)}</h2><div class="me-stats"><span class="lvl">${p.level}</span><span class="pow">${ico('crossed-swords')}${p.power}</span><span class="gold" title="Кошелёк: голды за проданные вещи и контракты, тратятся на рынке">${ico('two-coins')}${p.gold || 0}</span><span class="badge">${esc(raceText(p))}, ${esc(classText(p))}</span><span class="handcount"><i></i>${p.handCount}</span></div></div></div>
     <div class="opp-items" data-zone-view>${items}</div>
@@ -1647,10 +1645,6 @@ function extraFx(fresh) {
         fx.banner('Возвращение', `${pname(f.pid)} снова в игре`, 'pandora');
         if (ava) fx.sparkle(ava, { n: 14, colors: ['#f3d9ff', '#c77dff', '#ffffff'] });
         break;
-      case 'giveGold':
-        sfx.play('coins'); fx.coins(ava, avaOf(f.to), { n: 8 }); fx.float(avaOf(f.to) || ava, `+${f.n} г`, 'good');
-        if (f.to === S.room.me) toast(`${pname(f.pid)} передаёт вам ${f.n} г`, true);
-        break;
       case 'pandora': {
         sfx.play('portal'); sfx.play('bossRise', { delay: 0.25 });
         fx.banner('Ящик Пандоры открыт!', `${pname(f.pid)}: монстрам +${PANDORA_BONUS}, героям −${PANDORA_ESCAPE} к побегу`, 'pandora');
@@ -1791,11 +1785,11 @@ const RULES = `<div class="modal rules" role="dialog" aria-label="Как игр�
   <h3>Вещи и уровни</h3>
   <p>Один головняк, один броник, одна обувка, две руки и одна большая вещь (гномам — сколько угодно, механикам — три руки). Можно завести одного питомца: он даёт бонус и один раз спасает от расплаты. Вещи можно продать — голды идут в кошелёк и тратятся на рынке. Собрали все вещи комплекта — получаете бонус сверху: Легендарный (Шлем Ареса, Доспехи Бога, Сапоги эпохи и Меч Экскалибур) даёт ещё +7. Его части носит только человек — герой без расы, а со «Смешанной кровью» — герой любой расы.</p>
   <h3>Спутники и приручение</h3>
-  <p>Спутник — карта клада, он один: Носильщик даёт +2 к пределу руки и ещё одну большую вещь, Проводник — +2 к побегу, Наёмник — +3 к силе, но в начале каждого вашего хода берёт плату: 200 голдов из кошелька, а если их нет — карту ценой от 200 голдов из руки или запаса, иначе уходит. Победили зверя с перевесом ${TAME_MARGIN} и больше (чернокнижник — ${WARLOCK_TAME}) — до конца хода его можно приручить: он займёт место питомца и даст силу по своему уровню. Плут может сманить чужого спутника или зверя: сбросить карту и выбросить 4+.</p>
+  <p>Спутник — карта клада, он один: Носильщик даёт +2 к пределу руки и ещё одну большую вещь, Проводник — +2 к побегу, Наёмник — +3 к силе, но в начале каждого вашего хода берёт плату: 200 голдов из кошелька, а если их нет — карту ценой от 200 голдов из руки или запаса, иначе уходит. Спутник носит за вас вещи: когда он приходит, ему выпадают места — оружие и броник, а повезёт — ещё и головняк. Откройте свою вещь и выберите «Отдать спутнику»: её бонус пойдёт вам в силу. Вещи с ограничением по расе или классу носит только сам герой. Уйдёт спутник — его вещи вернутся вам. Победили зверя с перевесом ${TAME_MARGIN} и больше (чернокнижник — ${WARLOCK_TAME}) — до конца хода его можно приручить: он займёт место питомца и даст силу по своему уровню. Плут может сманить чужого спутника или зверя: сбросить карту и выбросить 4+.</p>
   <h3>Поединок</h3>
   <p>Карта «Вызов на поединок» играется в свой ход вне боя: выберите соперника. Сравнивается сила — уровень, вещи и бонусы «в следующем бою»; остальные могут подкинуть разовые бонусы любой стороне, и тогда отсчёт начинается заново. При равенстве побеждает вызванный (а воин-зачинщик — и при равенстве). Проигравший отдаёт победителю свою лучшую вещь со стола, легендарки не отдаются.</p>
   <h3>Кошелёк и подземный рынок</h3>
-  <p>У каждого есть кошелёк: голды в него приходят за проданные вещи и выполненные контракты, сколько у кого — видно всем. Рынок открыт всегда — кнопка в шапке стола. В свой ход вне боя на голды можно купить разовые карты для боя, зелья, проклятия, чтобы наслать на соперников, и «Получи уровень» (не больше одного за ход, последний уровень так не взять). Продаётся только то, что ещё лежит в колоде, поэтому товар кончается. У каждой локации своя ценовая политика: в таверне еда за полцены, в Звёздной библиотеке дешевле уровни и свитки, на кладбище — проклятия, а в Небесной цитадели уровни в полтора раза дороже. Цены локации написаны на её карте. Голды можно передать любому игроку в любой момент: нажмите на соперника и выберите «Передать голды». Единственная карта «Сокровища Атлантиды» сразу кладёт в кошелёк 10000 голдов, а единственное проклятие «Прощай навсегда» (на рынке — около 3000) отнимает у жертвы всё и выбивает её из партии, пока кто-нибудь не откроет Ящик Пандоры.</p>
+  <p>У каждого есть кошелёк: голды в него приходят за проданные вещи и выполненные контракты, сколько у кого — видно всем. Рынок открыт всегда — кнопка в шапке стола. В свой ход вне боя на голды можно купить разовые карты для боя, зелья, проклятия, чтобы наслать на соперников, и «Получи уровень» (не больше одного за ход, последний уровень так не взять). Продаётся только то, что ещё лежит в колоде, поэтому товар кончается. У каждой локации своя ценовая политика: в таверне еда за полцены, в Звёздной библиотеке дешевле уровни и свитки, на кладбище — проклятия, а в Небесной цитадели уровни в полтора раза дороже. Цены локации написаны на её карте. Единственная карта «Сокровища Атлантиды» сразу кладёт в кошелёк 10000 голдов, а единственное проклятие «Прощай навсегда» (на рынке — около 3000) отнимает у жертвы всё и выбивает её из партии, пока кто-нибудь не откроет Ящик Пандоры.</p>
   <h3>Ящик Пандоры</h3>
   <p>Во время любого боя — своего или чужого — на столе стоит резная шкатулка. Любой игрок может открыть её за ${PANDORA_COST} голдов: в этом бою монстрам +${PANDORA_BONUS}, героям −${PANDORA_ESCAPE} к побегу, а кто из героев не убежит, лишится всех вещей и питомца — их раздадут другим игрокам наугад. Спутник остаётся. Чернокнижник уходит тенью и ничего не теряет. В одном бою — один ящик. Открытый ящик к тому же возвращает в партию всех, кого настигло «Прощай навсегда».</p>
   <h3>Ловушки</h3>
@@ -2450,7 +2444,7 @@ function flySource(a) {
 function flyCard(src, a) {
   if (!src) return;
   const d = def(src.uid);
-  if (['equip', 'unequip', 'discardInPlay'].includes(a.type)) return;
+  if (['equip', 'unequip', 'discardInPlay', 'allyWear', 'allyTake'].includes(a.type)) return;
   let to = $('#stage');
   if (a.target) to = a.target === S.room.me ? $('#meava') : document.querySelector(`[data-opp="${a.target}"] .ava`);
   else if (a.type === 'gift') to = document.querySelector(`[data-opp="${a.to}"] .ava`);

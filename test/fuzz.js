@@ -4,14 +4,14 @@ import { botDecide } from '../shared/bot.js';
 import { allUids, def, SHOP_IDS } from '../shared/cards.js';
 
 function mulberry32(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
-const TYPES = ['pandora', 'giveGold', 'kick', 'loot', 'lookForTrouble', 'endTurn', 'playCard', 'equip', 'unequip', 'autoEquip', 'discardInPlay', 'sell', 'gift', 'askHelp', 'answerHelp', 'cancelHelp', 'fight', 'runAway', 'ability', 'haunt', 'offerTrade', 'answerTrade', 'cancelTrade', 'bribe', 'trap', 'tame', 'buy', 'pass', '__proto__', 'toString', 'constructor', 'nope'];
+const TYPES = ['pandora', 'allyWear', 'allyTake', 'giveGold', 'kick', 'loot', 'lookForTrouble', 'endTurn', 'playCard', 'equip', 'unequip', 'autoEquip', 'discardInPlay', 'sell', 'gift', 'askHelp', 'answerHelp', 'cancelHelp', 'fight', 'runAway', 'ability', 'haunt', 'offerTrade', 'answerTrade', 'cancelTrade', 'bribe', 'trap', 'tame', 'buy', 'pass', '__proto__', 'toString', 'constructor', 'nope'];
 const ABIL = ['rage', 'turn', 'levitate', 'charm', 'backstab', 'steal', 'lullaby', 'distill', 'mutagen', 'lure', 'x'];
 const ALL = [...allUids('door'), ...allUids('treasure')];
 const junk = rng => [null, 1, -1, 'x', {}, [], [1], ['a#0'], NaN, '__proto__', 99999][Math.floor(rng() * 11)];
 const TOTAL = ALL.length;
 function count(s) {
   const all = [...s.decks.door, ...s.decks.treasure, ...s.discard.door, ...s.discard.treasure];
-  for (const p of s.players) all.push(...p.hand, ...p.equipped, ...p.carried, ...p.races, ...p.classes, ...[p.halfbreed, p.supermunch, p.ally, p.beast].filter(Boolean));
+  for (const p of s.players) all.push(...p.hand, ...p.equipped, ...p.carried, ...(p.allyGear || []), ...p.races, ...p.classes, ...[p.halfbreed, p.supermunch, p.ally, p.beast].filter(Boolean));
   if (s.trap) all.push(s.trap.uid);
   if (s.tame) all.push(s.tame.uid);
   if (s.duel) all.push(s.duel.card, ...s.duel.used);
@@ -33,7 +33,7 @@ for (let g = 0; g < N; g++) {
     if (rng() < 0.55) a = botDecide(s, pid, { rng, now }) || { type: 'kick' };
     else {
       const p = s.players.find(x => x.id === pid);
-      const pool = [...p.hand, ...p.equipped, ...p.carried, ...s.players.flatMap(x => [x.ally, x.beast].filter(Boolean))];
+      const pool = [...p.hand, ...p.equipped, ...p.carried, ...(p.allyGear || []), ...s.players.flatMap(x => [x.ally, x.beast].filter(Boolean))];
       const pickU = () => (rng() < 0.7 && pool.length ? pool[Math.floor(rng() * pool.length)] : ALL[Math.floor(rng() * ALL.length)]);
       a = { type: TYPES[Math.floor(rng() * TYPES.length)], uid: pickU(), target: ids[Math.floor(rng() * ids.length)], to: ids[Math.floor(rng() * ids.length)],
         side: rng() < 0.5 ? 'player' : 'monster', monster: Math.floor(rng() * 3) - (rng() < 0.1 ? 5 : 0), with: pickU(), uids: [pickU(), pickU()], give: [pickU()],
@@ -43,7 +43,7 @@ for (let g = 0; g < N; g++) {
       // рынок: настоящий товар (и кошелёк потолще, чтобы покупки случались) или мусор
       if (a.type === 'buy') { a.id = rng() < 0.7 ? SHOP_IDS[Math.floor(rng() * SHOP_IDS.length)] : junk(rng); if (rng() < 0.3) p.gold = (p.gold || 0) + 1000; }
       if (rng() < 0.1) a.into = rng() < 0.8 ? true : junk(rng);
-      if (a.type === 'giveGold' || a.type === 'pandora') { a.n = rng() < 0.8 ? Math.floor(rng() * 3000) - 100 : junk(rng); if (rng() < 0.3) p.gold = (p.gold || 0) + 3000; }
+      if (a.type === 'pandora') { a.n = rng() < 0.8 ? Math.floor(rng() * 3000) - 100 : junk(rng); if (rng() < 0.3) p.gold = (p.gold || 0) + 3000; }
       if (rng() < 0.3) { const k = Object.keys(a)[Math.floor(rng() * 12)]; a[k] = junk(rng); }
     }
     // иногда — честное предложение обмена, чтобы проверить перенос вещей
