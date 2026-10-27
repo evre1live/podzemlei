@@ -96,9 +96,10 @@ const isLegend = uid => def(uid).rarity === 'legendary';
 
 // ───────────────────────── заказ карты ─────────────────────────
 // Сервер может тихо заказать герою карту: она придёт вместо ближайшей карты клада, если свободна
-// (лежит в колоде или сбросе). Вещь, которая у кого-то из героев, заказать нельзя. Класс можно всегда:
-// если все копии разобраны, появится ещё одна. В летопись и в вид для игроков заказ не попадает.
+// (лежит в колоде или сбросе). Вещь, которая у кого-то из героев, заказать нельзя. Класс, «Смешанную кровь»
+// и «Совместителя» можно всегда: если все копии разобраны, появится ещё одна. В летопись и в вид для игроков заказ не попадает.
 const baseId = uid => String(uid).split('#')[0];
+const ORDER_ANYWAY = new Set(['class', 'halfbreed', 'supermunch']);
 function freeUid(s, id) {
   const d = def(id);
   for (const pile of [s.decks[d.deck], s.discard[d.deck]]) { const u = pile.find(x => baseId(x) === id); if (u) return u; }
@@ -107,7 +108,7 @@ function freeUid(s, id) {
 export function orderCard(s, pid, id) {
   const p = P(s, pid);
   if (!p || !id || s.phase !== 'playing') return { ok: false, error: 'Только во время партии' };
-  if (def(id).type !== 'class' && !freeUid(s, id)) return { ok: false, error: 'Сейчас не выйдет: эта карта уже у кого-то из героев' };
+  if (!ORDER_ANYWAY.has(def(id).type) && !freeUid(s, id)) return { ok: false, error: 'Сейчас не выйдет: эта карта уже у кого-то из героев' };
   if (!s.orders) s.orders = {};
   const q = s.orders[pid] || (s.orders[pid] = []);
   if (!q.includes(id)) q.push(id);
@@ -121,7 +122,7 @@ function takeOrder(s, p) {
     const id = q.shift(), d = def(id);
     u = freeUid(s, id);
     if (u) without(s.decks[d.deck], u) || without(s.discard[d.deck], u);
-    else if (d.type === 'class') u = `${id}#${(d.copies || 1) + (s.orderSeq = (s.orderSeq || 0) + 1) - 1}`;
+    else if (ORDER_ANYWAY.has(d.type)) u = `${id}#${(d.copies || 1) + (s.orderSeq = (s.orderSeq || 0) + 1) - 1}`;
   }
   if (q && !q.length) delete s.orders[p.id];
   return u;

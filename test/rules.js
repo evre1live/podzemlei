@@ -394,6 +394,22 @@ t('Легендарный комплект: только человеку, со 
   assert.ok(h.equipped.includes('i_epochboots#0'));
 });
 
+t('тайные команды /MIXBLOOD и /2CL: «Смешанная кровь» и «Совместитель» приходят всегда', () => {
+  const s = fresh(); const p = P(s, 'p0'); const o = P(s, 'p1');
+  // все копии у соперника — всё равно придёт ещё одна
+  o.hand.push(take(s, 'x_halfbreed#0'), take(s, 'x_halfbreed#1'), take(s, 'x_super#0'), take(s, 'x_super#1'));
+  assert.equal(orderCard(s, 'p0', cheatCard('/MIXBLOOD')).ok, true);
+  assert.equal(orderCard(s, 'p0', cheatCard('/2CL')).ok, true);
+  s.turn = { idx: 0, pid: 'p0', step: 'pre', n: 3, hoardPlayed: false };
+  p.hand.push(take(s, 'h_hoard#0'));
+  assert.equal(A(s, 'p0', { type: 'playCard', uid: 'h_hoard#0' }).ok, true);
+  const mix = p.hand.find(u => def(u).type === 'halfbreed'), sup = p.hand.find(u => def(u).type === 'supermunch');
+  assert.ok(mix && sup, 'обе карты пришли со схроном');
+  assert.equal(A(s, 'p0', { type: 'playCard', uid: mix }).ok, true);
+  assert.equal(A(s, 'p0', { type: 'playCard', uid: sup }).ok, true);
+  assert.equal(p.halfbreed, mix); assert.equal(p.supermunch, sup);
+});
+
 t('тайные команды: карта приходит вместо ближайшей карты клада и никому не видна', () => {
   assert.equal(cheatCard('/GODMODE'), 'i_godarmor');
   assert.equal(cheatCard(' /ageboots '), 'i_epochboots');
@@ -401,6 +417,11 @@ t('тайные команды: карта приходит вместо бли�
   assert.equal(cheatCard('/EXC'), 'i_excalibur');
   assert.equal(cheatCard('/GOLDENDRAGON'), 'p_golddragon');
   assert.equal(cheatCard('/ARES'), 'i_ares');
+  assert.equal(cheatCard('/MIXBLOOD'), 'x_halfbreed');
+  assert.equal(cheatCard('/2CL'), 'x_super');
+  assert.equal(cheatCard('/2cl'), 'x_super');
+  assert.equal(cheatCard('/WARLOCK'), 'c_warlock');
+  assert.equal(cheatCard('/PLOTVA'), 'p_roach');
   assert.equal(cheatCard('/hello'), null);
   assert.equal(cheatCard('привет /ARES'), null);
   const s = fresh(); const p = P(s, 'p0'); const o = P(s, 'p1');

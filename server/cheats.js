@@ -10,9 +10,11 @@ export const CHEATS = {
   AGEBOOTS: 'i_epochboots',  // Сапоги эпохи
   WARLOCK: 'c_warlock',      // Чернокнижник
   PLOTVA: 'p_roach',         // Конь Плотва
+  MIXBLOOD: 'x_halfbreed',   // Смешанная кровь
+  '2CL': 'x_super',          // Совместитель
 };
-// «/witcher», «/WITCHER» → карта; всё остальное → null
+// «/witcher», «/WITCHER», «/2cl» → карта; всё остальное → null
 export function cheatCard(text) {
-  const m = /^\/([a-z]+)$/i.exec(String(text || '').trim());
+  const m = /^\/([a-z0-9]+)$/i.exec(String(text || '').trim());
   return (m && CHEATS[m[1].toUpperCase()]) || null;
 }
