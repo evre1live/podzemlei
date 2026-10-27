@@ -10,6 +10,7 @@ import { AVATAR_PARTS, avatarFromSeed, cleanAvatar, avatarInGame, gameRaces, pic
 import { AV_LABELS, lookNote, portraitThumb } from '/art-avatar.js';
 import { createVoice } from '/voice.js';
 import { ico } from '/icons.js';
+import { NEWS, NEWS_LATEST } from '/news.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const app = $('#app');
@@ -191,7 +192,7 @@ mount.home = () => {
   app.innerHTML = `
   <div class="home">
     <header class="band b-surface"><div class="grassline"></div>
-      <div class="home-top"><div class="logo-row">${HATCH}<span class="spacer"></span><a class="btn ghost small" href="/guide">Справочник</a><button class="btn ghost small" data-act="rules">Как играть</button></div></div>
+      <div class="home-top"><div class="logo-row">${HATCH}<span class="spacer"></span><a class="btn ghost small" href="/guide">Справочник</a><button class="btn ghost small news-btn" data-act="news" title="Новые механики и карты по датам">Что нового${newsUnseen() ? '<i class="news-dot" aria-label="есть новое"></i>' : ''}</button><button class="btn ghost small" data-act="rules">Как играть</button></div></div>
     </header>
     <section class="band b-clay pebbles title-wrap">
       <h1 class="title">Под Землёй</h1>
@@ -1732,6 +1733,21 @@ function maybeEndScreen() {
   </div>`);
 }
 
+// «Что нового»: изменения по датам; метка на кнопке гаснет, когда игрок открыл окно
+function newsUnseen() { return LS.get('newsSeen', '') < NEWS_LATEST; }
+const newsDate = d => new Date(d + 'T12:00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
+function openNews() {
+  LS.set('newsSeen', NEWS_LATEST);
+  document.querySelectorAll('.news-dot').forEach(e => e.remove());
+  showOverlay(`<div class="modal rules news" role="dialog" aria-label="Что нового" style="max-width:640px">
+    <h2>Что нового</h2>
+    <p class="muted" style="margin:0">Новые механики и карты — самое свежее сверху.</p>
+    ${NEWS.map((day, i) => `<section class="news-day"><h3>${esc(newsDate(day.date))}${i === 0 ? ' <span class="badge lamp">новое</span>' : ''}</h3>
+      <ul>${day.items.map(x => `<li><b>${esc(x.t)}.</b> ${esc(x.d)}</li>`).join('')}</ul></section>`).join('')}
+    <div class="row"><button class="btn primary" data-act="closeOverlay">Понятно</button><button class="btn ghost" data-act="rules">Как играть</button></div>
+  </div>`);
+}
+
 const RULES = `<div class="modal rules" role="dialog" aria-label="Как играть" style="max-width:640px">
   <h2>Как играть</h2>
   <p>Каждый начинает человеком первого уровня с 4 картами проходов и 4 картами клада. Побеждает тот, кто первым дойдёт до <b>10-го уровня</b>; хозяин в лобби может выбрать быструю партию до 5-го (на старте по 6 карт каждой колоды) или долгую — до 15 или 20. Последний уровень берётся только победой над монстром.</p>
@@ -2047,6 +2063,7 @@ document.addEventListener('click', async e => {
     case 'avatarSave': return saveAvatar();
     case 'soundTest': return sfx.play('victory', { gap: 0 });
     case 'rules': return showOverlay(RULES);
+    case 'news': return openNews();
     case 'voicePanel': return openVoicePanel();
     case 'voiceJoin': await vc.join(); return drawVoicePanel();
     case 'voiceLeave': await vc.leave(); return drawVoicePanel();
