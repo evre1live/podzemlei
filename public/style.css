@@ -411,6 +411,7 @@ label { display: grid; gap: 6px; font-size: 14px; color: var(--muted); }
 .card[data-uid^="i_epochboots"] .c-pic > img.c-img { object-position: 50% 16%; }
 .card[data-uid^="c_witcher"] .c-pic > img.c-img { object-position: 50% 10%; }
 .card[data-uid^="k_farewell"] .c-pic > img.c-img { object-position: 50% 22%; }
+.card[data-uid^="d_femme"] .c-pic > img.c-img { object-position: 50% 10%; }
 /* эмблема вместо рисунка: чеканный золотой знак на тёмной коже, подсвеченной цветом категории */
 .card .emb { position: absolute; inset: 0; display: grid; place-items: center;
   background: radial-gradient(circle at 50% 46%, color-mix(in srgb, var(--acc) 55%, transparent) 0, transparent 62%), radial-gradient(ellipse at 50% 110%, rgba(0,0,0,.7), transparent 60%), url(/ui/v1/leather.webp) center / 128px; }
