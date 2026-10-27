@@ -291,7 +291,7 @@ const ICON_OF = {
   o_smoke: 'smoke-bomb', o_petrify: 'scroll-unfurled', o_slave: 'handcuffs', o_ward: 'stone-sphere',
   b_courage: 'standing-potion', b_energy: 'soda-can', b_pies: 'bread',
   l_stash: 'two-coins', l_bribe: 'coins', l_manual: 'open-book', l_sleep: 'night-sleep', l_exam: 'graduate-cap', l_friend: 'shaking-hands', l_map: 'treasure-map', l_bonus: 'coins-pile',
-  l_shortcut: 'path-distance', h_hoard: 'open-treasure-chest', g_atlantis: 'trident', g_deadchest: 'chest', k_farewell: 'tombstone',
+  l_shortcut: 'path-distance', h_hoard: 'open-treasure-chest', g_atlantis: 'trident', g_deadchest: 'chest', d_femme: 'crowned-heart', k_farewell: 'tombstone',
   r_elf: 'elf-ear', r_dwarf: 'dwarf-face', r_halfling: 'barefoot', r_orc: 'orc-head', r_goblin: 'goblin-head', r_mole: 'mole',
   c_warrior: 'crossed-swords', c_mage: 'pointy-hat', c_cleric: 'holy-symbol', c_rogue: 'cloak-dagger', c_bard: 'lyre', c_alchemist: 'round-bottom-flask', c_engineer: 'gear-hammer',
   c_witcher: 'crossed-sabres', c_warlock: 'warlock-hood', x_halfbreed: 'yin-yang', x_super: 'double-face-mask',

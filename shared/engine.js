@@ -2,7 +2,7 @@
 // Сервер хранит состояние, вызывает act()/tick() и рассылает view() каждому игроку.
 import { def, allUids, RACE_NAMES, CLASS_NAMES, ALLY_SLOT_TEXT, ruleText, BOSS_MULT, BOSS_MIN_LEVEL, BOSS_FLOOR, TROUBLE_BONUS, WITCHER_BONUS, MUTAGEN_BONUS, LULLABY_PENALTY, LULLABY_MAX, DISTILL_COST,
   DEPTH, DEPTH_TREASURE_EVERY, DEATH_LEVELS, GHOST_BONUS, CONTRACTS, CONTRACT_DEFS, SETS, rewardText,
-  TAME_MARGIN, WARLOCK_TAME, PANDORA_COST, PANDORA_BONUS, PANDORA_ESCAPE, tameBonus, TRAP_ROLL, TRAP_SKILL, TRAP_FAIL_LEVELS, SHOP_IDS, shopCat, shopBase, roundPrice, dailyOf } from './cards.js';
+  TAME_MARGIN, WARLOCK_TAME, FEMME_LEVELS, PANDORA_COST, PANDORA_BONUS, PANDORA_ESCAPE, tameBonus, TRAP_ROLL, TRAP_SKILL, TRAP_FAIL_LEVELS, SHOP_IDS, shopCat, shopBase, roundPrice, dailyOf } from './cards.js';
 
 export const WIN_LEVEL = 10;
 // до какого уровня идёт партия: 10 по умолчанию, в лобби можно выбрать 15 или 20
@@ -575,6 +575,8 @@ export function duelNumbers(s) {
   const A = P(s, d.from), B = P(s, d.to);
   const mod = side => d.mods.filter(m => m.side === side).reduce((a, m) => a + m.n, 0);
   const a = duelStrength(s, A) + mod('from'), b = duelStrength(s, B) + mod('to');
+  // «Роковая женщина»: при равенстве никто не проигрывает
+  if (d.femme) return { from: a, to: b, winner: a > b ? A.id : b > a ? B.id : null };
   // при равенстве побеждает вызванный, а воин-зачинщик — и при равенстве
   const fromWins = a > b || (a === b && hasClass(A, 'warrior') && !hasClass(B, 'warrior'));
   return { from: a, to: b, winner: fromWins ? A.id : B.id };
@@ -582,8 +584,28 @@ export function duelNumbers(s) {
 // что отдаст проигравший: самую полезную вещь со стола (легендарки не отдаются)
 const prizeScore = u => (def(u).bonus || 0) * 100 + (def(u).runBonus || 0) * 40 + (def(u).value || 0) / 10;
 export const duelPrize = p => [...p.equipped, ...p.carried].filter(u => !def(u).noSteal && !isLegend(u)).sort((a, b) => prizeScore(b) - prizeScore(a))[0] || null;
+// что потеряет проигравший из-за «Роковой женщины»: самую ценную большую вещь (легендарки не теряются)
+export const femmeLoss = p => [...p.equipped, ...p.carried, ...(p.allyGear || [])].filter(u => def(u).big && !isLegend(u)).sort((a, b) => prizeScore(b) - prizeScore(a))[0] || null;
+function resolveFemme(s, d, n) {
+  const A = P(s, d.from), B = P(s, d.to);
+  A.nextCombat = 0; B.nextCombat = 0;
+  if (!n.winner) {
+    fx(s, { kind: 'duelEnd', pid: null, loser: null, femme: true, from: A.id, to: B.id });
+    log(s, `💋 Ничья: ${A.name} и ${B.name} разошлись целыми (${n.from} против ${n.to}) — «Роковая женщина» осталась ни с чем.`, 'info');
+    return;
+  }
+  const W = P(s, n.winner), L = W === A ? B : A;
+  const lost = femmeLoss(L);
+  if (lost) { if (!removeItem(L, lost)) without(L.allyGear, lost); toDiscard(s, lost); }
+  const before = L.level;
+  setLevel(s, L, L.level - FEMME_LEVELS);
+  normalize(s, L);
+  fx(s, { kind: 'duelEnd', pid: W.id, loser: L.id, card: lost, femme: true, levels: before - L.level });
+  log(s, `💋 ${W.name} одолевает ${L.name} (${n[W === A ? 'from' : 'to']} против ${n[L === A ? 'from' : 'to']}). ${L.name} теряет ${[lost && q(def(lost).name), before > L.level && `${before - L.level} ур.`].filter(Boolean).join(' и ') || 'только гордость'}.`, 'curse');
+}
 function resolveDuel(s) {
   const d = s.duel, n = duelNumbers(s);
+  if (d.femme) { s.duel = null; toDiscard(s, d.card); d.used.forEach(u => toDiscard(s, u)); return resolveFemme(s, d, n); }
   const W = P(s, n.winner), L = P(s, n.winner === d.from ? d.to : d.from);
   s.duel = null;
   toDiscard(s, d.card); d.used.forEach(u => toDiscard(s, u));
@@ -1179,6 +1201,13 @@ function playCheck(s, p, a) {
     case 'duel': {
       const e = manageErr(s, p); if (e) return e;
       if (s.turn.step === 'trap') return 'Сначала разберитесь с ловушкой';
+      if (d.femme) {
+        const t = P(s, a.target), w = P(s, a.with);
+        if (!t || !w || t === w) return 'Выберите двух соперников';
+        if (t === p || w === p) return 'Роковую женщину подсылают к двум соперникам';
+        if (t.dead || w.dead) return 'Мёртвые не дерутся';
+        return null;
+      }
       const t = P(s, a.target);
       if (!t || t === p) return 'Кого вызвать?';
       if (t.dead) return 'Мёртвых на поединок не вызывают';
@@ -1286,6 +1315,16 @@ H.playCard = {
         break;
       case 'trap': grudge(s, a.target, p.id); trapOn(s, P(s, a.target), a.uid, rng, p); break;
       case 'duel': {
+        if (d.femme) {
+          const t = P(s, a.target), w = P(s, a.with);
+          s.duel = { from: t.id, to: w.id, by: p.id, femme: true, card: a.uid, mods: [], used: [], passed: [], winStart: s.now, winAt: s.now + (s.opts.winDelayMs || 0) };
+          grudge(s, t.id, p.id); grudge(s, w.id, p.id);
+          const n = duelNumbers(s);
+          fx(s, { kind: 'duel', pid: t.id, to: w.id, by: p.id, femme: true });
+          log(s, `💋 ${p.name} подсылает «Роковую женщину»: ${t.name} и ${w.name} бьются из-за неё — сила ${n.from} против ${n.to}. Проигравший потеряет большую вещь и ${FEMME_LEVELS} уровня.`, 'curse');
+          if ((s.opts.winDelayMs || 0) <= 0) resolveDuel(s);
+          break;
+        }
         const t = P(s, a.target);
         s.duel = { from: p.id, to: t.id, card: a.uid, mods: [], used: [], passed: [], winStart: s.now, winAt: s.now + (s.opts.winDelayMs || 0) };
         grudge(s, t.id, p.id);
@@ -1314,7 +1353,7 @@ H.playCard = {
         toDiscard(s, a.uid);
         p.gold = (p.gold || 0) + d.gold;
         fx(s, { kind: 'jackpot', pid: p.id, card: a.uid, n: d.gold });
-        log(s, `${d.emoji || '💰'} ${p.name} открывает ${q(d.name)}: +${d.gold} голдов — в кошельке ${p.gold}!`, 'win');
+        log(s, `${d.emoji || '💰'} ${p.name} открывает ${q(d.name)}: +${d.gold} голдов!`, 'win');
         break;
       case 'levelup':
         toDiscard(s, a.uid);
@@ -1483,7 +1522,7 @@ H.sell = {
     if (doubled) s.turn.halflingSold = true;
     p.gold = (p.gold || 0) + total;
     fx(s, { kind: 'gold', pid: p.id, n: total });
-    log(s, `${p.name} продаёт ${a.uids.length === 1 ? q(def(a.uids[0]).name) : `${a.uids.length} вещ.`} за ${total} голдов${doubled ? ' (полурослик торгуется вдвое)' : ''} — в кошельке ${p.gold}.`, 'good');
+    log(s, `${p.name} продаёт ${a.uids.length === 1 ? q(def(a.uids[0]).name) : `${a.uids.length} вещ.`} за ${total} голдов${doubled ? ' (полурослик торгуется вдвое)' : ''}.`, 'good');
     contractEvent(s, p, 'sellItem', { n: a.uids.length }, rng);
   },
 };
@@ -2071,6 +2110,11 @@ export function playOptions(s, pid, uid) {
   const d = def(uid);
   // свой бой после пустой двери; в чужой — с «Из темноты вылезло…», а чернокнижник подкидывает и без неё
   if (d.type === 'monster') { tryA({ type: 'playCard', uid }); tryA({ type: 'playCard', uid, into: true }); return out; }
+  if (d.type === 'duel' && d.femme) {
+    const xs = s.players.filter(x => x.id !== pid);
+    for (let i = 0; i < xs.length; i++) for (let j = i + 1; j < xs.length; j++) tryA({ type: 'playCard', uid, target: xs[i].id, with: xs[j].id });
+    return out;
+  }
   if (d.type === 'curse' || d.type === 'trap' || d.type === 'duel' || (d.type === 'oneshot' && d.effect === 'enslave')) { s.players.forEach(x => tryA({ type: 'playCard', uid, target: x.id })); return out; }
   if (d.type === 'enhancer' || (d.type === 'oneshot' && d.effect === 'remove')) {
     (s.combat?.monsters || []).forEach((m, i) => tryA({ type: 'playCard', uid, monster: i }));
@@ -2158,7 +2202,8 @@ export function view(s, pid) {
     trap: s.trap ? { ...s.trap } : null, tame: s.tame ? { ...s.tame } : null,
     shop: { items: shopList(s), note: locationOf(s)?.priceNote || null, fair: s.opts?.dailyId === 'fair' },
     duel: s.duel ? { from: s.duel.from, to: s.duel.to, card: s.duel.card, mods: s.duel.mods.map(m => ({ ...m })), passed: [...s.duel.passed], winAt: s.duel.winAt, winStart: s.duel.winStart,
-      numbers: duelNumbers(s), prize: { from: duelPrize(P(s, s.duel.from)), to: duelPrize(P(s, s.duel.to)) } } : null,
+      femme: !!s.duel.femme, by: s.duel.by || null,
+      numbers: duelNumbers(s), prize: s.duel.femme ? { from: femmeLoss(P(s, s.duel.from)), to: femmeLoss(P(s, s.duel.to)) } : { from: duelPrize(P(s, s.duel.from)), to: duelPrize(P(s, s.duel.to)) } } : null,
     log: s.log.slice(-80), fx: s.fx.slice(-20),
     decks: { door: s.decks.door.length, treasure: s.decks.treasure.length },
     depth: { level: s.depth || 0, bonus: depthBonus(s), treasure: depthTreasure(s), round: s.round || 0, every: depthEvery(s), max: depthMax(s),
@@ -2173,7 +2218,7 @@ export function view(s, pid) {
       level: p.level, races: [...p.races], classes: [...p.classes], halfbreed: p.halfbreed, supermunch: p.supermunch,
       equipped: [...p.equipped], carried: [...p.carried], nextCombat: p.nextCombat, nextEscape: p.nextEscape || 0,
       dead: p.dead, handCount: p.hand.length, handLimit: handLimit(p, s), handsLimit: handsLimit(p), mutagenUsed: !!p.mutagenUsed,
-      power: powerOf(s, p), runBonus: runBonusOf(s, p), gold: p.gold || 0, banished: !!p.banished, sets: setsOf(p), ghost: isGhost(p), ally: p.ally || null, allySlots: allySlotsOf(p), allyGear: p.allyGear || [], beast: p.beast || null, persona: p.persona || null, contractsDone: p.contractsDone || 0,
+      power: powerOf(s, p), runBonus: runBonusOf(s, p), gold: p.id === pid ? p.gold || 0 : null, banished: !!p.banished, sets: setsOf(p), ghost: isGhost(p), ally: p.ally || null, allySlots: allySlotsOf(p), allyGear: p.allyGear || [], beast: p.beast || null, persona: p.persona || null, contractsDone: p.contractsDone || 0,
       hand: p.id === pid ? [...p.hand] : undefined,
       contract: p.id === pid && p.contract && CONTRACT_DEFS[p.contract.id] ? { ...CONTRACT_DEFS[p.contract.id], progress: p.contract.progress, rewardText: rewardText(CONTRACT_DEFS[p.contract.id].reward) } : undefined,
     })),

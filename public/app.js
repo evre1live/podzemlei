@@ -1,5 +1,5 @@
 // «Под Землёй» — клиент.
-import { def, RACE_NAMES, CLASS_NAMES, SETS, ALLY_SLOT_NAMES, ALLY_SLOT_TEXT, setRuleVars, ruleText, BOSS_FLOOR, TROUBLE_BONUS, LULLABY_PENALTY, MUTAGEN_BONUS, DISTILL_COST,
+import { def, RACE_NAMES, CLASS_NAMES, SETS, ALLY_SLOT_NAMES, ALLY_SLOT_TEXT, FEMME_LEVELS, setRuleVars, ruleText, BOSS_FLOOR, TROUBLE_BONUS, LULLABY_PENALTY, MUTAGEN_BONUS, DISTILL_COST,
   PERSONAS, GHOST_BONUS, DEATH_LEVELS, DEPTH, DEPTH_TREASURE_EVERY, TRADE_TIMEOUT_MS, TAME_MARGIN, WARLOCK_TAME, PANDORA_COST, PANDORA_BONUS, PANDORA_ESCAPE, tameBonus, TRAP_FAIL_LEVELS, SHOP_CATS, dailyOf, dailyDate } from '/shared/cards.js';
 import { esc, cardHTML, chipHTML, avatarSVG, iconSVG, cardBackSVG, locationSVG, cardIcon, cardText } from '/art.js';
 import { fx } from '/fx.js';
@@ -610,7 +610,7 @@ function oppHTML(p) {
     <div class="ava">${avatarSVG(gAva(p), p.color)}</div>
     <div class="oname">${esc(p.name)}</div>
     <div class="ometa"><span>${esc(raceText(p))}</span><span>${esc(classText(p))}</span></div>
-    <div class="ostats"><span class="lvl" title="Уровень">${p.level}</span><span class="pow" title="Сила: уровень и надетые вещи">${ico('crossed-swords')}${p.power}</span><span class="gold" title="Кошелёк: голды за проданные вещи и контракты, тратятся на рынке">${ico('two-coins')}${p.gold || 0}</span><span class="handcount" title="Карт в руке"><i></i>${p.handCount}</span>${statusTags(p)}</div>
+    <div class="ostats"><span class="lvl" title="Уровень">${p.level}</span><span class="pow" title="Сила: уровень и надетые вещи">${ico('crossed-swords')}${p.power}</span>${p.gold != null ? `<span class="gold" title="Кошелёк: голды за проданные вещи и контракты, тратятся на рынке">${ico('two-coins')}${p.gold}</span>` : ''}<span class="handcount" title="Карт в руке"><i></i>${p.handCount}</span>${statusTags(p)}</div>
   </button>`;
 }
 
@@ -903,16 +903,21 @@ function duelHTML() {
     if (p.nextCombat) ms.push(`<span class="mod ${hero ? 'p' : 'm'}">${p.nextCombat > 0 ? 'зелье +' + p.nextCombat : 'слабость −' + Math.abs(p.nextCombat)}</span>`);
     return `<div class="side-col ${hero ? 'hero' : 'mon'}"><div class="side-main">
       <div class="shield ${hero ? 'hero' : 'mon'}${n.winner === id ? ' lead' : ''}" id="${hero ? 'shieldHero' : 'shieldMon'}" title="Сила ${esc(p.name)}">${SHIELD(hero ? 'hero' : 'mon')}<b>${n[key]}</b></div>
-      <div class="heroes-row">${heroMedal(p, { str: n[key], sub: hero ? 'вызывает' : 'принимает вызов', foe: !hero })}</div></div>
+      <div class="heroes-row">${heroMedal(p, { str: n[key], sub: d.femme ? 'бьётся из-за неё' : hero ? 'вызывает' : 'принимает вызов', foe: !hero })}</div></div>
       <div class="mods">${ms.join('')}</div>
-      <div class="duel-prize">${prize ? `Проиграет — отдаст <b data-uid="${esc(prize)}" data-zone="view">«${esc(def(prize).name)}»</b>` : 'Отдать нечего'}</div></div>`;
+      <div class="duel-prize">${d.femme
+        ? `Проиграет — потеряет ${prize ? `<b data-uid="${esc(prize)}" data-zone="view">«${esc(def(prize).name)}»</b> и ` : ''}${FEMME_LEVELS} уровня`
+        : prize ? `Проиграет — отдаст <b data-uid="${esc(prize)}" data-zone="view">«${esc(def(prize).name)}»</b>` : 'Отдать нечего'}</div></div>`;
   };
   const tie = n.from === n.to;
   const center = `<div class="countdown" data-until="${d.winAt}" data-total="${g.opts.winDelayMs}"><svg viewBox="0 0 74 74"><circle cx="37" cy="37" r="32" fill="rgba(0,0,0,.55)" stroke="rgba(255,255,255,.12)" stroke-width="5"/><circle class="ring" cx="37" cy="37" r="32" fill="none" stroke="#e8e4dc" stroke-width="5" stroke-linecap="round" stroke-dasharray="201" stroke-dashoffset="0"/></svg><b>…</b></div>`;
-  const verdict = `<span class="verdict ${n.winner === d.from ? 'win' : 'lose'}">${esc(pname(n.winner))} сильнее${tie ? (n.winner === d.to ? ' (ничья — за вызванным)' : ' (ничья — за воином)') : ''}</span>`;
+  const verdict = !n.winner ? `<span class="verdict lose">Ничья — оба уйдут целыми</span>`
+    : `<span class="verdict ${n.winner === d.from ? 'win' : 'lose'}">${esc(pname(n.winner))} сильнее${tie ? (n.winner === d.to ? ' (ничья — за вызванным)' : ' (ничья — за воином)') : ''}</span>`;
   const b = [];
   const canBoost = Object.values(h.cards || {}).some(o => o.some(a => a.side === 'from' || a.side === 'to'));
-  b.push(`<span class="hint">Поединок: ${esc(pname(d.from))} против ${esc(pname(d.to))}. ${canBoost ? 'Разовые бонусы в руке можно подкинуть любой стороне.' : 'Когда отсчёт кончится, сильнейший забирает вещь.'}</span>`);
+  b.push(d.femme
+    ? `<span class="hint">«Роковая женщина» от ${esc(pname(d.by))}: ${esc(pname(d.from))} и ${esc(pname(d.to))} бьются из-за неё. ${canBoost ? 'Разовые бонусы в руке можно подкинуть любой стороне.' : 'Когда отсчёт кончится, слабейший потеряет большую вещь и уровни.'}</span>`
+    : `<span class="hint">Поединок: ${esc(pname(d.from))} против ${esc(pname(d.to))}. ${canBoost ? 'Разовые бонусы в руке можно подкинуть любой стороне.' : 'Когда отсчёт кончится, сильнейший забирает вещь.'}</span>`);
   if (h.pass) b.push(`<button class="btn ghost" data-act="pass">Не мешаю</button>`);
   if (d.passed.length) b.push(`<span class="hint passed">Не мешают: ${d.passed.map(id => esc(pname(id))).join(', ')}</span>`);
   return `
@@ -1149,7 +1154,7 @@ function renderWatcher() {
     <div class="me-top" style="--seat:${p.color}">
       <div class="me-ava">${avatarSVG(gAva(p), p.color)}</div>
       <div><div class="me-name">${esc(p.name)}${now ? ' <span class="badge lamp">ходит</span>' : ''}</div>
-        <div class="me-stats"><span class="lvl" title="Уровень">${p.level}</span><span class="pow" title="Сила: уровень и надетые вещи">${ico('crossed-swords')}${p.power}</span><span class="gold" title="Кошелёк: голды за проданные вещи и контракты, тратятся на рынке">${ico('two-coins')}${p.gold || 0}</span>
+        <div class="me-stats"><span class="lvl" title="Уровень">${p.level}</span><span class="pow" title="Сила: уровень и надетые вещи">${ico('crossed-swords')}${p.power}</span>${p.gold != null ? `<span class="gold" title="Кошелёк: голды за проданные вещи и контракты, тратятся на рынке">${ico('two-coins')}${p.gold}</span>` : ''}
         <span class="badge" title="Сколько нужно выбросить на кубике, чтобы убежать">${p.classes.some(u => def(u).cls === 'warlock') ? 'побег всегда' : `побег ${run <= 1 ? 'всегда' : run > 6 ? 'никогда' : run + '+'}`}</span>${p.dead ? '<span class="badge warn">погиб до следующего хода</span>' : ''}</div>
       </div>
     </div>
@@ -1277,6 +1282,7 @@ function closeOverlay() { layer.innerHTML = ''; S.ui.overlay = null; popOpts = [
 
 function optLabel(a) {
   const d = def(a.uid);
+  if (d.femme && a.target && a.with) return `Стравить: ${pname(a.target)} и ${pname(a.with)}`;
   if (a.target) return d.effect === 'enslave' ? `Заставить помогать: ${pname(a.target)}` : d.type === 'trap' ? `Подложить: ${pname(a.target)}` : d.type === 'duel' ? `Вызвать: ${pname(a.target)}` : `Наслать на ${pname(a.target)}`;
   if (a.side === 'from' || a.side === 'to') return `За ${pname(S.game.duel?.[a.side])} +${d.bonus}`;
   if (a.side) return a.side === 'player' ? `Героям +${d.bonus}` : `Монстрам +${d.bonus}`;
@@ -1305,7 +1311,7 @@ function whenText(d) {
     case 'curse': return 'Насылается на любого игрока в любой момент.';
     case 'trap': return 'Подложите любому игроку в любой момент: он бросает кубик (4+, плуту и механику 2+). Не обезвредил — получает расплату.';
     case 'ally': return 'Берётся в свой ход вне боя. Спутник один: новый прогоняет прежнего.';
-    case 'duel': return 'Играется в свой ход вне боя: выберите соперника. Сила против силы, при равенстве побеждает вызванный.';
+    case 'duel': return d.femme ? 'Играется в свой ход вне боя на двух соперников. Сила против силы, при равенстве оба уходят целыми.' : 'Играется в свой ход вне боя: выберите соперника. Сила против силы, при равенстве побеждает вызванный.';
     case 'race': case 'class': case 'halfbreed': case 'supermunch': case 'item': case 'hoard': return 'Играется в свой ход, когда нет боя.';
     case 'enhancer': return 'Играется на монстра в любом бою.';
     case 'wandering': return 'Играется в любом бою вместе с монстром из руки.';
@@ -1368,7 +1374,8 @@ function openOppPop(pid) {
   const mine = me();
   popOpts = [];
   if (mine) {
-    for (const u of mine.hand) for (const a of h.cards?.[u] || []) if (a.target === pid) popOpts.push({ label: def(u).effect === 'enslave' ? `«${def(u).name}»: пусть помогает` : def(u).type === 'trap' ? `Подложить «${def(u).name}»` : def(u).type === 'duel' ? 'Вызвать на поединок' : `Наслать «${def(u).name}»`, action: a, cls: 'danger' });
+    for (const u of mine.hand) for (const a of h.cards?.[u] || []) if (def(u).femme && (a.target === pid || a.with === pid)) popOpts.push({ label: `«${def(u).name}»: ${pname(a.target)} и ${pname(a.with)}`, action: a, cls: 'danger' });
+    for (const u of mine.hand) for (const a of h.cards?.[u] || []) if (a.target === pid && !def(u).femme) popOpts.push({ label: def(u).effect === 'enslave' ? `«${def(u).name}»: пусть помогает` : def(u).type === 'trap' ? `Подложить «${def(u).name}»` : def(u).type === 'duel' ? 'Вызвать на поединок' : `Наслать «${def(u).name}»`, action: a, cls: 'danger' });
     for (const s of h.abilities?.lure || []) if (s.target === pid) popOpts.push({ label: `Сманить «${def(s.item).name}»`, fn: () => startMode({ kind: 'ability', name: 'lure', target: pid, item: s.item, picked: [], max: 1 }), cls: 'ghost' });
     for (const s of h.abilities?.steal || []) if (s.target === pid) popOpts.push({ label: `Стащить «${def(s.item).name}»`, fn: () => startMode({ kind: 'ability', name: 'steal', target: pid, item: s.item, picked: [], max: 1 }), cls: 'ghost' });
     for (const t of h.abilities?.backstab || []) if (t === pid) popOpts.push({ label: 'Ударить в спину (−2)', fn: () => startMode({ kind: 'ability', name: 'backstab', target: pid, picked: [], max: 1 }), cls: 'danger' });
@@ -1376,7 +1383,7 @@ function openOppPop(pid) {
   if (mine && h.tradeTargets?.includes(pid)) popOpts.push({ label: 'Предложить обмен', fn: () => openTrade(pid), cls: 'hero' });
   const items = [...p.equipped.map(u => chipHTML(u)), ...(p.beast ? [beastChip(p.beast, 'view')] : []), ...(p.ally ? [allyChip(p.ally, 'view')] : []), ...(p.allyGear || []).map(u => chipHTML(u, { cls: 'ally-worn', zone: 'view' })), ...p.carried.map(u => chipHTML(u, { cls: 'off' }))].join('') || '<p class="muted">Вещей нет.</p>';
   showOverlay(`<div class="modal" role="dialog" aria-label="${esc(p.name)}">
-    <div class="row"><span class="me-ava" style="--seat:${p.color}">${avatarSVG(gAva(p), p.color)}</span><div><h2>${esc(p.name)}</h2><div class="me-stats"><span class="lvl">${p.level}</span><span class="pow">${ico('crossed-swords')}${p.power}</span><span class="gold" title="Кошелёк: голды за проданные вещи и контракты, тратятся на рынке">${ico('two-coins')}${p.gold || 0}</span><span class="badge">${esc(raceText(p))}, ${esc(classText(p))}</span><span class="handcount"><i></i>${p.handCount}</span></div></div></div>
+    <div class="row"><span class="me-ava" style="--seat:${p.color}">${avatarSVG(gAva(p), p.color)}</span><div><h2>${esc(p.name)}</h2><div class="me-stats"><span class="lvl">${p.level}</span><span class="pow">${ico('crossed-swords')}${p.power}</span>${p.gold != null ? `<span class="gold" title="Кошелёк: голды за проданные вещи и контракты, тратятся на рынке">${ico('two-coins')}${p.gold}</span>` : ''}<span class="badge">${esc(raceText(p))}, ${esc(classText(p))}</span><span class="handcount"><i></i>${p.handCount}</span></div></div></div>
     <div class="opp-items" data-zone-view>${items}</div>
     ${setsHTML(p)}
     ${popOpts.length ? `<div class="pop-actions">${popOpts.map((o, i) => `<button class="btn ${o.cls}" data-popopt="${i}">${esc(o.label)}</button>`).join('')}</div>` : ''}
@@ -1385,7 +1392,7 @@ function openOppPop(pid) {
 }
 
 // подземный рынок: всегда открыт; товар — карты, что ещё в колоде; платят голдами из кошелька, цены зависят от локации
-const SHOP_ORDER = ['level', 'curse', 'food', 'potion', 'gear', 'magic'];
+const SHOP_ORDER = ['level', 'curse', 'duel', 'food', 'potion', 'gear', 'magic'];
 function shopLots() {
   const items = S.game.shop?.items || [];
   // все «Получи уровень» одинаковы — на прилавке это один товар
@@ -1662,7 +1669,8 @@ function extraFx(fresh) {
         break;
       case 'duel':
         sfx.play('shing');
-        fx.banner('Вызов!', `${pname(f.pid)} вызывает ${pname(f.to)} на поединок`, '');
+        if (f.femme) fx.banner('Роковая женщина!', `${pname(f.by)} стравливает ${pname(f.pid)} и ${pname(f.to)}`, 'curse');
+        else fx.banner('Вызов!', `${pname(f.pid)} вызывает ${pname(f.to)} на поединок`, '');
         break;
       case 'duelMod': {
         const el = $(f.side === 'from' ? '#shieldHero' : '#shieldMon');
@@ -1670,8 +1678,10 @@ function extraFx(fresh) {
         break;
       }
       case 'duelEnd':
-        sfx.play(f.pid === S.room.me ? 'victory' : f.loser === S.room.me ? 'levelDown' : 'clang');
-        fx.banner(`${pname(f.pid)} побеждает`, f.card ? `и забирает «${def(f.card).name}» у ${pname(f.loser)}` : `${pname(f.loser)} нечего отдать`, f.pid === S.room.me ? 'win' : '');
+        sfx.play(f.pid && f.pid === S.room.me ? 'victory' : f.loser && f.loser === S.room.me ? 'levelDown' : 'clang');
+        if (f.femme && !f.pid) fx.banner('Ничья', `${pname(f.from)} и ${pname(f.to)} уходят целыми`, '');
+        else if (f.femme) fx.banner(`${pname(f.pid)} побеждает`, `${pname(f.loser)} теряет ${[f.card && `«${def(f.card).name}»`, f.levels && `${f.levels} ур.`].filter(Boolean).join(' и ') || 'только гордость'}`, f.pid === S.room.me ? 'win' : '');
+        else fx.banner(`${pname(f.pid)} побеждает`, f.card ? `и забирает «${def(f.card).name}» у ${pname(f.loser)}` : `${pname(f.loser)} нечего отдать`, f.pid === S.room.me ? 'win' : '');
         break;
       case 'trap':
         sfx.play('clang');
@@ -1788,8 +1798,9 @@ const RULES = `<div class="modal rules" role="dialog" aria-label="Как игр�
   <p>Спутник — карта клада, он один: Носильщик даёт +2 к пределу руки и ещё одну большую вещь, Проводник — +2 к побегу, Наёмник — +3 к силе, но в начале каждого вашего хода берёт плату: 200 голдов из кошелька, а если их нет — карту ценой от 200 голдов из руки или запаса, иначе уходит. Спутник носит за вас вещи: когда он приходит, ему выпадают места — оружие и броник, а повезёт — ещё и головняк. Откройте свою вещь и выберите «Отдать спутнику»: её бонус пойдёт вам в силу. Вещи с ограничением по расе или классу носит только сам герой. Уйдёт спутник — его вещи вернутся вам. Победили зверя с перевесом ${TAME_MARGIN} и больше (чернокнижник — ${WARLOCK_TAME}) — до конца хода его можно приручить: он займёт место питомца и даст силу по своему уровню. Плут может сманить чужого спутника или зверя: сбросить карту и выбросить 4+.</p>
   <h3>Поединок</h3>
   <p>Карта «Вызов на поединок» играется в свой ход вне боя: выберите соперника. Сравнивается сила — уровень, вещи и бонусы «в следующем бою»; остальные могут подкинуть разовые бонусы любой стороне, и тогда отсчёт начинается заново. При равенстве побеждает вызванный (а воин-зачинщик — и при равенстве). Проигравший отдаёт победителю свою лучшую вещь со стола, легендарки не отдаются.</p>
+  <p>«Роковая женщина» тоже играется в свой ход вне боя, но на двух соперников: из-за неё они бьются между собой по тем же правилам, остальные могут подкинуть бонусы. Проигравший теряет свою самую ценную большую вещь (легендарки не теряются) и ${FEMME_LEVELS} уровня. Ничья — оба уходят целыми. Обе карты продаются на рынке в разделе «Поединки»: вызов — около 700 голдов, роковая женщина — около 1000.</p>
   <h3>Кошелёк и подземный рынок</h3>
-  <p>У каждого есть кошелёк: голды в него приходят за проданные вещи и выполненные контракты, сколько у кого — видно всем. Рынок открыт всегда — кнопка в шапке стола. В свой ход вне боя на голды можно купить разовые карты для боя, зелья, проклятия, чтобы наслать на соперников, и «Получи уровень» (не больше одного за ход, последний уровень так не взять). Продаётся только то, что ещё лежит в колоде, поэтому товар кончается. У каждой локации своя ценовая политика: в таверне еда за полцены, в Звёздной библиотеке дешевле уровни и свитки, на кладбище — проклятия, а в Небесной цитадели уровни в полтора раза дороже. Цены локации написаны на её карте. Карты «Сокровища Атлантиды» и «Сундук мертвеца» (по одной в колоде) сразу кладут в кошелёк по 3000 голдов, а единственное проклятие «Прощай навсегда» (на рынке — около 3000) отнимает у жертвы всё и выбивает её из партии, пока кто-нибудь не откроет Ящик Пандоры.</p>
+  <p>У каждого есть кошелёк: голды в него приходят за проданные вещи и выполненные контракты. Сколько голдов у вас, видите только вы — чужие кошельки скрыты. Рынок открыт всегда — кнопка в шапке стола. В свой ход вне боя на голды можно купить разовые карты для боя, зелья, проклятия, чтобы наслать на соперников, и «Получи уровень» (не больше одного за ход, последний уровень так не взять). Продаётся только то, что ещё лежит в колоде, поэтому товар кончается. У каждой локации своя ценовая политика: в таверне еда за полцены, в Звёздной библиотеке дешевле уровни и свитки, на кладбище — проклятия, а в Небесной цитадели уровни в полтора раза дороже. Цены локации написаны на её карте. Карты «Сокровища Атлантиды» и «Сундук мертвеца» (по одной в колоде) сразу кладут в кошелёк по 3000 голдов, а единственное проклятие «Прощай навсегда» (на рынке — около 3000) отнимает у жертвы всё и выбивает её из партии, пока кто-нибудь не откроет Ящик Пандоры.</p>
   <h3>Ящик Пандоры</h3>
   <p>Во время любого боя — своего или чужого — на столе стоит резная шкатулка. Любой игрок может открыть её за ${PANDORA_COST} голдов: в этом бою монстрам +${PANDORA_BONUS}, героям −${PANDORA_ESCAPE} к побегу, а кто из героев не убежит, лишится всех вещей и питомца — их раздадут другим игрокам наугад. Спутник остаётся. Чернокнижник уходит тенью и ничего не теряет. В одном бою — один ящик. Открытый ящик к тому же возвращает в партию всех, кого настигло «Прощай навсегда».</p>
   <h3>Ловушки</h3>

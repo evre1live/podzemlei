@@ -328,7 +328,16 @@ function turnMove(s, p, rng) {
     // рынок: уровень, проклятие для того, кто рвётся к победе, боевые карты про запас
     { const a = shopMove(s, p, step); if (a && ok(a)) return a; }
     // вызвать на поединок того, у кого есть что забрать и кто заметно слабее
-    const duelCard = p.hand.find(u => def(u).type === 'duel');
+    // «Роковая женщина»: стравливаем лидера с тем, кто его сильнее, а нет такого — двух самых опытных соперников
+    const femme = p.hand.find(u => def(u).femme);
+    if (femme && step !== 'charity') {
+      const foes = s.players.filter(x => x.id !== id && !x.dead).sort((a, b) => b.level - a.level || duelStrength(s, b) - duelStrength(s, a));
+      const lead = foes[0];
+      const rival = lead && foes.slice(1).filter(x => duelStrength(s, x) > duelStrength(s, lead)).sort((a, b) => duelStrength(s, b) - duelStrength(s, a))[0];
+      const pair = rival ? [lead, rival] : foes.length >= 2 && lead.level >= 3 ? [foes[0], foes[1]] : null;
+      if (pair && ok({ type: 'playCard', uid: femme, target: pair[0].id, with: pair[1].id })) return { type: 'playCard', uid: femme, target: pair[0].id, with: pair[1].id };
+    }
+    const duelCard = p.hand.find(u => def(u).type === 'duel' && !def(u).femme);
     if (duelCard && step !== 'charity') {
       const mine = duelStrength(s, p);
       const t = s.players.filter(x => x.id !== id && !x.dead && duelPrize(x) && mine >= duelStrength(s, x) + 3)
@@ -410,7 +419,7 @@ function duelMove(s, p) {
   const alch = hasClass(p, 'alchemist') ? 2 : 0;
   const bonus = p.hand.filter(u => def(u).type === 'oneshot' && def(u).effect === 'bonus').sort((a, b) => def(a).bonus - def(b).bonus);
   // сколько не хватает стороне, чтобы победить (при равенстве побеждает вызванный)
-  const gapFor = side => (side === 'from' ? n.to - n.from + 1 : n.from - n.to);
+  const gapFor = side => (side === 'from' ? n.to - n.from + 1 : n.from - n.to + (d.femme ? 1 : 0));
   const boost = side => {
     const gap = gapFor(side);
     if (gap <= 0) return null;
@@ -427,6 +436,7 @@ function duelMove(s, p) {
     }
     return pass();
   }
+  if (!n.winner) return pass();
   const W = P(s, n.winner);
   const top = leader(s, null);
   const threat = (W.level >= winLevel(s) - 3 && W.level >= top.level) || (persona(p) === 'vengeful' && grudgeOf(s, p.id, W.id) > 0);
@@ -456,6 +466,7 @@ function shopMove(s, p, step) {
     const target = threat ? top : foe;
     if (target && !target.dead) {
       if (threat && top.level >= W - 2 && ok('k_farewell') && !p.hand.some(u => def(u).keep)) return { type: 'buy', id: 'k_farewell' };
+      if (threat && ok('d_femme') && gold - price('d_femme') >= reserve && !p.hand.some(u => def(u).femme)) return { type: 'buy', id: 'd_femme' };
       const c = SHOP_IDS.filter(id => def(id).type === 'curse' && def(id).fx.some(f => f.k === 'levels') && ok(id)).sort((a, b) => price(a) - price(b))[0];
       if (c && (gold - price(c) >= reserve || (threat && top.level >= W - 2))) return { type: 'buy', id: c };
     }

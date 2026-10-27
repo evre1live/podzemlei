@@ -24,7 +24,7 @@ t('нельзя дойти до 10 уровня картой уровня; пр�
   p.hand.push(take(s, 'i_jackhammer#0'), take(s, 'i_diver#0'));
   assert.equal(A(s, 'p0', { type: 'sell', uids: ['i_jackhammer#0', 'i_diver#0'] }).ok, true);
   assert.equal(p.level, 9); assert.equal(p.gold, 800 + 600);
-  assert.equal(view(s, 'p1').players[0].gold, 1400, 'кошелёк виден всем');
+  assert.equal(view(s, 'p0').players[0].gold, 1400); assert.equal(view(s, 'p1').players[0].gold, null, 'чужой кошелёк скрыт');
   // мелочь тоже продаётся: порога в 1000 больше нет
   p.carried.push(take(s, 'i_ladle#0'));
   assert.equal(A(s, 'p0', { type: 'sell', uids: ['i_ladle#0'] }).ok, true);
@@ -755,7 +755,8 @@ t('«Искать неприятности»: только без монстро
 t('«Искать неприятности»: монстр разбужен, +4 к силе; боссу бонус не нужен', () => {
   const s = fresh(); const p = P(s, 'p0'); p.level = 3;
   s.turn.step = 'post';
-  const m = s.decks.door.find(u => def(u).type === 'monster' && !def(u).boss && !def(u).mirror);
+  // простой монстр: без поправок по кругу, классу и расе
+  const m = s.decks.door.find(u => def(u).type === 'monster' && !def(u).boss && !def(u).mirror && !def(u).roundMod && !def(u).vs);
   s.decks.door.splice(s.decks.door.indexOf(m), 1);
   s.decks.door.push(m);
   const pool = s.decks.door.filter(u => def(u).type === 'monster' && u !== m);
@@ -1366,7 +1367,7 @@ t('подземный рынок: за голды из кошелька, тол�
   const toDeck = (...l) => l.forEach(u => s.decks[def(u).deck].push(take(s, u)));
   toDeck('l_stash#0', 'l_bribe#0', 'k_tax#0', 'o_kvass#0', 'o_smoke#0');
   const item = id => view(s, 'p0').shop.items.find(x => x.id === id);
-  assert.ok(view(s, 'p0').shop.items.every(x => ['oneshot', 'buff', 'curse', 'levelup'].includes(def(x.id).type)));
+  assert.ok(view(s, 'p0').shop.items.every(x => ['oneshot', 'buff', 'curse', 'levelup', 'duel'].includes(def(x.id).type)));
   assert.equal(item('l_stash').price, 1000); assert.equal(item('l_stash').cat, 'level');
   assert.match(A(s, 'p0', { type: 'buy', id: 'l_stash' }).error, /Нужно 1000/);
   assert.deepEqual(view(s, 'p0').hints.shop, []);
@@ -1580,6 +1581,74 @@ t('«Сокровища Атлантиды» и «Сундук мертвеца�
   p.hand.push(take(s, 'h_hoard#0')); A(s, 'p0', { type: 'playCard', uid: 'h_hoard#0' });
   assert.ok(p.hand.includes('g_atlantis#0'));
   assert.equal(A(s, 'p0', { type: 'sell', uids: ['g_atlantis#0'] }).ok, false, 'не продаётся');
+});
+
+t('чужой кошелёк скрыт: свои голды видно, чужие — нет; в летописи нет остатков', () => {
+  const s = fresh(); const p = P(s, 'p0'), q = P(s, 'p1');
+  p.gold = 1200; q.gold = 4500;
+  const v = view(s, 'p0');
+  assert.equal(v.players.find(x => x.id === 'p0').gold, 1200);
+  assert.equal(v.players.find(x => x.id === 'p1').gold, null);
+  assert.ok(view(s, null).players.every(x => x.gold === null), 'зрители кошельков не видят');
+  q.hand.push(take(s, 'g_deadchest#0'));
+  A(s, 'p1', { type: 'playCard', uid: 'g_deadchest#0' });
+  assert.ok(!s.log.some(l => /в кошельке/.test(l.text)));
+});
+
+t('рынок: «Вызов на поединок» — 700, «Роковая женщина» — 1000, «Ты мой раб» — 1000, раздел «Поединки»', () => {
+  const s = fresh();
+  const items = view(s, 'p0').shop.items;
+  const it = id => items.find(x => x.id === id);
+  assert.equal(it('d_duel').price, 700); assert.equal(it('d_duel').cat, 'duel');
+  assert.equal(it('d_femme').price, 1000); assert.equal(it('d_femme').cat, 'duel');
+  assert.equal(it('o_slave').price, 1000);
+  const p = P(s, 'p0'); p.gold = 2000;
+  assert.equal(A(s, 'p0', { type: 'buy', id: 'd_femme' }).ok, true);
+  assert.ok(p.hand.some(u => u.startsWith('d_femme'))); assert.equal(p.gold, 1000);
+});
+
+t('«Роковая женщина»: двое соперников бьются, проигравший теряет большую вещь и 2 уровня; ничья — оба целы', () => {
+  const s = fresh(4); const p = P(s, 'p0'), a = P(s, 'p1'), b = P(s, 'p2');
+  a.level = 6; b.level = 3;
+  b.equipped.push(take(s, 'i_jackhammer#0')); // большая, +5: сила 8 против 6
+  b.carried.push(take(s, 'i_diver#0'));        // тоже большая, +3
+  p.hand.push(take(s, 'd_femme#0'));
+  const opts = view(s, 'p0').hints.cards['d_femme#0'];
+  assert.equal(opts.length, 3, 'все пары соперников: из трёх — три пары');
+  assert.ok(opts.every(o => o.target !== 'p0' && o.with !== 'p0'));
+  assert.match(A(s, 'p0', { type: 'playCard', uid: 'd_femme#0', target: 'p0', with: 'p1' }).error, /двум соперникам/);
+  assert.match(A(s, 'p0', { type: 'playCard', uid: 'd_femme#0', target: 'p1', with: 'p1' }).error, /двух соперников/);
+  assert.equal(A(s, 'p0', { type: 'playCard', uid: 'd_femme#0', target: 'p1', with: 'p2' }).ok, true);
+  const d = view(s, 'p3').duel;
+  assert.equal(d.femme, true); assert.equal(d.by, 'p0');
+  assert.deepEqual([d.numbers.from, d.numbers.to, d.numbers.winner], [6, 8, 'p2']);
+  assert.equal(d.prize.from, null, 'у p1 больших вещей нет'); assert.equal(d.prize.to, 'i_jackhammer#0');
+  assert.equal(tick(s, { rng, now: 1000 + 6000 }), true);
+  assert.equal(s.duel, null);
+  assert.equal(a.level, 4, 'проигравший теряет 2 уровня');
+  assert.equal(b.level, 3);
+  assert.ok(b.equipped.includes('i_jackhammer#0'), 'победитель ничего не теряет');
+  assert.ok(s.discard.door.includes('d_femme#0'));
+  assert.ok(s.log.some(l => /Роковую женщину|Роковая женщина/.test(l.text)));
+  // проигравший с большой вещью: теряет самую ценную большую и 2 уровня
+  const t2 = fresh(); const x = P(t2, 'p1'), y = P(t2, 'p2');
+  x.level = 2; y.level = 9;
+  x.equipped.push(take(t2, 'i_jackhammer#0')); x.carried.push(take(t2, 'i_diver#0'));
+  P(t2, 'p0').hand.push(take(t2, 'd_femme#0'));
+  A(t2, 'p0', { type: 'playCard', uid: 'd_femme#0', target: 'p1', with: 'p2' });
+  tick(t2, { rng, now: 9000 });
+  assert.ok(!x.equipped.includes('i_jackhammer#0') && t2.discard.treasure.includes('i_jackhammer#0'), 'отбойный молоток (+5) потерян');
+  assert.ok(x.carried.includes('i_diver#0')); assert.equal(x.level, 1, 'не ниже первого уровня');
+  // ничья — никто ничего не теряет
+  const t3 = fresh(); const m = P(t3, 'p1'), k = P(t3, 'p2');
+  m.level = 9; k.level = 4; k.equipped.push(take(t3, 'i_jackhammer#0'));
+  P(t3, 'p0').hand.push(take(t3, 'd_femme#0'));
+  A(t3, 'p0', { type: 'playCard', uid: 'd_femme#0', target: 'p1', with: 'p2' });
+  const n3 = view(t3, 'p0').duel.numbers;
+  assert.deepEqual([n3.from, n3.to, n3.winner], [9, 9, null]);
+  tick(t3, { rng, now: 9000 });
+  assert.equal(m.level, 9); assert.equal(k.level, 4); assert.ok(k.equipped.includes('i_jackhammer#0'));
+  assert.ok(t3.log.some(l => /Ничья/.test(l.text)));
 });
 
 t('голды друг другу передать нельзя', () => {

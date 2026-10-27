@@ -2190,8 +2190,8 @@ input[type=text], input[type=password], select, .g-search, .g-sort select,
 .shop-policy:not(.muted) { padding: 7px 10px; border-left: 3px solid rgb(var(--torch, 242 194 122) / .8); background: rgb(255 255 255 / .05); }
 .modal.shop > * { flex: none; }
 .modal.shop > .shop-lots { flex: 1 1 auto; }
-.shop-tabs { display: grid; grid-template-columns: repeat(auto-fit, minmax(108px, 1fr)); width: 100%; }
-.shop-tabs button { padding: 7px 8px; font-size: 13.5px; white-space: nowrap; }
+.shop-tabs { display: grid; grid-template-columns: repeat(auto-fit, minmax(92px, 1fr)); width: 100%; }
+.shop-tabs button { padding: 7px 6px; font-size: 13px; white-space: nowrap; }
 .shop-tabs button small { opacity: .7; font-weight: 500; margin-left: 2px; }
 .shop-lots { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 14px 10px; overflow-y: auto; padding: 4px 2px 8px; min-height: 180px; }
 .shop-lots .lot { display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; }
@@ -2340,9 +2340,9 @@ button.pandora:not(.ready) .pb-cap { color: var(--text-2); }
 /* вещи героя: строки прямо по стеклу, без плашек. Слева — значок места в маленьком гнезде,
    имя окрашено по редкости, бонус — цифрой шрифта заголовков; между местами тонкая линия */
 .slots { gap: 0 10px; }
-.slots .slot { background: none; box-shadow: none; border-radius: 0; padding: 3px 0 3px 32px; min-height: 31px; gap: 1px; border-top: 1px solid rgb(255 255 255 / .06); }
+.slots .slot { background: none; box-shadow: none; border-radius: 0; padding: 2px 0 2px 32px; min-height: 29px; gap: 1px; border-top: 1px solid rgb(255 255 255 / .06); }
 .slots .slot:first-child { border-top: 0; }
-.slots .slot > small { left: 1px; top: 4px; transform: none; width: 23px; height: 23px; border-radius: 50%;
+.slots .slot > small { left: 1px; top: 3px; transform: none; width: 23px; height: 23px; border-radius: 50%;
   background: radial-gradient(circle at 50% 30%, rgb(255 255 255 / .09), rgb(0 0 0 / .3)); box-shadow: inset 0 1px 2px rgb(0 0 0 / .55), 0 0 0 1px rgb(255 255 255 / .08); color: var(--text-2); }
 .slots .slot > small .gi { width: 14px; height: 14px; }
 .slots .slot.vacant > small { background: none; box-shadow: inset 0 0 0 1px rgb(255 255 255 / .07); color: rgb(255 255 255 / .2); }
@@ -2362,9 +2362,12 @@ button.pandora:not(.ready) .pb-cap { color: var(--text-2); }
 .slots .chip.off b { color: rgb(127 205 168 / .55); }
 .slots .chip.picked { background: rgb(214 168 90 / .2); box-shadow: inset 0 0 0 1px rgb(214 168 90 / .6); }
 /* места спутника — под ним, с отступом и «веточкой» */
-.slots .slot.ally-gear { padding-left: 52px; min-height: 28px; border-top-color: rgb(255 255 255 / .035); }
+.slots .slot.ally-gear { padding-left: 52px; min-height: 27px; border-top-color: rgb(255 255 255 / .035); }
 .slots .slot.ally-gear > small { left: 25px; top: 4px; width: 20px; height: 20px; }
 .slots .slot.ally-gear > small .gi { width: 12px; height: 12px; }
 .slots .slot.ally-gear::before { content: ''; position: absolute; left: 12px; top: -2px; height: 15px; width: 11px; border-left: 1px solid rgb(184 209 242 / .3); border-bottom: 1px solid rgb(184 209 242 / .3); border-bottom-left-radius: 6px; pointer-events: none; }
 .chip.ally-worn { box-shadow: inset 0 0 0 1px rgb(111 151 200 / .5); }
 @media (max-width: 900px) { .slots .slot[data-slot^="ally"] { grid-column: 1 / -1; } }
+/* «Роковая женщина»: багровая кайма у заставки */
+.fx-banner.curse { border-color: rgb(226 80 120 / .75); box-shadow: 0 0 0 4px rgba(0,0,0,.35), 0 18px 50px rgba(0,0,0,.55), 0 0 50px rgb(220 60 110 / .45); }
+.fx-banner.curse b { color: #ffc2d6; }
