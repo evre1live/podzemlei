@@ -1654,6 +1654,8 @@ t('«Роковая женщина»: двое соперников бьются
 t('тайные команды с NOW: карта сразу в руку, соперники не видят, что карт стало больше; без NOW — со следующим кладом', () => {
   assert.equal(cheatCardNow('/ARESNOW'), 'i_ares'); assert.equal(cheatCardNow('/2clnow'), 'x_super'); assert.equal(cheatCardNow('/ATLANTISNOW'), 'g_atlantis');
   assert.equal(cheatCardNow('/ARES'), null); assert.equal(cheatCard('/ARESNOW'), null); assert.equal(cheatCard('/ARES'), 'i_ares');
+  assert.deepEqual(['/HELP1', '/help2', '/HELP3'].map(cheatCard), ['a_porter', 'a_guide', 'a_merc']);
+  assert.deepEqual(['/HELP1NOW', '/help2now', '/HELP3NOW'].map(cheatCardNow), ['a_porter', 'a_guide', 'a_merc']);
   const s = fresh(); const p = P(s, 'p0');
   const seen = (by = 'p1') => view(s, by).players.find(x => x.id === 'p0').handCount;
   const before = seen(), mine = p.hand.length;
@@ -1663,6 +1665,10 @@ t('тайные команды с NOW: карта сразу в руку, соп
   assert.equal(seen(), before, 'соперник видит прежнее число'); assert.equal(seen(null), before, 'зритель тоже');
   assert.match(grantCard(s, 'p1', 'i_ares').error, /уже у кого-то/);
   assert.equal(grantCard(s, 'p1', 'x_super').ok, true, 'совместитель — всегда');
+  // спутник — тоже всегда: даже если он уже у кого-то, появится ещё один
+  P(s, 'p2').ally = take(s, 'a_merc#0');
+  const gm = grantCard(s, 'p1', 'a_merc');
+  assert.equal(gm.ok, true); assert.ok(P(s, 'p1').hand.includes(gm.uid)); assert.notEqual(gm.uid, 'a_merc#0');
   // сыграл тайную карту — для соперников счёт так и не менялся
   assert.equal(A(s, 'p0', { type: 'playCard', uid: 'i_ares#0' }).ok, true);
   assert.equal(seen(), before); assert.deepEqual(p.secret, []);

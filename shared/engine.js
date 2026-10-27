@@ -96,10 +96,10 @@ const isLegend = uid => def(uid).rarity === 'legendary';
 
 // ───────────────────────── заказ карты ─────────────────────────
 // Сервер может тихо заказать герою карту: она придёт вместо ближайшей карты клада, если свободна
-// (лежит в колоде или сбросе). Вещь, которая у кого-то из героев, заказать нельзя. Класс, «Смешанную кровь»
-// и «Совместителя» можно всегда: если все копии разобраны, появится ещё одна. В летопись и в вид для игроков заказ не попадает.
+// (лежит в колоде или сбросе). Вещь, которая у кого-то из героев, заказать нельзя. Класс, «Смешанную кровь»,
+// «Совместителя» и спутника можно всегда: если все копии разобраны, появится ещё одна. В летопись и в вид для игроков заказ не попадает.
 const baseId = uid => String(uid).split('#')[0];
-const ORDER_ANYWAY = new Set(['class', 'halfbreed', 'supermunch']);
+const ORDER_ANYWAY = new Set(['class', 'halfbreed', 'supermunch', 'ally']);
 function freeUid(s, id) {
   const d = def(id);
   for (const pile of [s.decks[d.deck], s.discard[d.deck]]) { const u = pile.find(x => baseId(x) === id); if (u) return u; }
@@ -573,7 +573,7 @@ function newRound(s, rng) {
 // Открыт всегда: в свой ход вне боя можно купить разовые карты, зелья, проклятия и «Получи уровень» за голды из кошелька.
 // Товар — только карты, которые ещё лежат в колоде (не в сбросе и не на руках), поэтому его число ограничено.
 // Цену меняет локация (у каждой своя политика по разделам рынка) и «Ярмарочный день».
-// постоянный клиент: потратил на рынке REGULAR_SPEND голдов. Статус видит только он сам
+// «Шопоголик» (постоянный клиент рынка): потратил на рынке REGULAR_SPEND голдов. Статус видит только он сам
 export const isRegular = p => (p?.spent || 0) >= REGULAR_SPEND;
 export function shopPrice(s, d, p = null) {
   const pr = locationOf(s)?.prices || {};
@@ -584,7 +584,7 @@ export function shopPrice(s, d, p = null) {
   // ниже цены продажи не опускается: купить и тут же продать с выгодой нельзя
   return Math.max(v, (d.value || 0) + 50);
 }
-// когда можно покупать: в свой ход вне боя, а постоянному клиенту — в любой момент, даже в бою
+// когда можно покупать: в свой ход вне боя, а Шопоголику — в любой момент, даже в бою
 export const buyErr = (s, p) => (isRegular(p) ? (p.dead ? 'Мёртвым на рынок нельзя' : null) : manageErr(s, p));
 const stockUid = (s, id) => s.decks[def(id).deck].find(u => baseId(u) === id) || null;
 export const shopStock = (s, id) => s.decks[def(id).deck].reduce((n, u) => n + (baseId(u) === id ? 1 : 0), 0);
@@ -1765,7 +1765,7 @@ H.buy = {
     const d = def(a.id), price = shopPrice(s, d, p), u = stockUid(s, a.id);
     without(s.decks[d.deck], u);
     p.gold -= price;
-    p.spent = (p.spent || 0) + price; // копится к статусу постоянного клиента; в летопись не пишется
+    p.spent = (p.spent || 0) + price; // копится к статусу «Шопоголик»; в летопись не пишется
     p.hand.push(u);
     if (d.type === 'levelup') { s.turn.boughtLevel = true; p.levelTurn = s.turn.n; }
     fx(s, { kind: 'buy', pid: p.id, card: u, price });

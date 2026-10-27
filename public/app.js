@@ -1,5 +1,5 @@
 // «Под Землёй» — клиент.
-import { def, RACE_NAMES, CLASS_NAMES, SETS, ALLY_SLOT_NAMES, ALLY_SLOT_TEXT, FEMME_LEVELS, REGULAR_SPEND, REGULAR_DISCOUNT, setRuleVars, ruleText, BOSS_FLOOR, TROUBLE_BONUS, LULLABY_PENALTY, MUTAGEN_BONUS, DISTILL_COST,
+import { def, RACE_NAMES, CLASS_NAMES, SETS, ALLY_SLOT_NAMES, ALLY_SLOT_TEXT, FEMME_LEVELS, REGULAR_DISCOUNT, setRuleVars, ruleText, BOSS_FLOOR, TROUBLE_BONUS, LULLABY_PENALTY, MUTAGEN_BONUS, DISTILL_COST,
   PERSONAS, GHOST_BONUS, DEATH_LEVELS, DEPTH, DEPTH_TREASURE_EVERY, TRADE_TIMEOUT_MS, TAME_MARGIN, WARLOCK_TAME, PANDORA_COST, PANDORA_BONUS, PANDORA_ESCAPE, tameBonus, TRAP_FAIL_LEVELS, SHOP_CATS, dailyOf, dailyDate } from '/shared/cards.js';
 import { esc, cardHTML, chipHTML, avatarSVG, iconSVG, cardBackSVG, locationSVG, cardIcon, cardText } from '/art.js';
 import { fx } from '/fx.js';
@@ -161,7 +161,7 @@ socket.on('room:state', ({ room, game, serverTime }) => {
   if ($('#shopModal')) openMarketModal();
   if ($('#contractModal')) openContractModal();
   { const reg = !!game?.players?.find(x => x.id === room.me)?.regular;
-    if (S.ui.regular === false && reg) { sfx.play('victory', { always: true }); fx.banner('Постоянный клиент!', `На рынке для вас −${Math.round(REGULAR_DISCOUNT * 100)}%, покупать можно в любой момент — даже в бою`, 'win'); }
+    if (S.ui.regular === false && reg) requestAnimationFrame(shopaholicFx);
     S.ui.regular = game ? reg : undefined; }
   renderVoice();
   if (fresh.length) requestAnimationFrame(() => runFx(fresh, snap));
@@ -564,7 +564,7 @@ update.game = () => {
   const dl = g.opts?.daily ? dailyOf(g.opts.daily) : null;
   $('#dailypill').innerHTML = dl ? `<span class="daily-pill" title="${esc(`Испытание дня ${g.opts.daily}: ${dl.text} Колода сегодня у всех одна.`)}">${ico('calendar')}<span class="lbl">${esc(dl.name)}</span></span>` : '';
   { const mp = me();
-    $('#marketpill').innerHTML = g.shop && g.phase === 'playing' ? `<button class="market-pill${mp?.regular ? ' regular' : ''}" data-act="market" title="${mp?.regular ? `Подземный рынок: вы постоянный клиент — цены на ${Math.round(REGULAR_DISCOUNT * 100)}% ниже, покупать можно в любой момент` : 'Подземный рынок: разовые, зелья, проклятия и уровни из колоды за голды из кошелька'}">${ico(mp?.regular ? 'laurels' : 'shop')}<span><span class="lbl">Рынок${mp ? ' · ' : ''}</span>${mp ? `${mp.gold} г` : ''}</span></button>` : ''; }
+    $('#marketpill').innerHTML = g.shop && g.phase === 'playing' ? `<button class="market-pill${mp?.regular ? ' regular' : ''}" data-act="market" title="${mp?.regular ? `Подземный рынок: вы Шопоголик — цены на ${Math.round(REGULAR_DISCOUNT * 100)}% ниже, покупать можно в любой момент` : 'Подземный рынок: разовые, зелья, проклятия и уровни из колоды за голды из кошелька'}">${ico(mp?.regular ? 'laurels' : 'shop')}<span><span class="lbl">Рынок${mp ? ' · ' : ''}</span>${mp ? `${mp.gold} г` : ''}</span></button>` : ''; }
   // контракт — значком в шапке, по нажатию открывается окошко
   { const k = me()?.contract;
     $('#contractpill').innerHTML = k && g.phase === 'playing' ? `<button class="contract-pill${k.progress >= k.need ? ' ready' : ''}" data-act="contract" title="${esc(`Контракт «${k.name}»: ${k.progress} из ${k.need}. Нажмите, чтобы посмотреть условие и награду`)}" aria-label="Контракт ${esc(k.name)}, ${k.progress} из ${k.need}">${ico('scroll-quill')}<span>${k.progress}/${k.need}</span></button>` : ''; }
@@ -1437,11 +1437,8 @@ function openMarketModal() {
   const policy = [g.shop.note && `<b>${esc(L?.name || '')}:</b> ${esc(g.shop.note)}`, g.shop.fair && '<b>Ярмарочный день:</b> всё на четверть дешевле.'].filter(Boolean).join(' ');
   const how = !p ? 'Вы зритель: смотреть можно, покупать — нет.'
     : h?.buy ? 'Купленная карта ложится в руку. «Получи уровень» — не больше одного за ход.' : 'Покупать можно в свой ход, когда нет боя.';
-  // постоянный клиент: видит только сам игрок
-  const left = p ? Math.max(0, REGULAR_SPEND - (p.spent || 0)) : 0;
-  const status = !p ? '' : p.regular
-    ? `<p class="shop-regular">${ico('laurels')}<span><b>Вы постоянный клиент.</b> Цены для вас на ${Math.round(REGULAR_DISCOUNT * 100)}% ниже, а рынок открыт в любой момент — даже в бою. Этот статус видите только вы.</span></p>`
-    : `<p class="shop-progress" title="Статус видите только вы"><span>До статуса постоянного клиента: потратить ещё <b>${left} г</b> — и цены станут на ${Math.round(REGULAR_DISCOUNT * 100)}% ниже, а покупать можно будет в любой момент.</span><i style="--k:${((p.spent || 0) / REGULAR_SPEND).toFixed(3)}"></i></p>`;
+  // «Шопоголик»: статус-сюрприз за покупки на 5000 голдов, видит только сам игрок; до него — ни слова
+  const status = p?.regular ? `<p class="shop-regular">${ico('laurels')}<span><b>Вы — Шопоголик.</b> Цены для вас на ${Math.round(REGULAR_DISCOUNT * 100)}% ниже, а рынок открыт в любой момент — даже в бою. Этот статус видите только вы.</span></p>` : '';
   showOverlay(`<div class="modal shop" id="shopModal" role="dialog" aria-label="Подземный рынок">
     <div class="shop-head"><h2>${ico('shop')} Подземный рынок</h2>${p ? `<span class="wallet" title="Голды за проданные вещи и контракты">${ico('two-coins')}<b>${p.gold}</b> г</span>` : ''}</div>
     <p class="muted shop-how">Продаётся только то, что ещё лежит в колоде. ${how}</p>
@@ -1534,6 +1531,18 @@ function contractHTML(p) {
   return `<div class="contract" title="${esc(tip)}"><span class="c-ico" aria-hidden="true">${ico('scroll-quill')}</span><div class="c-body">
     <div class="c-head"><b>${esc(k.name)}</b><span class="c-prog">${k.progress}/${k.need}</span>${p.contractsDone ? `<span class="c-done" title="Выполнено контрактов">${ico('check-mark')}${p.contractsDone}</span>` : ''}</div>
     <div class="c-text">${esc(k.text)} Награда: ${esc(k.rewardText)}.</div></div></div>`;
+}
+// «Шопоголик»: праздник только у самого игрока — золотые лучи, монеты и искры у кошелька на рынке (или у кнопки рынка)
+function shopaholicFx() {
+  const at = $('#shopModal .wallet') || document.querySelector('.market-pill') || $('#mecard .gold');
+  sfx.play('victory', { always: true }); sfx.play('coins', { delay: 0.35, always: true });
+  fx.banner('Шопоголик!', `Новый статус: на рынке для вас −${Math.round(REGULAR_DISCOUNT * 100)}%, а покупать можно в любой момент — даже в бою`, 'legend');
+  if (!at) return;
+  fx.rays(at, { color: '255,214,120', size: 300, dur: 2400 });
+  fx.ring(at, { n: 3, size: 28, grow: 340, color: 'rgba(242,207,120,.9)' });
+  fx.sparkle(at, { n: 26, colors: ['#fff6c8', '#ffd56a', '#ffffff', '#f2cf78'] });
+  fx.coins(at, at, { n: 22 });
+  setTimeout(() => { const el = $('#shopModal .wallet') || document.querySelector('.market-pill'); if (el) fx.sparkle(el, { n: 14, colors: ['#fff6c8', '#ffd56a'] }); }, 900);
 }
 // окошко контракта: условие, ход выполнения, награда
 function openContractModal() {

@@ -14,6 +14,9 @@ export const CHEATS = {
   MIXBLOOD: 'x_halfbreed',   // Смешанная кровь
   '2CL': 'x_super',          // Совместитель
   ATLANTIS: 'g_atlantis',    // Сокровища Атлантиды
+  HELP1: 'a_porter',         // Носильщик Савелий
+  HELP2: 'a_guide',          // Проводник Митрич
+  HELP3: 'a_merc',           // Наёмник Кондрат
 };
 // «/witcher», «/WITCHER», «/2cl» → карта; всё остальное → null
 export function cheatCard(text) {
