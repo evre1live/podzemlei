@@ -2105,6 +2105,22 @@ function badShape(a) {
 // Зритель с тайной командой получает TRICK_GOLD голдов, покупает карты на рынке и разыгрывает их.
 // Карта разыгрывается от имени кого-то из игроков («куклы»): в летописи и эффектах это его ход.
 // Пакостник, его голды и карты в рукаве в вид для игроков не попадают.
+// ───────────────────────── зритель садится за стол ─────────────────────────
+// Игроки голосованием пускают зрителя на место бота или автопилота: герой, вещи, рука и уровень остаются,
+// меняется только тот, кто им управляет (и имя за столом).
+export function takeSeat(s, pid, name) {
+  const p = P(s, pid);
+  if (!p || s.phase !== 'playing') return { ok: false, error: 'Этого места уже нет' };
+  const was = p.name;
+  let nm = String(name || 'Игрок');
+  if (s.players.some(x => x !== p && x.name === nm)) nm += ' 2';
+  p.name = nm; p.isBot = false; p.persona = null;
+  fx(s, { kind: 'seat', pid, from: was });
+  log(s, nm === was ? `🤝 ${nm} снова за столом.` : `🤝 ${nm} садится за стол вместо ${was}.`, 'event');
+  s.version++;
+  return { ok: true, name: nm };
+}
+
 export const TRICK_GOLD = 77777;
 export const trickOf = (s, key) => s.tricksters?.[key] || null;
 export function trickStart(s, key) {

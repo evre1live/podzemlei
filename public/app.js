@@ -102,6 +102,12 @@ const spectating = () => !!S.room?.spectator;
 
 // ───────────────────────── связь ─────────────────────────
 socket.on('connect', async () => {
+  // смотрим комнату, где у нас есть своё место, — возвращаемся за стол, а не на трибуну
+  if (S.watch && S.tokens[S.watch.id]) {
+    const j = await call('room:join', { roomId: S.watch.id, token: S.tokens[S.watch.id] });
+    if (j.ok) { S.watch = null; return; }
+    dropToken(S.watch.id);
+  }
   if (S.watch) {
     const r = await call('room:watch', { roomId: S.watch.id, password: S.watch.pw, name: S.name, cid: S.cid });
     if (r.ok) return;
@@ -113,6 +119,15 @@ socket.on('connect', async () => {
     if (r.ok) { S.pendingRoom = null; return; }
     dropToken(code);
     if (S.room) { S.room = null; S.game = null; render(); toast(r.error); }
+  }
+  // игру свернули, а ссылка потерялась (телефон перезапустил вкладку, ярлык на главном экране):
+  // своё место за столом не потеряно, пока есть жетон — возвращаемся сами
+  if (!S.room && !S.pendingRoom && !S.pendingWatch) {
+    for (const id of Object.keys(S.tokens).slice(-5)) {
+      const j = await call('room:join', { roomId: id, token: S.tokens[id] });
+      if (j.ok) { toast('Вы снова за своим столом'); return; }
+      dropToken(id);
+    }
   }
   const lst = await call('lobby:watch');
   if (lst.ok) { S.rooms = lst.rooms; if (S.screen === 'home') renderRooms(); }
@@ -137,6 +152,21 @@ socket.on('kicked', ({ reason }) => {
   S.room = null; S.game = null; setUrl(null);
   toast(reason || 'Вы вышли из комнаты');
   closeOverlay(); render();
+});
+// зритель за столом: игроки отдали ему место бота или автопилота — входим с жетоном этого места
+socket.on('seat:granted', async ({ roomId, token }) => {
+  saveToken(roomId, token);
+  const r = await call('room:join', { roomId, token });
+  if (!r.ok) return toast(r.error || 'Не получилось сесть за стол');
+  S.watch = null; S.trick = null; S.ui.seatAsk = null;
+  closeOverlay();
+  sfx.play('yourTurn', { always: true });
+  toast('Вы за столом! Герой, вещи и карты теперь ваши');
+});
+socket.on('seat:result', ({ reason }) => {
+  S.ui.seatAsk = null;
+  if ($('#seatModal')) closeOverlay();
+  if (reason) toast(reason);
 });
 // режим пакостника (/IAMGOD у зрителя): свой кошелёк и рукав, видит их только он
 socket.on('trick:state', t => {
@@ -168,6 +198,8 @@ socket.on('room:state', ({ room, game, serverTime }) => {
   if ($('#shopModal')) openMarketModal();
   if ($('#contractModal')) openContractModal();
   if ($('#trickPop')) refreshTrickPop();
+  if ($('#seatModal')) openSeatModal();
+  if ($('#seatVoteModal')) openSeatVote();
   { const reg = !!game?.players?.find(x => x.id === room.me)?.regular;
     if (S.ui.regular === false && reg) requestAnimationFrame(shopaholicFx);
     S.ui.regular = game ? reg : undefined; }
@@ -293,14 +325,15 @@ function renderRooms() {
   const st = { lobby: 'собираются', playing: 'идёт игра', ended: 'партия окончена' };
   // в собирающуюся комнату заходят игроком, на идущую партию — смотрят
   el.innerHTML = S.rooms.map(r => {
-    const live = r.status !== 'lobby';
+    const mine = !!S.tokens[r.id];
+    const live = r.status !== 'lobby' && !mine;
     return `
-    <div class="room-row${live ? ' live' : ''}">
-      <button class="room-main" ${live ? `data-watch="${esc(r.id)}"` : `data-join="${esc(r.id)}"`} data-locked="${r.locked}" aria-label="${live ? 'Смотреть' : 'Войти'}: ${esc(r.name)}">
+    <div class="room-row${live ? ' live' : ''}${mine ? ' mine' : ''}">
+      <button class="room-main" ${live ? `data-watch="${esc(r.id)}"` : `data-join="${esc(r.id)}"`} data-locked="${r.locked}" aria-label="${mine ? 'Вернуться за стол' : live ? 'Смотреть' : 'Войти'}: ${esc(r.name)}">
         <span class="lock">${iconSVG(r.locked ? 'amulet' : 'chest')}</span>
         <span><span class="rname">${esc(r.name)}</span><br><span class="rmeta">${r.locked ? 'с паролем' : 'без пароля'}, хозяин ${esc(r.host)}${r.watchers ? ` · ${EYE}${r.watchers}` : ''}</span></span>
         <span class="rmeta">${r.players} из ${r.max}</span>
-        <span class="status ${r.status}">${st[r.status]}</span>
+        <span class="status ${r.status}">${mine && r.status !== 'lobby' ? 'ваше место' : st[r.status]}</span>
       </button>
       <button class="btn small ${live ? 'primary' : 'ghost'} watch-btn" data-watch="${esc(r.id)}" data-locked="${r.locked}" title="Смотреть, не садясь за стол">${EYE}Смотреть</button>
     </div>`;
@@ -312,6 +345,11 @@ const EYE = `<svg class="eye" viewBox="0 0 24 24" aria-hidden="true"><path d="M2
 // смотреть партию: место за столом не занимается, чужие руки не видны
 async function tryWatch(code, password) {
   if (S.room && !S.room.spectator) return toast('Сначала выйдите из своей комнаты');
+  if (S.tokens[code]) {
+    const j = await call('room:join', { roomId: code, token: S.tokens[code] });
+    if (j.ok) { S.pendingWatch = null; S.watch = null; closeOverlay(); return; }
+    dropToken(code);
+  }
   const row = S.rooms.find(r => r.id === code);
   if (password === undefined && row?.locked) return openWatchModal(code, row);
   const r = await call('room:watch', { roomId: code, password: password || '', name: S.name, cid: S.cid });
@@ -580,9 +618,11 @@ update.game = () => {
   { const k = me()?.contract;
     $('#contractpill').innerHTML = k && g.phase === 'playing' ? `<button class="contract-pill${k.progress >= k.need ? ' ready' : ''}" data-act="contract" title="${esc(`Контракт «${k.name}»: ${k.progress} из ${k.need}. Нажмите, чтобы посмотреть условие и награду`)}" aria-label="Контракт ${esc(k.name)}, ${k.progress} из ${k.need}">${ico('scroll-quill')}<span>${k.progress}/${k.need}</span></button>` : ''; }
   const wn = r.watchers || 0;
-  $('#watchpill').innerHTML = r.spectator && trickOn() ? `<span class="watch-pill on trick" title="Это видите только вы: карты из рукава сыграют игроки, и в летописи будут их имена">${ico('double-face-mask')}Вы пакостник</span>`
+  const sv = r.seats?.vote;
+  const votePill = sv?.canVote && !sv.mine ? `<button class="seat-pill" data-act="seatVote" title="Зритель просится за стол — выберите, за кого из ботов он сядет">${ico('shaking-hands')}<span>${esc(sv.name)} просится за стол</span></button>` : '';
+  $('#watchpill').innerHTML = votePill + (r.spectator && trickOn() ? `<span class="watch-pill on trick" title="Это видите только вы: карты из рукава сыграют игроки, и в летописи будут их имена">${ico('double-face-mask')}Вы пакостник</span>`
     : r.spectator ? `<span class="watch-pill on" title="Вы видите стол, бои и летопись, но не чужие карты на руках">${EYE}Вы зритель${wn > 1 ? ` · ещё ${wn - 1}` : ''}</span>`
-    : wn ? `<span class="watch-pill" title="Столько людей смотрят партию со стороны">${EYE}${wn}</span>` : '';
+    : wn ? `<span class="watch-pill" title="Столько людей смотрят партию со стороны">${EYE}${wn}</span>` : '');
   renderOpps();
   renderStage();
   renderMine();
@@ -593,6 +633,7 @@ update.game = () => {
   $('#sidepanel').classList.toggle('open', S.ui.sideOpen);
   maybeHelpPrompt();
   maybeTradePrompt();
+  maybeSeatVote();
   maybeEndScreen();
 };
 
@@ -1181,13 +1222,13 @@ function renderWatcher() {
   const tr = trickOn();
   if (tr) {
     // рукав пакостника: карты, купленные на рынке; играются от имени игроков
-    $('#handhead').innerHTML = `${follow}<span class="trick-head">${ico('double-face-mask')}Рукав пакостника: ${cardsNom(tr.hand.length)}</span><button class="btn ghost small trick-wallet" data-act="market" title="Кошелёк пакостника — купить карты на рынке">${ico('two-coins')}${tr.gold} г</button>`;
+    $('#handhead').innerHTML = `${follow}${seatBtnHTML()}<span class="trick-head">${ico('double-face-mask')}Рукав пакостника: ${cardsNom(tr.hand.length)}</span><button class="btn ghost small trick-wallet" data-act="market" title="Кошелёк пакостника — купить карты на рынке">${ico('two-coins')}${tr.gold} г</button>`;
     const prev = S.ui.prevTrick;
     $('#hand').innerHTML = tr.hand.length ? tr.hand.map(u => cardHTML(u, { playable: true, cls: prev && !prev.has(u) ? 'deal-in' : '', attrs: 'data-zone="trick"' })).join('')
       : '<p class="muted">Рукав пуст. Купите карты на рынке — и подбрасывайте их от имени игроков: в летописи будут их имена.</p>';
     S.ui.prevTrick = new Set(tr.hand);
   } else {
-    $('#handhead').innerHTML = `${follow}<span>У ${esc(p.name)} в руке ${cardsNom(p.handCount)} — их видит только сам игрок.</span>`;
+    $('#handhead').innerHTML = `${follow}${seatBtnHTML()}<span>У ${esc(p.name)} в руке ${cardsNom(p.handCount)} — их видит только сам игрок.</span>`;
     $('#hand').innerHTML = p.handCount ? Array.from({ length: p.handCount }, () => `<div class="card hand-back" aria-hidden="true">${cardBackSVG('door')}</div>`).join('') : '<p class="muted">Рука пуста.</p>';
     S.ui.prevTrick = null;
   }
@@ -1491,6 +1532,83 @@ function openMarketModal() {
 async function buyLot(id) {
   if (!id) return;
   await act({ type: 'buy', id }); // окно обновится само, когда придёт новое состояние стола
+}
+
+// ───────────────────────── зритель за столом ─────────────────────────
+// Свободные места — боты и отключившиеся игроки на автопилоте. Зритель просится, игроки голосуют, за кого он сядет.
+const seatLeft = endsAt => Math.max(0, Math.ceil((endsAt - (Date.now() + (S.skew || 0))) / 1000));
+setInterval(() => document.querySelectorAll('[data-seat-ends]').forEach(el => { el.textContent = seatLeft(Number(el.dataset.seatEnds)); }), 1000);
+function seatLabel(id) {
+  const m = S.room?.members.find(x => x.id === id), p = pl(id);
+  return { name: p?.name || m?.name || '—', color: p?.color || m?.color || '#888', ava: p ? avatarSVG(gAva(p), p.color) : '', meta: `ур. ${p?.level ?? '?'} · ${m?.isBot ? 'бот' : 'автопилот'}` };
+}
+function seatBtnHTML() {
+  const st = S.room?.seats;
+  if (!st?.open.length) return '';
+  const mine = st.vote && st.vote.id === S.ui.seatAsk;
+  return `<button class="btn small seat-ask${mine ? ' waiting' : ''}" data-act="seatAsk" title="Сесть за стол вместо бота или автопилота">${ico('shaking-hands')}${mine ? `Голосуют: ${st.vote.voted} из ${st.voters}` : 'Сесть за стол'}</button>`;
+}
+function seatRow(id, inner) {
+  const x = seatLabel(id);
+  return `<span class="seat-who" style="--seat:${x.color}"><span class="ava">${x.ava}</span><span><b>${esc(x.name)}</b><small>${esc(x.meta)}</small></span>${inner || ''}</span>`;
+}
+function openSeatModal() {
+  const st = S.room?.seats;
+  popOpts = [];
+  if (!S.room?.spectator || !st) return closeOverlay();
+  const v = st.vote;
+  let body;
+  if (v && v.id === S.ui.seatAsk) {
+    const i = popOpts.push({ fn: async () => { await call('seat:cancel'); S.ui.seatAsk = null; closeOverlay(); } }) - 1;
+    body = `<p style="margin:0">Игроки голосуют, за кого из ботов вы сядете. Проголосовали <b>${v.voted} из ${st.voters}</b>, осталось <b data-seat-ends="${v.endsAt}">${seatLeft(v.endsAt)}</b> с.</p>
+      <div class="seat-list">${st.open.map(id => seatRow(id, v.counts[id] ? `<em>${v.counts[id]}</em>` : '')).join('')}</div>
+      <div class="row"><button class="btn ghost" data-popopt="${i}">Передумал</button><button class="btn ghost" data-act="closeOverlay">Свернуть</button></div>`;
+  } else if (v) {
+    body = `<p style="margin:0">Сейчас игроки решают, пускать ли за стол ${esc(v.name)}. Попробуйте через минуту.</p><button class="btn ghost" data-act="closeOverlay">Понятно</button>`;
+  } else if (!st.open.length) {
+    body = `<p style="margin:0">Свободных мест нет: за столом сейчас ни одного бота или автопилота.</p><button class="btn ghost" data-act="closeOverlay">Понятно</button>`;
+  } else if (!st.voters) {
+    // живых игроков нет — место выбирает сам зритель (так можно вернуться к своему герою)
+    const btns = st.open.map(id => { const i = popOpts.push({ fn: () => askSeat(id) }) - 1; return `<button class="btn seat-btn" data-popopt="${i}">${seatRow(id)}</button>`; }).join('');
+    body = `<p style="margin:0">Живых игроков за столом нет — выберите, за кого сесть. Герой, его вещи, карты и уровень станут вашими.</p><div class="seat-list">${btns}</div><button class="btn ghost" data-act="closeOverlay">Отмена</button>`;
+  } else {
+    const i = popOpts.push({ fn: () => askSeat(null) }) - 1;
+    body = `<p style="margin:0">Свободные места — боты и игроки на автопилоте. Игроки за столом выберут голосованием, за кого вы сядете: герой, его вещи, карты и уровень станут вашими.</p>
+      <div class="seat-list">${st.open.map(id => seatRow(id)).join('')}</div>
+      <div class="row"><button class="btn primary" data-popopt="${i}">Попросить место</button><button class="btn ghost" data-act="closeOverlay">Отмена</button></div>`;
+  }
+  showOverlay(`<div class="modal seat-modal" id="seatModal" role="dialog" aria-label="Сесть за стол"><h2>${ico('shaking-hands')} Сесть за стол</h2>${body}</div>`);
+}
+async function askSeat(seat) {
+  const r = await call('seat:ask', seat ? { seat } : {});
+  if (!r.ok) return toast(r.error || 'Не получилось');
+  if (r.granted) return;
+  S.ui.seatAsk = r.id;
+  toast('Просьба отправлена — игроки голосуют');
+  openSeatModal();
+}
+// игроку за столом: зритель просится — за кого из ботов он сядет?
+function maybeSeatVote() {
+  const v = S.room?.seats?.vote;
+  if (!v || !v.canVote || v.mine) { if ($('#seatVoteModal')) closeOverlay(); return; }
+  if (S.ui.seatVoteSeen === v.id || S.ui.overlay) return;
+  S.ui.seatVoteSeen = v.id;
+  sfx.play('bell', { always: true });
+  openSeatVote();
+}
+function openSeatVote() {
+  const st = S.room?.seats, v = st?.vote;
+  if (!v || !v.canVote || v.mine) return closeOverlay();
+  popOpts = [];
+  const vote = seat => async () => { const r = await call('seat:vote', { id: v.id, seat }); if (!r.ok) return toast(r.error || 'Не получилось'); closeOverlay(); toast('Голос принят'); };
+  const btns = st.open.map(id => { const i = popOpts.push({ fn: vote(id) }) - 1; return `<button class="btn seat-btn" data-popopt="${i}">${seatRow(id, v.counts[id] ? `<em>${v.counts[id]}</em>` : '')}</button>`; }).join('');
+  const no = popOpts.push({ fn: vote('no') }) - 1;
+  showOverlay(`<div class="modal seat-modal" id="seatVoteModal" role="alertdialog" aria-label="Зритель просится за стол">
+    <h2>${ico('shaking-hands')} ${esc(v.name)} просится за стол</h2>
+    <p style="margin:0">За кого из ботов сядет зритель? Герой, его вещи, карты и уровень перейдут к нему. Решает большинство, проголосовали ${v.voted} из ${st.voters}, осталось <b data-seat-ends="${v.endsAt}">${seatLeft(v.endsAt)}</b> с.</p>
+    <div class="seat-list">${btns}</div>
+    <div class="row"><button class="btn ghost" data-popopt="${no}">Не пускать${v.counts.no ? ` (${v.counts.no})` : ''}</button><button class="btn ghost" data-act="closeOverlay">Позже</button></div>
+  </div>`);
 }
 
 // ───────────────────────── пакостник ─────────────────────────
@@ -2256,6 +2374,8 @@ document.addEventListener('click', async e => {
   if (!a) return;
   switch (a) {
     case 'closeOverlay': return closeOverlay();
+    case 'seatAsk': return openSeatModal();
+    case 'seatVote': S.ui.seatVoteSeen = S.room?.seats?.vote?.id; return openSeatVote();
     case 'sound': return openSoundModal();
     case 'avatar': return openAvatarEditor();
     case 'avatarRandom': return avRandom();

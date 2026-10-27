@@ -236,6 +236,61 @@ assert.ok(Array.isArray(B2.lastState.game.players.find(p => p.id === idB).hand))
   ok('пакостник: /IAMGOD у зрителя, покупка в рукав, карта сыграна от имени игрока');
 }
 
+// зритель садится за стол: игроки голосуют, за кого из ботов он сядет
+{
+  const H1 = await client(), H2 = await client();
+  const rc = await H1.call('room:create', { name: 'Места', playerName: 'Хозяин', maxPlayers: 4 });
+  assert.ok((await H2.call('room:join', { roomId: rc.roomId, password: '', playerName: 'Гость' })).ok);
+  assert.ok((await H1.call('room:addBot')).ok); assert.ok((await H1.call('room:addBot')).ok);
+  assert.ok((await H1.call('room:start')).ok);
+  await until(() => H1.lastState?.game && H2.lastState?.game, 3000, 'seat game');
+  const bots = H1.lastState.room.members.filter(m => m.isBot).map(m => m.id);
+  const V = await client();
+  V.granted = null; V.on('seat:granted', g => { V.granted = g; });
+  assert.ok((await V.call('room:watch', { roomId: rc.roomId, password: '', name: 'Зоя', cid: 'seatwatch01' })).ok);
+  await until(() => V.lastState?.room.seats?.open.length === 2 && V.lastState.room.seats.voters === 2, 3000, 'seats info');
+  assert.equal((await H1.call('seat:ask')).ok, false, 'игрок за столом не просится');
+  const ask = await V.call('seat:ask');
+  assert.ok(ask.ok && ask.id, ask.error);
+  await until(() => H1.lastState.room.seats?.vote?.canVote && H2.lastState.room.seats?.vote?.name === 'Зоя', 3000, 'vote shown');
+  assert.equal((await H1.call('seat:vote', { id: ask.id, seat: H1.lastState.room.me })).ok, false, 'за живого игрока голосовать нельзя');
+  assert.ok((await H1.call('seat:vote', { id: ask.id, seat: bots[1] })).ok);
+  await until(() => H1.lastState.room.seats.vote?.voted === 1, 3000, 'one vote');
+  assert.equal(V.granted, null, 'одного голоса из двух мало');
+  assert.ok((await H2.call('seat:vote', { id: ask.id, seat: bots[1] })).ok);
+  await until(() => V.granted, 3000, 'granted');
+  const j = await V.call('room:join', { roomId: V.granted.roomId, token: V.granted.token });
+  assert.ok(j.ok, j.error); assert.equal(j.memberId, bots[1]);
+  await until(() => V.lastState.room.me === bots[1] && !V.lastState.room.spectator, 3000, 'seated');
+  const meP = V.lastState.game.players.find(x => x.id === bots[1]);
+  assert.equal(meP.name, 'Зоя'); assert.ok(Array.isArray(meP.hand), 'рука героя — своя');
+  assert.ok(!H1.lastState.room.members.find(m => m.id === bots[1]).isBot);
+  assert.ok(H1.lastState.game.log.some(l => l.text.includes('Зоя садится за стол вместо')));
+  assert.equal(H1.lastState.room.seats.open.length, 1);
+  // «не пускать» большинством
+  const V2 = await client();
+  V2.result = null; V2.on('seat:result', x => { V2.result = x; });
+  await V2.call('room:watch', { roomId: rc.roomId, password: '', name: 'Тим', cid: 'seatwatch02' });
+  const ask2 = await V2.call('seat:ask');
+  assert.ok(ask2.ok);
+  assert.match((await V2.call('seat:ask')).error || 'повтор', /повтор|подождите/);
+  await H1.call('seat:vote', { id: ask2.id, seat: 'no' }); await H2.call('seat:vote', { id: ask2.id, seat: 'no' });
+  await until(() => V2.result, 3000, 'rejected');
+  assert.match(V2.result.reason, /не пускать/);
+  // живых игроков нет — зритель выбирает место сам (так возвращаются к своему герою)
+  H1.close(); H2.close(); V.close();
+  await until(() => V2.lastState.room.seats?.voters === 0, 3000, 'no voters');
+  const lastBot = V2.lastState.room.seats.open.find(id => bots.includes(id));
+  const choose = await V2.call('seat:ask');
+  assert.equal(choose.ok, false); assert.equal(choose.choose, true);
+  V2.granted = null; V2.on('seat:granted', g => { V2.granted = g; });
+  assert.ok((await V2.call('seat:ask', { seat: lastBot })).ok);
+  await until(() => V2.granted?.memberId === lastBot, 3000, 'self seat');
+  assert.ok((await V2.call('room:join', { roomId: rc.roomId, token: V2.granted.token })).ok);
+  await V2.call('room:abort'); V2.close();
+  ok('зритель за столом: голосование за бота, «не пускать», без живых игроков — место на выбор');
+}
+
 // сохранение и рестарт сервера
 await stopServer();
 await startServer({ AFK_MS: '200' });

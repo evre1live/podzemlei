@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { Server } from 'socket.io';
-import { createGame, act, tick, view, P, WIN_LEVELS, WIN_LEVEL, orderCard, grantCard, trickStart, trickBuy, trickPlay, trickOptions, trickOf } from '../shared/engine.js';
+import { createGame, act, tick, view, P, WIN_LEVELS, WIN_LEVEL, orderCard, grantCard, takeSeat, trickStart, trickBuy, trickPlay, trickOptions, trickOf } from '../shared/engine.js';
 import { cheatCard, cheatCardNow, cheatGold, isTrickCmd } from './cheats.js';
 import { botDecide } from '../shared/bot.js';
 import { cleanAvatar, avatarFromSeed } from '../shared/avatar.js';
@@ -137,7 +137,7 @@ function roomSummary(r) {
 function lobbyInfo(r, meId) {
   return {
     id: r.id, name: r.name, locked: !!r.pass, hostId: r.hostId, maxPlayers: r.maxPlayers,
-    settings: r.settings, status: roomSummary(r).status, me: meId, spectator: !meId, watchers: watchCount(r), voice: voiceInfo(r),
+    settings: r.settings, status: roomSummary(r).status, me: meId, spectator: !meId, watchers: watchCount(r), voice: voiceInfo(r), seats: seatInfo(r, meId),
     members: r.members.filter(m => !m.left).map((m, i) => ({
       id: m.id, name: m.name, isBot: m.isBot, connected: m.isBot || m.connected, ready: m.ready, color: m.color, avatar: m.avatar,
       autopilot: !!m.autopilot, persona: m.isBot ? m.persona || null : null,
@@ -159,6 +159,75 @@ function broadcastRoom(r) {
   sendTricks(r);
   pushLobby();
 }
+// ───── зритель садится за стол ─────
+// Свободное место — бот или отключившийся игрок на автопилоте. Зритель просится за стол, живые игроки голосуют,
+// за кого из них он сядет (или не пускать). Решает большинство; через минуту — по тем голосам, что успели отдать.
+// Если живых игроков за столом нет, зритель выбирает место сам: так можно вернуться к своему герою, даже если вход потерян.
+const SEAT_VOTE_MS = 60000;
+const seatOpen = m => !m.left && (m.isBot || (!m.connected && (m.autopilot || m.quit)));
+const seatsOpen = r => (r.game?.phase === 'playing' ? r.members.filter(m => seatOpen(m) && P(r.game, m.id)) : []);
+const seatVoters = r => (r.game ? r.members.filter(m => !m.isBot && !m.left && !m.quit && m.connected && !m.autopilot && P(r.game, m.id)) : []);
+function seatInfo(r, meId) {
+  if (r.game?.phase !== 'playing') return null;
+  const voters = seatVoters(r), v = r.seatVote;
+  const counts = {};
+  if (v) for (const m of voters) { const x = v.votes[m.id]; if (x) counts[x] = (counts[x] || 0) + 1; }
+  return {
+    open: seatsOpen(r).map(m => m.id), voters: voters.length,
+    vote: v ? { id: v.id, name: v.name, endsAt: v.endsAt, counts, voted: voters.filter(m => v.votes[m.id]).length,
+      mine: meId ? v.votes[meId] || null : null, canVote: voters.some(m => m.id === meId) } : null,
+  };
+}
+function endSeatVote(r, chat, sock, reason) {
+  r.seatVote = null;
+  if (chat) sysChat(r, chat);
+  if (reason) sock?.emit('seat:result', { ok: false, reason });
+}
+function grantSeat(r, seatId, sock, name) {
+  r.seatVote = null;
+  const m = r.members.find(x => x.id === seatId);
+  if (!m || !seatOpen(m)) return sock.emit('seat:result', { ok: false, reason: 'Это место уже занято' });
+  const was = m.name;
+  const res = takeSeat(r.game, m.id, name);
+  if (!res.ok) return sock.emit('seat:result', { ok: false, reason: res.error });
+  Object.assign(m, { isBot: false, name: res.name, token: newToken(), quit: false, left: false, autopilot: false, ready: true, lastSeen: now(), connected: false, socketId: null });
+  delete m.persona;
+  sysChat(r, res.name === was ? `${res.name} возвращается за стол.` : `${res.name} садится за стол вместо ${was}.`);
+  dirty = true;
+  // жетон места уходит только этому зрителю: с ним он входит в комнату как игрок
+  sock.emit('seat:granted', { roomId: r.id, token: m.token, memberId: m.id });
+  broadcastRoom(r);
+}
+// подсчёт: место с большинством голосов — зритель садится; большинство «не пускать» — остаётся зрителем;
+// все проголосовали или вышло время — побеждает место с наибольшим числом голосов, если их больше, чем «не пускать»
+function resolveSeatVote(r, final = false) {
+  const v = r.seatVote;
+  if (!v) return false;
+  const sock = io.sockets.sockets.get(v.sock);
+  if (!sock || sock.data.watchId !== r.id || r.game?.phase !== 'playing') { endSeatVote(r, `Голосование отменено: ${v.name} больше не смотрит игру.`); return true; }
+  const open = seatsOpen(r).map(m => m.id);
+  if (!open.length) { endSeatVote(r, 'Голосование отменено: свободных мест за столом не осталось.', sock, 'Свободных мест за столом не осталось'); return true; }
+  const voters = seatVoters(r);
+  if (!voters.length) { endSeatVote(r, null, sock, 'Живых игроков за столом не осталось — выберите место сами'); return true; }
+  const need = Math.floor(voters.length / 2) + 1;
+  const c = {}; let no = 0, n = 0;
+  for (const m of voters) {
+    const x = v.votes[m.id];
+    if (!x) continue;
+    n++;
+    if (x === 'no') no++; else if (open.includes(x)) c[x] = (c[x] || 0) + 1;
+  }
+  const best = [...open].sort((a, b) => (c[b] || 0) - (c[a] || 0))[0], top = c[best] || 0;
+  if (top >= need) { grantSeat(r, best, sock, v.name); return true; }
+  if (no >= need) { endSeatVote(r, `Игроки не пустили ${v.name} за стол.`, sock, 'Игроки решили не пускать вас за стол'); return true; }
+  if (final || n === voters.length) {
+    if (top > no) { grantSeat(r, best, sock, v.name); return true; }
+    endSeatVote(r, n ? `Голоса разделились — ${v.name} остаётся зрителем.` : `Никто не проголосовал — ${v.name} остаётся зрителем.`, sock, n ? 'Голоса разделились — вы пока остаётесь зрителем' : 'Никто не проголосовал — попробуйте позже');
+    return true;
+  }
+  return false;
+}
+
 // режим пакостника: зритель с /IAMGOD держит свой кошелёк и рукав; видит их только он сам
 const trickKey = sock => 's:' + (sock.data.cid || sock.id);
 function sendTricks(r) {
@@ -271,6 +340,7 @@ function load() {
     const data = JSON.parse(fs.readFileSync(SAVE_FILE, 'utf8'));
     for (const r of data) {
       r.members.forEach(m => { m.socketId = null; m.connected = false; m.lastSeen = now(); });
+      r.seatVote = null;
       if (r.game?.combat) r.game.combat.winAt = null;
       // старые партии: отложенные легендарки возвращаются в колоду клада вперемешку
       if (r.game?.rig) {
@@ -369,6 +439,11 @@ const io = new Server(server, { cors: { origin: false }, maxHttpBufferSize: 64 *
 
 // ───────────────────────── сокеты ─────────────────────────
 io.on('connection', socket => {
+  // данные события — всегда объект: emit('x', null) или число вместо объекта не роняет обработчики с (p = {})
+  socket.use((packet, next) => {
+    if (packet.length > 1 && typeof packet[1] !== 'function' && (packet[1] === null || typeof packet[1] !== 'object')) packet[1] = {};
+    next();
+  });
   socket.data.roomId = null;
   socket.data.memberId = null;
   let bucket = 30, last = now(), badPw = [];
@@ -407,6 +482,7 @@ io.on('connection', socket => {
   function unwatch() {
     const id = socket.data.watchId;
     if (!id) return;
+    { const w = rooms.get(id); if (w?.seatVote?.sock === socket.id) endSeatVote(w, `${w.seatVote.name} передумал садиться за стол.`); }
     leaveVoice();
     socket.leave('watch:' + id);
     socket.data.watchId = null;
@@ -802,6 +878,57 @@ io.on('connection', socket => {
     }
   });
 
+  // ───── зритель просится за стол ─────
+  socket.on('seat:ask', (p = {}, cb) => {
+    cb = cbOf(cb);
+    if (limited()) return cb({ ok: false, error: 'Слишком часто' });
+    if (ctx().m) return cb({ ok: false, error: 'Вы уже за столом' });
+    const r = rooms.get(socket.data.watchId);
+    if (r?.game?.phase !== 'playing') return cb({ ok: false, error: 'Сесть за стол можно только во время партии' });
+    const open = seatsOpen(r);
+    if (!open.length) return cb({ ok: false, error: 'Свободных мест нет: за столом ни одного бота или автопилота' });
+    if (r.seatVote) {
+      if (r.seatVote.sock === socket.id) return cb({ ok: true, id: r.seatVote.id });
+      resolveSeatVote(r);
+      if (r.seatVote) return cb({ ok: false, error: `Сейчас игроки решают про ${r.seatVote.name} — подождите минутку` });
+    }
+    const name = cleanName(socket.data.watchName, 'Зритель');
+    // живых игроков нет — голосовать некому, место выбирает сам зритель
+    if (!seatVoters(r).length) {
+      const m = open.find(x => x.id === p.seat);
+      if (!m) return cb({ ok: false, error: 'Выберите, за кого сесть', choose: true });
+      cb({ ok: true, granted: true });
+      return grantSeat(r, m.id, socket, name);
+    }
+    r.seatVote = { id: newId(), sock: socket.id, name, at: now(), endsAt: now() + SEAT_VOTE_MS, votes: {} };
+    sysChat(r, `${name} просится за стол — игроки голосуют, за кого из ботов он сядет.`);
+    cb({ ok: true, id: r.seatVote.id });
+    broadcastRoom(r);
+  });
+  socket.on('seat:vote', (p = {}, cb) => {
+    cb = cbOf(cb);
+    if (limited()) return cb({ ok: false, error: 'Слишком часто' });
+    const { r, m } = ctx();
+    if (!r || !m) return cb({ ok: false, error: 'Вы не за столом' });
+    const v = r.seatVote;
+    if (!v || v.id !== p.id) return cb({ ok: false, error: 'Голосование уже закончилось' });
+    if (!seatVoters(r).some(x => x.id === m.id)) return cb({ ok: false, error: 'Голосуют только игроки за столом' });
+    const seat = String(p.seat || '');
+    if (seat !== 'no' && !seatsOpen(r).some(x => x.id === seat)) return cb({ ok: false, error: 'Это место уже занято' });
+    v.votes[m.id] = seat;
+    cb({ ok: true });
+    resolveSeatVote(r);
+    broadcastRoom(r);
+  });
+  socket.on('seat:cancel', (_, cb) => {
+    cb = cbOf(cb);
+    const r = rooms.get(socket.data.watchId);
+    if (!r?.seatVote || r.seatVote.sock !== socket.id) return cb({ ok: false });
+    endSeatVote(r, `${r.seatVote.name} передумал садиться за стол.`);
+    cb({ ok: true });
+    broadcastRoom(r);
+  });
+
   // ───── пакостник ─────
   function trickRoom() {
     if (ctx().m) return null;
@@ -857,6 +984,7 @@ io.on('connection', socket => {
 setInterval(() => {
   for (const r of rooms.values()) {
     try { runRoom(r); } catch (e) { console.error('room loop error', r.id, e); }
+    try { if (r.seatVote && resolveSeatVote(r, now() >= r.seatVote.endsAt)) broadcastRoom(r); } catch (e) { console.error('seat vote error', r.id, e); }
   }
 }, 250);
 
