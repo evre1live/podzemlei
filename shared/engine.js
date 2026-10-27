@@ -360,6 +360,7 @@ function applyFx(s, p, list, rng) {
         break;
       }
       case 'death': kill(s, p, rng); break;
+      case 'farewell': banish(s, p, rng); break;
     }
   }
   normalize(s, p);
@@ -384,6 +385,39 @@ function kill(s, p, rng) {
   p.dead = true; p.needsRevive = true;
   fx(s, { kind: 'death', pid: p.id });
   log(s, `💀 ${p.name} погибает${before > p.level ? ` и теряет ${before - p.level} ур. (теперь ${p.level})` : ''}. Раса и класс остаются.${taken.length ? ' Труп обшарили: ' + taken.join(', ') + '.' : ''} До своего хода — призрак.`, 'bad');
+}
+
+// «Прощай навсегда»: всё имущество и уровни — в сброс, герой выбывает из партии до открытия Ящика Пандоры
+function banish(s, p, rng) {
+  for (const u of [...p.equipped, ...p.carried, ...p.hand, ...(p.ally ? [p.ally] : []), ...(p.beast ? [p.beast] : [])]) toDiscard(s, u);
+  p.equipped = []; p.carried = []; p.hand = []; p.ally = null; p.beast = null;
+  if (p.level !== 1) fx(s, { kind: 'levelDown', pid: p.id, from: p.level, to: 1 });
+  p.level = 1; p.nextCombat = 0; p.nextEscape = 0;
+  p.banished = true; p.dead = true; p.needsRevive = false;
+  // выбывший больше ни в чём не участвует
+  s.trades = (s.trades || []).filter(x => x.from !== p.id && x.to !== p.id);
+  if (s.trap?.pid === p.id) { toDiscard(s, s.trap.uid); s.trap = null; if (s.turn.step === 'trap') s.turn.step = 'post'; }
+  if (s.tame?.pid === p.id) { toDiscard(s, s.tame.uid); s.tame = null; }
+  if (s.duel && (s.duel.from === p.id || s.duel.to === p.id)) { toDiscard(s, s.duel.card); s.duel.used.forEach(u => toDiscard(s, u)); s.duel = null; }
+  const c = s.combat;
+  if (c) {
+    if (c.helpReq?.to === p.id) c.helpReq = null;
+    if (c.helper === p.id) { c.helper = null; c.helpOffer = 0; c.forced = false; }
+    if (c.fighter === p.id) endCombat(s);
+  }
+  fx(s, { kind: 'farewell', pid: p.id });
+  log(s, `⚰ ${p.name} получает «Прощай навсегда»: все вещи, карты и уровни пропали, герой выбывает из партии. Вернуть его может только Ящик Пандоры.`, 'bad');
+  if (s.turn.pid === p.id && s.phase === 'playing') nextTurn(s, rng);
+}
+// открытый Ящик Пандоры возвращает всех выбывших: с 1-го уровня и со стартовыми картами
+function unbanish(s, rng) {
+  for (const x of s.players) {
+    if (!x.banished) continue;
+    x.banished = false; x.dead = false;
+    for (let i = 0; i < startCards(s); i++) { give(x, draw(s, 'door', rng)); give(x, drawFor(s, x, rng)); }
+    fx(s, { kind: 'reborn', pid: x.id });
+    log(s, `📦 Ящик Пандоры выпускает ${x.name} из небытия: снова в игре с 1-го уровня и с новыми картами.`, 'good');
+  }
 }
 
 function resolveCurse(s, target, uid, rng, byName, byId = null) {
@@ -594,7 +628,7 @@ function beginTurn(s, idx, rng) {
   s.turn = { idx, pid: p.id, step: 'pre', n: (s.turn?.n || 0) + 1, halflingSold: false, hoardPlayed: false, distilled: false, haunted: [] };
   if (s.turn.n > 1 && (s.turn.n - 1) % s.players.length === 0) newRound(s, rng);
   s.reveal = null;
-  for (const x of s.players) x.dead = false;
+  for (const x of s.players) x.dead = !!x.banished; // выбывшие «Прощай навсегда» остаются вне игры
   // зверь, которого так и не приручили, уходит в темноту
   if (s.tame) { log(s, `${q(def(s.tame.uid).name)} не дождался хозяина и ушёл в темноту.`, 'info'); toDiscard(s, s.tame.uid); s.tame = null; }
   if (p.needsRevive) {
@@ -605,7 +639,12 @@ function beginTurn(s, idx, rng) {
   if (allyN(p, 'fee')) payFee(s, p);
   log(s, `Ход: ${p.name}.`, 'turn');
 }
-function nextTurn(s, rng) { beginTurn(s, (s.turn.idx + 1) % s.players.length, rng); }
+// ход переходит к следующему, кто не выбыл из партии
+function nextTurn(s, rng) {
+  const n = s.players.length;
+  for (let i = 1; i <= n; i++) { const idx = (s.turn.idx + i) % n; if (!s.players[idx].banished) return beginTurn(s, idx, rng); }
+  beginTurn(s, (s.turn.idx + 1) % n, rng);
+}
 // наёмнику платят в начале хода самой дешёвой картой ценой от fee (из руки или с запасных вещей), иначе он уходит
 function payFee(s, p) {
   const d = allyOf(p);
@@ -991,6 +1030,7 @@ H.kick = {
     fx(s, { kind: 'reveal', pid: p.id, card: uid });
     if (d.type === 'monster') { startCombat(s, p, uid, rng); return; }
     s.turn.step = 'post';
+    if (d.type === 'curse' && d.keep) { p.hand.push(uid); log(s, `${p.name} находит за дверью ${q(d.name)} — такое проклятие на себя не срабатывает, оно уходит в руку.`, 'event'); return; }
     if (d.type === 'curse') { resolveCurse(s, p, uid, rng, null); return; }
     if (d.type === 'trap') {
       const guard = trapGuard(p, d);
@@ -1124,6 +1164,7 @@ function playCheck(s, p, a) {
     case 'buff': return c && isParticipant(s, p.id) && levelOnlyFight(s) ? 'Против этого монстра считается только уровень — зелье пропадёт зря' : null;
     case 'hoard': return manageErr(s, p) || (s.turn.hoardPlayed ? 'Схрон можно открыть только один раз за ход' : null);
     case 'levelup': return p.level >= winLevel(s) - 1 ? 'Последний уровень — только убийством монстра' : null;
+    case 'jackpot': return null;
     case 'curse': case 'trap': {
       const t = P(s, a.target);
       if (!t || t === p) return 'Выберите жертву';
@@ -1243,6 +1284,12 @@ H.playCard = {
         toDiscard(s, a.uid);
         s.turn.hoardPlayed = true;
         log(s, `${p.name} находит схрон: +2 карты клада.`, 'good');
+        break;
+      case 'jackpot':
+        toDiscard(s, a.uid);
+        p.gold = (p.gold || 0) + d.gold;
+        fx(s, { kind: 'jackpot', pid: p.id, card: a.uid, n: d.gold });
+        log(s, `🔱 ${p.name} открывает ${q(d.name)}: +${d.gold} голдов — в кошельке ${p.gold}!`, 'win');
         break;
       case 'levelup':
         toDiscard(s, a.uid);
@@ -1516,13 +1563,14 @@ H.pandora = {
     if (c.pandora) return 'Ящик Пандоры в этом бою уже открыт';
     return (p.gold || 0) < PANDORA_COST ? `Нужно ${PANDORA_COST} голдов, в кошельке ${p.gold || 0}` : null;
   },
-  run(s, p) {
+  run(s, p, a, rng) {
     const c = s.combat;
     p.gold -= PANDORA_COST;
     c.pandora = { by: p.id };
     c.mods.push({ side: 'monster', n: PANDORA_BONUS, by: p.id, uid: null, label: 'Ящик Пандоры' });
     if (!isParticipant(s, p.id)) grudge(s, c.fighter, p.id);
     fx(s, { kind: 'pandora', pid: p.id, to: c.fighter });
+    unbanish(s, rng);
     log(s, `📦 ${p.name} открывает Ящик Пандоры за ${PANDORA_COST} голдов: монстрам +${PANDORA_BONUS}, героям −${PANDORA_ESCAPE} к побегу. Кто не убежит — лишится всех вещей и питомца!`, 'curse');
   },
 };
@@ -1966,6 +2014,7 @@ export function check(s, pid, a) {
   if (s.phase !== 'playing') return 'Партия окончена';
   const p = P(s, pid);
   if (!p) return 'Вы не в игре';
+  if (p.banished) return 'Вы выбыли: «Прощай навсегда». Вернуть в игру может только открытый Ящик Пандоры';
   const h = Object.hasOwn(H, a.type) ? H[a.type] : null;
   if (!h) return 'Неизвестное действие';
   return h.check(s, p, a) || null;
@@ -2103,7 +2152,7 @@ export function view(s, pid) {
       level: p.level, races: [...p.races], classes: [...p.classes], halfbreed: p.halfbreed, supermunch: p.supermunch,
       equipped: [...p.equipped], carried: [...p.carried], nextCombat: p.nextCombat, nextEscape: p.nextEscape || 0,
       dead: p.dead, handCount: p.hand.length, handLimit: handLimit(p, s), handsLimit: handsLimit(p), mutagenUsed: !!p.mutagenUsed,
-      power: powerOf(s, p), runBonus: runBonusOf(s, p), gold: p.gold || 0, sets: setsOf(p), ghost: isGhost(p), ally: p.ally || null, beast: p.beast || null, persona: p.persona || null, contractsDone: p.contractsDone || 0,
+      power: powerOf(s, p), runBonus: runBonusOf(s, p), gold: p.gold || 0, banished: !!p.banished, sets: setsOf(p), ghost: isGhost(p), ally: p.ally || null, beast: p.beast || null, persona: p.persona || null, contractsDone: p.contractsDone || 0,
       hand: p.id === pid ? [...p.hand] : undefined,
       contract: p.id === pid && p.contract && CONTRACT_DEFS[p.contract.id] ? { ...CONTRACT_DEFS[p.contract.id], progress: p.contract.progress, rewardText: rewardText(CONTRACT_DEFS[p.contract.id].reward) } : undefined,
     })),

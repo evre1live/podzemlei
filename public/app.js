@@ -575,7 +575,8 @@ function statusTags(p) {
   if (g.turn.pid === p.id && g.phase === 'playing') t.push('<span class="badge lamp">ходит</span>');
   if (c?.fighter === p.id) t.push('<span class="badge warn">в бою</span>');
   if (c?.helper === p.id) t.push('<span class="badge">помогает</span>');
-  if (p.dead) t.push('<span class="badge warn">погиб</span>');
+  if (p.banished) t.push('<span class="badge warn" title="«Прощай навсегда»: выбыл из партии, пока кто-нибудь не откроет Ящик Пандоры">выбыл</span>');
+  else if (p.dead) t.push('<span class="badge warn">погиб</span>');
   else if (p.ghost) t.push(`<span class="badge ghost" title="Погиб и ждёт своего хода. Раз за ход может подкинуть +${GHOST_BONUS} героям или монстрам в чужом бою">призрак</span>`);
   if (p.isBot) t.push(`<span class="badge"${p.persona ? ` title="${esc(personaTip(p.persona))}"` : ''}>бот${p.persona ? ' · ' + esc(PERSONAS[p.persona] || '') : ''}</span>`);
   else if (mem?.autopilot) t.push('<span class="badge">автопилот</span>');
@@ -773,7 +774,7 @@ function pandoraSVG(open = false, id = 'pb') {
 function pandoraHTML(c, h) {
   if (c.pandora) return `<div class="pandora open" title="Ящик Пандоры открыт: монстрам +${PANDORA_BONUS}, героям −${PANDORA_ESCAPE} к побегу. Кто не убежит — лишится всех вещей и питомца">${pandoraSVG(true)}<span class="pb-cap">Открыл ${esc(pname(c.pandora.by))}</span></div>`;
   const p = me();
-  if (!p) return `<div class="pandora" title="Ящик Пандоры: открыть может любой игрок за ${PANDORA_COST} г">${pandoraSVG()}<span class="pb-cap">${PANDORA_COST} г</span></div>`;
+  if (!p || p.banished) return `<div class="pandora" title="Ящик Пандоры: открыть может любой игрок за ${PANDORA_COST} г">${pandoraSVG()}<span class="pb-cap">${PANDORA_COST} г</span></div>`;
   return `<button type="button" class="pandora${h?.pandora ? ' ready' : ''}" data-act="pandora" title="Ящик Пандоры: открыть за ${PANDORA_COST} г">${pandoraSVG()}<span class="pb-cap">${PANDORA_COST} г</span></button>`;
 }
 function openPandoraModal() {
@@ -1007,10 +1008,11 @@ function renderMine() {
       <div><div class="me-name">${esc(p.name)}</div>
         <div class="me-stats"><span class="lvl" title="Уровень">${p.level}</span><span class="pow" title="Сила: уровень и надетые вещи">${ico('crossed-swords')}${p.power}</span><span class="gold" data-act="market" role="button" title="Кошелёк: голды за проданные вещи и контракты, тратятся на рынке">${ico('two-coins')}${p.gold || 0}</span>
         <span class="badge" title="Сколько нужно выбросить на кубике, чтобы убежать">${p.classes.some(u => def(u).cls === 'warlock') ? 'побег всегда' : `побег ${run <= 1 ? 'всегда' : run > 6 ? 'никогда' : run + '+'}`}</span>
-        ${p.nextCombat > 0 ? `<span class="badge good">+${p.nextCombat} в бою</span>` : p.nextCombat < 0 ? `<span class="badge warn">${p.nextCombat} в бою</span>` : ''}${p.nextEscape < 0 ? `<span class="badge warn">побег ${p.nextEscape}</span>` : ''}${p.dead ? '<span class="badge warn">вы погибли до следующего хода</span>' : ''}</div>
+        ${p.nextCombat > 0 ? `<span class="badge good">+${p.nextCombat} в бою</span>` : p.nextCombat < 0 ? `<span class="badge warn">${p.nextCombat} в бою</span>` : ''}${p.nextEscape < 0 ? `<span class="badge warn">побег ${p.nextEscape}</span>` : ''}${p.banished ? '<span class="badge warn">вы выбыли из партии</span>' : p.dead ? '<span class="badge warn">вы погибли до следующего хода</span>' : ''}</div>
       </div>
     </div>
     <div class="traits">${traits.join('')}</div>
+    ${p.banished ? `<div class="ghost-note banished">${ico('tombstone')} Вас настигло «Прощай навсегда»: вы выбыли из партии. Вернуть вас может только Ящик Пандоры — его можно открыть в любом бою за ${PANDORA_COST} г.</div>` : ''}
     ${p.ghost ? `<div class="ghost-note">${ico('ghost')} Вы призрак до своего хода: раз за ход можно подкинуть +${GHOST_BONUS} героям или монстрам в чужом бою.</div>` : ''}
     ${contractHTML(p)}
     <div class="slots">${slots}</div>
@@ -1271,6 +1273,7 @@ function optLabel(a) {
     case 'item': return 'Выложить на стол';
     case 'ally': return me().ally ? `Взять в спутники (вместо «${def(me().ally).name}»)` : 'Взять в спутники';
     case 'levelup': return 'Получить уровень';
+    case 'jackpot': return `Открыть: +${d.gold} г`;
     case 'hoard': return 'Открыть схрон';
     case 'oneshot': return d.effect === 'escape' ? 'Бросить шашку и сбежать' : d.effect === 'escapeBonus' ? `Закинуть верёвку: побег +${d.bonus}` : 'Сыграть';
     case 'location': return S.game.location ? `Перенести всех сюда (вместо «${def(S.game.location).name}»)` : 'Перенести всех сюда';
@@ -1291,6 +1294,7 @@ function whenText(d) {
     case 'wandering': return 'Играется в любом бою вместе с монстром из руки.';
     case 'oneshot': return d.effect === 'ward' ? 'Срабатывает сам, когда на вас насылают проклятие.' : 'Играется во время боя.';
     case 'levelup': return `Играется когда угодно, но ${winLvl()}-й уровень так не взять.`;
+    case 'jackpot': return 'Откройте в любой момент — голды сразу лягут в кошелёк.';
     case 'location': return 'Играется в свой ход вне боя. Меняет правила для всех, пока кто-нибудь не сменит локацию.';
     case 'event': return 'Играется в свой ход вне боя и срабатывает сразу для всего стола.';
     case 'buff': return 'Выпейте в любой момент: бонус сработает в текущем или следующем вашем бою.';
@@ -1595,6 +1599,20 @@ function extraFx(fresh) {
       case 'gold':
         sfx.play('coins'); fx.float(ava, `+${f.n} г`, 'good'); fx.coins(ava, ava, { n: 5 });
         break;
+      case 'jackpot':
+        sfx.play('fanfare'); sfx.play('coins', { delay: 0.2 });
+        fx.banner('Сокровища Атлантиды!', `${pname(f.pid)}: +${f.n} голдов в кошелёк`, 'legend');
+        if (ava) { fx.coins(ava, ava, { n: 24 }); fx.sparkle(ava, { n: 18, colors: ['#fff3b0', '#ffd56a', '#8fe8ff'] }); }
+        break;
+      case 'farewell':
+        sfx.play('death'); sfx.play('bell', { delay: 0.4 });
+        fx.banner('Прощай навсегда', `${pname(f.pid)} выбывает из партии — вернуть может только Ящик Пандоры`, 'bad');
+        break;
+      case 'reborn':
+        sfx.play('portal');
+        fx.banner('Возвращение', `${pname(f.pid)} снова в игре`, 'pandora');
+        if (ava) fx.sparkle(ava, { n: 14, colors: ['#f3d9ff', '#c77dff', '#ffffff'] });
+        break;
       case 'giveGold':
         sfx.play('coins'); fx.coins(ava, avaOf(f.to), { n: 8 }); fx.float(avaOf(f.to) || ava, `+${f.n} г`, 'good');
         if (f.to === S.room.me) toast(`${pname(f.pid)} передаёт вам ${f.n} г`, true);
@@ -1728,9 +1746,9 @@ const RULES = `<div class="modal rules" role="dialog" aria-label="Как игр�
   <h3>Поединок</h3>
   <p>Карта «Вызов на поединок» играется в свой ход вне боя: выберите соперника. Сравнивается сила — уровень, вещи и бонусы «в следующем бою»; остальные могут подкинуть разовые бонусы любой стороне, и тогда отсчёт начинается заново. При равенстве побеждает вызванный (а воин-зачинщик — и при равенстве). Проигравший отдаёт победителю свою лучшую вещь со стола, легендарки не отдаются.</p>
   <h3>Кошелёк и подземный рынок</h3>
-  <p>У каждого есть кошелёк: голды в него приходят за проданные вещи и выполненные контракты, сколько у кого — видно всем. Рынок открыт всегда — кнопка в шапке стола. В свой ход вне боя на голды можно купить разовые карты для боя, зелья, проклятия, чтобы наслать на соперников, и «Получи уровень» (не больше одного за ход, последний уровень так не взять). Продаётся только то, что ещё лежит в колоде, поэтому товар кончается. У каждой локации своя ценовая политика: в таверне еда за полцены, в Звёздной библиотеке дешевле уровни и свитки, на кладбище — проклятия, а в Небесной цитадели уровни в полтора раза дороже. Цены локации написаны на её карте. Голды можно передать любому игроку в любой момент: нажмите на соперника и выберите «Передать голды».</p>
+  <p>У каждого есть кошелёк: голды в него приходят за проданные вещи и выполненные контракты, сколько у кого — видно всем. Рынок открыт всегда — кнопка в шапке стола. В свой ход вне боя на голды можно купить разовые карты для боя, зелья, проклятия, чтобы наслать на соперников, и «Получи уровень» (не больше одного за ход, последний уровень так не взять). Продаётся только то, что ещё лежит в колоде, поэтому товар кончается. У каждой локации своя ценовая политика: в таверне еда за полцены, в Звёздной библиотеке дешевле уровни и свитки, на кладбище — проклятия, а в Небесной цитадели уровни в полтора раза дороже. Цены локации написаны на её карте. Голды можно передать любому игроку в любой момент: нажмите на соперника и выберите «Передать голды». Единственная карта «Сокровища Атлантиды» сразу кладёт в кошелёк 10000 голдов, а единственное проклятие «Прощай навсегда» (на рынке — около 3000) отнимает у жертвы всё и выбивает её из партии, пока кто-нибудь не откроет Ящик Пандоры.</p>
   <h3>Ящик Пандоры</h3>
-  <p>Во время любого боя — своего или чужого — на столе стоит резная шкатулка. Любой игрок может открыть её за ${PANDORA_COST} голдов: в этом бою монстрам +${PANDORA_BONUS}, героям −${PANDORA_ESCAPE} к побегу, а кто из героев не убежит, лишится всех вещей и питомца — их раздадут другим игрокам наугад. Спутник остаётся. Чернокнижник уходит тенью и ничего не теряет. В одном бою — один ящик.</p>
+  <p>Во время любого боя — своего или чужого — на столе стоит резная шкатулка. Любой игрок может открыть её за ${PANDORA_COST} голдов: в этом бою монстрам +${PANDORA_BONUS}, героям −${PANDORA_ESCAPE} к побегу, а кто из героев не убежит, лишится всех вещей и питомца — их раздадут другим игрокам наугад. Спутник остаётся. Чернокнижник уходит тенью и ничего не теряет. В одном бою — один ящик. Открытый ящик к тому же возвращает в партию всех, кого настигло «Прощай навсегда».</p>
   <h3>Ловушки</h3>
   <p>Ловушка за дверью срабатывает на того, кто её открыл. Можно рискнуть и обезвредить — на кубике 4+ (плуту и механику 2+): тогда ловушка ваша и её можно подложить сопернику. Сорвалась — расплата и ещё −1 уровень. Можно не рисковать и просто принять расплату. Подложенную ловушку соперник обезвреживает тем же броском, но без лишнего штрафа. Противогаз и каска с канарейкой спасают от газа.</p>
   <h3>Расы и классы</h3>

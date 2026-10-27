@@ -23,7 +23,7 @@ export const GUIDE_CATS = [
   { id: 'ally', label: 'Спутники', test: d => d.type === 'ally', note: 'Один спутник на героя: новый прогоняет прежнего. Плут может сманить чужого спутника.' },
   { id: 'oneshot', label: 'Разовые', test: d => d.type === 'oneshot', note: 'Играются в бою и уходят в сброс.' },
   { id: 'buff', label: 'Зелья', test: d => d.type === 'buff', note: 'Играются на себя в любой момент: бонус к силе в этом или следующем бою.' },
-  { id: 'level', label: 'Уровни и схроны', test: d => d.type === 'levelup' || d.type === 'hoard', note: 'Дают уровень или карты клада. Последний уровень берётся только победой над монстром.' },
+  { id: 'level', label: 'Уровни и схроны', test: d => d.type === 'levelup' || d.type === 'hoard' || d.type === 'jackpot', note: 'Дают уровень или карты клада. Последний уровень берётся только победой над монстром.' },
 ];
 const catOf = d => GUIDE_CATS.find(c => c.test(d))?.id || 'other';
 

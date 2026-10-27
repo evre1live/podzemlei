@@ -43,9 +43,12 @@ const calmFor = (p, uid) => !!def(uid).noPursue && p.level <= def(uid).noPursue;
 export function botDecide(s, pid, { rng = Math.random, now = Date.now() } = {}) {
   if (s.phase !== 'playing') return null;
   const p = P(s, pid);
-  if (!p) return null;
+  if (!p || p.banished) return null;
   const c = s.combat;
   const ok = a => !check(s, pid, a);
+  // «Сокровища Атлантиды» открываем сразу: голды в кошельке надёжнее карты в руке
+  const jackpot = p.hand.find(u => def(u).type === 'jackpot');
+  if (jackpot && ok({ type: 'playCard', uid: jackpot })) return { type: 'playCard', uid: jackpot };
 
   // 1. Нас позвали на помощь
   if (c?.helpReq?.to === pid) {
@@ -328,7 +331,12 @@ function turnMove(s, p, rng) {
       if (t && ok({ type: 'playCard', uid: duelCard, target: t.id })) return { type: 'playCard', uid: duelCard, target: t.id };
     }
     // проклясть лидера или подложить ему ловушку
-    const curse = p.hand.find(u => def(u).type === 'curse' || def(u).type === 'trap');
+    const farewell = p.hand.find(u => def(u).keep);
+    if (farewell && step === 'pre') {
+      const t = s.players.filter(x => x.id !== id && !x.dead && x.level >= winLevel(s) - 3 && x.level >= p.level).sort((a, b) => b.level - a.level)[0];
+      if (t && ok({ type: 'playCard', uid: farewell, target: t.id })) return { type: 'playCard', uid: farewell, target: t.id };
+    }
+    const curse = p.hand.find(u => (def(u).type === 'curse' && !def(u).keep) || def(u).type === 'trap');
     if (curse && step === 'pre') {
       const foe = persona(p) === 'vengeful' ? worstEnemy(s, p) : null;
       if (foe && !foe.dead && ok({ type: 'playCard', uid: curse, target: foe.id })) return { type: 'playCard', uid: curse, target: foe.id };
@@ -436,12 +444,13 @@ function shopMove(s, p, step) {
   const levelsLeft = p.level < W - 1 && levels.some(id => shopStock(s, id) > 0);
   const reserve = levelsLeft ? price(levels.find(id => shopStock(s, id) > 0)) : 0;
   // проклятие с потерей уровня — тому, кто рвётся к победе (мстительный — обидчику)
-  if (step === 'pre' && !p.hand.some(u => def(u).type === 'curse')) {
+  if (step === 'pre' && !p.hand.some(u => def(u).type === 'curse' && !def(u).keep)) {
     const top = leader(s, p.id);
     const foe = persona(p) === 'vengeful' ? worstEnemy(s, p) : null;
     const threat = top && top.level >= W - 3 && top.level >= p.level;
     const target = threat ? top : foe;
     if (target && !target.dead) {
+      if (threat && top.level >= W - 2 && ok('k_farewell') && !p.hand.some(u => def(u).keep)) return { type: 'buy', id: 'k_farewell' };
       const c = SHOP_IDS.filter(id => def(id).type === 'curse' && def(id).fx.some(f => f.k === 'levels') && ok(id)).sort((a, b) => price(a) - price(b))[0];
       if (c && (gold - price(c) >= reserve || (threat && top.level >= W - 2))) return { type: 'buy', id: c };
     }

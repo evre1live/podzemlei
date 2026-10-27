@@ -12,6 +12,7 @@ export const CHEATS = {
   PLOTVA: 'p_roach',         // Конь Плотва
   MIXBLOOD: 'x_halfbreed',   // Смешанная кровь
   '2CL': 'x_super',          // Совместитель
+  ATLANTIS: 'g_atlantis',    // Сокровища Атлантиды
 };
 // «/witcher», «/WITCHER», «/2cl» → карта; всё остальное → null
 export function cheatCard(text) {

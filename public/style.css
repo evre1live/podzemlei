@@ -2238,3 +2238,5 @@ button.pandora:not(.ready) .pb-cap { color: var(--text-2); }
   .pandora .pb-svg { width: 64px; height: 58px; } .pandora.open .pb-svg { width: 70px; height: 63px; }
   .pandora .pb-cap { font-size: 13.5px; }
 }
+.ghost-note.banished { background: rgb(120 30 40 / .25); border-color: rgb(255 140 120 / .55); color: #ffe1da; display: flex; gap: 8px; align-items: flex-start; }
+.ghost-note.banished .gi { width: 20px; height: 20px; flex: none; color: #ffb7a5; }

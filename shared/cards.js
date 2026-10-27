@@ -75,6 +75,7 @@ export const shopCat = d => (d.type === 'levelup' ? 'level' : d.type === 'curse'
 const CURSE_PRICE = { levels: 600, slot: 400, smallItem: 300, bestItems: 600, race: 500, class: 500, cards: 150, giveToTop: 400, nextCombat: 100, nextEscape: 100 };
 export const roundPrice = v => Math.max(50, Math.round(v / 50) * 50);
 export function shopBase(d) {
+  if (d.price) return d.price;
   if (d.type === 'levelup') return 1000;
   if (d.type === 'curse') {
     let v = 0;
@@ -513,6 +514,11 @@ export const CARD_DEFS = [
     text: 'Жертва получает −3 в следующем бою (или в текущем).', fx: [{ k: 'nextCombat', n: -3 }] },
   { id: 'k_backpack', deck: 'door', type: 'curse', name: 'Проклятие: Тяжёлый рюкзак', copies: 1, art: 'backpack',
     text: 'Жертва получает −2 к побегу в следующем бою.', fx: [{ k: 'nextEscape', n: -2 }] },
+  // «Прощай навсегда»: жертва выбывает из партии, пока кто-нибудь не откроет Ящик Пандоры. Из двери не срабатывает на того,
+  // кто её выбил, — такое проклятие слишком ценно: оно уходит в руку. На рынке — около 3000 голдов (цену меняет локация).
+  { id: 'k_farewell', deck: 'door', type: 'curse', name: 'Проклятие: Прощай навсегда', copies: 1, art: 'farewell', rarity: 'epic', bg: 'dark',
+    price: 3000, keep: true, fx: [{ k: 'farewell' }],
+    text: 'Жертва погибает: теряет все вещи, карты, питомца, спутника и уровни (остаётся 1-й) и выбывает из партии. Вернуть её может только открытый Ящик Пандоры.' },
   { id: 'k_jinx', deck: 'door', type: 'curse', name: 'Проклятие: Сглаз на вещи', copies: 1, art: 'eye',
     text: 'Жертва теряет самую ценную вещь.', fx: [{ k: 'bestItems', n: 1 }] },
 
@@ -816,6 +822,8 @@ export const CARD_DEFS = [
   { id: 'l_map', deck: 'treasure', type: 'levelup', name: 'Карта с крестиком', art: 'up', text: 'Получи уровень. Не {win}-й.' },
   { id: 'l_bonus', deck: 'treasure', type: 'levelup', name: 'Премия за вредность', art: 'up', text: 'Получи уровень. Не {win}-й.' },
   { id: 'l_shortcut', deck: 'treasure', type: 'levelup', name: 'Короткий путь', art: 'up', text: 'Получи уровень. Не {win}-й.' },
+  { id: 'g_atlantis', deck: 'treasure', type: 'jackpot', name: 'Сокровища Атлантиды', gold: 10000, art: 'atlantis', rarity: 'legendary',
+    text: 'Открой в любой момент: +10000 голдов в кошелёк.' },
   { id: 'h_hoard', deck: 'treasure', type: 'hoard', name: 'Схрон!', copies: 2, art: 'chest', rarity: 'rare',
     text: 'Сыграй в свой ход вне боя: возьми 2 карты клада. Не больше одного схрона за ход.' },
 ];
