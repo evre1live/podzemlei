@@ -7,8 +7,8 @@ import fs from 'node:fs';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { Server } from 'socket.io';
-import { createGame, act, tick, view, P, WIN_LEVELS, WIN_LEVEL, orderCard } from '../shared/engine.js';
-import { cheatCard, cheatGold } from './cheats.js';
+import { createGame, act, tick, view, P, WIN_LEVELS, WIN_LEVEL, orderCard, grantCard } from '../shared/engine.js';
+import { cheatCard, cheatCardNow, cheatGold } from './cheats.js';
 import { botDecide } from '../shared/bot.js';
 import { cleanAvatar, avatarFromSeed } from '../shared/avatar.js';
 import { PERSONAS, TRADE_TIMEOUT_MS, dailyDate, dailyOf } from '../shared/cards.js';
@@ -725,6 +725,15 @@ io.on('connection', socket => {
     const text = String(p.text || '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, 300);
     if (!text) return cb({ ok: false });
     // тайная команда: в чат и летопись не попадает, ответ видит только тот, кто её ввёл
+    const nowCard = cheatCardNow(text);
+    if (nowCard) {
+      if (!own || !m || !r.game) return cb({ ok: false, error: 'Команда работает только во время партии' });
+      const res = grantCard(r.game, m.id, nowCard);
+      if (!res.ok) return cb({ ok: false, error: res.error });
+      dirty = true;
+      cb({ ok: true, note: 'Принято: карта уже у вас в руке' });
+      return broadcastRoom(r);
+    }
     const card = cheatCard(text);
     if (card) {
       if (!own || !m || !r.game) return cb({ ok: false, error: 'Команда работает только во время партии' });

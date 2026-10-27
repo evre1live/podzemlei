@@ -1,7 +1,7 @@
 // Точечные проверки правил.
 import assert from 'node:assert/strict';
-import { createGame, act, tick, view, combatNumbers, P, saleValue, fillText, orderCard, playOptions, troubleBand, shopPrice } from '../shared/engine.js';
-import { cheatCard, cheatGold } from '../server/cheats.js';
+import { createGame, act, tick, view, combatNumbers, P, saleValue, fillText, orderCard, grantCard, playOptions, troubleBand, shopPrice } from '../shared/engine.js';
+import { cheatCard, cheatCardNow, cheatGold } from '../server/cheats.js';
 import { botDecide } from '../shared/bot.js';
 import { def, dailyOf } from '../shared/cards.js';
 import { AVATAR_PARTS, cleanAvatar, avatarFromSeed, portraitId, pickCode, avatarInGame, gameRaces } from '../shared/avatar.js';
@@ -1649,6 +1649,26 @@ t('«Роковая женщина»: двое соперников бьются
   tick(t3, { rng, now: 9000 });
   assert.equal(m.level, 9); assert.equal(k.level, 4); assert.ok(k.equipped.includes('i_jackhammer#0'));
   assert.ok(t3.log.some(l => /Ничья/.test(l.text)));
+});
+
+t('тайные команды с NOW: карта сразу в руку, соперники не видят, что карт стало больше; без NOW — со следующим кладом', () => {
+  assert.equal(cheatCardNow('/ARESNOW'), 'i_ares'); assert.equal(cheatCardNow('/2clnow'), 'x_super'); assert.equal(cheatCardNow('/ATLANTISNOW'), 'g_atlantis');
+  assert.equal(cheatCardNow('/ARES'), null); assert.equal(cheatCard('/ARESNOW'), null); assert.equal(cheatCard('/ARES'), 'i_ares');
+  const s = fresh(); const p = P(s, 'p0');
+  const seen = (by = 'p1') => view(s, by).players.find(x => x.id === 'p0').handCount;
+  const before = seen(), mine = p.hand.length;
+  assert.equal(grantCard(s, 'p0', 'i_ares').ok, true);
+  assert.ok(p.hand.includes('i_ares#0'));
+  assert.equal(seen('p0'), mine + 1, 'сам видит новую карту');
+  assert.equal(seen(), before, 'соперник видит прежнее число'); assert.equal(seen(null), before, 'зритель тоже');
+  assert.match(grantCard(s, 'p1', 'i_ares').error, /уже у кого-то/);
+  assert.equal(grantCard(s, 'p1', 'x_super').ok, true, 'совместитель — всегда');
+  // сыграл тайную карту — для соперников счёт так и не менялся
+  assert.equal(A(s, 'p0', { type: 'playCard', uid: 'i_ares#0' }).ok, true);
+  assert.equal(seen(), before); assert.deepEqual(p.secret, []);
+  assert.ok(!s.log.some(l => /тайн|NOW/i.test(l.text)));
+  // старая команда без NOW работает по-прежнему: карта придёт со следующим кладом
+  assert.equal(orderCard(s, 'p0', 'p_roach').ok, true); assert.ok(!p.hand.some(u => u.startsWith('p_roach')));
 });
 
 t('тайная команда /GET5000: +5000 голдов', () => {

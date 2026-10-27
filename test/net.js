@@ -181,6 +181,16 @@ assert.ok(Array.isArray(B2.lastState.game.players.find(p => p.id === idB).hand))
   assert.equal(A.lastState?.game?.players?.find(p => p.id === idB)?.gold ?? null, null, 'чужой кошелёк не виден');
   ok('тайная команда /GET5000: +5000 в кошелёк, в чате не видно');
 }
+{
+  const mineCount = () => B2.lastState.game.players.find(p => p.id === idB).hand.length;
+  const before = mineCount();
+  const r6 = await B2.call('chat', { text: '/warlocknow' });
+  assert.ok(r6.ok, r6.error); assert.match(r6.note, /в руке/);
+  await until(() => mineCount() === before + 1, 3000, 'now cheat');
+  assert.ok(B2.lastState.game.players.find(p => p.id === idB).hand.some(u => u.startsWith('c_warlock')));
+  assert.ok(!B2.lastState.room.chat.some(m => /warlock/i.test(m.text)));
+  ok('тайная команда с NOW: карта сразу в руке, в чате не видно');
+}
 
 // сохранение и рестарт сервера
 await stopServer();

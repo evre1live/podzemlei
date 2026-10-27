@@ -127,6 +127,24 @@ function takeOrder(s, p) {
   if (q && !q.length) delete s.orders[p.id];
   return u;
 }
+// тайная команда с NOW: карта сразу в руку. Соперники не видят, что карт в руке стало больше:
+// такие карты не попадают в счёт руки, который видят другие, пока лежат в руке
+export function grantCard(s, pid, id) {
+  const p = P(s, pid);
+  if (!p || !id || s.phase !== 'playing') return { ok: false, error: 'Только во время партии' };
+  const d = def(id);
+  let u = freeUid(s, id);
+  if (u) without(s.decks[d.deck], u) || without(s.discard[d.deck], u);
+  else if (ORDER_ANYWAY.has(d.type)) u = `${id}#${(d.copies || 1) + (s.orderSeq = (s.orderSeq || 0) + 1) - 1}`;
+  else return { ok: false, error: 'Сейчас не выйдет: эта карта уже у кого-то из героев' };
+  p.hand.push(u);
+  p.secret = [...(p.secret || []).filter(x => p.hand.includes(x)), u];
+  s.version++;
+  return { ok: true, uid: u };
+}
+const pruneSecret = s => { for (const x of s.players) if (x.secret?.length) x.secret = x.secret.filter(u => x.hand.includes(u)); };
+// сколько карт в руке видят другие: без тайно полученных
+const shownHand = p => (p.secret?.length ? p.hand.filter(u => !p.secret.includes(u)).length : p.hand.length);
 // карта клада конкретному герою: заказанная или верхняя из колоды
 function drawFor(s, p, rng) { return takeOrder(s, p) || draw(s, 'treasure', rng); }
 function toDiscard(s, uid) { if (!uid) return; s.discard[def(uid).deck].push(uid); if (s.splits?.[uid]) delete s.splits[uid]; }
@@ -2092,6 +2110,7 @@ export function act(s, pid, a, { rng = Math.random, now = Date.now() } = {}) {
   if (err) return { ok: false, error: err };
   const hadCombat = !!s.combat, hadDuel = !!s.duel;
   H[a.type].run(s, P(s, pid), a, rng);
+  pruneSecret(s);
   // покупка на рынке сама по себе в бой не вмешивается — отсчёт не сбрасывает
   const quiet = a.type === 'pass' || a.type === 'buy';
   if (hadCombat && s.combat && a.type !== 'fight' && !quiet) { s.combat.winAt = null; s.combat.passed = []; }
@@ -2226,7 +2245,7 @@ export function view(s, pid) {
       id: p.id, name: p.name, color: p.color, avatar: p.avatar, isBot: p.isBot, seat: p.seat,
       level: p.level, races: [...p.races], classes: [...p.classes], halfbreed: p.halfbreed, supermunch: p.supermunch,
       equipped: [...p.equipped], carried: [...p.carried], nextCombat: p.nextCombat, nextEscape: p.nextEscape || 0,
-      dead: p.dead, handCount: p.hand.length, handLimit: handLimit(p, s), handsLimit: handsLimit(p), mutagenUsed: !!p.mutagenUsed,
+      dead: p.dead, handCount: p.id === pid ? p.hand.length : shownHand(p), handLimit: handLimit(p, s), handsLimit: handsLimit(p), mutagenUsed: !!p.mutagenUsed,
       power: powerOf(s, p), runBonus: runBonusOf(s, p), gold: p.id === pid ? p.gold || 0 : null, spent: p.id === pid ? p.spent || 0 : null, regular: p.id === pid ? isRegular(p) : null, banished: !!p.banished, sets: setsOf(p), ghost: isGhost(p), ally: p.ally || null, allySlots: allySlotsOf(p), allyGear: p.allyGear || [], beast: p.beast || null, persona: p.persona || null, contractsDone: p.contractsDone || 0,
       hand: p.id === pid ? [...p.hand] : undefined,
       contract: p.id === pid && p.contract && CONTRACT_DEFS[p.contract.id] ? { ...CONTRACT_DEFS[p.contract.id], progress: p.contract.progress, rewardText: rewardText(CONTRACT_DEFS[p.contract.id].reward) } : undefined,

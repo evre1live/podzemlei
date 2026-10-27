@@ -1,5 +1,6 @@
 // Тайные команды стола. Игрок пишет команду в чат — сервер её никому не показывает,
 // а нужная карта приходит ему вместо ближайшей карты клада (см. orderCard в движке).
+// С NOW на конце (/ARESNOW) карта сразу ложится в руку, а соперники не видят, что карт стало больше (grantCard).
 // Файл лежит на сервере и в браузер не отдаётся.
 export const CHEATS = {
   WITCHER: 'c_witcher',      // Ведьмак
@@ -17,6 +18,11 @@ export const CHEATS = {
 // «/witcher», «/WITCHER», «/2cl» → карта; всё остальное → null
 export function cheatCard(text) {
   const m = /^\/([a-z0-9]+)$/i.exec(String(text || '').trim());
+  return (m && CHEATS[m[1].toUpperCase()]) || null;
+}
+// та же команда с NOW на конце — карта сразу в руку: «/ARESNOW», «/2clnow» → карта; иначе null
+export function cheatCardNow(text) {
+  const m = /^\/([a-z0-9]+?)now$/i.exec(String(text || '').trim());
   return (m && CHEATS[m[1].toUpperCase()]) || null;
 }
 // тайные команды на голды: «/GET5000» — сразу +5000 в кошелёк (тоже никому не видны)
