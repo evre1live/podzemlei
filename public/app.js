@@ -972,7 +972,7 @@ const hasPetSlot = p => p.beast || p.equipped.some(u => def(u).slot === 'pet');
 const slotItems = (p, key, chip, zone) => p.equipped.filter(u => def(u).slot === key).map(chip).join('') + (key === 'pet' && p.beast ? beastChip(p.beast, zone) : '');
 // место на столе героя: вместо подписи — значок, подпись во всплывающей подсказке
 const SLOT_ICON = { head: 'crested-helmet', armor: 'breastplate', feet: 'boots', hand: 'mailed-fist', pet: 'paw-print', none: 'diamond-ring', ally: 'person', bag: 'knapsack' };
-const slotBox = (key, label, inner, extra = '') => `<div class="slot${inner ? '' : ' empty'}" data-slot="${key}"><small title="${esc(label)}">${ico(SLOT_ICON[key], '', label)}${extra}</small>${inner}</div>`;
+const slotBox = (key, label, inner, extra = '') => `<div class="slot${inner ? '' : ' vacant'}" data-slot="${key}"><small title="${esc(label)}">${ico(SLOT_ICON[key], '', label)}${extra}</small>${inner}</div>`;
 const allySlot = (p, zone) => (p.ally ? slotBox('ally', 'Спутник', allyChip(p.ally, zone)) : '');
 // комплекты снаряжения: собранные и начатые (надета хоть одна вещь)
 function setsHTML(p) {
