@@ -1768,8 +1768,8 @@ H.buy = {
     p.spent = (p.spent || 0) + price; // копится к статусу «Шопоголик»; в летопись не пишется
     p.hand.push(u);
     if (d.type === 'levelup') { s.turn.boughtLevel = true; p.levelTurn = s.turn.n; }
-    fx(s, { kind: 'buy', pid: p.id, card: u, price });
-    log(s, `🛒 ${p.name} покупает на рынке ${q(d.name)} за ${price} голдов.`, 'good');
+    // покупка — тайна покупателя: в летопись не пишется, анимацию с названием карты видит только он сам
+    fx(s, { kind: 'buy', pid: p.id, card: u, price, only: p.id });
   },
 };
 
@@ -2305,14 +2305,14 @@ export function view(s, pid) {
   const me = P(s, pid);
   const c = s.combat;
   return {
-    phase: s.phase, version: s.version, turn: { ...s.turn }, winners: [...s.winners],
+    phase: s.phase, version: s.version, turn: { ...s.turn, boughtLevel: undefined }, winners: [...s.winners],
     reveal: s.reveal, opts: { winDelayMs: s.opts.winDelayMs, winLevel: winLevel(s), daily: s.opts.daily || null, dailyId: s.opts.dailyId || null }, location: s.location,
     trap: s.trap ? { ...s.trap } : null, tame: s.tame ? { ...s.tame } : null,
     shop: { items: shopList(s, me), note: locationOf(s)?.priceNote || null, fair: s.opts?.dailyId === 'fair' },
     duel: s.duel ? { from: s.duel.from, to: s.duel.to, card: s.duel.card, mods: s.duel.mods.map(m => ({ ...m })), passed: [...s.duel.passed], winAt: s.duel.winAt, winStart: s.duel.winStart,
       femme: !!s.duel.femme, by: s.duel.by || null,
       numbers: duelNumbers(s), prize: s.duel.femme ? { from: femmeLoss(P(s, s.duel.from)), to: femmeLoss(P(s, s.duel.to)) } : { from: duelPrize(P(s, s.duel.from)), to: duelPrize(P(s, s.duel.to)) } } : null,
-    log: s.log.slice(-80), fx: s.fx.slice(-20),
+    log: s.log.slice(-80), fx: s.fx.filter(f => !f.only || f.only === pid).slice(-20),
     decks: { door: s.decks.door.length, treasure: s.decks.treasure.length },
     depth: { level: s.depth || 0, bonus: depthBonus(s), treasure: depthTreasure(s), round: s.round || 0, every: depthEvery(s), max: depthMax(s),
       turnsLeft: 1 + ((s.round || 0) + depthEvery(s) - ((s.round || 0) % depthEvery(s))) * s.players.length - s.turn.n },

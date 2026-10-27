@@ -2397,3 +2397,7 @@ button.pandora:not(.ready) .pb-cap { color: var(--text-2); }
 .trick-seg .ava { width: 22px; height: 22px; border-radius: 50%; overflow: hidden; display: inline-block; box-shadow: 0 0 0 2px var(--seat, #888); }
 .trick-seg .ava svg { width: 100%; height: 100%; display: block; }
 #trickPop .btn.primary[style*="--seat"] { box-shadow: inset 4px 0 0 var(--seat); }
+/* рынок: коротко под карточкой — что даёт и как работает; цена и кнопка выровнены по низу ряда */
+.lot-desc { flex: 1 0 auto; margin: 2px 0 0; max-width: 150px; font-size: 12px; line-height: 1.3; color: var(--text-2, #cfc6da);
+  display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden; text-wrap: balance; }
+.shop-lots .lot.out .lot-desc { opacity: .8; }

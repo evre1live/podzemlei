@@ -1362,6 +1362,20 @@ t('поединок: равенство — за вызванным; все ск
   assert.ok(q.carried.includes('i_slippers#0'));
 });
 
+t('покупка на рынке — тайна: в летописи её нет, анимацию с картой видит только покупатель', () => {
+  const s = fresh(); const p = P(s, 'p0');
+  s.decks.door.push(take(s, 'k_tax#0'));
+  p.gold = 5000;
+  const logLen = s.log.length;
+  assert.equal(A(s, 'p0', { type: 'buy', id: 'k_tax' }).ok, true);
+  assert.equal(s.log.length, logLen, 'в летопись ничего не добавилось');
+  const seen = pid => view(s, pid).fx.filter(f => f.kind === 'buy');
+  assert.equal(seen('p0').length, 1); assert.equal(seen('p0')[0].card, 'k_tax#0');
+  assert.equal(seen('p1').length, 0); assert.equal(seen(null).length, 0);
+  assert.ok(!JSON.stringify(view(s, 'p1')).includes('k_tax#0'));
+  assert.equal(view(s, 'p1').turn.boughtLevel, undefined);
+});
+
 t('подземный рынок: за голды из кошелька, только то, что ещё в колоде, уровень — один за ход', () => {
   const s = fresh(); const p = P(s, 'p0');
   const toDeck = (...l) => l.forEach(u => s.decks[def(u).deck].push(take(s, u)));

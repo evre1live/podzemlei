@@ -37,7 +37,6 @@ function scan(s) {
     if (l.text.includes(' подкладывает ')) stats.trapsPlanted++;
     if (l.text.includes(' сманивает ')) stats.lures++;
     if (l.text.startsWith('⚔ Поединок:')) { stats.duels++; if (l.kind === 'good') stats.duelsWonByChallenger++; }
-    if (l.text.includes(' покупает на рынке ')) stats.buys++;
     if (l.text.includes(' уходит тенью от ')) stats.shadowEscapes++;
     if (l.text.includes(' открывает Ящик Пандоры')) stats.pandora++;
     if (l.text.includes('Ящик Пандоры забирает у')) stats.pandoraLoss++;
@@ -70,7 +69,7 @@ for (let g = 0; g < N; g++) {
       const r = act(s, p.id, a, { rng, now });
       if (!r.ok) { errs++; if (errs < 15) console.log('ERR', p.id, JSON.stringify(a), r.error, 'step', s.turn.step); continue; }
       actions++; did = true;
-      if (a.type === 'buy') { const d = def(a.id); eco.bought[d.type] = (eco.bought[d.type] || 0) + 1; }
+      if (a.type === 'buy') { const d = def(a.id); eco.bought[d.type] = (eco.bought[d.type] || 0) + 1; stats.buys = (stats.buys || 0) + 1; }
       if (a.type === 'sell') stats.sells++;
       if (a.into) { stats.summons++; if (s.combat && (s.combat.fighter === p.id)) stats.summonsOwn++; }
       if (a.type === 'answerHelp' && a.accept) stats.help++;

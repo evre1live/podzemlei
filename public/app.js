@@ -1419,6 +1419,13 @@ function openOppPop(pid) {
 
 // подземный рынок: всегда открыт; товар — карты, что ещё в колоде; платят голдами из кошелька, цены зависят от локации
 const SHOP_ORDER = ['level', 'curse', 'duel', 'food', 'potion', 'gear', 'magic'];
+// коротко под карточкой на рынке: что даёт и как работает (полный текст — в подсказке и по нажатию на карту)
+function shopBlurb(d) {
+  if (d.short) return d.short;
+  if (d.type === 'levelup') return `Сразу +1 уровень. ${winLvl()}-й так не взять.`;
+  return ruleText(d.text).replace(/^Разовая\.\s*/, '');
+}
+const lotDesc = id => { const d = def(id); return `<p class="lot-desc" title="${esc(`${ruleText(d.text)} ${whenText(d)}`.trim())}">${esc(shopBlurb(d))}</p>`; };
 function shopLots() {
   const items = S.game.shop?.items || [];
   // все «Получи уровень» одинаковы — на прилавке это один товар
@@ -1447,7 +1454,7 @@ function openMarketModal() {
     if (tr) {
       const i = popOpts.push({ fn: () => trickBuy(l.ids[0]) }) - 1;
       const short = tr.gold < l.price;
-      return `<div class="lot${l.stock ? '' : ' out'}">${cardHTML(l.id, { size: 'sm', attrs: 'data-zone="view"', tab: false })}
+      return `<div class="lot${l.stock ? '' : ' out'}">${cardHTML(l.id, { size: 'sm', attrs: 'data-zone="view"', tab: false })}${lotDesc(l.id)}
       <div class="lot-price"><b>${l.price}</b> г</div>
       <div class="lot-stock">${l.stock ? `в колоде: ${l.stock}` : 'распродано'}</div>
       ${l.stock ? (short ? `<small class="lot-why">не хватает ${l.price - tr.gold} г</small>` : `<button class="btn primary small" data-popopt="${i}">Купить</button>`) : ''}</div>`;
@@ -1459,7 +1466,7 @@ function openMarketModal() {
       : l.cat === 'level' ? 'уровень — один за ход' : '';
     const i = popOpts.push({ fn: () => buyLot(buyId) }) - 1;
     const tone = l.price < l.base ? 'cheap' : l.price > l.base ? 'dear' : '';
-    return `<div class="lot${l.stock ? '' : ' out'}">${cardHTML(l.id, { size: 'sm', attrs: 'data-zone="view"', tab: false })}
+    return `<div class="lot${l.stock ? '' : ' out'}">${cardHTML(l.id, { size: 'sm', attrs: 'data-zone="view"', tab: false })}${lotDesc(l.id)}
       <div class="lot-price ${tone}">${l.price !== l.base ? `<s>${l.base}</s>` : ''}<b>${l.price}</b> г</div>
       <div class="lot-stock">${l.stock ? `в колоде: ${l.stock}` : 'распродано'}</div>
       ${h?.buy && l.stock ? (buyId ? `<button class="btn primary small" data-popopt="${i}">Купить</button>` : `<small class="lot-why">${esc(why)}</small>`) : ''}</div>`;

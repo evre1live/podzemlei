@@ -496,7 +496,7 @@ export const CARD_DEFS = [
     more: 'Явившись, забирает у каждого игрока, кроме того, с кем бьётся, по случайной карте из руки.' }),
 
   // ───────────── ПРОКЛЯТИЯ ─────────────
-  { id: 'k_draft', deck: 'door', type: 'curse', name: 'Проклятие: Сквозняк', copies: 2, art: 'wind',
+  { id: 'k_draft', short: 'Жертва теряет головняк.', deck: 'door', type: 'curse', name: 'Проклятие: Сквозняк', copies: 2, art: 'wind',
     text: 'Сдуло шапку. Жертва теряет головняк.', fx: [{ k: 'slot', slot: 'head' }] },
   { id: 'k_cavein', deck: 'door', type: 'curse', name: 'Проклятие: Обвал свода', copies: 1, art: 'rocks',
     text: 'Жертва теряет броник.', fx: [{ k: 'slot', slot: 'armor' }] },
@@ -516,7 +516,7 @@ export const CARD_DEFS = [
     text: 'Жертва теряет класс.', fx: [{ k: 'class' }] },
   { id: 'k_pickpocket', deck: 'door', type: 'curse', name: 'Проклятие: Карманники в метро', copies: 1, art: 'hand',
     text: 'Жертва сбрасывает 2 случайные карты с руки.', fx: [{ k: 'cards', n: 2 }] },
-  { id: 'k_klepto', deck: 'door', type: 'curse', name: 'Проклятие: Сосед-клептоман', copies: 1, art: 'hand',
+  { id: 'k_klepto', short: 'Лидер среди соперников крадёт у жертвы мелкую вещь.', deck: 'door', type: 'curse', name: 'Проклятие: Сосед-клептоман', copies: 1, art: 'hand',
     text: 'Самый прокачанный из остальных игроков забирает у жертвы случайную мелкую вещь.', fx: [{ k: 'giveToTop' }] },
   { id: 'k_flu', deck: 'door', type: 'curse', name: 'Проклятие: Подземный насморк', copies: 2, art: 'drop',
     text: 'Жертва получает −3 в следующем бою (или в текущем).', fx: [{ k: 'nextCombat', n: -3 }] },
@@ -524,7 +524,7 @@ export const CARD_DEFS = [
     text: 'Жертва получает −2 к побегу в следующем бою.', fx: [{ k: 'nextEscape', n: -2 }] },
   // «Прощай навсегда»: жертва выбывает из партии, пока кто-нибудь не откроет Ящик Пандоры. Из двери не срабатывает на того,
   // кто её выбил, — такое проклятие слишком ценно: оно уходит в руку. На рынке — около 3000 голдов (цену меняет локация).
-  { id: 'k_farewell', deck: 'door', type: 'curse', name: 'Проклятие: Прощай навсегда', copies: 1, art: 'farewell', rarity: 'epic', bg: 'dark',
+  { id: 'k_farewell', short: 'Жертва теряет всё и выбывает. Вернёт только Ящик Пандоры.', deck: 'door', type: 'curse', name: 'Проклятие: Прощай навсегда', copies: 1, art: 'farewell', rarity: 'epic', bg: 'dark',
     price: 3000, keep: true, fx: [{ k: 'farewell' }],
     text: 'Жертва погибает: теряет все вещи, карты, питомца, спутника и уровни (остаётся 1-й) и выбывает из партии. Вернуть её может только открытый Ящик Пандоры.' },
   { id: 'k_jinx', deck: 'door', type: 'curse', name: 'Проклятие: Сглаз на вещи', copies: 1, art: 'eye',
@@ -620,9 +620,9 @@ export const CARD_DEFS = [
   // ───────────── ВЫЗОВ ─────────────
   // Дуэль героев: сила против силы (уровень, вещи, «в следующем бою»). Остальные могут подкинуть разовые бонусы любой стороне.
   // При равенстве побеждает вызванный (воин-зачинщик побеждает и при равенстве). Проигравший отдаёт лучшую вещь со стола.
-  { id: 'd_duel', deck: 'door', type: 'duel', name: 'Вызов на поединок', copies: 3, art: 'duel', price: 700,
+  { id: 'd_duel', short: 'Вызови соперника: сила против силы. Проигравший отдаёт лучшую вещь.', deck: 'door', type: 'duel', name: 'Вызов на поединок', copies: 3, art: 'duel', price: 700,
     text: 'Сыграй в свой ход вне боя: вызови соперника. Сила против силы, остальные могут подкинуть бонусы. Проигравший отдаёт победителю лучшую вещь.' },
-  { id: 'd_femme', deck: 'door', type: 'duel', femme: true, name: 'Роковая женщина', copies: 3, art: 'femme', price: 1000, rarity: 'epic',
+  { id: 'd_femme', short: 'Стравит двух соперников. Проигравший: −2 уровня и большая вещь.', deck: 'door', type: 'duel', femme: true, name: 'Роковая женщина', copies: 3, art: 'femme', price: 1000, rarity: 'epic',
     text: 'Сыграй в свой ход вне боя на двух соперников: из-за неё они будут биться. Сила против силы, остальные могут подкинуть бонусы. Проигравший теряет большую вещь и 2 уровня. Ничья — оба уходят целыми.' },
 
   // ───────────── ЛОВУШКИ ─────────────
@@ -799,18 +799,18 @@ export const CARD_DEFS = [
     name: 'Ледяная газировка', text: 'Разовая. В любом бою: +3 любой стороне.' },
   { id: 'o_firecracker', deck: 'treasure', shop: 'gear', type: 'oneshot', effect: 'bonus', bonus: 4, value: 300, art: 'boom',
     name: 'Петарда «Ракета»', text: 'Разовая. В любом бою: +4 любой стороне.' },
-  { id: 'o_holywater', deck: 'treasure', shop: 'potion', type: 'oneshot', effect: 'bonus', bonus: 2, value: 300, copies: 2, art: 'holywater',
+  { id: 'o_holywater', short: 'В бою +2 любой стороне, героям против нежити +8.', deck: 'treasure', shop: 'potion', type: 'oneshot', effect: 'bonus', bonus: 2, value: 300, copies: 2, art: 'holywater',
     tagBonus: { tag: 'undead', n: 6 },
     name: 'Святая вода', text: 'Разовая. +2 любой стороне, а героям против нежити — +8.' },
-  { id: 'o_rope', deck: 'treasure', shop: 'gear', type: 'oneshot', effect: 'escapeBonus', bonus: 3, value: 200, art: 'rope',
+  { id: 'o_rope', short: 'Участнику боя +3 к побегу в этом бою.', deck: 'treasure', shop: 'gear', type: 'oneshot', effect: 'escapeBonus', bonus: 3, value: 200, art: 'rope',
     name: 'Верёвка с кошкой', text: 'Разовая. Участник боя: +3 к побегу в этом бою.' },
-  { id: 'o_smoke', deck: 'treasure', shop: 'gear', type: 'oneshot', effect: 'escape', value: 200, copies: 2, art: 'smoke',
+  { id: 'o_smoke', short: 'В бою: все герои сбегают без расплаты и без наград.', deck: 'treasure', shop: 'gear', type: 'oneshot', effect: 'escape', value: 200, copies: 2, art: 'smoke',
     name: 'Дымовая шашка', text: 'Разовая. Участник боя: все герои сбегают без расплаты и без наград.' },
-  { id: 'o_petrify', deck: 'treasure', shop: 'magic', type: 'oneshot', effect: 'remove', value: 300, copies: 2, art: 'scroll', rarity: 'rare',
+  { id: 'o_petrify', short: 'В бою убирает одного монстра. Ни уровня, ни клада за него.', deck: 'treasure', shop: 'magic', type: 'oneshot', effect: 'remove', value: 300, copies: 2, art: 'scroll', rarity: 'rare',
     name: 'Свиток окаменения', text: 'Разовая. В любом бою: убери одного монстра. Ни уровня, ни клада за него.' },
-  { id: 'o_slave', deck: 'treasure', shop: 'magic', type: 'oneshot', effect: 'enslave', value: 300, price: 1000, copies: 3, art: 'shackles', rarity: 'rare',
+  { id: 'o_slave', short: 'В своём бою: любой игрок обязан тебе помогать, без доли клада.', deck: 'treasure', shop: 'magic', type: 'oneshot', effect: 'enslave', value: 300, price: 1000, copies: 3, art: 'shackles', rarity: 'rare',
     name: 'Ты мой раб', text: 'Сыграй в своём бою: выбери любого игрока — он обязан вступить в бой на твоей стороне. Отказаться нельзя, клада ему не положено.' },
-  { id: 'o_ward', deck: 'treasure', shop: 'magic', type: 'oneshot', effect: 'ward', value: 300, copies: 2, art: 'amulet',
+  { id: 'o_ward', short: 'Лежит в руке и гасит первое проклятие на тебя.', deck: 'treasure', shop: 'magic', type: 'oneshot', effect: 'ward', value: 300, copies: 2, art: 'amulet',
     name: 'Куриный бог', text: 'Держи в руке: первое проклятие на тебя срабатывает впустую, а камушек уходит в сброс.' },
 
   // ───────────── КЛАД: БАФФЫ ─────────────
@@ -819,7 +819,7 @@ export const CARD_DEFS = [
     text: '+3 к силе в этом или следующем бою.' },
   { id: 'b_energy', deck: 'treasure', shop: 'food', type: 'buff', name: 'Энергетик «Забой»', bonus: 2, value: 100, copies: 2, art: 'energy',
     text: '+2 к силе в этом или следующем бою.' },
-  { id: 'b_pies', deck: 'treasure', shop: 'food', type: 'buff', name: 'Бабушкины пирожки', bonus: 4, value: 300, art: 'pies', rarity: 'rare',
+  { id: 'b_pies', short: '+4 к силе в этом или следующем бою.', deck: 'treasure', shop: 'food', type: 'buff', name: 'Бабушкины пирожки', bonus: 4, value: 300, art: 'pies', rarity: 'rare',
     text: '+4 к силе в этом или следующем бою. С капустой.' },
 
   // ───────────── КЛАД: УРОВНИ И ПРОЧЕЕ ─────────────
