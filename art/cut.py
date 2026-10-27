@@ -3,15 +3,18 @@
 
   python3 art/cut.py sheet <картинка> <номер листа>   — лист из ChatGPT: сетка 3×2, порядок панелей — art/sheets.json
   python3 art/cut.py one <картинка> <id карты>         — отдельная картинка для одной карты (или back_door, back_treasure)
-  python3 art/cut.py loc <картинка> <id локации>       — сцена локации: фон стола 16:9 и картинка карты 4:3
+  python3 art/cut.py loc <картинка> <id локации>       — сцена локации: фон стола 16:9 (1920 px и 4K) и картинка карты 4:3
+  python3 art/cut.py menu <картинка>                   — фон главного меню (1920 px и 4K)
   python3 art/cut.py index                             — пересобрать список карт с рисунками (public/card-art.js)
   python3 art/cut.py avatars <картинка> <номер листа>  — лист портретов или рамок, порядок — art/portraits.json
   python3 art/cut.py avindex                           — пересобрать список портретов и рамок (public/avatar-art.js)
   python3 art/cut.py thumbs                            — пересобрать маленькие портреты для каталога (public/avatars/v1/t)
 
 Рисунки ложатся в public/cards/v1/<id>.webp (длинная сторона до 460 px).
-Сцены локаций — в public/loc/v1/<id>.webp (1672×941) и <id>-card.webp (640×480); локация сама прописывается
-в списки картин (LOC_IMG в public/art.js и IMG_SCENES в public/world.js).
+Сцены локаций — в public/loc/v2/<id>.webp (1920×1080), <id>@4k.webp (3840×2160) и <id>-card.webp (960×720);
+локация сама прописывается в списки картин (LOC_IMG в public/art.js и IMG_SCENES в public/world.js).
+Игра берёт 4K на больших и плотных экранах и на телефонах, иначе — 1920 px. Чтобы в 4K были настоящие детали,
+а не растянутые пиксели, картинку сначала увеличивают нейросетью: python3 art/sr.py (см. там).
 Портреты — в public/avatars/v1/<id>.webp (квадрат 360 px) и уменьшенные для каталога в t/<id>.webp (192 px),
 рамки — туда же, кольцо с прозрачностью (400 px).
 """
@@ -22,6 +25,7 @@ from PIL import Image
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, 'public', 'cards', 'v1')
 MAXSIDE = 460
+Q4K = 80  # качество WebP для 4K: детали на месте, файл около мегабайта
 
 
 def save(img, cid):
@@ -44,10 +48,14 @@ def cover(img, w, h):
 
 def location(img, lid):
     import re
-    out = os.path.join(ROOT, 'public', 'loc', 'v1')
+    out = os.path.join(ROOT, 'public', 'loc', 'v2')
+    os.makedirs(out, exist_ok=True)
     img = img.convert('RGB')
-    cover(img, 1672, 941).save(os.path.join(out, lid + '.webp'), 'WEBP', quality=78, method=6)
-    cover(img, 640, 480).save(os.path.join(out, lid + '-card.webp'), 'WEBP', quality=80, method=6)
+    cover(img, 3840, 2160).save(os.path.join(out, lid + '@4k.webp'), 'WEBP', quality=Q4K, method=6)
+    cover(img, 1920, 1080).save(os.path.join(out, lid + '.webp'), 'WEBP', quality=84, method=6)
+    cover(img, 960, 720).save(os.path.join(out, lid + '-card.webp'), 'WEBP', quality=84, method=6)
+    if lid == 'default':  # арена по умолчанию — не локация, в списки картин её не пишем
+        print('  default: фон готов'); return
     for f, name in (('public/art.js', 'export const LOC_IMG'), ('public/world.js', 'const IMG_SCENES')):
         path = os.path.join(ROOT, f)
         src = open(path, encoding='utf-8').read()
@@ -56,6 +64,15 @@ def location(img, lid):
             src = src[:m.end(1)] + f", '{lid}'" + src[m.end(1):]
             open(path, 'w', encoding='utf-8').write(src)
     print(f'  {lid}: фон и карта готовы')
+
+
+def menu(img):
+    out = os.path.join(ROOT, 'public', 'ui', 'v2')
+    os.makedirs(out, exist_ok=True)
+    img = img.convert('RGB')
+    cover(img, 3840, 2560).save(os.path.join(out, 'menu@4k.webp'), 'WEBP', quality=Q4K, method=6)
+    cover(img, 1920, 1280).save(os.path.join(out, 'menu.webp'), 'WEBP', quality=84, method=6)
+    print('  меню: фон готов')
 
 
 def gutters(profile, n, size):
@@ -223,6 +240,8 @@ def main():
         save(Image.open(sys.argv[2]), sys.argv[3]); index()
     elif cmd == 'loc':
         location(Image.open(sys.argv[2]), sys.argv[3])
+    elif cmd == 'menu':
+        menu(Image.open(sys.argv[2]))
     elif cmd == 'index':
         index()
     elif cmd == 'avatars':

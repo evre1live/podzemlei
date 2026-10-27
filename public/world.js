@@ -1,5 +1,5 @@
 // «Под Землёй» — живой фон: подземная арена по умолчанию и своя живописная сцена для каждой локации.
-// Сцена — картинка во весь экран (/loc/v1). Поверх неё рисуются живые эффекты на видеокарте (vfx.js, PixiJS):
+// Сцена — картинка во весь экран (/loc/v2: 1920 px и 4K). Поверх неё рисуются живые эффекты на видеокарте (vfx.js, PixiJS):
 // пламя, дым, искры, вода, лава, туман, молнии. Если WebGL недоступен или включён «неподвижный фон» —
 // остаются простые CSS-огоньки ниже (двигаются только transform и opacity).
 
@@ -50,9 +50,11 @@ function lightning(x) {
 // ───────────── сцены ─────────────
 // локации с живописным фоном: картинка во весь экран, поверх — только лёгкие анимации
 const IMG_SCENES = new Set(['loc_tavern', 'loc_dungeon', 'loc_glade', 'loc_forge', 'loc_ice', 'loc_graveyard', 'loc_sky', 'loc_cove', 'loc_library', 'loc_oasis', 'loc_flooded', 'loc_grove', 'loc_koschei']);
+// 4K-картинка, когда экран большой или плотный (и на телефоне: там сцену растягивают по высоте), иначе облегчённая 1920 px
+const sceneRes = () => { const d = devicePixelRatio || 1; return Math.max(innerWidth * d, innerHeight * d * 16 / 9) > 2100 ? '@4k' : ''; };
 function sceneOf(key) {
   const r = mulberry(hash(key));
-  const S = { img: `/loc/v1/${IMG_SCENES.has(key) ? key : 'default'}.webp`, fx: '' };
+  const S = { img: `/loc/v2/${IMG_SCENES.has(key) ? key : 'default'}${sceneRes()}.webp`, fx: '' };
   const fx = (...a) => { S.fx += a.join(''); };
   switch (key) {
     // ───── живописные локации: картинка-фон и лёгкая анимация поверх (огонь, светлячки, снег, молнии) ─────

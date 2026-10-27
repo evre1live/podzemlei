@@ -365,7 +365,7 @@ async function init(hostEl) {
   const small = Math.min(innerWidth, innerHeight) < 600;
   quality = small || (navigator.hardwareConcurrency || 4) <= 4 ? 0.6 : 1;
   app = new PIXI.Application();
-  await app.init({ backgroundAlpha: 0, antialias: false, autoDensity: true, resolution: Math.min(devicePixelRatio || 1, small ? 1.25 : 1.5),
+  await app.init({ backgroundAlpha: 0, antialias: false, autoDensity: true, resolution: Math.min(devicePixelRatio || 1, quality < 1 ? 1.25 : 2), // на плотных экранах вода и огонь не мылятся
     resizeTo: host, preference: 'webgl', powerPreference: 'low-power', hello: false });
   if (quality < 1) app.ticker.maxFPS = 40;
   app.canvas.className = 'w-vfx';

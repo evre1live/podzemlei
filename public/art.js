@@ -209,9 +209,9 @@ const ICONS = {
 };
 
 // ───────────── локации: живописные сцены ─────────────
-// Картинки лежат в /loc/v1: <ключ>.webp — фон стола, <ключ>-card.webp — кадр для карты.
+// Картинки лежат в /loc/v2: <ключ>.webp — фон стола 1920 px, <ключ>@4k.webp — он же в 4K, <ключ>-card.webp — кадр для карты.
 export const LOC_IMG = new Set(['loc_tavern', 'loc_dungeon', 'loc_glade', 'loc_forge', 'loc_ice', 'loc_graveyard', 'loc_sky', 'loc_cove', 'loc_library', 'loc_oasis', 'loc_flooded', 'loc_grove', 'loc_koschei']);
-export const locImg = (key, card = true) => `/loc/v1/${LOC_IMG.has(key) ? key : 'loc_tavern'}${card ? '-card' : ''}.webp`;
+export const locImg = (key, card = true) => `/loc/v2/${LOC_IMG.has(key) ? key : 'loc_tavern'}${card ? '-card' : ''}.webp`;
 export function locationSVG(key) {
   // у новой локации без картины — гравированный знак на тёмной патине
   if (!LOC_IMG.has(key)) return `<svg viewBox="0 0 160 120" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><defs><radialGradient id="lg-${key}" cx="50%" cy="45%" r="70%"><stop offset="0" stop-color="#2c4a40"/><stop offset="1" stop-color="#0a1411"/></radialGradient></defs><rect width="160" height="120" fill="url(#lg-${key})"/><g transform="translate(52 32) scale(.109)" fill="#cfe9dd" opacity=".9">${ICON_PATH(ICON_OF[key] || 'stone-tower')}</g></svg>`;

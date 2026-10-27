@@ -631,7 +631,7 @@ function renderStage() {
   if (lp.dataset.key !== key) {
     lp.dataset.key = key;
     lp.innerHTML = loc ? `<button class="loc-banner" id="locBanner" data-uid="${esc(g.location)}" data-zone="view" title="${esc(loc.text)}">${locationSVG(loc.art)}<span><small>Локация</small><b>${esc(loc.name)}</b></span></button>`
-      : `<span class="loc-banner is-default" title="Подземелье: особых правил нет. Карта локации перенесёт весь стол в новое место."><img src="/loc/v1/default.webp" alt="" decoding="async"><span><small>Локация</small><b>Подземелье</b></span></span>`;
+      : `<span class="loc-banner is-default" title="Подземелье: особых правил нет. Карта локации перенесёт весь стол в новое место."><img src="/loc/v2/default-card.webp" alt="" decoding="async"><span><small>Локация</small><b>Подземелье</b></span></span>`;
   }
   if (g.combat) { el.innerHTML = decks + `<div class="stage-inner">${fightHTML()}</div>`; afterStage(); return; }
   if (g.duel && g.phase === 'playing') { el.innerHTML = decks + `<div class="stage-inner">${duelHTML()}</div>`; afterStage(); return; }
