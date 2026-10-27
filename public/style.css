@@ -1954,7 +1954,8 @@ input[type=text]:focus, input[type=password]:focus { outline: none; border-color
 
 /* ───────── окно карты: карта не сжимается, рядом — её название и полный текст крупно ───────── */
 .pop > .card, .g-zoom-in > .card { flex: none; }
-.pop-actions { min-width: min(260px, 100%); }
+/* колонка кнопок рядом с картой: ширина без процентов — иначе окно считает себя уже, чем нужно, и кнопки вылезают за край */
+.pop-actions { min-width: 260px; flex: 1 1 260px; }
 .pop-info { display: grid; gap: 6px; padding-bottom: 6px; border-bottom: 1px solid rgb(255 255 255 / .08); }
 .pop-info h3 { font-family: var(--display); font-weight: 700; font-size: 22px; line-height: 1.15; color: var(--text); }
 .pop-text { margin: 0; font-family: var(--ui); font-size: 15px; line-height: 1.5; color: var(--text); text-wrap: pretty; }
@@ -2257,3 +2258,5 @@ button.pandora:not(.ready) .pb-cap { color: var(--text-2); }
   .home-top .logo-row .btn.small { padding: 6px 9px; font-size: 12.5px; white-space: nowrap; }
 }
 @media (max-width: 380px) { .home-top .logo-row .btn.small { padding: 5px 7px; font-size: 12px; } }
+
+@media (max-width: 900px) { .pop-actions { min-width: 0; flex: none; } }
