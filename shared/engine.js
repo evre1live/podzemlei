@@ -1314,7 +1314,7 @@ H.playCard = {
         toDiscard(s, a.uid);
         p.gold = (p.gold || 0) + d.gold;
         fx(s, { kind: 'jackpot', pid: p.id, card: a.uid, n: d.gold });
-        log(s, `🔱 ${p.name} открывает ${q(d.name)}: +${d.gold} голдов — в кошельке ${p.gold}!`, 'win');
+        log(s, `${d.emoji || '💰'} ${p.name} открывает ${q(d.name)}: +${d.gold} голдов — в кошельке ${p.gold}!`, 'win');
         break;
       case 'levelup':
         toDiscard(s, a.uid);

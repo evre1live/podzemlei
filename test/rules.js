@@ -1564,13 +1564,17 @@ t('«Прощай навсегда»: из двери уходит в руку, 
   assert.equal(view(t3, 'p0').shop.items.find(x => x.id === 'k_farewell').price, 1800);
 });
 
-t('«Сокровища Атлантиды»: +10000 голдов, тайная команда /ATLANTIS — если карта ни у кого не на руке', () => {
+t('«Сокровища Атлантиды» и «Сундук мертвеца»: по +3000 голдов, тайная команда /ATLANTIS — если карта ни у кого не на руке', () => {
   const s = fresh(); const p = P(s, 'p0'), o = P(s, 'p1');
   assert.equal(cheatCard('/ATLANTIS'), 'g_atlantis');
   o.hand.push(take(s, 'g_atlantis#0'));
   assert.match(orderCard(s, 'p0', 'g_atlantis').error, /уже у кого-то/);
   assert.equal(A(s, 'p1', { type: 'playCard', uid: 'g_atlantis#0' }).ok, true, 'открыть можно в любой момент, даже не в свой ход');
-  assert.equal(o.gold, 10000);
+  assert.equal(o.gold, 3000);
+  o.hand.push(take(s, 'g_deadchest#0'));
+  assert.equal(A(s, 'p1', { type: 'playCard', uid: 'g_deadchest#0' }).ok, true);
+  assert.equal(o.gold, 6000);
+  assert.ok(s.log.some(l => /Сундук мертвеца.*\+3000/.test(l.text)));
   assert.ok(s.discard.treasure.includes('g_atlantis#0'));
   assert.equal(orderCard(s, 'p0', 'g_atlantis').ok, true);
   p.hand.push(take(s, 'h_hoard#0')); A(s, 'p0', { type: 'playCard', uid: 'h_hoard#0' });

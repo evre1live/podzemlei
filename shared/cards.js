@@ -825,8 +825,10 @@ export const CARD_DEFS = [
   { id: 'l_map', deck: 'treasure', type: 'levelup', name: 'Карта с крестиком', art: 'up', text: 'Получи уровень. Не {win}-й.' },
   { id: 'l_bonus', deck: 'treasure', type: 'levelup', name: 'Премия за вредность', art: 'up', text: 'Получи уровень. Не {win}-й.' },
   { id: 'l_shortcut', deck: 'treasure', type: 'levelup', name: 'Короткий путь', art: 'up', text: 'Получи уровень. Не {win}-й.' },
-  { id: 'g_atlantis', deck: 'treasure', type: 'jackpot', name: 'Сокровища Атлантиды', gold: 10000, art: 'atlantis', rarity: 'legendary',
-    text: 'Открой в любой момент: +10000 голдов в кошелёк.' },
+  { id: 'g_atlantis', deck: 'treasure', type: 'jackpot', name: 'Сокровища Атлантиды', gold: 3000, art: 'atlantis', rarity: 'legendary', emoji: '🔱',
+    text: 'Открой в любой момент: +3000 голдов в кошелёк.' },
+  { id: 'g_deadchest', deck: 'treasure', type: 'jackpot', name: 'Сундук мертвеца', gold: 3000, art: 'deadchest', rarity: 'epic', emoji: '☠️',
+    text: 'Открой в любой момент: +3000 голдов в кошелёк.' },
   { id: 'h_hoard', deck: 'treasure', type: 'hoard', name: 'Схрон!', copies: 2, art: 'chest', rarity: 'rare',
     text: 'Сыграй в свой ход вне боя: возьми 2 карты клада. Не больше одного схрона за ход.' },
 ];
