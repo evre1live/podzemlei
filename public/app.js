@@ -1,5 +1,5 @@
 // «Под Землёй» — клиент.
-import { def, RACE_NAMES, CLASS_NAMES, SETS, ALLY_SLOT_NAMES, ALLY_SLOT_TEXT, FEMME_LEVELS, setRuleVars, ruleText, BOSS_FLOOR, TROUBLE_BONUS, LULLABY_PENALTY, MUTAGEN_BONUS, DISTILL_COST,
+import { def, RACE_NAMES, CLASS_NAMES, SETS, ALLY_SLOT_NAMES, ALLY_SLOT_TEXT, FEMME_LEVELS, REGULAR_SPEND, REGULAR_DISCOUNT, setRuleVars, ruleText, BOSS_FLOOR, TROUBLE_BONUS, LULLABY_PENALTY, MUTAGEN_BONUS, DISTILL_COST,
   PERSONAS, GHOST_BONUS, DEATH_LEVELS, DEPTH, DEPTH_TREASURE_EVERY, TRADE_TIMEOUT_MS, TAME_MARGIN, WARLOCK_TAME, PANDORA_COST, PANDORA_BONUS, PANDORA_ESCAPE, tameBonus, TRAP_FAIL_LEVELS, SHOP_CATS, dailyOf, dailyDate } from '/shared/cards.js';
 import { esc, cardHTML, chipHTML, avatarSVG, iconSVG, cardBackSVG, locationSVG, cardIcon, cardText } from '/art.js';
 import { fx } from '/fx.js';
@@ -160,6 +160,9 @@ socket.on('room:state', ({ room, game, serverTime }) => {
   render();
   if ($('#shopModal')) openMarketModal();
   if ($('#contractModal')) openContractModal();
+  { const reg = !!game?.players?.find(x => x.id === room.me)?.regular;
+    if (S.ui.regular === false && reg) { sfx.play('victory', { always: true }); fx.banner('Постоянный клиент!', `На рынке для вас −${Math.round(REGULAR_DISCOUNT * 100)}%, покупать можно в любой момент — даже в бою`, 'win'); }
+    S.ui.regular = game ? reg : undefined; }
   renderVoice();
   if (fresh.length) requestAnimationFrame(() => runFx(fresh, snap));
 });
@@ -561,7 +564,7 @@ update.game = () => {
   const dl = g.opts?.daily ? dailyOf(g.opts.daily) : null;
   $('#dailypill').innerHTML = dl ? `<span class="daily-pill" title="${esc(`Испытание дня ${g.opts.daily}: ${dl.text} Колода сегодня у всех одна.`)}">${ico('calendar')}<span class="lbl">${esc(dl.name)}</span></span>` : '';
   { const mp = me();
-    $('#marketpill').innerHTML = g.shop && g.phase === 'playing' ? `<button class="market-pill" data-act="market" title="Подземный рынок: разовые, зелья, проклятия и уровни из колоды за голды из кошелька">${ico('shop')}<span><span class="lbl">Рынок${mp ? ' · ' : ''}</span>${mp ? `${mp.gold} г` : ''}</span></button>` : ''; }
+    $('#marketpill').innerHTML = g.shop && g.phase === 'playing' ? `<button class="market-pill${mp?.regular ? ' regular' : ''}" data-act="market" title="${mp?.regular ? `Подземный рынок: вы постоянный клиент — цены на ${Math.round(REGULAR_DISCOUNT * 100)}% ниже, покупать можно в любой момент` : 'Подземный рынок: разовые, зелья, проклятия и уровни из колоды за голды из кошелька'}">${ico(mp?.regular ? 'laurels' : 'shop')}<span><span class="lbl">Рынок${mp ? ' · ' : ''}</span>${mp ? `${mp.gold} г` : ''}</span></button>` : ''; }
   // контракт — значком в шапке, по нажатию открывается окошко
   { const k = me()?.contract;
     $('#contractpill').innerHTML = k && g.phase === 'playing' ? `<button class="contract-pill${k.progress >= k.need ? ' ready' : ''}" data-act="contract" title="${esc(`Контракт «${k.name}»: ${k.progress} из ${k.need}. Нажмите, чтобы посмотреть условие и награду`)}" aria-label="Контракт ${esc(k.name)}, ${k.progress} из ${k.need}">${ico('scroll-quill')}<span>${k.progress}/${k.need}</span></button>` : ''; }
@@ -1434,9 +1437,15 @@ function openMarketModal() {
   const policy = [g.shop.note && `<b>${esc(L?.name || '')}:</b> ${esc(g.shop.note)}`, g.shop.fair && '<b>Ярмарочный день:</b> всё на четверть дешевле.'].filter(Boolean).join(' ');
   const how = !p ? 'Вы зритель: смотреть можно, покупать — нет.'
     : h?.buy ? 'Купленная карта ложится в руку. «Получи уровень» — не больше одного за ход.' : 'Покупать можно в свой ход, когда нет боя.';
+  // постоянный клиент: видит только сам игрок
+  const left = p ? Math.max(0, REGULAR_SPEND - (p.spent || 0)) : 0;
+  const status = !p ? '' : p.regular
+    ? `<p class="shop-regular">${ico('laurels')}<span><b>Вы постоянный клиент.</b> Цены для вас на ${Math.round(REGULAR_DISCOUNT * 100)}% ниже, а рынок открыт в любой момент — даже в бою. Этот статус видите только вы.</span></p>`
+    : `<p class="shop-progress" title="Статус видите только вы"><span>До статуса постоянного клиента: потратить ещё <b>${left} г</b> — и цены станут на ${Math.round(REGULAR_DISCOUNT * 100)}% ниже, а покупать можно будет в любой момент.</span><i style="--k:${((p.spent || 0) / REGULAR_SPEND).toFixed(3)}"></i></p>`;
   showOverlay(`<div class="modal shop" id="shopModal" role="dialog" aria-label="Подземный рынок">
     <div class="shop-head"><h2>${ico('shop')} Подземный рынок</h2>${p ? `<span class="wallet" title="Голды за проданные вещи и контракты">${ico('two-coins')}<b>${p.gold}</b> г</span>` : ''}</div>
     <p class="muted shop-how">Продаётся только то, что ещё лежит в колоде. ${how}</p>
+    ${status}
     ${policy ? `<p class="shop-policy">${policy}</p>` : '<p class="shop-policy muted">Подземелье: обычные цены. На других локациях цены другие.</p>'}
     <div class="seg shop-tabs" role="group">${tabs}</div>
     <div class="shop-lots" data-zone-view>${lotHTML}</div>

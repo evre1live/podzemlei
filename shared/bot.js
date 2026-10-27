@@ -450,7 +450,7 @@ function duelMove(s, p) {
 const isBoostCard = d => (d.type === 'oneshot' && d.effect === 'bonus') || d.type === 'buff';
 function shopMove(s, p, step) {
   const ok = id => !check(s, p.id, { type: 'buy', id });
-  const price = id => shopPrice(s, def(id));
+  const price = id => shopPrice(s, def(id), p);
   const W = winLevel(s), gold = p.gold || 0;
   const levels = SHOP_IDS.filter(id => def(id).type === 'levelup').sort((a, b) => price(a) - price(b));
   const lv = levels.find(ok);

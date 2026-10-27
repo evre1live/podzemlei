@@ -2,7 +2,7 @@
 // Сервер хранит состояние, вызывает act()/tick() и рассылает view() каждому игроку.
 import { def, allUids, RACE_NAMES, CLASS_NAMES, ALLY_SLOT_TEXT, ruleText, BOSS_MULT, BOSS_MIN_LEVEL, BOSS_FLOOR, TROUBLE_BONUS, WITCHER_BONUS, MUTAGEN_BONUS, LULLABY_PENALTY, LULLABY_MAX, DISTILL_COST,
   DEPTH, DEPTH_TREASURE_EVERY, DEATH_LEVELS, GHOST_BONUS, CONTRACTS, CONTRACT_DEFS, SETS, rewardText,
-  TAME_MARGIN, WARLOCK_TAME, FEMME_LEVELS, PANDORA_COST, PANDORA_BONUS, PANDORA_ESCAPE, tameBonus, TRAP_ROLL, TRAP_SKILL, TRAP_FAIL_LEVELS, SHOP_IDS, shopCat, shopBase, roundPrice, dailyOf } from './cards.js';
+  TAME_MARGIN, WARLOCK_TAME, FEMME_LEVELS, REGULAR_SPEND, REGULAR_DISCOUNT, PANDORA_COST, PANDORA_BONUS, PANDORA_ESCAPE, tameBonus, TRAP_ROLL, TRAP_SKILL, TRAP_FAIL_LEVELS, SHOP_IDS, shopCat, shopBase, roundPrice, dailyOf } from './cards.js';
 
 export const WIN_LEVEL = 10;
 // до какого уровня идёт партия: 10 по умолчанию, в лобби можно выбрать 15 или 20
@@ -555,16 +555,22 @@ function newRound(s, rng) {
 // Открыт всегда: в свой ход вне боя можно купить разовые карты, зелья, проклятия и «Получи уровень» за голды из кошелька.
 // Товар — только карты, которые ещё лежат в колоде (не в сбросе и не на руках), поэтому его число ограничено.
 // Цену меняет локация (у каждой своя политика по разделам рынка) и «Ярмарочный день».
-export function shopPrice(s, d) {
+// постоянный клиент: потратил на рынке REGULAR_SPEND голдов. Статус видит только он сам
+export const isRegular = p => (p?.spent || 0) >= REGULAR_SPEND;
+export function shopPrice(s, d, p = null) {
   const pr = locationOf(s)?.prices || {};
   let m = pr[shopCat(d)] ?? pr.all ?? 1;
   if (s.opts?.dailyId === 'fair') m *= 0.75;
+  let v = roundPrice(shopBase(d) * m);
+  if (isRegular(p)) v = roundPrice(v * (1 - REGULAR_DISCOUNT));
   // ниже цены продажи не опускается: купить и тут же продать с выгодой нельзя
-  return Math.max(roundPrice(shopBase(d) * m), (d.value || 0) + 50);
+  return Math.max(v, (d.value || 0) + 50);
 }
+// когда можно покупать: в свой ход вне боя, а постоянному клиенту — в любой момент, даже в бою
+export const buyErr = (s, p) => (isRegular(p) ? (p.dead ? 'Мёртвым на рынок нельзя' : null) : manageErr(s, p));
 const stockUid = (s, id) => s.decks[def(id).deck].find(u => baseId(u) === id) || null;
 export const shopStock = (s, id) => s.decks[def(id).deck].reduce((n, u) => n + (baseId(u) === id ? 1 : 0), 0);
-export const shopList = s => SHOP_IDS.map(id => { const d = def(id); return { id, cat: shopCat(d), price: shopPrice(s, d), base: shopBase(d), stock: shopStock(s, id) }; });
+export const shopList = (s, p = null) => SHOP_IDS.map(id => { const d = def(id); return { id, cat: shopCat(d), price: shopPrice(s, d, p), base: shopBase(d), stock: shopStock(s, id) }; });
 
 // ───────────────────────── поединок ─────────────────────────
 // Сила в поединке: уровень, вещи, расовые и классовые бонусы и «в следующем бою».
@@ -1726,23 +1732,24 @@ H.trap = {
 // подземный рынок: купить карту из колоды за голды из кошелька
 H.buy = {
   check(s, p, a) {
-    const e = manageErr(s, p); if (e) return e;
+    const e = buyErr(s, p); if (e) return e;
     if (!SHOP_IDS.includes(a.id)) return 'Такого на рынке не продают';
     const d = def(a.id);
     if (!stockUid(s, a.id)) return 'Распродано: в колоде таких больше нет';
     if (d.type === 'levelup') {
-      if (s.turn.boughtLevel) return 'Уровень на рынке — один за ход';
+      if (p.levelTurn === s.turn.n || (s.turn.boughtLevel && s.turn.pid === p.id && p.levelTurn === undefined)) return 'Уровень на рынке — один за ход';
       if (p.level >= winLevel(s) - 1) return 'Последний уровень — только убийством монстра';
     }
-    const price = shopPrice(s, d);
+    const price = shopPrice(s, d, p);
     return (p.gold || 0) < price ? `Нужно ${price} голдов, в кошельке ${p.gold || 0}` : null;
   },
   run(s, p, a) {
-    const d = def(a.id), price = shopPrice(s, d), u = stockUid(s, a.id);
+    const d = def(a.id), price = shopPrice(s, d, p), u = stockUid(s, a.id);
     without(s.decks[d.deck], u);
     p.gold -= price;
+    p.spent = (p.spent || 0) + price; // копится к статусу постоянного клиента; в летопись не пишется
     p.hand.push(u);
-    if (d.type === 'levelup') s.turn.boughtLevel = true;
+    if (d.type === 'levelup') { s.turn.boughtLevel = true; p.levelTurn = s.turn.n; }
     fx(s, { kind: 'buy', pid: p.id, card: u, price });
     log(s, `🛒 ${p.name} покупает на рынке ${q(d.name)} за ${price} голдов.`, 'good');
   },
@@ -2085,9 +2092,11 @@ export function act(s, pid, a, { rng = Math.random, now = Date.now() } = {}) {
   if (err) return { ok: false, error: err };
   const hadCombat = !!s.combat, hadDuel = !!s.duel;
   H[a.type].run(s, P(s, pid), a, rng);
-  if (hadCombat && s.combat && a.type !== 'fight' && a.type !== 'pass') { s.combat.winAt = null; s.combat.passed = []; }
+  // покупка на рынке сама по себе в бой не вмешивается — отсчёт не сбрасывает
+  const quiet = a.type === 'pass' || a.type === 'buy';
+  if (hadCombat && s.combat && a.type !== 'fight' && !quiet) { s.combat.winAt = null; s.combat.passed = []; }
   // в поединок вмешались — отсчёт начинается заново
-  if (hadDuel && s.duel && a.type !== 'pass') { s.duel.winStart = s.now; s.duel.winAt = s.now + (s.opts.winDelayMs || 0); s.duel.passed = []; }
+  if (hadDuel && s.duel && !quiet) { s.duel.winStart = s.now; s.duel.winAt = s.now + (s.opts.winDelayMs || 0); s.duel.passed = []; }
   s.version++;
   return { ok: true };
 }
@@ -2157,7 +2166,7 @@ export function hints(s, pid) {
     bribe: s.combat?.fighter === pid && s.combat.monsters.some(m => def(m.uid).bribe) ? inPlayItems(p).filter(u => ok({ type: 'bribe', item: u })) : [],
     tame: ok({ type: 'tame' }) ? s.tame.uid : null,
     pandora: ok({ type: 'pandora' }),
-    buy: !manageErr(s, p),
+    buy: !buyErr(s, p),
     shop: SHOP_IDS.filter(id => ok({ type: 'buy', id })),
     trap: ok({ type: 'trap' }) ? { uid: s.trap.uid, need: trapNeed(p) } : null,
     manage: !manageErr(s, p),
@@ -2200,7 +2209,7 @@ export function view(s, pid) {
     phase: s.phase, version: s.version, turn: { ...s.turn }, winners: [...s.winners],
     reveal: s.reveal, opts: { winDelayMs: s.opts.winDelayMs, winLevel: winLevel(s), daily: s.opts.daily || null, dailyId: s.opts.dailyId || null }, location: s.location,
     trap: s.trap ? { ...s.trap } : null, tame: s.tame ? { ...s.tame } : null,
-    shop: { items: shopList(s), note: locationOf(s)?.priceNote || null, fair: s.opts?.dailyId === 'fair' },
+    shop: { items: shopList(s, me), note: locationOf(s)?.priceNote || null, fair: s.opts?.dailyId === 'fair' },
     duel: s.duel ? { from: s.duel.from, to: s.duel.to, card: s.duel.card, mods: s.duel.mods.map(m => ({ ...m })), passed: [...s.duel.passed], winAt: s.duel.winAt, winStart: s.duel.winStart,
       femme: !!s.duel.femme, by: s.duel.by || null,
       numbers: duelNumbers(s), prize: s.duel.femme ? { from: femmeLoss(P(s, s.duel.from)), to: femmeLoss(P(s, s.duel.to)) } : { from: duelPrize(P(s, s.duel.from)), to: duelPrize(P(s, s.duel.to)) } } : null,
@@ -2218,7 +2227,7 @@ export function view(s, pid) {
       level: p.level, races: [...p.races], classes: [...p.classes], halfbreed: p.halfbreed, supermunch: p.supermunch,
       equipped: [...p.equipped], carried: [...p.carried], nextCombat: p.nextCombat, nextEscape: p.nextEscape || 0,
       dead: p.dead, handCount: p.hand.length, handLimit: handLimit(p, s), handsLimit: handsLimit(p), mutagenUsed: !!p.mutagenUsed,
-      power: powerOf(s, p), runBonus: runBonusOf(s, p), gold: p.id === pid ? p.gold || 0 : null, banished: !!p.banished, sets: setsOf(p), ghost: isGhost(p), ally: p.ally || null, allySlots: allySlotsOf(p), allyGear: p.allyGear || [], beast: p.beast || null, persona: p.persona || null, contractsDone: p.contractsDone || 0,
+      power: powerOf(s, p), runBonus: runBonusOf(s, p), gold: p.id === pid ? p.gold || 0 : null, spent: p.id === pid ? p.spent || 0 : null, regular: p.id === pid ? isRegular(p) : null, banished: !!p.banished, sets: setsOf(p), ghost: isGhost(p), ally: p.ally || null, allySlots: allySlotsOf(p), allyGear: p.allyGear || [], beast: p.beast || null, persona: p.persona || null, contractsDone: p.contractsDone || 0,
       hand: p.id === pid ? [...p.hand] : undefined,
       contract: p.id === pid && p.contract && CONTRACT_DEFS[p.contract.id] ? { ...CONTRACT_DEFS[p.contract.id], progress: p.contract.progress, rewardText: rewardText(CONTRACT_DEFS[p.contract.id].reward) } : undefined,
     })),

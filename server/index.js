@@ -8,7 +8,7 @@ import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { Server } from 'socket.io';
 import { createGame, act, tick, view, P, WIN_LEVELS, WIN_LEVEL, orderCard } from '../shared/engine.js';
-import { cheatCard } from './cheats.js';
+import { cheatCard, cheatGold } from './cheats.js';
 import { botDecide } from '../shared/bot.js';
 import { cleanAvatar, avatarFromSeed } from '../shared/avatar.js';
 import { PERSONAS, TRADE_TIMEOUT_MS, dailyDate, dailyOf } from '../shared/cards.js';
@@ -731,6 +731,15 @@ io.on('connection', socket => {
       const res = orderCard(r.game, m.id, card);
       if (res.ok) dirty = true;
       return cb(res.ok ? { ok: true, note: 'Принято: придёт со следующей картой клада' } : { ok: false, error: res.error });
+    }
+    const goldCheat = cheatGold(text);
+    if (goldCheat) {
+      const gp = own && m && r.game ? P(r.game, m.id) : null;
+      if (!gp) return cb({ ok: false, error: 'Команда работает только во время партии' });
+      gp.gold = (gp.gold || 0) + goldCheat;
+      r.game.version++;
+      cb({ ok: true, note: `Принято: +${goldCheat} голдов в кошелёк` });
+      return broadcastRoom(r);
     }
     if (m && own) r.chat.push({ id: newId(), from: m.id, name: m.name, color: m.color, text, t: now() });
     else r.chat.push({ id: newId(), from: null, spectator: true, name: socket.data.watchName || 'Зритель', color: '#a9b2c3', text, t: now() });

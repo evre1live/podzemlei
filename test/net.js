@@ -171,6 +171,16 @@ r = await B2.call('room:join', { roomId: code, token: tokenB });
 assert.ok(r.ok); assert.equal(r.memberId, idB);
 await until(() => B2.lastState?.game, 3000, 'rejoin state');
 assert.ok(Array.isArray(B2.lastState.game.players.find(p => p.id === idB).hand)); ok('переподключение по токену возвращает руку');
+{
+  const goldOf = () => B2.lastState.game.players.find(p => p.id === idB).gold;
+  const before = goldOf();
+  const r5 = await B2.call('chat', { text: '/GET5000' });
+  assert.ok(r5.ok); assert.match(r5.note, /5000/);
+  await until(() => goldOf() === before + 5000, 3000, 'gold cheat');
+  assert.ok(!B2.lastState.room.chat.some(m => /GET5000/i.test(m.text)));
+  assert.equal(A.lastState?.game?.players?.find(p => p.id === idB)?.gold ?? null, null, 'чужой кошелёк не виден');
+  ok('тайная команда /GET5000: +5000 в кошелёк, в чате не видно');
+}
 
 // сохранение и рестарт сервера
 await stopServer();

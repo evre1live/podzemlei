@@ -73,6 +73,9 @@ const SHOP_SHORT = { level: 'уровни', curse: 'проклятия', duel: '
 export const shopCat = d => (d.type === 'levelup' ? 'level' : d.type === 'curse' ? 'curse' : d.type === 'duel' ? 'duel' : d.type === 'oneshot' || d.type === 'buff' ? d.shop || 'gear' : null);
 // «Роковая женщина»: проигравший теряет большую вещь и столько уровней
 export const FEMME_LEVELS = 2;
+// постоянный клиент рынка: потратил столько голдов — цены ниже и рынок открыт в любой момент, даже в бою
+export const REGULAR_SPEND = 5000;
+export const REGULAR_DISCOUNT = 0.2;
 // цена без поправок: уровень — 1000, проклятие — по тому, как больно бьёт, разовые и зелья — вдвое дороже, чем их продают
 const CURSE_PRICE = { levels: 600, slot: 400, smallItem: 300, bestItems: 600, race: 500, class: 500, cards: 150, giveToTop: 400, nextCombat: 100, nextEscape: 100 };
 export const roundPrice = v => Math.max(50, Math.round(v / 50) * 50);

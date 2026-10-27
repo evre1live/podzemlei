@@ -1,7 +1,7 @@
 // Точечные проверки правил.
 import assert from 'node:assert/strict';
 import { createGame, act, tick, view, combatNumbers, P, saleValue, fillText, orderCard, playOptions, troubleBand, shopPrice } from '../shared/engine.js';
-import { cheatCard } from '../server/cheats.js';
+import { cheatCard, cheatGold } from '../server/cheats.js';
 import { botDecide } from '../shared/bot.js';
 import { def, dailyOf } from '../shared/cards.js';
 import { AVATAR_PARTS, cleanAvatar, avatarFromSeed, portraitId, pickCode, avatarInGame, gameRaces } from '../shared/avatar.js';
@@ -1649,6 +1649,44 @@ t('«Роковая женщина»: двое соперников бьются
   tick(t3, { rng, now: 9000 });
   assert.equal(m.level, 9); assert.equal(k.level, 4); assert.ok(k.equipped.includes('i_jackhammer#0'));
   assert.ok(t3.log.some(l => /Ничья/.test(l.text)));
+});
+
+t('тайная команда /GET5000: +5000 голдов', () => {
+  assert.equal(cheatGold('/GET5000'), 5000); assert.equal(cheatGold('/get5000'), 5000);
+  assert.equal(cheatGold('/GET500'), 0); assert.equal(cheatGold('GET5000'), 0); assert.equal(cheatCard('/GET5000'), null);
+});
+
+t('постоянный клиент: после покупок на 5000 — цены −20% и рынок открыт в любой момент, даже в бою; видит только он', () => {
+  const s = fresh(); const p = P(s, 'p0'), q = P(s, 'p1');
+  const price = id => view(s, 'p0').shop.items.find(x => x.id === id).price;
+  assert.equal(price('d_femme'), 1000);
+  // не в свой ход обычному покупателю нельзя
+  q.gold = 9000;
+  assert.match(A(s, 'p1', { type: 'buy', id: 'd_duel' }).error, /не ваш ход/);
+  p.gold = 9000;
+  assert.equal(A(s, 'p0', { type: 'buy', id: 'l_stash' }).ok, true); // уровень — 1000
+  assert.match(A(s, 'p0', { type: 'buy', id: 'l_map' }).error, /один за ход/);
+  for (const id of ['d_femme', 'd_femme', 'o_slave']) assert.equal(A(s, 'p0', { type: 'buy', id }).ok, true);
+  assert.equal(p.spent, 4000); assert.equal(view(s, 'p0').players[0].regular, false);
+  assert.equal(A(s, 'p0', { type: 'buy', id: 'd_duel' }).ok, true); // 700 → 4700
+  assert.equal(view(s, 'p0').players[0].regular, false);
+  assert.equal(A(s, 'p0', { type: 'buy', id: 'd_duel' }).ok, true); // 5400
+  const v = view(s, 'p0').players[0];
+  assert.equal(v.regular, true); assert.equal(v.spent, 5400);
+  assert.equal(view(s, 'p1').players[0].regular, null, 'чужой статус не виден'); assert.equal(view(s, 'p1').players[0].spent, null);
+  assert.ok(!s.log.some(l => /постоянн/i.test(l.text)), 'в летописи о статусе ни слова');
+  assert.equal(price('o_slave'), 800, '1000 − 20%');
+  assert.equal(view(s, 'p1').shop.items.find(x => x.id === 'o_slave').price, 1000, 'остальным — обычная цена');
+  // постоянный клиент покупает не в свой ход и в бою
+  s.turn = { idx: 1, pid: 'p1', step: 'pre', n: 5 };
+  fight(s, 'm_mole#0', 'p1');
+  const g0 = p.gold;
+  assert.equal(view(s, 'p0').hints.buy, true);
+  assert.equal(A(s, 'p0', { type: 'buy', id: 'o_slave' }).ok, true);
+  assert.equal(p.gold, g0 - 800);
+  assert.equal(A(s, 'p0', { type: 'buy', id: 'l_map' }).ok, true, 'уровень — один за ход: этот ход новый');
+  assert.match(A(s, 'p0', { type: 'buy', id: 'l_friend' }).error, /один за ход/);
+  assert.match(A(s, 'p1', { type: 'buy', id: 'o_slave' }).error, /не ваш ход|во время боя/i, 'обычный покупатель в бою не покупает');
 });
 
 t('голды друг другу передать нельзя', () => {

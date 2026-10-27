@@ -19,3 +19,9 @@ export function cheatCard(text) {
   const m = /^\/([a-z0-9]+)$/i.exec(String(text || '').trim());
   return (m && CHEATS[m[1].toUpperCase()]) || null;
 }
+// тайные команды на голды: «/GET5000» — сразу +5000 в кошелёк (тоже никому не видны)
+export const CHEAT_GOLD = { GET5000: 5000 };
+export function cheatGold(text) {
+  const m = /^\/([a-z0-9]+)$/i.exec(String(text || '').trim());
+  return (m && CHEAT_GOLD[m[1].toUpperCase()]) || 0;
+}
