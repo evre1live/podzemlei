@@ -2181,10 +2181,13 @@ export function trickPlay(s, key, a, puppetId = null, { rng = Math.random, now =
   const extra = a.with && !P(s, a.with) ? a.with : null;
   if (extra && !trickExtras(t, a.uid).includes(extra)) return { ok: false, error: 'Этой карты у вас нет' };
   const put = [a.uid, ...(extra ? [extra] : [])];
+  // кукла — бот, если боты за столом есть; без ботов (или если выбран конкретный игрок) — тот, кого подставили
+  const bots = s.players.some(p => p.isBot && !p.dead);
   let cands = s.players.filter(p => !p.dead && p.id !== a.target && p.id !== a.with);
   if (puppetId) cands = cands.filter(p => p.id === puppetId);
+  else if (bots) cands = cands.filter(p => p.isBot);
   for (let i = cands.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [cands[i], cands[j]] = [cands[j], cands[i]]; }
-  let err = puppetId ? 'От имени этого игрока так нельзя' : 'Сейчас эту карту никто из игроков сыграть не может';
+  let err = puppetId ? 'От имени этого игрока так нельзя' : bots ? 'Сейчас это не может сыграть ни один бот — выберите, кого из игроков подставить' : 'Сейчас эту карту никто из игроков сыграть не может';
   for (const p of cands) {
     p.hand.push(...put);
     const e = check(s, p.id, pa);

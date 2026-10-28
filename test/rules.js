@@ -1725,6 +1725,28 @@ t('пакостник: 77777 голдов, покупает на рынке и �
   assert.match(trickBuy(s, 'c:нет', 'l_map').error, /не включён/);
 });
 
+t('пакостник: при ботах за столом карту «играет» бот, без подходящего бота — тот, кого подставили', () => {
+  const s = fresh(); const q = P(s, 'p1'), b = P(s, 'p2');
+  b.isBot = true; q.level = 6; b.level = 6;
+  trickStart(s, 'c:y');
+  const cid = SHOP_IDS.find(id => def(id).type === 'curse' && def(id).fx.length === 1 && def(id).fx[0].k === 'levels' && def(id).fx[0].n === 1);
+  for (let i = 0; i < 2; i++) {
+    const k = trickBuy(s, 'c:y', cid);
+    if (!k.ok) { s.decks.door.push(take(s, cid + '#' + (i + 1))); assert.equal(trickBuy(s, 'c:y', cid).ok, true); }
+  }
+  const [u1, u2] = trickOf(s, 'c:y').hand;
+  const own = { rng: () => 0.3, now: 1000 }; // свой жребий: общий генератор других проверок не трогаем
+  // на человека — от имени бота, сколько бы раз ни бросали жребий
+  const r1 = trickPlay(s, 'c:y', { uid: u1, target: 'p1' }, null, own);
+  assert.equal(r1.ok, true); assert.equal(r1.puppet, 'p2');
+  assert.ok(s.log.some(l => l.text.includes(b.name) && l.text.includes(def(cid).name)));
+  // на самого бота: другого бота нет — сам по себе ход не пройдёт, но можно подставить игрока
+  assert.match(trickPlay(s, 'c:y', { uid: u2, target: 'p2' }, null, own).error, /ни один бот/);
+  const r2 = trickPlay(s, 'c:y', { uid: u2, target: 'p2' }, 'p0', own);
+  assert.equal(r2.ok, true); assert.equal(r2.puppet, 'p0');
+  assert.equal(b.level, 5);
+});
+
 t('тайная команда /GET5000: +5000 голдов', () => {
   assert.equal(cheatGold('/GET5000'), 5000); assert.equal(cheatGold('/get5000'), 5000);
   assert.equal(cheatGold('/GET500'), 0); assert.equal(cheatGold('GET5000'), 0); assert.equal(cheatCard('/GET5000'), null);
@@ -1732,6 +1754,11 @@ t('тайная команда /GET5000: +5000 голдов', () => {
 
 t('постоянный клиент: после покупок на 5000 — цены −20% и рынок открыт в любой момент, даже в бою; видит только он', () => {
   const s = fresh(); const p = P(s, 'p0'), q = P(s, 'p1');
+  // все копии нужных товаров — в колоду (с рук и из сброса), чтобы проверка не зависела от раздачи
+  for (const id of ['d_femme', 'o_slave', 'd_duel', 'l_stash', 'l_map', 'l_friend']) for (let i = 0; i < (def(id).copies || 1); i++) {
+    const u = `${id}#${i}`, deck = s.decks[def(id).deck];
+    for (const pile of [...s.players.map(x => x.hand), s.discard[def(id).deck]]) { const k = pile.indexOf(u); if (k >= 0) { pile.splice(k, 1); deck.push(u); } }
+  }
   const price = id => view(s, 'p0').shop.items.find(x => x.id === id).price;
   assert.equal(price('d_femme'), 1000);
   // не в свой ход обычному покупателю нельзя

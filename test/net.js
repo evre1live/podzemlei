@@ -222,10 +222,12 @@ assert.ok(Array.isArray(B2.lastState.game.players.find(p => p.id === idB).hand))
   await until(() => T.trick.hand.includes(b.uid) && T.trick.gold === 77777 - b.price, 3000, 'trick buy');
   const o = await T.call('trick:opts', { uid: b.uid });
   assert.ok(o.ok && o.opts.length, 'есть на кого наслать');
-  const opt = o.opts[0];
-  assert.ok(!opt.puppets.includes(opt.a.target));
+  const botIds = T.lastState.game.players.filter(x => x.isBot).map(x => x.id);
+  const opt = o.opts.find(x => x.puppets.some(id => botIds.includes(id)));
+  assert.ok(opt && !opt.puppets.includes(opt.a.target));
   const pl = await T.call('trick:play', { a: opt.a });
   assert.ok(pl.ok, pl.error);
+  assert.ok(botIds.includes(pl.puppet), 'при ботах за столом карту «играет» бот');
   await until(() => !T.trick.hand.includes(b.uid), 3000, 'trick played');
   const cardName = def(b.uid).name;
   await until(() => A.lastState.game.log.some(l => l.text.includes(cardName) && l.text.includes(pl.name)), 3000, 'log names the puppet');

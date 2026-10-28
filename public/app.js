@@ -1630,6 +1630,8 @@ async function openTrickPop(uid) {
   const r = await call('trick:opts', { uid });
   if (!r.ok) return toast(r.error || 'Не получилось');
   if (S.ui.trickPop?.uid !== uid) S.ui.trickBy = '';
+  // выбранный раньше бот или игрок мог уйти со стола
+  if (S.ui.trickBy && !pl(S.ui.trickBy)) S.ui.trickBy = '';
   S.ui.trickPop = { uid, opts: r.opts };
   drawTrickPop();
 }
@@ -1648,21 +1650,32 @@ function refreshTrickPop() {
 function drawTrickPop() {
   const { uid, opts } = S.ui.trickPop, d = def(uid);
   const aimed = opts.filter(o => trickAimed(o.a)), self = opts.filter(o => !trickAimed(o.a));
+  // боты за столом есть — всё «делает» бот; нет ботов — пакостник сам выбирает, кого из игроков подставить
+  const botIds = S.game.players.filter(p => p.isBot && !p.dead).map(p => p.id), hasBots = botIds.length > 0;
   const by = S.ui.trickBy || '';
   popOpts = [];
   const rows = [];
   if (aimed.length) {
-    const who = [...new Set(aimed.flatMap(o => o.puppets))];
-    const seg = [['', 'Кто-нибудь'], ...who.map(id => [id, pname(id)])].map(([id, label]) => {
+    const pool = [...new Set(aimed.flatMap(o => o.puppets))].filter(id => !hasBots || botIds.includes(id));
+    const seg = [['', hasBots ? 'Любой бот' : 'Кто-нибудь'], ...pool.map(id => [id, pname(id)])].map(([id, label]) => {
       const i = popOpts.push({ fn: () => { S.ui.trickBy = id; drawTrickPop(); } }) - 1;
       const x = id && pl(id);
       return `<button type="button" data-popopt="${i}" aria-pressed="${by === id}" ${x ? `style="--seat:${x.color}"` : ''}>${x ? `<span class="ava">${avatarSVG(gAva(x), x.color)}</span>` : ''}${esc(label)}</button>`;
     }).join('');
-    rows.push(`<div class="trick-by"><span class="muted">От чьего имени:</span><div class="seg trick-seg" role="group">${seg}</div></div>`);
+    if (pool.length) rows.push(`<div class="trick-by"><span class="muted">${hasBots ? 'Какой бот это сделает:' : 'Кого подставить:'}</span><div class="seg trick-seg" role="group">${seg}</div></div>`);
     for (const o of aimed) {
-      const can = !by || o.puppets.includes(by);
-      const i = popOpts.push({ fn: () => trickDo(o.a, by || null) }) - 1;
-      rows.push(`<button class="btn danger" data-popopt="${i}" ${can ? '' : `disabled title="${esc(`От имени ${pname(by)} так нельзя`)}"`}>${esc(optLabel(o.a))}</button>`);
+      const mine = hasBots ? o.puppets.filter(id => botIds.includes(id)) : o.puppets;
+      if (mine.length) {
+        const can = !by || mine.includes(by);
+        const i = popOpts.push({ fn: () => trickDo(o.a, by || null) }) - 1;
+        rows.push(`<button class="btn danger" data-popopt="${i}" ${can ? '' : `disabled title="${esc(`${pname(by)} так сейчас не может`)}"`}>${esc(optLabel(o.a))}</button>`);
+        continue;
+      }
+      // ни один бот сейчас так не может — можно подставить игрока
+      for (const pid of o.puppets) {
+        const i = popOpts.push({ fn: () => trickDo(o.a, pid) }) - 1;
+        rows.push(`<button class="btn danger" data-popopt="${i}" style="--seat:${pl(pid)?.color || '#888'}">${esc(`${optLabel(o.a)} — подставить ${pname(pid)}`)}</button>`);
+      }
     }
   }
   for (const o of self) for (const pid of o.puppets) {
@@ -1670,11 +1683,12 @@ function drawTrickPop() {
     rows.push(`<button class="btn primary" data-popopt="${i}" style="--seat:${pl(pid)?.color || '#888'}">${esc(trickSelfLabel(o.a, pid))}</button>`);
   }
   if (!opts.length) rows.push(`<p class="why">Сейчас эту карту никто из игроков сыграть не может. ${esc(whenText(d))}</p>`);
+  const note = hasBots ? 'Карту сыграет бот — в летописи будет его имя, а о вас никто не узнает.' : 'Ботов за столом нет — выберите, кого из игроков подставить: в летописи будет его имя.';
   showOverlay(`<div class="pop" id="trickPop" role="dialog" aria-label="${esc(d.name)}">
     ${cardHTML(uid, { size: 'lg', tab: false })}
     <div class="pop-actions">
       <div class="pop-info"><h3>${esc(d.name)}</h3><p class="pop-text">${cardText(d)}</p></div>
-      <p class="trick-note">${ico('double-face-mask')}Карту сыграет игрок — в летописи будет его имя, а о вас никто не узнает.</p>
+      <p class="trick-note">${ico('double-face-mask')}${esc(note)}</p>
       ${rows.join('')}
       <button class="btn ghost" data-act="closeOverlay">Закрыть</button>
     </div></div>`);
