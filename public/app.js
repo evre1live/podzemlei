@@ -814,48 +814,17 @@ function actionButtons() {
 }
 
 const SWORDS = ico('crossed-swords');
-// Ящик Пандоры: резная шкатулка тёмного дерева в золотой оковке; из-под крышки сочится лиловый свет, открытая — бьёт столбом
-function pandoraSVG(open = false, id = 'pb') {
-  const lid = open ? `transform="translate(0 -15) rotate(-9 16 44)"` : '';
-  return `<svg class="pb-svg" viewBox="0 0 120 108" aria-hidden="true">
-  <defs>
-    <linearGradient id="${id}W" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6a2a3e"/><stop offset=".55" stop-color="#3a1424"/><stop offset="1" stop-color="#1c0912"/></linearGradient>
-    <linearGradient id="${id}L" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7d3550"/><stop offset="1" stop-color="#3b1526"/></linearGradient>
-    <linearGradient id="${id}G" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff4c4"/><stop offset=".35" stop-color="#f1c460"/><stop offset=".7" stop-color="#b9842c"/><stop offset="1" stop-color="#6e4612"/></linearGradient>
-    <radialGradient id="${id}K" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#ffe9ff"/><stop offset=".45" stop-color="#c77dff"/><stop offset="1" stop-color="#5a1a8c" stop-opacity="0"/></radialGradient>
-    <linearGradient id="${id}B" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#e7b6ff" stop-opacity=".95"/><stop offset=".5" stop-color="#9d4dff" stop-opacity=".45"/><stop offset="1" stop-color="#9d4dff" stop-opacity="0"/></linearGradient>
-    <filter id="${id}F" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="2.4"/></filter>
-  </defs>
-  ${open ? `<path class="pb-beam" d="M22 46 L8 0 H112 L98 46 Z" fill="url(#${id}B)"/><g class="pb-motes" fill="#f3d9ff"><circle cx="40" cy="22" r="1.6"/><circle cx="62" cy="10" r="1.2"/><circle cx="80" cy="26" r="1.8"/><circle cx="52" cy="34" r="1.1"/><circle cx="72" cy="4" r="1"/></g>` : ''}
-  <ellipse cx="60" cy="100" rx="46" ry="6" fill="rgba(0,0,0,.45)"/>
-  <path d="M14 48 H106 V88 Q106 94 100 94 H20 Q14 94 14 88 Z" fill="url(#${id}W)" stroke="#120609" stroke-width="2"/>
-  <path d="M18 52 H102 V86 H18 Z" fill="none" stroke="url(#${id}G)" stroke-width="1.4" opacity=".55"/>
-  <path d="M38 62 q5 -5 10 0 t10 0 M64 62 q5 -5 10 0 t10 0" fill="none" stroke="#f1c460" stroke-width="1" opacity=".35"/>
-  <rect x="27" y="48" width="7" height="46" fill="url(#${id}G)" stroke="#4a2c08" stroke-width=".8"/>
-  <rect x="86" y="48" width="7" height="46" fill="url(#${id}G)" stroke="#4a2c08" stroke-width=".8"/>
-  <path d="M14 82 L26 94 H14 Z M106 82 L94 94 H106 Z" fill="url(#${id}G)" stroke="#4a2c08" stroke-width=".8"/>
-  <path d="M50 52 H70 V66 Q70 76 60 80 Q50 76 50 66 Z" fill="url(#${id}G)" stroke="#4a2c08" stroke-width="1.2"/>
-  <circle cx="60" cy="63" r="6.5" fill="url(#${id}K)" class="pb-key"/>
-  <path d="M58.4 61 a1.8 1.8 0 1 1 3.2 0 L62.4 68 H57.6 Z" fill="#1c0912"/>
-  <path class="pb-seam" d="M16 48 H104" stroke="#d79bff" stroke-width="${open ? 5 : 3}" filter="url(#${id}F)"/>
-  <g ${lid}>
-    <path d="M14 48 V36 Q14 22 28 20 H92 Q106 22 106 36 V48 Z" fill="url(#${id}L)" stroke="#120609" stroke-width="2"/>
-    <path d="M20 44 V37 Q20 27 30 26 H90 Q100 27 100 37 V44" fill="none" stroke="url(#${id}G)" stroke-width="1.4" opacity=".6"/>
-    <rect x="27" y="20.5" width="7" height="27.5" fill="url(#${id}G)" stroke="#4a2c08" stroke-width=".8"/>
-    <rect x="86" y="20.5" width="7" height="27.5" fill="url(#${id}G)" stroke="#4a2c08" stroke-width=".8"/>
-    <path d="M14 46 H106" stroke="url(#${id}G)" stroke-width="3"/>
-    <path d="M60 25 l6 7 l-6 7 l-6 -7 Z" fill="#b0207a" stroke="url(#${id}G)" stroke-width="1.6"/>
-    <path d="M58 29 l2 -2 l2 2" stroke="#ffc6ea" stroke-width="1" fill="none"/>
-    <path d="M40 34 q4 -4 8 0 M72 34 q4 -4 8 0" fill="none" stroke="#f1c460" stroke-width="1" opacity=".45"/>
-  </g>
-</svg>`;
+// Ящик Пандоры: шкатулка чёрно-красного дерева в золотой оковке с аметистом, из-под крышки сочится лиловый дым;
+// открытая — из неё рвутся тени в столбе лилового света (art/cut.py pandora; фон прозрачный)
+function pandoraArt(open = false) {
+  return `<img class="pb-img${open ? ' open' : ''}" src="/ui/v3/pandora-${open ? 'open' : 'closed'}.webp" alt="" width="300" height="${open ? 293 : 194}" decoding="async" draggable="false">`;
 }
 // шкатулка в бою: закрытая — кнопка (кто может заплатить), открытая — кто её открыл
 function pandoraHTML(c, h) {
-  if (c.pandora) return `<div class="pandora open" title="Ящик Пандоры открыт: сила монстров ×${PANDORA_MULT}, героям −${PANDORA_ESCAPE} к побегу. Кто не убежит — лишится всех вещей и питомца">${pandoraSVG(true)}<span class="pb-cap">Открыл ${esc(pname(c.pandora.by))}</span></div>`;
+  if (c.pandora) return `<div class="pandora open" title="Ящик Пандоры открыт: сила монстров ×${PANDORA_MULT}, героям −${PANDORA_ESCAPE} к побегу. Кто не убежит — лишится всех вещей и питомца">${pandoraArt(true)}<span class="pb-cap">Открыл ${esc(pname(c.pandora.by))}</span></div>`;
   const p = me();
-  if (!p || p.banished) return `<div class="pandora" title="Ящик Пандоры: открыть может любой игрок за ${PANDORA_COST} г">${pandoraSVG()}<span class="pb-cap">${PANDORA_COST} г</span></div>`;
-  return `<button type="button" class="pandora${h?.pandora ? ' ready' : ''}" data-act="pandora" title="Ящик Пандоры: открыть за ${PANDORA_COST} г">${pandoraSVG()}<span class="pb-cap">${PANDORA_COST} г</span></button>`;
+  if (!p || p.banished) return `<div class="pandora" title="Ящик Пандоры: открыть может любой игрок за ${PANDORA_COST} г">${pandoraArt()}<span class="pb-cap">${PANDORA_COST} г</span></div>`;
+  return `<button type="button" class="pandora${h?.pandora ? ' ready' : ''}" data-act="pandora" title="Ящик Пандоры: открыть за ${PANDORA_COST} г">${pandoraArt()}<span class="pb-cap">${PANDORA_COST} г</span></button>`;
 }
 function openPandoraModal() {
   const c = S.game?.combat, h = hints(), p = me();
@@ -864,7 +833,7 @@ function openPandoraModal() {
   popOpts = [{ fn: async () => { const r = await act({ type: 'pandora' }); if (r.ok) closeOverlay(); } }];
   const self = c.fighter === p.id || c.helper === p.id;
   showOverlay(`<div class="modal pandora-modal" role="dialog" aria-label="Ящик Пандоры">
-    <div class="pb-big">${pandoraSVG(false, 'pbm')}</div>
+    <div class="pb-big">${pandoraArt()}</div>
     <h2>Ящик Пандоры</h2>
     <p>Откройте его за <b>${PANDORA_COST} голдов</b> — и в этом бою вся сила монстров <b>удваивается</b> (сейчас ${c.numbers?.monsters ?? '?'} → ${(c.numbers?.monsters ?? 0) * PANDORA_MULT}), а героям <b>−${PANDORA_ESCAPE} к побегу</b>. Кто из героев не убежит, лишится <b>всех вещей и питомца</b>: их раздадут другим игрокам наугад. Чернокнижник уходит тенью и ничего не теряет. В одном бою — один ящик.</p>
     ${self ? `<p class="warn-note">Это ваш собственный бой — ящик ударит по вам.</p>` : ''}

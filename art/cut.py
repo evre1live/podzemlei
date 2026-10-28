@@ -9,6 +9,7 @@
   python3 art/cut.py avatars <картинка> <номер листа>  — лист портретов или рамок, порядок — art/portraits.json
   python3 art/cut.py avindex                           — пересобрать список портретов и рамок (public/avatar-art.js)
   python3 art/cut.py thumbs                            — пересобрать маленькие портреты для каталога (public/avatars/v1/t)
+  python3 art/cut.py pandora <картинка>                — Ящик Пандоры: слева закрытый, справа открытый, фон прозрачный
 
 Рисунки ложатся в public/cards/v1/<id>.webp (длинная сторона до 460 px).
 Сцены локаций — в public/loc/v2/<id>.webp (1920×1080), <id>@4k.webp (3840×2160) и <id>-card.webp (960×720);
@@ -239,6 +240,28 @@ def avatars(img, n):
     avindex()
 
 
+def pandora(img):
+    """Ящик Пандоры с прозрачным фоном: левая половина — закрытый, правая — открытый.
+    Обе половины режутся по одной ширине, низ ящика на одной линии; закрытый — без пустого верха."""
+    import numpy as np
+    img = img.convert('RGBA')
+    W, H = img.size
+    halves = [img.crop((0, 0, W // 2, H)), img.crop((W // 2, 0, W, H))]
+    boxes = [np.array(h.getchannel('A')) > 20 for h in halves]
+    xs = [np.where(b.any(0))[0] for b in boxes]
+    ys = [np.where(b.any(1))[0] for b in boxes]
+    x0, x1 = min(x[0] for x in xs), max(x[-1] for x in xs) + 1
+    y1 = max(y[-1] for y in ys) + 1
+    out = os.path.join(ROOT, 'public', 'ui', 'v3')
+    os.makedirs(out, exist_ok=True)
+    for name, h, y in (('closed', halves[0], ys[0]), ('open', halves[1], ys[1])):
+        c = h.crop((x0, max(0, y[0] - 6), x1, y1))
+        c = c.resize((300, round(c.height * 300 / c.width)), Image.LANCZOS)
+        path = os.path.join(out, f'pandora-{name}.webp')
+        c.save(path, 'WEBP', quality=86, method=6)
+        print(f'  pandora-{name}: {c.size[0]}×{c.size[1]}, {os.path.getsize(path) // 1024} КБ')
+
+
 def main():
     if len(sys.argv) < 2: print(__doc__); return
     cmd = sys.argv[1]
@@ -264,6 +287,8 @@ def main():
         avindex()
     elif cmd == 'thumbs':
         thumbs()
+    elif cmd == 'pandora':
+        pandora(Image.open(sys.argv[2]))
     else:
         print(__doc__)
 
