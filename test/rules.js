@@ -1479,7 +1479,7 @@ t('чернокнижник подкидывает монстра с руки в
   assert.match(A(u, 'p1', { type: 'playCard', uid: 'm_mosquito#0', into: true }).error, /турникет/);
 });
 
-t('Ящик Пандоры: за 3000 голдов монстрам +10, героям −3 к побегу, раз за бой', () => {
+t('Ящик Пандоры: за 3000 голдов сила монстров ×2, героям −3 к побегу, раз за бой', () => {
   const s = fresh(); const p = P(s, 'p0'), q = P(s, 'p1');
   p.level = 5; fight(s, 'm_mole#0'); // 5 против 3
   const before = combatNumbers(s).monsters;
@@ -1489,7 +1489,12 @@ t('Ящик Пандоры: за 3000 голдов монстрам +10, гер�
   assert.equal(view(s, 'p1').hints.pandora, true);
   assert.equal(A(s, 'p1', { type: 'pandora' }).ok, true);
   assert.equal(q.gold, 500);
-  assert.equal(combatNumbers(s).monsters, before + 10);
+  assert.equal(combatNumbers(s).monsters, before * 2);
+  assert.ok(s.log.some(l => l.text.includes(`×2 (${before} → ${before * 2})`)));
+  // всё, что подкинут монстрам после открытия, тоже удваивается
+  q.hand.push(take(s, 'e_armored#0'));
+  assert.equal(A(s, 'p1', { type: 'playCard', uid: 'e_armored#0', monster: 0 }).ok, true);
+  assert.equal(combatNumbers(s).monsters, (before + def('e_armored#0').bonus) * 2);
   assert.ok(view(s, 'p0').combat.pandora);
   P(s, 'p2').gold = 5000;
   assert.match(A(s, 'p2', { type: 'pandora' }).error, /уже открыт/);

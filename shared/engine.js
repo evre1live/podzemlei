@@ -2,7 +2,7 @@
 // Сервер хранит состояние, вызывает act()/tick() и рассылает view() каждому игроку.
 import { def, allUids, RACE_NAMES, CLASS_NAMES, ALLY_SLOT_TEXT, ruleText, BOSS_MULT, BOSS_MIN_LEVEL, BOSS_FLOOR, TROUBLE_BONUS, WITCHER_BONUS, MUTAGEN_BONUS, LULLABY_PENALTY, LULLABY_MAX, DISTILL_COST,
   DEPTH, DEPTH_TREASURE_EVERY, DEATH_LEVELS, GHOST_BONUS, CONTRACTS, CONTRACT_DEFS, SETS, rewardText,
-  TAME_MARGIN, WARLOCK_TAME, FEMME_LEVELS, REGULAR_SPEND, REGULAR_DISCOUNT, PANDORA_COST, PANDORA_BONUS, PANDORA_ESCAPE, tameBonus, TRAP_ROLL, TRAP_SKILL, TRAP_FAIL_LEVELS, SHOP_IDS, shopCat, shopBase, roundPrice, dailyOf } from './cards.js';
+  TAME_MARGIN, WARLOCK_TAME, FEMME_LEVELS, REGULAR_SPEND, REGULAR_DISCOUNT, PANDORA_COST, PANDORA_MULT, PANDORA_ESCAPE, tameBonus, TRAP_ROLL, TRAP_SKILL, TRAP_FAIL_LEVELS, SHOP_IDS, shopCat, shopBase, roundPrice, dailyOf } from './cards.js';
 
 export const WIN_LEVEL = 10;
 // до какого уровня идёт партия: 10 по умолчанию, в лобби можно выбрать 15 или 20
@@ -833,8 +833,9 @@ export function combatNumbers(s) {
   const heroes = parts.reduce((a, p) => a + heroStrength(s, p), 0)
     + (levelOnlyFight(s) ? 0 : c.mods.filter(m => m.side === 'player').reduce((a, m) => a + m.n, 0));
   const perMonster = c.monsters.map(m => monsterStrength(s, m));
-  const monsters = perMonster.reduce((a, b) => a + b, 0)
-    + c.mods.filter(m => m.side === 'monster').reduce((a, m) => a + m.n, 0);
+  // Ящик Пандоры удваивает всю сторону монстров — и то, что подкинут после открытия
+  const monsters = (perMonster.reduce((a, b) => a + b, 0)
+    + c.mods.filter(m => m.side === 'monster').reduce((a, m) => a + m.n, 0)) * (c.pandora ? PANDORA_MULT : 1);
   const warrior = parts.some(p => hasClass(p, 'warrior'));
   const winning = c.monsters.length > 0 && (heroes > monsters || (warrior && heroes === monsters));
   const f = P(s, c.fighter);
@@ -1660,7 +1661,7 @@ H.haunt = {
 };
 
 // ───────────────────────── Ящик Пандоры ─────────────────────────
-// В любом бою любой живой игрок может открыть ящик за голды: монстрам +10, героям −3 к побегу.
+// В любом бою любой живой игрок может открыть ящик за голды: сила монстров ×2, героям −3 к побегу.
 // Кто из героев не убежит — теряет все вещи и питомца, их раздают другим игрокам наугад.
 H.pandora = {
   check(s, p) {
@@ -1673,12 +1674,12 @@ H.pandora = {
   run(s, p, a, rng) {
     const c = s.combat;
     p.gold -= PANDORA_COST;
+    const was = combatNumbers(s).monsters;
     c.pandora = { by: p.id };
-    c.mods.push({ side: 'monster', n: PANDORA_BONUS, by: p.id, uid: null, label: 'Ящик Пандоры' });
     if (!isParticipant(s, p.id)) grudge(s, c.fighter, p.id);
     fx(s, { kind: 'pandora', pid: p.id, to: c.fighter });
     unbanish(s, rng);
-    log(s, `📦 ${p.name} открывает Ящик Пандоры за ${PANDORA_COST} голдов: монстрам +${PANDORA_BONUS}, героям −${PANDORA_ESCAPE} к побегу. Кто не убежит — лишится всех вещей и питомца!`, 'curse');
+    log(s, `📦 ${p.name} открывает Ящик Пандоры за ${PANDORA_COST} голдов: сила монстров ×${PANDORA_MULT} (${was} → ${combatNumbers(s).monsters}), героям −${PANDORA_ESCAPE} к побегу. Кто не убежит — лишится всех вещей и питомца!`, 'curse');
   },
 };
 function pandoraLoss(s, p, rng) {

@@ -1,6 +1,6 @@
 // «Под Землёй» — клиент.
 import { def, RACE_NAMES, CLASS_NAMES, SETS, ALLY_SLOT_NAMES, ALLY_SLOT_TEXT, FEMME_LEVELS, REGULAR_DISCOUNT, setRuleVars, ruleText, BOSS_FLOOR, TROUBLE_BONUS, LULLABY_PENALTY, MUTAGEN_BONUS, DISTILL_COST,
-  PERSONAS, GHOST_BONUS, DEATH_LEVELS, DEPTH, DEPTH_TREASURE_EVERY, TRADE_TIMEOUT_MS, TAME_MARGIN, WARLOCK_TAME, PANDORA_COST, PANDORA_BONUS, PANDORA_ESCAPE, tameBonus, TRAP_FAIL_LEVELS, SHOP_CATS, dailyOf, dailyDate } from '/shared/cards.js';
+  PERSONAS, GHOST_BONUS, DEATH_LEVELS, DEPTH, DEPTH_TREASURE_EVERY, TRADE_TIMEOUT_MS, TAME_MARGIN, WARLOCK_TAME, PANDORA_COST, PANDORA_MULT, PANDORA_ESCAPE, tameBonus, TRAP_FAIL_LEVELS, SHOP_CATS, dailyOf, dailyDate } from '/shared/cards.js';
 import { esc, cardHTML, chipHTML, avatarSVG, iconSVG, cardBackSVG, locationSVG, cardIcon, cardText } from '/art.js';
 import { fx } from '/fx.js';
 import { sfx } from '/sfx.js';
@@ -852,7 +852,7 @@ function pandoraSVG(open = false, id = 'pb') {
 }
 // шкатулка в бою: закрытая — кнопка (кто может заплатить), открытая — кто её открыл
 function pandoraHTML(c, h) {
-  if (c.pandora) return `<div class="pandora open" title="Ящик Пандоры открыт: монстрам +${PANDORA_BONUS}, героям −${PANDORA_ESCAPE} к побегу. Кто не убежит — лишится всех вещей и питомца">${pandoraSVG(true)}<span class="pb-cap">Открыл ${esc(pname(c.pandora.by))}</span></div>`;
+  if (c.pandora) return `<div class="pandora open" title="Ящик Пандоры открыт: сила монстров ×${PANDORA_MULT}, героям −${PANDORA_ESCAPE} к побегу. Кто не убежит — лишится всех вещей и питомца">${pandoraSVG(true)}<span class="pb-cap">Открыл ${esc(pname(c.pandora.by))}</span></div>`;
   const p = me();
   if (!p || p.banished) return `<div class="pandora" title="Ящик Пандоры: открыть может любой игрок за ${PANDORA_COST} г">${pandoraSVG()}<span class="pb-cap">${PANDORA_COST} г</span></div>`;
   return `<button type="button" class="pandora${h?.pandora ? ' ready' : ''}" data-act="pandora" title="Ящик Пандоры: открыть за ${PANDORA_COST} г">${pandoraSVG()}<span class="pb-cap">${PANDORA_COST} г</span></button>`;
@@ -866,7 +866,7 @@ function openPandoraModal() {
   showOverlay(`<div class="modal pandora-modal" role="dialog" aria-label="Ящик Пандоры">
     <div class="pb-big">${pandoraSVG(false, 'pbm')}</div>
     <h2>Ящик Пандоры</h2>
-    <p>Откройте его за <b>${PANDORA_COST} голдов</b> — и в этом бою монстрам <b>+${PANDORA_BONUS}</b>, а героям <b>−${PANDORA_ESCAPE} к побегу</b>. Кто из героев не убежит, лишится <b>всех вещей и питомца</b>: их раздадут другим игрокам наугад. Чернокнижник уходит тенью и ничего не теряет. В одном бою — один ящик.</p>
+    <p>Откройте его за <b>${PANDORA_COST} голдов</b> — и в этом бою вся сила монстров <b>удваивается</b> (сейчас ${c.numbers?.monsters ?? '?'} → ${(c.numbers?.monsters ?? 0) * PANDORA_MULT}), а героям <b>−${PANDORA_ESCAPE} к побегу</b>. Кто из героев не убежит, лишится <b>всех вещей и питомца</b>: их раздадут другим игрокам наугад. Чернокнижник уходит тенью и ничего не теряет. В одном бою — один ящик.</p>
     ${self ? `<p class="warn-note">Это ваш собственный бой — ящик ударит по вам.</p>` : ''}
     ${why ? `<p class="muted">${esc(why)}</p>` : ''}
     <div class="row"><button class="btn danger" data-popopt="0" ${h?.pandora ? '' : 'disabled'}>Открыть за ${PANDORA_COST} г</button><button class="btn ghost" data-act="closeOverlay">Не трогать</button></div>
@@ -904,7 +904,7 @@ function fightHTML() {
   for (const [id, v] of Object.entries(c.turnUndead || {})) if (v) pm.push({ side: 'player', t: `${esc(pname(id))}: изгнание +${v}` });
   for (const bs of c.backstabs) pm.push({ side: 'monster', t: `${esc(pname(bs.by))} бьёт в спину ${esc(pname(bs.on))}: −2` });
   for (const [id, v] of Object.entries(c.escape || {})) if (v) pm.push({ side: 'player', t: `${esc(pname(id))}: левитация, побег +${v}` });
-  if (c.pandora) pm.push({ side: 'player', t: `Ящик Пандоры: побег −${PANDORA_ESCAPE}` });
+  if (c.pandora) pm.push({ side: 'player', t: `Ящик Пандоры: побег −${PANDORA_ESCAPE}` }, { side: 'monster', t: `${esc(pname(c.pandora.by))}: Ящик Пандоры ×${PANDORA_MULT}` });
   const mods = side => pm.filter(x => x.side === side).map(x => `<span class="mod ${side === 'player' ? 'p' : 'm'}">${x.t}</span>`).join('');
   const monsters = c.monsters.map((m, i) => `
     <div class="mon-wrap">
@@ -1935,7 +1935,7 @@ function extraFx(fresh) {
         break;
       case 'pandora': {
         sfx.play('portal'); sfx.play('bossRise', { delay: 0.25 });
-        fx.banner('Ящик Пандоры открыт!', `${pname(f.pid)}: монстрам +${PANDORA_BONUS}, героям −${PANDORA_ESCAPE} к побегу`, 'pandora');
+        fx.banner('Ящик Пандоры открыт!', `${pname(f.pid)}: сила монстров ×${PANDORA_MULT}, героям −${PANDORA_ESCAPE} к побегу`, 'pandora');
         const box = $('#stage .pandora'); if (box) { fx.ring(box, { n: 3, size: 30, grow: 520, color: 'rgba(200,125,255,.9)' }); fx.sparkle(box, { n: 14, colors: ['#f3d9ff', '#c77dff', '#ffd56a'] }); }
         fx.shake($('#stage'), 'bump');
         break;
@@ -2083,7 +2083,7 @@ const RULES = `<div class="modal rules" role="dialog" aria-label="Как игр�
   <h3>Кошелёк и подземный рынок</h3>
   <p>У каждого есть кошелёк: голды в него приходят за проданные вещи и выполненные контракты. Сколько голдов у вас, видите только вы — чужие кошельки скрыты. Рынок открыт всегда — кнопка в шапке стола. В свой ход вне боя на голды можно купить разовые карты для боя, зелья, проклятия, чтобы наслать на соперников, и «Получи уровень» (не больше одного за ход, последний уровень так не взять). Продаётся только то, что ещё лежит в колоде, поэтому товар кончается. У каждой локации своя ценовая политика: в таверне еда за полцены, в Звёздной библиотеке дешевле уровни и свитки, на кладбище — проклятия, а в Небесной цитадели уровни в полтора раза дороже. Цены локации написаны на её карте. Карты «Сокровища Атлантиды» и «Сундук мертвеца» (по одной в колоде) сразу кладут в кошелёк по 3000 голдов, а единственное проклятие «Прощай навсегда» (на рынке — около 3000) отнимает у жертвы всё и выбивает её из партии, пока кто-нибудь не откроет Ящик Пандоры.</p>
   <h3>Ящик Пандоры</h3>
-  <p>Во время любого боя — своего или чужого — на столе стоит резная шкатулка. Любой игрок может открыть её за ${PANDORA_COST} голдов: в этом бою монстрам +${PANDORA_BONUS}, героям −${PANDORA_ESCAPE} к побегу, а кто из героев не убежит, лишится всех вещей и питомца — их раздадут другим игрокам наугад. Спутник остаётся. Чернокнижник уходит тенью и ничего не теряет. В одном бою — один ящик. Открытый ящик к тому же возвращает в партию всех, кого настигло «Прощай навсегда».</p>
+  <p>Во время любого боя — своего или чужого — на столе стоит резная шкатулка. Любой игрок может открыть её за ${PANDORA_COST} голдов: в этом бою вся сила монстров удваивается (и всё, что им подкинут после), героям −${PANDORA_ESCAPE} к побегу, а кто из героев не убежит, лишится всех вещей и питомца — их раздадут другим игрокам наугад. Спутник остаётся. Чернокнижник уходит тенью и ничего не теряет. В одном бою — один ящик. Открытый ящик к тому же возвращает в партию всех, кого настигло «Прощай навсегда».</p>
   <h3>Ловушки</h3>
   <p>Ловушка за дверью срабатывает на того, кто её открыл. Можно рискнуть и обезвредить — на кубике 4+ (плуту и механику 2+): тогда ловушка ваша и её можно подложить сопернику. Сорвалась — расплата и ещё −1 уровень. Можно не рисковать и просто принять расплату. Подложенную ловушку соперник обезвреживает тем же броском, но без лишнего штрафа. Противогаз и каска с канарейкой спасают от газа.</p>
   <h3>Расы и классы</h3>

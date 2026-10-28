@@ -343,6 +343,8 @@ function load() {
       r.members.forEach(m => { m.socketId = null; m.connected = false; m.lastSeen = now(); });
       r.seatVote = null;
       if (r.game?.combat) r.game.combat.winAt = null;
+      // старые партии: открытый Ящик Пандоры давал монстрам +10 отдельным бонусом — теперь он удваивает силу сам
+      if (r.game?.combat?.pandora) r.game.combat.mods = r.game.combat.mods.filter(m => m.label !== 'Ящик Пандоры');
       // старые партии: отложенные легендарки возвращаются в колоду клада вперемешку
       if (r.game?.rig) {
         for (const u of r.game.rig.queue || []) r.game.decks.treasure.splice(Math.floor(Math.random() * (r.game.decks.treasure.length + 1)), 0, u);

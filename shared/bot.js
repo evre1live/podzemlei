@@ -1,5 +1,5 @@
 // Простой ИИ для ботов «Под Землёй». Возвращает одно действие или null.
-import { def, TROUBLE_BONUS, MUTAGEN_BONUS, LULLABY_PENALTY, LULLABY_MAX, DISTILL_COST, tameBonus, TRAP_FAIL_LEVELS, SHOP_IDS, PANDORA_COST, PANDORA_BONUS } from './cards.js';
+import { def, TROUBLE_BONUS, MUTAGEN_BONUS, LULLABY_PENALTY, LULLABY_MAX, DISTILL_COST, tameBonus, TRAP_FAIL_LEVELS, SHOP_IDS, PANDORA_COST, PANDORA_MULT } from './cards.js';
 import {
   P, check, act, combatNumbers, playOptions, handLimit, hasClass, hasRace, cardWorth, shopPrice, shopStock, depthBonus,
   equipError, participants, heroStrength, levelOnlyFight, winLevel, luxLevel, saleValue, monsterBaseLevel, powerOf, locationOf,
@@ -243,7 +243,7 @@ function interfere(s, p) {
   }
   // Ящик Пандоры — дорого, поэтому только чтобы не дать сопернику выиграть партию (или лидеру, если голдов с запасом)
   const gold = p.gold || 0;
-  if (!c.pandora && !participants(s).includes(p.id) && (forGame || (isLeader && gold >= PANDORA_COST * 2)) && gold >= PANDORA_COST) opts.push({ v: PANDORA_BONUS, a: { type: 'pandora' } });
+  if (!c.pandora && !participants(s).includes(p.id) && (forGame || (isLeader && gold >= PANDORA_COST * 2)) && gold >= PANDORA_COST) opts.push({ v: combatNumbers(s).monsters * (PANDORA_MULT - 1), a: { type: 'pandora' } });
   if (hasClass(p, 'warlock') && !(c.summoned || []).includes(p.id)) {
     for (const m of p.hand.filter(x => def(x).type === 'monster')) {
       const v = def(m).boss ? 2 * heroStrength(s, f) : monsterBaseLevel(s, def(m)) + depthBonus(s);
