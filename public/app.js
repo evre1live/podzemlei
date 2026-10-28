@@ -712,7 +712,8 @@ function renderStage() {
     lp.innerHTML = loc ? `<button class="loc-banner" id="locBanner" data-uid="${esc(g.location)}" data-zone="view" title="${esc(loc.text)}">${locationSVG(loc.art)}<span><small>Локация</small><b>${esc(loc.name)}</b></span></button>`
       : `<span class="loc-banner is-default" title="Подземелье: особых правил нет. Карта локации перенесёт весь стол в новое место."><img src="/loc/v2/default-card.webp" alt="" decoding="async"><span><small>Локация</small><b>Подземелье</b></span></span>`;
   }
-  if (g.combat) { el.innerHTML = decks + `<div class="stage-inner">${fightHTML()}</div>`; afterStage(); return; }
+  // на телефоне Ящик Пандоры стоит в углу сцены рядом с колодами — вне общего потока боя
+  if (g.combat) { el.innerHTML = decks + pandoraHTML(g.combat, h, 'pb-corner') + `<div class="stage-inner">${fightHTML()}</div>`; afterStage(); return; }
   if (g.duel && g.phase === 'playing') { el.innerHTML = decks + `<div class="stage-inner">${duelHTML()}</div>`; afterStage(); return; }
   const tp = pl(g.turn.pid);
   const mine = tp?.id === S.room.me;
@@ -820,11 +821,11 @@ function pandoraArt(open = false) {
   return `<img class="pb-img${open ? ' open' : ''}" src="/ui/v3/pandora-${open ? 'open' : 'closed'}.webp" alt="" width="300" height="${open ? 293 : 194}" decoding="async" draggable="false">`;
 }
 // шкатулка в бою: закрытая — кнопка (кто может заплатить), открытая — кто её открыл
-function pandoraHTML(c, h) {
-  if (c.pandora) return `<div class="pandora open" title="Ящик Пандоры открыт: сила монстров ×${PANDORA_MULT}, героям −${PANDORA_ESCAPE} к побегу. Кто не убежит — лишится всех вещей и питомца">${pandoraArt(true)}<span class="pb-cap">Открыл ${esc(pname(c.pandora.by))}</span></div>`;
+function pandoraHTML(c, h, at = 'pb-top') {
+  if (c.pandora) return `<div class="pandora open ${at}" title="Ящик Пандоры открыт: сила монстров ×${PANDORA_MULT}, героям −${PANDORA_ESCAPE} к побегу. Кто не убежит — лишится всех вещей и питомца">${pandoraArt(true)}<span class="pb-cap">Открыл ${esc(pname(c.pandora.by))}</span></div>`;
   const p = me();
-  if (!p || p.banished) return `<div class="pandora" title="Ящик Пандоры: открыть может любой игрок за ${PANDORA_COST} г">${pandoraArt()}<span class="pb-cap">${PANDORA_COST} г</span></div>`;
-  return `<button type="button" class="pandora${h?.pandora ? ' ready' : ''}" data-act="pandora" title="Ящик Пандоры: открыть за ${PANDORA_COST} г">${pandoraArt()}<span class="pb-cap">${PANDORA_COST} г</span></button>`;
+  if (!p || p.banished) return `<div class="pandora ${at}" title="Ящик Пандоры: открыть может любой игрок за ${PANDORA_COST} г">${pandoraArt()}<span class="pb-cap">${PANDORA_COST} г</span></div>`;
+  return `<button type="button" class="pandora ${at}${h?.pandora ? ' ready' : ''}" data-act="pandora" title="Ящик Пандоры: открыть за ${PANDORA_COST} г">${pandoraArt()}<span class="pb-cap">${PANDORA_COST} г</span></button>`;
 }
 function openPandoraModal() {
   const c = S.game?.combat, h = hints(), p = me();
@@ -912,13 +913,12 @@ function fightHTML() {
   return `
     <div class="fight" style="--ha:${n.winning ? 0.34 : 0.12};--ma:${n.winning ? 0.12 : 0.36}">
       <div class="side-col hero"><div class="side-main"><div class="shield hero${n.winning ? ' lead' : ''}" id="shieldHero" title="Сила героев">${SHIELD('hero')}<b data-roll="${n.heroes}">${prev ? prev.heroes : n.heroes}</b></div><div class="heroes-row${c.helper ? ' duo' : ''}">${heroes}</div></div><div class="mods">${mods('player')}</div></div>
-      <div class="versus">${center}${verdict}</div>
+      <div class="versus">${pandoraHTML(c, h)}${center}${verdict}</div>
       <div class="side-col mon"><div class="side-main"><div class="shield mon${n.winning ? '' : ' lead'}" id="shieldMon" title="Сила монстров">${SHIELD('mon')}<b data-roll="${n.monsters}">${prev ? prev.monsters : n.monsters}</b></div><div class="monsters-row">${monsters}</div></div><div class="mods">${mods('monster')}</div></div>
     </div>
     <div class="tug" style="--k:${(prev ? prev.k : tk).toFixed(3)}" data-k="${tk.toFixed(3)}" title="Перевес сил: ${n.heroes} против ${n.monsters}"><i class="tug-fill"></i><i class="tug-mark"></i></div>
     <div class="reward">За победу: +${n.levels} ${plural(n.levels, 'уровень', 'уровня', 'уровней')} и ${n.treasures} ${plural(n.treasures, 'карта', 'карты', 'карт')} клада${c.helper ? `: ${esc(pname(c.fighter))} — ${n.treasures - n.helperShare}, ${esc(pname(c.helper))} — ${n.helperShare}${n.helperExtra ? ` (обещано ${c.helpOffer}, ещё ${n.helperExtra} сверху из колоды)` : ''}` : ''}</div>
-    <div class="act-bar">${b.join('')}</div>
-    ${pandoraHTML(c, h)}`;
+    <div class="act-bar">${b.join('')}</div>`;
 }
 
 // поединок двух героев: щиты силы, бонусы сторон, отсчёт и что отдаст проигравший
@@ -1905,7 +1905,7 @@ function extraFx(fresh) {
       case 'pandora': {
         sfx.play('portal'); sfx.play('bossRise', { delay: 0.25 });
         fx.banner('Ящик Пандоры открыт!', `${pname(f.pid)}: сила монстров ×${PANDORA_MULT}, героям −${PANDORA_ESCAPE} к побегу`, 'pandora');
-        const box = $('#stage .pandora'); if (box) { fx.ring(box, { n: 3, size: 30, grow: 520, color: 'rgba(200,125,255,.9)' }); fx.sparkle(box, { n: 14, colors: ['#f3d9ff', '#c77dff', '#ffd56a'] }); }
+        const box = [...document.querySelectorAll('#stage .pandora')].find(e => e.offsetParent); if (box) { fx.ring(box, { n: 3, size: 30, grow: 520, color: 'rgba(200,125,255,.9)' }); fx.sparkle(box, { n: 14, colors: ['#f3d9ff', '#c77dff', '#ffd56a'] }); }
         fx.shake($('#stage'), 'bump');
         break;
       }

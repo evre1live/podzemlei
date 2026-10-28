@@ -2212,8 +2212,10 @@ input[type=text], input[type=password], select, .g-search, .g-sort select,
 }
 
 /* ───────── Ящик Пандоры ───────── */
-/* шкатулка стоит в правом верхнем углу сцены: сцена в бою может прокручиваться, а верх виден всегда */
-#stage .pandora { position: absolute; right: 22px; top: 14px; z-index: 2; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 0; border: 0; background: none; color: inherit; font: inherit; }
+/* шкатулка стоит в центре боя, над скрещёнными мечами и надписью «против» */
+/* одна шкатулка — в центре боя (компьютер), вторая — в углу у колод (телефон); видна только своя */
+#stage .pandora.pb-corner { display: none !important; }
+#stage .pandora { position: relative; z-index: 2; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 0; border: 0; background: none; color: inherit; font: inherit; }
 .pandora .pb-cap { font-family: var(--ui); font-weight: 700; font-size: 12.5px; color: #f0d9ff; text-shadow: 0 1px 2px #000; white-space: nowrap; }
 button.pandora { cursor: pointer; }
 button.pandora:not(.ready) .pb-cap { color: var(--text-2); }
@@ -2224,10 +2226,13 @@ button.pandora:not(.ready) .pb-cap { color: var(--text-2); }
 .pandora-modal p { margin: 0; line-height: 1.5; }
 .pandora-modal .row { justify-content: center; }
 .pandora-modal .warn-note { color: #ffb7a5; font-weight: 600; }
-/* на узком экране сцена тянется по высоте — шкатулка встаёт в общий поток под кнопками боя */
+/* на узком экране шкатулка — в правом нижнем углу сцены, в одну линию с колодами дверей и клада */
 @media (max-width: 900px) {
-  #stage .pandora { position: static; flex-direction: row; gap: 10px; margin: 8px auto 0; align-self: center; }
-  .pandora .pb-cap { font-size: 13.5px; }
+  #stage .pandora.pb-top { display: none !important; }
+  #stage .pandora.pb-corner { display: flex !important; position: absolute; top: auto; bottom: 12px; right: 14px; flex-direction: column; gap: 1px; margin: 0; }
+  #stage .pandora .pb-img { width: 84px; }
+  #stage .pandora .pb-img.open { width: 80px; }
+  .pandora .pb-cap { font-size: 12.5px; }
 }
 .ghost-note.banished { background: rgb(120 30 40 / .25); border-color: rgb(255 140 120 / .55); color: #ffe1da; display: flex; gap: 8px; align-items: flex-start; }
 .ghost-note.banished .gi { width: 20px; height: 20px; flex: none; color: #ffb7a5; }
@@ -2316,11 +2321,10 @@ button.pandora:not(.ready) .pb-cap { color: var(--text-2); }
   .game .opp .ostats { grid-column: 1 / -1; grid-row: 3; flex-wrap: nowrap; overflow: hidden; margin-top: 3px; font-size: 12.5px; gap: 5px; }
   .game .opp .ostats .badge.bot { display: none; }
   .game .opp .ostats .badge { white-space: nowrap; }
-  /* сцена: бой помещается целиком; колоды поменьше, Ящик Пандоры — в правом нижнем углу боя */
+  /* сцена: бой помещается целиком; колоды поменьше */
   .game .cave-stage { padding: 10px 16px; overflow-x: hidden; }
   .game .stage-inner { gap: 8px; }
   .game .decks { transform: scale(.78); transform-origin: left bottom; left: 10px; bottom: 8px; }
-  #stage .pandora { top: auto; bottom: 0; right: 0; transform: scale(.85); transform-origin: right bottom; }
 }
 /* вещи героя: строки прямо по стеклу, без плашек. Слева — значок места в маленьком гнезде,
    имя окрашено по редкости, бонус — цифрой шрифта заголовков; между местами тонкая линия */
