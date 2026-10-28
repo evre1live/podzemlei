@@ -1371,9 +1371,10 @@ t('покупка на рынке — тайна: в летописи её не�
   assert.equal(A(s, 'p0', { type: 'buy', id: 'k_tax' }).ok, true);
   assert.equal(s.log.length, logLen, 'в летопись ничего не добавилось');
   const seen = pid => view(s, pid).fx.filter(f => f.kind === 'buy');
-  assert.equal(seen('p0').length, 1); assert.equal(seen('p0')[0].card, 'k_tax#0');
+  const got = seen('p0')[0]?.card;
+  assert.equal(seen('p0').length, 1); assert.ok(got?.startsWith('k_tax#'));
   assert.equal(seen('p1').length, 0); assert.equal(seen(null).length, 0);
-  assert.ok(!JSON.stringify(view(s, 'p1')).includes('k_tax#0'));
+  assert.ok(!JSON.stringify(view(s, 'p1')).includes(got));
   assert.equal(view(s, 'p1').turn.boughtLevel, undefined);
 });
 
@@ -1534,55 +1535,13 @@ t('Ящик Пандоры: не убежал — все вещи и питом�
   assert.deepEqual(k.equipped, ['i_helmet#0']);
 });
 
-t('«Прощай навсегда»: жертва теряет всё и выбывает, ходы её пропускают, вернуть может только Ящик Пандоры', () => {
-  const s = fresh(); const p = P(s, 'p0'), v = P(s, 'p1'), w = P(s, 'p2');
-  s.decks.door.push(take(s, 'k_farewell#0'));
-  assert.equal(view(s, 'p0').shop.items.find(x => x.id === 'k_farewell').price, 3000);
-  p.gold = 3000;
-  assert.equal(A(s, 'p0', { type: 'buy', id: 'k_farewell' }).ok, true);
-  v.level = 8; v.gold = 700;
-  v.equipped.push(take(s, 'i_helmet#0'), take(s, 'p_rat#0')); v.carried.push(take(s, 'i_ladle#0')); v.hand.push(take(s, 'o_kvass#0')); v.ally = take(s, 'a_guide#0');
-  v.classes.push(take(s, 'c_bard#0'));
-  assert.equal(A(s, 'p0', { type: 'playCard', uid: 'k_farewell#0', target: 'p1' }).ok, true);
-  assert.equal(v.banished, true); assert.equal(v.level, 1);
-  assert.deepEqual([v.equipped, v.carried, v.hand], [[], [], []]); assert.equal(v.ally, null);
-  assert.equal(v.gold, 700, 'кошелёк остаётся'); assert.equal(v.classes.length, 1, 'класс остаётся');
-  assert.equal(view(s, 'p0').players[1].banished, true);
-  assert.match(A(s, 'p1', { type: 'autoEquip' }).error, /выбыли/);
-  // ход жертвы пропускается
-  s.turn.step = 'charity'; A(s, 'p0', { type: 'endTurn' });
-  assert.equal(s.turn.pid, 'p2');
-  // на выбывшего ничего не насылают
-  w.hand.push(take(s, 'k_tax#0'));
-  assert.match(A(s, 'p2', { type: 'playCard', uid: 'k_tax#0', target: 'p1' }).error, /мертва/);
-  // кто-то открыл Ящик Пандоры в бою — выбывший возвращается с 1-го уровня и стартовыми картами
-  s.turn.step = 'pre'; fight(s, 'm_mole#0', 'p2');
-  p.gold = 3000; A(s, 'p0', { type: 'pandora' });
-  assert.equal(v.banished, false); assert.equal(v.dead, false); assert.equal(v.level, 1);
-  assert.equal(v.hand.length, 8);
-  assert.ok(s.log.some(l => /из небытия/.test(l.text)));
-  assert.doesNotMatch(A(s, 'p1', { type: 'autoEquip' }).error || '', /выбыли/, 'снова в игре');
-});
-
-t('«Прощай навсегда»: из двери уходит в руку, на бойца — бой кончается и ход переходит, Куриный бог спасает', () => {
-  const s = fresh(); const p = P(s, 'p0');
-  s.decks.door.push(take(s, 'k_farewell#0'));
-  assert.equal(A(s, 'p0', { type: 'kick' }).ok, true);
-  assert.ok(p.hand.includes('k_farewell#0')); assert.ok(!p.banished);
-  // соперник в бою и в свой ход
-  s.turn = { idx: 1, pid: 'p1', step: 'pre', n: 2 };
-  fight(s, 'm_mole#0', 'p1');
-  assert.equal(A(s, 'p0', { type: 'playCard', uid: 'k_farewell#0', target: 'p1' }).ok, true);
-  assert.equal(s.combat, null); assert.equal(s.turn.pid, 'p2');
-  // Куриный бог отводит и это проклятие
-  const t2 = fresh(); const a = P(t2, 'p0'), b = P(t2, 'p1');
-  a.hand.push(take(t2, 'k_farewell#0')); b.hand.push(take(t2, 'o_ward#0'));
-  A(t2, 'p0', { type: 'playCard', uid: 'k_farewell#0', target: 'p1' });
-  assert.ok(!b.banished);
-  // в Кладбище горгулий проклятия дешевле
-  const t3 = fresh(); const c = P(t3, 'p0'); t3.decks.door.push(take(t3, 'k_farewell#0'));
-  c.hand.push(take(t3, 'loc_graveyard#0')); A(t3, 'p0', { type: 'playCard', uid: 'loc_graveyard#0' });
-  assert.equal(view(t3, 'p0').shop.items.find(x => x.id === 'k_farewell').price, 1800);
+t('«Прощай навсегда» убрана из игры: нет ни в колоде, ни на рынке, но старые сохранения её узнают', () => {
+  const s = fresh();
+  const all = [...s.decks.door, ...s.discard.door, ...s.players.flatMap(p => p.hand)];
+  assert.ok(!all.some(u => u.startsWith('k_farewell')));
+  assert.ok(!SHOP_IDS.includes('k_farewell'));
+  assert.ok(!view(s, 'p0').shop.items.some(x => x.id === 'k_farewell'));
+  assert.equal(def('k_farewell#0').name, 'Проклятие: Прощай навсегда');
 });
 
 t('«Сокровища Атлантиды» и «Сундук мертвеца»: по +3000 голдов, тайная команда /ATLANTIS — если карта ни у кого не на руке', () => {

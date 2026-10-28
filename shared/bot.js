@@ -465,7 +465,6 @@ function shopMove(s, p, step) {
     const threat = top && top.level >= W - 3 && top.level >= p.level;
     const target = threat ? top : foe;
     if (target && !target.dead) {
-      if (threat && top.level >= W - 2 && ok('k_farewell') && !p.hand.some(u => def(u).keep)) return { type: 'buy', id: 'k_farewell' };
       if (threat && ok('d_femme') && gold - price('d_femme') >= reserve && !p.hand.some(u => def(u).femme)) return { type: 'buy', id: 'd_femme' };
       const c = SHOP_IDS.filter(id => def(id).type === 'curse' && def(id).fx.some(f => f.k === 'levels') && ok(id)).sort((a, b) => price(a) - price(b))[0];
       if (c && (gold - price(c) >= reserve || (threat && top.level >= W - 2))) return { type: 'buy', id: c };
