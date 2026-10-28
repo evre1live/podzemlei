@@ -2424,3 +2424,21 @@ button.pandora:not(.ready) .pb-cap { color: var(--text-2); }
 .seat-list > .seat-who { padding: 6px 10px; border-radius: 8px; background: rgb(255 255 255 / .04); }
 .seat-btn { justify-content: flex-start; padding: 8px 12px; min-height: 50px; }
 @media (max-width: 900px) { .game .g-head .seat-pill span { max-width: 120px; overflow: hidden; text-overflow: ellipsis; } }
+/* рамка медальона — снаружи круга портрета: портрет своего размера не меняет, кольцо выходит за край */
+svg.av-framed { overflow: visible; }
+:is(.me-ava, .opp .ava, .seat .ava, .hero-ava, .av-preview, .cn-avafly, .hero-pill.medal .ava):has(> svg.av-framed) {
+  overflow: visible; border-color: transparent; background: none; box-shadow: none;
+}
+.opp .ava:has(> svg.av-framed), .me-ava:has(> svg.av-framed), .seat .ava:has(> svg.av-framed) { z-index: 1; }
+/* в мелких списках (следить за, выбор игрока) рамку не надеваем — только портрет */
+:is(.follow, .pick, .trick-seg, .seat-who) .av-frame { display: none; }
+/* в выборе рамки портрет с кольцом уменьшен, чтобы кольцо целиком влезло в ячейку */
+.av-pick .c.fit { overflow: visible; border-color: transparent; background: none; }
+.av-pick .c.fit svg { transform: scale(var(--k, .7)); }
+/* свет в выборе: два тона — ореол и тень */
+.av-light-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; vertical-align: 0; background: linear-gradient(135deg, var(--a), var(--b)); box-shadow: 0 0 6px var(--a); }
+/* под кольцо рамки — место: в бою над медальоном, в редакторе вокруг большого портрета */
+.hero-pill.medal.framed { padding-top: calc(var(--rs) * var(--fext, 0)); }
+.av-preview { --pv: 180px; width: var(--pv); height: var(--pv); margin: calc(var(--pv) * var(--fext, 0) + 4px) auto calc(var(--pv) * var(--fext, 0) * .6); }
+@media (max-width: 760px) { .av-preview { --pv: 132px; } }
+@media (max-width: 420px) { .av-preview { --pv: 104px; } }

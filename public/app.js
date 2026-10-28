@@ -7,7 +7,8 @@ import { sfx } from '/sfx.js';
 import { setWorld, worldMood } from '/world.js';
 import { cine, growlKind } from '/cine.js';
 import { AVATAR_PARTS, avatarFromSeed, cleanAvatar, avatarInGame, gameRaces, pickCode } from '/shared/avatar.js';
-import { AV_LABELS, lookNote, portraitThumb } from '/art-avatar.js';
+import { AV_LABELS, LIGHTS, lookNote, portraitThumb, setAvatarLocation, sceneOf, lightOf, frameExt } from '/art-avatar.js';
+import { FRAMES } from '/avatar-art.js';
 import { createVoice } from '/voice.js';
 import { ico } from '/icons.js';
 import { NEWS, NEWS_LATEST } from '/news.js';
@@ -210,6 +211,8 @@ socket.on('room:state', ({ room, game, serverTime }) => {
 // ───────────────────────── маршрутизация экранов ─────────────────────────
 function render() {
   const scr = !S.room ? 'home' : S.game ? 'game' : 'lobby';
+  // сцена «Локация партии»: за портретами — текущая локация стола
+  setAvatarLocation(scr === 'game' ? S.game.location : null);
   if (scr !== S.screen) { S.screen = scr; mount[scr](); soundIcons(); }
   setWorld($('#world'), scr === 'home' ? null : scr === 'game' && S.game.location ? def(S.game.location).art : 'default');
   // фон откликается на бой: края кадра наливаются тревожным светом, у босса — лиловым
@@ -675,7 +678,7 @@ function oppHTML(p) {
 // под кольцом имя на шестигранной табличке (как названия на картах)
 function heroMedal(p, { str, sub = '', vmember = false, foe = false } = {}) {
   const a = gAva(p);
-  return `<div class="hero-pill medal${a.frame ? ' framed' : ''}${foe ? ' foe' : ''}" data-pid="${p.id}"${vmember ? ` data-vmember="${p.id}"` : ''} style="--seat:${p.color}">
+  return `<div class="hero-pill medal${a.frame ? ' framed' : ''}${foe ? ' foe' : ''}" data-pid="${p.id}"${vmember ? ` data-vmember="${p.id}"` : ''} style="--seat:${p.color};--fext:${frameExt(a)}">
     <span class="ring"><span class="ava">${avatarSVG(a, p.color)}</span>
       <b class="hm-lvl" title="Уровень ${p.level}">${p.level}</b>
       <b class="hm-str" title="Сила ${str}">${ico('crossed-swords')}<span>${str}</span></b></span>
@@ -2513,7 +2516,7 @@ document.addEventListener('click', async e => {
 // поэтому там можно выбрать только портреты своей расы (полукровке — двух).
 const RACE_PL = ['Люди', 'Эльфы', 'Гномы', 'Полурослики', 'Орки', 'Гоблины', 'Кротолюды'];
 const RACE_GEN = ['человека', 'эльфа', 'гнома', 'полурослика', 'орка', 'гоблина', 'кротолюда'];
-const AV_TABS = [{ id: 'face', label: 'Портреты' }, { id: 'frame', label: 'Рамка' }];
+const AV_TABS = [{ id: 'face', label: 'Портреты' }, { id: 'scene', label: 'Сцена и свет' }, { id: 'frame', label: 'Рамка' }];
 const seatColor = () => S.room?.members.find(m => m.id === S.room.me)?.color || '#3a3a42';
 // расы героя в идущей партии или null, если партии нет (или вы зритель)
 const avGameRaces = () => { const p = S.game?.phase === 'playing' || S.game?.phase === 'ended' ? me() : null; return p ? gameRaces(raceKeysOf(p)) : null; };
@@ -2557,8 +2560,25 @@ function avFrames(cfg, races, sc) {
   const done = achDone();
   return `<div class="av-row"><div class="av-title">Рамка медальона: <b>${esc(AV_LABELS.frame[cfg.frame])}</b> <span class="muted">· рамки с замком открываются подвигами</span></div><div class="av-grid labeled">${AV_LABELS.frame.map((n, i) => {
     const lock = FRAME_ACH[i] && !done[FRAME_ACH[i]] && cfg.frame !== i ? ACH[FRAME_ACH[i]][0] : '';
-    return `<button class="av-pick${cfg.frame === i ? ' on' : ''}${lock ? ' locked' : ''}" data-av-k="frame" data-av-v="${i}" aria-pressed="${cfg.frame === i}"${lock ? ` title="${esc(lock)}"` : ''}><span class="c">${avatarSVG({ ...shown, frame: i }, sc)}${lock ? `<i class="lock">${ico('padlock')}</i>` : ''}</span><small>${esc(n)}${lock ? `<em>${esc(lock)}</em>` : FRAME_ACH[i] ? `<em>${esc(ACH[FRAME_ACH[i]][1])}</em>` : ''}</small></button>`;
+    const k = i ? (FRAMES[i - 1][3] / 0.96 * 0.98).toFixed(3) : 1;
+    return `<button class="av-pick${cfg.frame === i ? ' on' : ''}${lock ? ' locked' : ''}" data-av-k="frame" data-av-v="${i}" aria-pressed="${cfg.frame === i}"${lock ? ` title="${esc(lock)}"` : ''}><span class="c${i ? ' fit' : ''}" style="--k:${k}">${avatarSVG({ ...shown, frame: i }, sc)}${lock ? `<i class="lock">${ico('padlock')}</i>` : ''}</span><small>${esc(n)}${lock ? `<em>${esc(lock)}</em>` : FRAME_ACH[i] ? `<em>${esc(ACH[FRAME_ACH[i]][1])}</em>` : ''}</small></button>`;
   }).join('')}</div></div>`;
+}
+// сцена за портретом и свет: фон локации, ореол и кромка вокруг героя, тон картинки
+function avScenes(cfg, races, sc) {
+  const shown = { ...avShown(cfg, races), frame: 0 };
+  const scenes = AV_LABELS.scene.map((n, i) => {
+    const note = i === 0 ? 'как нарисован' : i === 1 ? (S.game?.location ? 'сейчас: ' + def(S.game.location).name : 'меняется с локацией') : '';
+    return `<button class="av-pick${cfg.scene === i ? ' on' : ''}" data-av-k="scene" data-av-v="${i}" aria-pressed="${cfg.scene === i}"><span class="c">${avatarSVG({ ...shown, scene: i }, sc)}</span><small>${esc(n)}${note ? `<em>${esc(note)}</em>` : ''}</small></button>`;
+  }).join('');
+  const auto = (() => { const v = { ...shown, light: 0 }; const i = lightOf(v, sceneOf(v)); return i >= 0 ? LIGHTS[i].name.toLowerCase() : 'без подсветки'; })();
+  const lights = AV_LABELS.light.map((n, i) => {
+    const L = i ? LIGHTS[i - 1] : null;
+    const dot = L?.halo ? `<i class="av-light-dot" style="--a:${L.halo};--b:${L.bottom}"></i>` : '';
+    return `<button class="av-pick${cfg.light === i ? ' on' : ''}" data-av-k="light" data-av-v="${i}" aria-pressed="${cfg.light === i}"><span class="c">${avatarSVG({ ...shown, scene: cfg.scene, light: i }, sc)}</span><small>${dot}${esc(n)}${i === 0 ? `<em>${esc(auto)}</em>` : ''}</small></button>`;
+  }).join('');
+  return `<div class="av-row"><div class="av-title">Сцена: <b>${esc(AV_LABELS.scene[cfg.scene])}</b> <span class="muted">· фон за героем; «Локация партии» меняется вместе с локацией стола</span></div><div class="av-grid labeled">${scenes}</div></div>
+    <div class="av-row"><div class="av-title">Свет: <b>${esc(AV_LABELS.light[cfg.light])}</b> <span class="muted">· ореол, кромка и тон портрета</span></div><div class="av-grid labeled">${lights}</div></div>`;
 }
 const avCaption = (cfg, races) => {
   const v = avShown(cfg, races);
@@ -2576,11 +2596,12 @@ function drawAvatarEditor() {
   const tab = AV_TABS.find(t => t.id === E.tab) || AV_TABS[0];
   const filters = tab.id === 'face'
     ? `<div class="av-filters">${avChips('g', 'Пол', ['Мужчины', 'Женщины'], F.g)}${races ? '' : avChips('r', 'Раса', RACE_PL, F.r)}${avChips('l', 'Образ', AV_LABELS.look, F.l)}</div>` : '';
-  const body = tab.id === 'face' ? avGallery(cfg, races) : avFrames(cfg, races, sc);
+  const body = tab.id === 'face' ? avGallery(cfg, races) : tab.id === 'scene' ? avScenes(cfg, races, sc) : avFrames(cfg, races, sc);
   const box = $('#avModal');
   // при выборе перерисовываем только содержимое, чтобы список не прыгал наверх
   if (box && box.dataset.avtab === tab.id) {
-    box.querySelector('.av-preview').innerHTML = avatarSVG(avShown(cfg, races), sc);
+    const pv = box.querySelector('.av-preview');
+    pv.innerHTML = avatarSVG(avShown(cfg, races), sc); pv.style.setProperty('--fext', frameExt(cfg));
     box.querySelector('.av-caption').innerHTML = avCaption(cfg, races);
     const fl = box.querySelector('.av-filters'); if (fl) fl.outerHTML = filters;
     box.querySelector('.av-rows').innerHTML = body;
@@ -2590,7 +2611,7 @@ function drawAvatarEditor() {
     <h2>Облик героя</h2>
     <div class="av-body">
       <div class="av-side">
-        <div class="av-preview" style="--seat:${sc}">${avatarSVG(avShown(cfg, races), sc)}</div>
+        <div class="av-preview" style="--seat:${sc};--fext:${frameExt(cfg)}">${avatarSVG(avShown(cfg, races), sc)}</div>
         <p class="av-caption">${avCaption(cfg, races)}</p>
         <button class="btn small" data-act="avatarRandom">${ico('rolling-dices')}Случайно</button>
       </div>

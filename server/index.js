@@ -63,12 +63,13 @@ const newCode = () => { let c; do { c = Array.from({ length: 6 }, () => CODE_CHA
 const newId = () => crypto.randomBytes(6).toString('hex');
 const newToken = () => crypto.randomBytes(24).toString('hex');
 const BOT_NAMES = ['Кротыч', 'Диггер Петя', 'Шахтёрка Зоя', 'Сталактитыч', 'Гоша из подвала', 'Тётя Вагонетка', 'Дед Фонарь', 'Крыса Лариса'];
-// у каждого бота свой портрет и рамка: раса, пол, образ (0 воин … 5 знать), рамка
+// у каждого бота свой портрет, рамка и сцена: раса, пол, образ (0 воин … 5 знать), рамка,
+// сцена (1 — локация партии, 2… — сцены по порядку art/scenes.json)
 const BOT_LOOKS = {
-  'Кротыч': { race: 6, gender: 0, look: 4, frame: 10 }, 'Диггер Петя': { race: 0, gender: 0, look: 2, frame: 1 },
-  'Шахтёрка Зоя': { race: 2, gender: 1, look: 4, frame: 2 }, 'Сталактитыч': { race: 2, gender: 0, look: 1, frame: 9 },
-  'Гоша из подвала': { race: 5, gender: 0, look: 4, frame: 7 }, 'Тётя Вагонетка': { race: 3, gender: 1, look: 4, frame: 6 },
-  'Дед Фонарь': { race: 6, gender: 0, look: 3, frame: 11 }, 'Крыса Лариса': { race: 5, gender: 1, look: 2, frame: 5 },
+  'Кротыч': { race: 6, gender: 0, look: 4, frame: 10, scene: 14 }, 'Диггер Петя': { race: 0, gender: 0, look: 2, frame: 1, scene: 1 },
+  'Шахтёрка Зоя': { race: 2, gender: 1, look: 4, frame: 2, scene: 6 }, 'Сталактитыч': { race: 2, gender: 0, look: 1, frame: 9, scene: 7 },
+  'Гоша из подвала': { race: 5, gender: 0, look: 4, frame: 7, scene: 10 }, 'Тётя Вагонетка': { race: 3, gender: 1, look: 4, frame: 6, scene: 3 },
+  'Дед Фонарь': { race: 6, gender: 0, look: 3, frame: 11, scene: 8 }, 'Крыса Лариса': { race: 5, gender: 1, look: 2, frame: 5, scene: 15 },
 };
 const COLORS = ['#b5432f', '#c4773a', '#4f8f5c', '#3f7fb0', '#8a5cb0', '#b0587f']; // цвета мест: приглушённые геральдические
 

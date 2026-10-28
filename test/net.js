@@ -97,7 +97,7 @@ ok('в списке комнат замок, хэш пароля не утека
   assert.ok((await D.call('room:addBot')).ok);
   await until(() => D.lastState.room.members.length === 2, 3000, 'bot seated');
   const botAv = D.lastState.room.members.find(m => m.isBot).avatar;
-  assert.deepEqual(Object.keys(botAv).sort(), ['alt', 'frame', 'gender', 'look', 'pref', 'race']);
+  assert.deepEqual(Object.keys(botAv).sort(), ['alt', 'frame', 'gender', 'light', 'look', 'pref', 'race', 'scene']);
   assert.ok((await D.call('room:start')).ok);
   await until(() => D.lastState?.game, 3000, 'game 20');
   assert.equal(D.lastState.game.opts.winLevel, 20);

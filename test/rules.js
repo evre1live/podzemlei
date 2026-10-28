@@ -606,16 +606,17 @@ t('по умолчанию и при мусоре в настройках — 10
   assert.equal(s.phase, 'ended');
 });
 
-t('облик: пол, раса, образ и рамка; аватары прошлых версий не ломаются', () => {
-  assert.deepEqual(AVATAR_PARTS, { gender: 2, race: 7, look: 6, frame: 13, pref: 7 });
+t('облик: пол, раса, образ, рамка, сцена и свет; аватары прошлых версий не ломаются', () => {
+  assert.deepEqual(AVATAR_PARTS, { gender: 2, race: 7, look: 6, frame: 13, pref: 7, scene: 16, light: 9 });
   const Z = [0, 0, 0, 0, 0, 0, 0];
-  const a = cleanAvatar({ gender: 1, race: 6, look: 5, frame: 12 });
-  assert.deepEqual(a, { gender: 1, race: 6, look: 5, frame: 12, pref: 0, alt: Z });
+  const a = cleanAvatar({ gender: 1, race: 6, look: 5, frame: 12, scene: 15, light: 8 });
+  assert.deepEqual(a, { gender: 1, race: 6, look: 5, frame: 12, pref: 0, scene: 15, light: 8, alt: Z });
+  assert.equal(cleanAvatar({ scene: 16, light: 9 }).scene + cleanAvatar({ scene: 16, light: 9 }).light, 0, 'чужие номера сцены и света — в 0');
   assert.equal(portraitId(a), 'p_mole_f_6');
   assert.equal(portraitId(cleanAvatar({})), 'p_human_m_1');
   // облик прошлой версии: пол и раса остаются, детали лица и одежды отбрасываются
-  assert.deepEqual(cleanAvatar({ gender: 1, race: 2, hair: 9, outfit: 12, jewel: 4 }), { gender: 1, race: 2, look: 0, frame: 0, pref: 0, alt: Z });
-  assert.deepEqual(cleanAvatar({ gender: 5, race: -1, look: 'маг', frame: 1.5, alt: 'x' }), { gender: 0, race: 0, look: 0, frame: 0, pref: 0, alt: Z });
+  assert.deepEqual(cleanAvatar({ gender: 1, race: 2, hair: 9, outfit: 12, jewel: 4 }), { gender: 1, race: 2, look: 0, frame: 0, pref: 0, scene: 0, light: 0, alt: Z });
+  assert.deepEqual(cleanAvatar({ gender: 5, race: -1, look: 'маг', frame: 1.5, alt: 'x' }), { gender: 0, race: 0, look: 0, frame: 0, pref: 0, scene: 0, light: 0, alt: Z });
   assert.deepEqual(cleanAvatar({ alt: [3, 13, -1, '12', 1.5, 0, 7, 9] }).alt, [3, 0, 0, 12, 0, 0, 7]);
   const seen = new Set();
   for (let i = 0; i < 400; i++) { const r = avatarFromSeed(i); assert.deepEqual(cleanAvatar(r), r); seen.add(portraitId(r)); }

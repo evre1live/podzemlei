@@ -199,16 +199,30 @@ def avindex():
     h = lambda i: hashlib.md5(open(os.path.join(AVOUT, i + '.webp'), 'rb').read()).hexdigest()[:8]
     notes = {i: n for s in meta['sheets'] for i, n in zip(s['ids'], s['notes'])}
     frames = [i for s in meta['sheets'] for i in s['ids'] if i.startswith('frame_')]
+    # вырезанный герой и карта света (art/scene.py): отпечаток обоих файлов, если они есть
+    def hcut(i):
+        c, g = (os.path.join(AVOUT, d, i + '.webp') for d in ('c', 'g'))
+        if not (os.path.exists(c) and os.path.exists(g)): return None
+        return hashlib.md5(open(c, 'rb').read() + open(g, 'rb').read()).hexdigest()[:8]
+    scenes_path = os.path.join(ROOT, 'art', 'scenes.json')
+    scenes = json.load(open(scenes_path))['scenes'] if os.path.exists(scenes_path) else []
     with open(os.path.join(ROOT, 'public', 'avatar-art.js'), 'w') as f:
         f.write('// Портреты героев и рамки медальона в /avatars/v1 (файл обновляет art/cut.py avindex)\n')
-        f.write('// PORTRAITS: id → [отпечаток файла, подпись]; FRAMES: по порядку, [id, отпечаток, название, доля проёма]\n')
+        f.write('// PORTRAITS: id → [отпечаток файла, подпись, отпечаток вырезанного героя и карты света или null];\n')
+        f.write('// FRAMES: по порядку, [id, отпечаток, название, доля проёма]; SCENES: [id, отпечаток фона, название, свет]\n')
         f.write(f"export const ROLES = {json.dumps(meta['roles'], ensure_ascii=False)};\n")
         f.write('export const PORTRAITS = new Map([\n')
         for i in sorted(x for x in have if x.startswith('p_')):
-            f.write(f"  ['{i}', ['{h(i)}', {json.dumps(notes.get(i, ''), ensure_ascii=False)}]],\n")
+            hc = hcut(i)
+            f.write(f"  ['{i}', ['{h(i)}', {json.dumps(notes.get(i, ''), ensure_ascii=False)}, {json.dumps(hc)}]],\n")
         f.write(']);\nexport const FRAMES = [\n')
         for i in frames:
             if i in have: f.write(f"  ['{i}', '{h(i)}', {json.dumps(notes[i], ensure_ascii=False)}, {inner.get(i, 0.8)}],\n")
+        f.write('];\nexport const SCENES = [\n')
+        for sc in scenes:
+            bg = os.path.join(AVOUT, 'bg', sc['id'] + '.webp')
+            if os.path.exists(bg):
+                f.write(f"  ['{sc['id']}', '{hashlib.md5(open(bg, 'rb').read()).hexdigest()[:8]}', {json.dumps(sc['name'], ensure_ascii=False)}, '{sc['light']}'],\n")
         f.write('];\n')
     print(f'avatar-art.js: {sum(1 for x in have if x.startswith("p_"))} портретов, {sum(1 for x in frames if x in have)} рамок')
 

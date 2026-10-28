@@ -1,0 +1,19 @@
+{
+  "note": "Сцены за портретом героя: фон из локации и свет по умолчанию (номера света — LIGHTS в public/art-avatar.js). arena — вид сверху на стол: берётся верхняя полоса со стенами и огнями; scenic — картина целиком.",
+  "scenes": [
+    { "id": "default", "name": "Подземелье", "light": "candle", "crop": "arena" },
+    { "id": "loc_tavern", "name": "Таверна «Хмельной кабан»", "light": "candle", "crop": "arena" },
+    { "id": "loc_dungeon", "name": "Сокровищница темницы", "light": "candle", "crop": "arena" },
+    { "id": "loc_glade", "name": "Поляна светлячков", "light": "moon", "crop": "arena" },
+    { "id": "loc_forge", "name": "Кузня подгорного короля", "light": "forge", "crop": "arena" },
+    { "id": "loc_ice", "name": "Ледяная цитадель", "light": "frost", "crop": "arena" },
+    { "id": "loc_graveyard", "name": "Кладбище горгулий", "light": "moon", "crop": "arena" },
+    { "id": "loc_sky", "name": "Небесная цитадель", "light": "arcane", "crop": "arena" },
+    { "id": "loc_cove", "name": "Бухта гоблинов-пиратов", "light": "candle", "crop": "arena" },
+    { "id": "loc_library", "name": "Звёздная библиотека", "light": "arcane", "crop": "arena" },
+    { "id": "loc_oasis", "name": "Оазис джинна", "light": "candle", "crop": "arena" },
+    { "id": "loc_flooded", "name": "Затопленная станция", "light": "moon", "crop": "scenic" },
+    { "id": "loc_grove", "name": "Грибная роща", "light": "curse", "crop": "scenic" },
+    { "id": "loc_koschei", "name": "Логово Кощея", "light": "curse", "crop": "scenic" }
+  ]
+}
