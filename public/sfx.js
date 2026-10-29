@@ -1,10 +1,11 @@
 // «Под Землёй» — звуки. Всё синтезируется в браузере через Web Audio: никаких файлов.
 // Звук включается после первого касания или нажатия (так требуют браузеры).
 // Атмосфера пещеры (гул, ветер, капли) — по желанию, выключена по умолчанию.
+// Музыка локаций — тихая, своя у каждой локации; сочиняется на ходу из аккордов и лада локации.
 
 const KEY = 'pz.sfx';
 const st = (() => {
-  const d = { on: true, vol: 0.7, amb: false };
+  const d = { on: true, vol: 0.7, amb: false, mus: true, musVol: 0.5 };
   try { return { ...d, ...JSON.parse(localStorage.getItem(KEY) || '{}') }; } catch { return d; }
 })();
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(st)); } catch { /* приватный режим */ } };
@@ -387,6 +388,45 @@ const SOUNDS = {
       thud(E, t + dt, d > 1 ? 1.2 : 0.7);
     });
   },
+  // своя тема у каждого владыки подземелья; удар — через 1.9 с (o.sp — скорость сцены)
+  bossTheme(E, t, o = {}) {
+    const q = o.sp || 1, at = x => t + x / q, kind = o.kind;
+    tone(E, { t, f: 55, type: 'sawtooth', dur: 4 / q, a: 0.8 / q, hold: 1.8 / q, vol: 0.08, lp: 320, wet: 0.6, vib: 1, vibF: 4.6 });
+    tone(E, { t, f: 41.2, type: 'triangle', dur: 4 / q, a: 1 / q, hold: 1.6 / q, vol: 0.12, wet: 0.4 });
+    if (kind === 'lucifer') {
+      // рёв пламени и хор в уменьшённом аккорде
+      noiseV(E, { t, dur: 3.4 / q, a: 1.2 / q, hold: 0.8 / q, vol: 0.16, type: 'lowpass', f: 260, f2: 1500, q: 0.7, wet: 0.5 });
+      [110, 130.8, 155.6, 185].forEach((f, i) => tone(E, { t: at(0.5 + i * 0.08), f, type: 'sawtooth', dur: 3 / q, a: 0.7 / q, hold: 1.2 / q, vol: 0.04, lp: 1300, wet: 0.7, vib: 2.2, vibF: 5 + i * 0.4 }));
+    } else if (kind === 'hades') {
+      // погребальный колокол и стон ветра над Стиксом
+      [0.35, 1.25, 2.3].forEach(x => bell(E, { t: at(x), f: 98, dur: 3, vol: 0.2, wet: 0.85, partials: [1, 2.4, 3.01, 4.53], gains: [1, 0.5, 0.3, 0.14] }));
+      noiseV(E, { t, dur: 3.6 / q, a: 1.4 / q, vol: 0.07, type: 'bandpass', f: 380, f2: 760, q: 2.4, wet: 0.7 });
+      tone(E, { t: at(0.9), f: 330, f2: 262, dur: 2.2 / q, a: 0.6 / q, vol: 0.035, wet: 0.85, vib: 9, vibF: 5.5 });
+    } else if (kind === 'anubis') {
+      // систр, барабан и восточный лад
+      for (let i = 0; i < 10; i++) noiseV(E, { t: at(0.3 + i * 0.17), dur: 0.07, vol: 0.06 + (i % 2) * 0.03, type: 'highpass', f: 5200, wet: 0.35 });
+      [0.2, 0.75, 1.3, 1.6].forEach(x => thud(E, at(x), 0.6));
+      [329.6, 349.2, 415.3, 440, 415.3, 349.2, 329.6].forEach((f, i) => tone(E, { t: at(0.45 + i * 0.17), f, type: 'triangle', dur: 0.5, vol: 0.055, wet: 0.55, vib: 4, vibF: 6 }));
+    } else if (kind === 'morena') {
+      // вой метели и звон льда
+      noiseV(E, { t, dur: 3.8 / q, a: 1.2 / q, vol: 0.13, type: 'bandpass', f: 420, f2: 1250, q: 3.2, wet: 0.6 });
+      noiseV(E, { t: at(0.6), dur: 3 / q, a: 1 / q, vol: 0.09, type: 'bandpass', f: 900, f2: 520, q: 4, wet: 0.6 });
+      [[0.55, 1568], [0.85, 2093], [1.2, 1760], [2.4, 2349]].forEach(([x, f]) => bell(E, { t: at(x), f, dur: 1.4, vol: 0.05, wet: 0.8, partials: [1, 2.76, 5.4], gains: [1, 0.35, 0.12] }));
+      for (let i = 0; i < 6; i++) noiseV(E, { t: at(1.9 + i * 0.04 + rnd(0, 0.03)), dur: 0.05, vol: 0.12, type: 'highpass', f: 3500, wet: 0.4 });
+    } else if (kind === 'chernobog') {
+      // вороний грай, шёпот во тьме и утробный рык
+      [0.45, 0.8, 2.6].forEach(x => {
+        tone(E, { t: at(x), f: 860, f2: 560, type: 'sawtooth', dur: 0.24, vol: 0.06, lp: 2400, wet: 0.5, vib: 40, vibF: 30 });
+        noiseV(E, { t: at(x), dur: 0.2, vol: 0.05, type: 'bandpass', f: 1500, q: 2, wet: 0.5 });
+      });
+      for (let i = 0; i < 5; i++) noiseV(E, { t: at(0.3 + i * 0.32 + rnd(0, 0.1)), dur: 0.26, a: 0.08, vol: 0.035, type: 'bandpass', f: rnd(2200, 3400), q: 6, wet: 0.7 });
+      tone(E, { t: at(1.75), f: 46, f2: 36, type: 'sawtooth', dur: 2.4 / q, a: 0.15, vol: 0.12, lp: 220, wet: 0.5, vib: 2, vibF: 7 });
+    }
+    // удар
+    thud(E, at(1.9), 1.4);
+    tone(E, { t: at(1.9), f: 82.4, type: 'sawtooth', dur: 1.6, a: 0.01, vol: 0.13, lp: 800, wet: 0.5 });
+    tone(E, { t: at(1.9), f: 41.2, type: 'square', dur: 1.6, a: 0.01, vol: 0.06, lp: 380, wet: 0.5 });
+  },
   drip(E, t) {
     const f = rnd(900, 1700);
     tone(E, { t, f, f2: f * 1.7, dur: 0.07, vol: 0.12, wet: 0.95 });
@@ -567,6 +607,16 @@ const SAMPLED = {
   },
   sleep(E, t) { arp(E, t, 'pizz', [76, 72, 67], 0.22, 0.3, { wet: 0.65 }); },
   ward(E, t) { S(E, t, 'force', { vol: 0.28, wet: 0.45 }); S(E, t + 0.05, 'glass', { vol: 0.24, wet: 0.5 }); },
+  bossTheme(E, t, o = {}) {
+    SOUNDS.bossTheme(E, t, o);
+    const q = o.sp || 1, at = x => t + x / q, kind = o.kind;
+    S(E, at(1.9), 'boom', { vol: 0.8, rate: 0.62, wet: 0.7 });
+    if (kind === 'lucifer') { S(E, at(1.95), 'growlL', { vol: 0.62, rate: 0.68, wet: 0.6 }); S(E, at(0.2), 'ghost', { vol: 0.3, rate: 0.5, wet: 0.8 }); }
+    else if (kind === 'hades') { S(E, at(0.7), 'ghost', { vol: 0.42, rate: 0.55, wet: 0.85 }); S(E, at(1.6), 'ghost', { vol: 0.3, rate: 0.72, wet: 0.85 }); }
+    else if (kind === 'anubis') { S(E, at(1.95), 'growlL', { vol: 0.5, rate: 0.82, wet: 0.55 }); S(E, at(1.9), 'metal', { vol: 0.32, rate: 0.5, wet: 0.7 }); }
+    else if (kind === 'morena') { S(E, at(1.9), 'glassbreak', { vol: 0.7, rate: 0.62, wet: 0.7, lp: 4200 }); S(E, at(0.4), 'ghost', { vol: 0.26, rate: 0.95, wet: 0.85 }); }
+    else if (kind === 'chernobog') { S(E, at(1.8), 'growlL', { vol: 0.7, rate: 0.52, wet: 0.65 }); S(E, at(0.3), 'ghost', { vol: 0.34, rate: 0.45, wet: 0.85 }); }
+  },
   bossRise(E, t) {
     SOUNDS.bossRise(E, t);
     S(E, t + 0.1, 'ghost', { vol: 0.45, rate: 0.62, wet: 0.75 });
@@ -629,6 +679,7 @@ function build() {
   // прервали, пока страница на виду (например, закончился звонок) — пробуем вернуть звук
   me.onstatechange = () => { if (me === ac && !document.hidden && me.state !== 'running' && me.state !== 'closed') setTimeout(wake, 250); };
   if (st.on && st.amb && !document.hidden) ambStart();
+  musSync();
   return true;
 }
 let probe = 0, rebuiltAt = 0;
@@ -652,6 +703,7 @@ function wake(gesture = false) {
 function rebuild() {
   const old = ac;
   ambKill();
+  if (mus) { clearTimeout(mus.timer); mus = null; }
   ac = null; E = null;
   try { old?.close(); } catch { /* уже закрыт */ }
   if (build()) wake();
@@ -711,11 +763,150 @@ function ambStop() {
   a.bus.gain.linearRampToValueAtTime(0.0001, t + 0.6);
   setTimeout(() => { a.nodes.forEach(n => { try { n.stop(); } catch { /* уже остановлен */ } }); a.bus.disconnect(); }, 700);
 }
+// ───────────── музыка локаций ─────────────
+// Каждая локация — свой лад, тональность, темп и инструмент: тихий пэд из аккордов, бас, редкие ноты сверху
+// и шум места (огонь, ветер, вода, сверчки, пузыри). Ничего не записано — музыка сочиняется на ходу,
+// поэтому не повторяется. Смена локации — плавный переход за пару секунд.
+const LADS = {
+  aeolian: [0, 2, 3, 5, 7, 8, 10], dorian: [0, 2, 3, 5, 7, 9, 10], phrygian: [0, 1, 3, 5, 7, 8, 10], lydian: [0, 2, 4, 6, 7, 9, 11],
+  mixolydian: [0, 2, 4, 5, 7, 9, 10], harmonic: [0, 2, 3, 5, 7, 8, 11], hijaz: [0, 1, 4, 5, 7, 8, 10], hungarian: [0, 2, 3, 6, 7, 8, 11], whole: [0, 2, 4, 6, 8, 10, 12],
+};
+// ступени аккордов (от 0): по аккорду на такт
+const PROG = { sad: [0, 5, 3, 4], calm: [0, 3, 5, 4], dark: [0, 1, 0, 5], open: [0, 4, 5, 3], drone: [0, 0, 5, 0] };
+const THEMES = {
+  default: { root: 45, lad: 'aeolian', prog: 'sad', bar: 7.5, pad: 'sawtooth', lp: 620, lead: 'bell', oct: 24, dens: 0.3, tex: 'drips' },
+  loc_tavern: { root: 50, lad: 'dorian', prog: 'calm', bar: 4.6, pad: 'triangle', lp: 900, lead: 'pluck', oct: 24, dens: 0.6, tex: 'fire', pulse: true },
+  loc_dungeon: { root: 43, lad: 'phrygian', prog: 'dark', bar: 8, pad: 'sawtooth', lp: 520, lead: 'bell', oct: 24, dens: 0.22, tex: 'drips' },
+  loc_glade: { root: 52, lad: 'lydian', prog: 'open', bar: 6, pad: 'triangle', lp: 1200, lead: 'glass', oct: 24, dens: 0.5, tex: 'crickets' },
+  loc_forge: { root: 41, lad: 'harmonic', prog: 'dark', bar: 6, pad: 'sawtooth', lp: 560, lead: 'anvil', oct: 24, dens: 0.25, tex: 'fire', drum: true },
+  loc_ice: { root: 47, lad: 'aeolian', prog: 'drone', bar: 9, pad: 'triangle', lp: 1500, lead: 'glass', oct: 36, dens: 0.3, tex: 'wind' },
+  loc_graveyard: { root: 44, lad: 'phrygian', prog: 'drone', bar: 9, pad: 'sawtooth', lp: 480, lead: 'toll', oct: 12, dens: 0.16, tex: 'wind' },
+  loc_sky: { root: 53, lad: 'lydian', prog: 'open', bar: 7, pad: 'triangle', lp: 1600, lead: 'glass', oct: 24, dens: 0.42, tex: 'breeze' },
+  loc_cove: { root: 48, lad: 'mixolydian', prog: 'calm', bar: 5, pad: 'triangle', lp: 1000, lead: 'pluck', oct: 24, dens: 0.5, tex: 'waves', pulse: true },
+  loc_library: { root: 50, lad: 'dorian', prog: 'sad', bar: 8, pad: 'sine', lp: 1400, lead: 'bell', oct: 24, dens: 0.38, tex: null },
+  loc_oasis: { root: 52, lad: 'hijaz', prog: 'drone', bar: 5.5, pad: 'triangle', lp: 1000, lead: 'oud', oct: 12, dens: 0.55, tex: 'breeze', drum: true },
+  loc_flooded: { root: 45, lad: 'aeolian', prog: 'calm', bar: 8, pad: 'sine', lp: 900, lead: 'bell', oct: 24, dens: 0.28, tex: 'water' },
+  loc_grove: { root: 49, lad: 'whole', prog: 'open', bar: 7, pad: 'triangle', lp: 1100, lead: 'glass', oct: 24, dens: 0.4, tex: 'bubbles' },
+  loc_koschei: { root: 40, lad: 'hungarian', prog: 'dark', bar: 7, pad: 'sawtooth', lp: 480, lead: 'toll', oct: 24, dens: 0.26, tex: 'wind' },
+};
+const hz = m => 440 * Math.pow(2, (m - 69) / 12);
+let mus = null, musWant = null;
+// голос музыки: всё идёт в общий микшер через свою шину (её громкость — «Музыка» в настройках)
+function mTone(M, { t, f, type = 'sine', dur, a, vol, lp, vib = 0, vibF = 5, wet = 0.5 }) {
+  const o = M.ac.createOscillator(); o.type = type; o.frequency.setValueAtTime(f, t);
+  if (vib) { const l = M.ac.createOscillator(), lg = M.ac.createGain(); l.frequency.value = vibF; lg.gain.value = vib; l.connect(lg); lg.connect(o.frequency); l.start(t); l.stop(t + dur + 0.1); }
+  const g = M.ac.createGain(); env(g, t, a, vol, dur);
+  let n = o; if (lp) { const fl = M.ac.createBiquadFilter(); fl.type = 'lowpass'; fl.frequency.value = lp; o.connect(fl); n = fl; }
+  n.connect(g); g.connect(M.bus);
+  if (wet) { const w = M.ac.createGain(); w.gain.value = wet; g.connect(w); w.connect(M.send); }
+  o.start(t); o.stop(t + dur + 0.1);
+}
+function mNoise(M, { t, dur, a = 0.005, vol, type = 'bandpass', f, f2, q = 1, wet = 0.3 }) {
+  const src = M.ac.createBufferSource(); src.buffer = M.E.noise; src.loop = true;
+  const fl = M.ac.createBiquadFilter(); fl.type = type; fl.Q.value = q; fl.frequency.setValueAtTime(f, t); if (f2) fl.frequency.exponentialRampToValueAtTime(f2, t + dur);
+  const g = M.ac.createGain(); env(g, t, a, vol, dur);
+  src.connect(fl); fl.connect(g); g.connect(M.bus);
+  if (wet) { const w = M.ac.createGain(); w.gain.value = wet; g.connect(w); w.connect(M.send); }
+  src.start(t, Math.random() * 1.5); src.stop(t + dur + 0.05);
+}
+// инструмент мелодии
+function mLead(M, kind, t, m, v = 1) {
+  const f = hz(m);
+  if (kind === 'pluck' || kind === 'oud') {
+    mTone(M, { t, f, type: 'triangle', dur: kind === 'oud' ? 1.1 : 0.8, a: 0.004, vol: 0.05 * v, lp: 2200, vib: kind === 'oud' ? 3 : 0, vibF: 6, wet: 0.35 });
+    mTone(M, { t, f: f * 2, type: 'sine', dur: 0.3, a: 0.003, vol: 0.014 * v, wet: 0.3 });
+  } else if (kind === 'glass') {
+    [1, 2.76, 5.4].forEach((p, i) => mTone(M, { t, f: f * p, dur: 2.4 - i * 0.7, a: 0.004, vol: [0.035, 0.012, 0.005][i] * v, wet: 0.8 }));
+  } else if (kind === 'anvil') {
+    [1, 2.4, 3.9, 5.3].forEach((p, i) => mTone(M, { t, f: f * p, dur: 1.6 - i * 0.3, a: 0.002, vol: [0.04, 0.02, 0.012, 0.006][i] * v, wet: 0.6 }));
+  } else if (kind === 'toll') {
+    [1, 2.4, 3.01, 4.53].forEach((p, i) => mTone(M, { t, f: f * p, dur: 4 - i * 0.7, a: 0.004, vol: [0.06, 0.03, 0.018, 0.008][i] * v, wet: 0.9 }));
+  } else {
+    [1, 2, 2.99].forEach((p, i) => mTone(M, { t, f: f * p, dur: 2.2 - i * 0.6, a: 0.004, vol: [0.04, 0.014, 0.007][i] * v, wet: 0.7 }));
+  }
+}
+// шум места: ровный фон и отдельные звуки (треск, капли, сверчки, пузыри)
+function mTexture(M, kind, t, bar) {
+  if (!kind) return;
+  if (kind === 'fire') {
+    mNoise(M, { t, dur: bar * 1.1, a: bar * 0.3, vol: 0.022, type: 'lowpass', f: 420, wet: 0.1 });
+    for (let i = 0; i < 5; i++) mNoise(M, { t: t + rnd(0, bar), dur: 0.018, vol: rnd(0.006, 0.018), type: 'bandpass', f: rnd(1800, 3200), q: 1.2, wet: 0.2 });
+  } else if (kind === 'wind' || kind === 'breeze') {
+    const k = kind === 'wind' ? 1 : 0.6;
+    mNoise(M, { t, dur: bar * 1.2, a: bar * 0.45, vol: 0.03 * k, type: 'bandpass', f: rnd(300, 500), f2: rnd(600, 1100), q: 2.6, wet: 0.5 });
+  } else if (kind === 'waves') {
+    mNoise(M, { t, dur: bar * 0.9, a: bar * 0.4, vol: 0.035, type: 'lowpass', f: 500, f2: 1400, wet: 0.4 });
+  } else if (kind === 'water') {
+    mNoise(M, { t, dur: bar * 1.1, a: bar * 0.3, vol: 0.016, type: 'lowpass', f: 700, wet: 0.4 });
+    for (let i = 0; i < 3; i++) { const x = t + rnd(0, bar), f = rnd(900, 1700); mTone(M, { t: x, f, type: 'sine', dur: 0.07, a: 0.002, vol: 0.03, wet: 0.9 }); }
+  } else if (kind === 'drips') {
+    for (let i = 0; i < 2; i++) { const x = t + rnd(0, bar), f = rnd(900, 1700); mTone(M, { t: x, f, type: 'sine', dur: 0.07, a: 0.002, vol: 0.035, wet: 0.95 }); }
+  } else if (kind === 'crickets') {
+    for (let i = 0; i < 4; i++) { const x = t + rnd(0, bar), f = rnd(4200, 5200); for (let j = 0; j < 3; j++) mTone(M, { t: x + j * 0.06, f, type: 'sine', dur: 0.035, a: 0.003, vol: 0.008, wet: 0.4 }); }
+  } else if (kind === 'bubbles') {
+    for (let i = 0; i < 4; i++) { const x = t + rnd(0, bar), f = rnd(300, 600); const o = { t: x, f, type: 'sine', dur: 0.12, a: 0.004, vol: 0.025, wet: 0.6 }; mTone(M, o); }
+  }
+}
+// один такт: аккорд пэда, бас, мелодия по ладу и шум места
+function mBar(M, t) {
+  const T = M.th, sc = LADS[T.lad], prog = PROG[T.prog], bar = T.bar;
+  const deg = prog[M.n % prog.length];
+  const note = (d, base = T.root) => base + sc[((d % 7) + 7) % 7] + 12 * Math.floor(d / 7);
+  const chord = [deg, deg + 2, deg + 4].map(d => note(d, T.root + 12));
+  chord.forEach((m, i) => mTone(M, { t, f: hz(m) * (1 + (i - 1) * 0.0025), type: T.pad, dur: bar * 1.25, a: bar * 0.4, vol: 0.022, lp: T.lp, vib: 0.8, vibF: 0.2 + i * 0.07, wet: 0.7 }));
+  mTone(M, { t, f: hz(note(deg)), type: 'sine', dur: bar * 1.1, a: bar * 0.25, vol: 0.05, wet: 0.3 });
+  if (T.pulse) for (let i = 0; i < 4; i++) mTone(M, { t: t + i * bar / 4, f: hz(note(deg) + (i % 2 ? 7 : 0)), type: 'triangle', dur: 0.35, a: 0.01, vol: 0.022, lp: 700, wet: 0.2 });
+  if (T.drum) [0, 0.5].forEach(x => { mTone(M, { t: t + x * bar, f: 90, type: 'sine', dur: 0.35, a: 0.004, vol: 0.05, wet: 0.4 }); mNoise(M, { t: t + x * bar, dur: 0.12, vol: 0.02, type: 'lowpass', f: 300, wet: 0.3 }); });
+  // мелодия: шаги по ладу от прошлой ноты, тянется к звукам аккорда
+  const steps = 8;
+  for (let i = 0; i < steps; i++) {
+    if (Math.random() > T.dens * (i % 2 ? 0.6 : 1)) continue;
+    M.mel = Math.max(-3, Math.min(9, M.mel + [-2, -1, -1, 1, 1, 2, 0][Math.floor(Math.random() * 7)]));
+    const d = Math.random() < 0.4 ? deg + [0, 2, 4][Math.floor(Math.random() * 3)] : M.mel;
+    mLead(M, T.lead, t + (i * bar) / steps + rnd(0, 0.03), note(d, T.root + T.oct), rnd(0.7, 1));
+  }
+  mTexture(M, T.tex, t, bar);
+}
+function musStart(key) {
+  if (!E || document.hidden || !st.on || !st.mus) return;
+  const th = THEMES[key] || THEMES.default;
+  if (mus?.key === key) return;
+  musStop();
+  const t = ac.currentTime;
+  const bus = ac.createGain();
+  bus.gain.setValueAtTime(0.0001, t);
+  bus.gain.linearRampToValueAtTime(st.musVol, t + 3);
+  bus.connect(E.master);
+  const send = ac.createGain(); send.gain.value = 1; send.connect(E.verb);
+  const M = mus = { key, th, bus, send, n: 0, mel: 2, next: t + 0.2, timer: 0, ac, E };
+  const tickM = () => {
+    if (mus !== M) return;
+    while (M.next < ac.currentTime + 1.2) { mBar(M, M.next); M.next += th.bar; M.n++; }
+    M.timer = setTimeout(tickM, 400);
+  };
+  tickM();
+}
+function musStop(now = false) {
+  if (!mus) return;
+  const M = mus; mus = null;
+  clearTimeout(M.timer);
+  const t = ac?.currentTime || 0;
+  try {
+    M.bus.gain.cancelScheduledValues(t);
+    M.bus.gain.setValueAtTime(M.bus.gain.value, t);
+    M.bus.gain.linearRampToValueAtTime(0.0001, t + (now ? 0.05 : 2.2));
+  } catch { /* контекст уже закрыт */ }
+  setTimeout(() => { try { M.bus.disconnect(); M.send.disconnect(); } catch { /* уже отключена */ } }, now ? 100 : 2400);
+}
+const musSync = () => { if (st.on && st.mus && musWant && !document.hidden) { if (mus?.key !== musWant) musStart(musWant); } else musStop(); };
+function musVolume() { if (mus && ac) mus.bus.gain.setTargetAtTime(st.musVol, ac.currentTime, 0.2); }
+
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden) { ambStop(); return; }
+  if (document.hidden) { ambStop(); musStop(true); return; }
   if (!ac) return;
   wake();
   if (st.on && st.amb) ambStart();
+  musSync();
 });
 
 export const sfx = {
@@ -740,11 +931,28 @@ export const sfx = {
     save();
     applyVol();
     if (st.on && st.amb) ambStart(); else ambStop();
+    if ('musVol' in p) musVolume();
+    musSync();
   },
+  // музыка локации: ключ локации (loc_…), 'default' — подземелье без локации, null — тишина
+  music(key) { musWant = key || null; if (E) musSync(); },
+  get musicKey() { return mus?.key || null; },
   names: Object.keys(SOUNDS),
   get samples() { return bankReady; },
   // для проверки: загрузить записи без касания экрана
   preload() { const c = ac || new OfflineAudioContext(1, 1, 44100); return loadBank(c); },
+  // для проверки: сыграть музыку локации без колонок и вернуть буфер
+  async renderMusic(key, seconds = 20) {
+    const oc = new OfflineAudioContext(2, Math.floor(44100 * seconds), 44100);
+    const e = makeEngine(oc, oc.destination);
+    const th = THEMES[key] || THEMES.default;
+    const bus = oc.createGain(); bus.gain.value = st.musVol; bus.connect(e.master);
+    const send = oc.createGain(); send.connect(e.verb);
+    const M = { key, th, bus, send, n: 0, mel: 2, ac: oc, E: e };
+    for (let t = 0.1; t < seconds; t += th.bar) { mBar(M, t); M.n++; }
+    return oc.startRendering();
+  },
+  musicKeys: Object.keys(THEMES),
   // для проверки: отрисовать звук без колонок и вернуть буфер
   async render(name, o = {}, seconds = 3, synthOnly = false) {
     const oc = new OfflineAudioContext(2, Math.floor(44100 * seconds), 44100);

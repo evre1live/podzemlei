@@ -307,7 +307,8 @@ export const hasCardImg = id => CARD_IMG.has(id);
 export const cardImgUrl = id => `/cards/v1/${id}.webp?v=${CARD_IMG.get(id)}`;
 export function cardArt(d, uid = null) {
   if (CARD_IMG.has(d.id)) return `<img class="c-img" src="${cardImgUrl(d.id)}" alt="" loading="lazy" decoding="async" draggable="false">`;
-  if (d.type === 'location' && LOC_IMG.has(d.art)) return locationSVG(d.art);
+  // картина локации — тоже <img>: у неё есть карта глубины (объёмная карта, depth.js)
+  if (d.type === 'location' && LOC_IMG.has(d.art)) return `<img class="c-img c-loc" src="${locImg(d.art)}" alt="" loading="lazy" decoding="async" draggable="false">`;
   // пока нет живописи — гравированная золотая эмблема на тёмном фоне в цвете категории
   return `<div class="emb">${ico(cardIcon(d), 'emb-ico')}</div>`;
 }

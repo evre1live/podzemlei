@@ -1,7 +1,7 @@
 // «Под Землёй» — клиент.
 import { def, RACE_NAMES, CLASS_NAMES, SETS, ALLY_SLOT_NAMES, ALLY_SLOT_TEXT, FEMME_LEVELS, REGULAR_DISCOUNT, setRuleVars, ruleText, BOSS_FLOOR, TROUBLE_BONUS, LULLABY_PENALTY, MUTAGEN_BONUS, DISTILL_COST,
   PERSONAS, GHOST_BONUS, DEATH_LEVELS, DEPTH, DEPTH_TREASURE_EVERY, TRADE_TIMEOUT_MS, TAME_MARGIN, WARLOCK_TAME, PANDORA_COST, PANDORA_MULT, PANDORA_ESCAPE, tameBonus, TRAP_FAIL_LEVELS, SHOP_CATS, dailyOf, dailyDate } from '/shared/cards.js';
-import { esc, cardHTML, chipHTML, avatarSVG, iconSVG, cardBackSVG, locationSVG, cardIcon, cardText } from '/art.js';
+import { esc, cardHTML, chipHTML, avatarSVG, iconSVG, cardBackSVG, locationSVG, cardIcon, cardText, locImg } from '/art.js';
 import { fx } from '/fx.js';
 import { sfx } from '/sfx.js';
 import { setWorld, worldMood } from '/world.js';
@@ -11,6 +11,7 @@ import { AV_LABELS, LIGHTS, lookNote, portraitThumb, setAvatarLocation, sceneOf,
 import { FRAMES } from '/avatar-art.js';
 import { createVoice } from '/voice.js';
 import { ico } from '/icons.js';
+import { initDepth, depthOn, applyDepth } from '/depth.js';
 import { NEWS, NEWS_LATEST } from '/news.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -212,7 +213,10 @@ socket.on('room:state', ({ room, game, serverTime }) => {
 function render() {
   const scr = !S.room ? 'home' : S.game ? 'game' : 'lobby';
   // сцена «Локация партии»: за портретами — текущая локация стола
-  setAvatarLocation(scr === 'game' ? S.game.location : null);
+  const locArt = scr === 'game' && S.game.location ? def(S.game.location).art : null;
+  setAvatarLocation(locArt);
+  // музыка локации: играет, пока идёт партия
+  sfx.music(scr === 'game' && S.game.phase === 'playing' ? locArt || 'default' : null);
   if (scr !== S.screen) { S.screen = scr; mount[scr](); soundIcons(); }
   setWorld($('#world'), scr === 'home' ? null : scr === 'game' && S.game.location ? def(S.game.location).art : 'default');
   // фон откликается на бой: края кадра наливаются тревожным светом, у босса — лиловым
@@ -234,15 +238,37 @@ const mount = {}, update = {};
 
 // ───────────────────────── главная ─────────────────────────
 const HATCH = ico('dungeon-gate', 'hatch');
+// главное меню: объёмное название (art/logo.py, Blender) и цикличное видео подземного города за воротами
+// (ролик Higgsfield, петля — art/menu-loop.py). Пока видео грузится — его первый кадр картинкой.
+const MENU = {
+  title: '/ui/v4/title.webp?v=f7196a8c', title2x: '/ui/v4/title@2x.webp?v=063c5828',
+  poster: '/ui/v4/menu-poster.webp?v=8fe4b431', poster720: '/ui/v4/menu-poster-720.webp?v=3660a312',
+  mp4: { 1080: '/ui/v4/menu-1080.mp4?v=bdb35828', 720: '/ui/v4/menu-720.mp4?v=0c0487cb' },
+  webm: { 1080: '/ui/v4/menu-1080.webm?v=51718e40', 720: '/ui/v4/menu-720.webm?v=bb4fb95b' },
+};
+// видео — только при «Живом фоне», без «уменьшить движение» и режима экономии трафика; на телефоне — 720p
+function homeVideo() {
+  const v = document.querySelector('.home-video');
+  if (!v) return;
+  const ok = liveBg() && !matchMedia('(prefers-reduced-motion: reduce)').matches && !navigator.connection?.saveData;
+  if (!ok) { v.pause(); v.classList.remove('on'); if (v.getAttribute('src')) { v.removeAttribute('src'); v.load(); } return; }
+  const boxW = Math.max(innerWidth, innerHeight * 1.4) * Math.min(2, devicePixelRatio || 1);
+  // VP9 легче вдвое; где его нет (Safari), — H.264
+  const set = v.canPlayType('video/webm; codecs="vp9"') ? MENU.webm : MENU.mp4;
+  const src = set[matchMedia('(max-width: 700px)').matches || boxW <= 1500 ? 720 : 1080];
+  if (v.getAttribute('src') !== src) { v.src = src; v.addEventListener('playing', () => v.classList.add('on'), { once: true }); }
+  v.play().catch(() => {});
+}
 
 mount.home = () => {
   app.innerHTML = `
   <div class="home">
+    <div class="home-bg" aria-hidden="true"><img class="home-poster" src="${MENU.poster}" srcset="${MENU.poster720} 1280w, ${MENU.poster} 1920w" sizes="max(100vw, 140vh)" alt="" decoding="async"><video class="home-video" muted loop playsinline preload="none" disablepictureinpicture></video></div>
     <header class="band b-surface"><div class="grassline"></div>
       <div class="home-top"><div class="logo-row">${HATCH}<span class="spacer"></span><a class="btn ghost small" href="/guide">Справочник</a><button class="btn ghost small news-btn" data-act="news" title="Новые механики и карты по датам">Что нового${newsUnseen() ? '<i class="news-dot" aria-label="есть новое"></i>' : ''}</button><button class="btn ghost small" data-act="rules">Как играть</button></div></div>
     </header>
     <section class="band b-clay pebbles title-wrap">
-      <h1 class="title">Под Землёй</h1>
+      <h1 class="title has-img"><img class="title-img" src="${MENU.title}" srcset="${MENU.title} 1000w, ${MENU.title2x} 2000w" sizes="(max-width: 1100px) 92vw, 1000px" width="1000" height="155" alt="Под Землёй"></h1>
       <p class="subtitle">Карточная игра для компании от двух до шести человек. Выбивайте двери, побеждайте монстров из подвалов и тоннелей, собирайте клад и не стесняйтесь подставлять друзей. Кто первым дойдёт до 10-го уровня, тот и победил. Хозяин комнаты может выбрать быструю партию до 5-го или долгую — до 15 или 20.</p>
     </section>
     <section class="band b-rock home-main">
@@ -292,6 +318,7 @@ mount.home = () => {
     const code = await typedCode();
     if (code) tryJoin(code);
   });
+  homeVideo();
   renderRooms();
 };
 update.home = () => {};
@@ -2022,16 +2049,51 @@ function maybeEndScreen() {
     if (iWon && (!best || g.turn.n < best)) LS.set('daily', { date: g.opts.daily, turns: g.turn.n });
     daily = `<p class="daily-result">${ico('calendar')} Испытание дня «${esc(dailyOf(g.opts.daily).name)}»: ${iWon ? `победа за ${g.turn.n} ${plural(g.turn.n, 'ход', 'хода', 'ходов')}` : 'в этот раз без победы'}${best ? ` · ваш лучший сегодня — ${Math.min(best, iWon ? g.turn.n : best)}` : ''}</p>`;
   }
-  setTimeout(() => { fx.confetti({ n: 180 }); fx.sparkle($('#endScreen .crownbig'), { n: 22 }); }, 80);
+  setTimeout(() => { fx.confetti({ n: 180 }); fx.sparkle($('#endScreen .es-crown'), { n: 22 }); }, 80);
   setTimeout(() => cine.gameOver(), 500);
   sfx.play(w.some(p => p.id === S.room.me) ? 'fanfare' : 'victory', { always: true });
+  // победитель — крупным портретом на фоне картины локации, где закончилась партия
+  const loc = g.location ? def(g.location) : null;
+  const bg = loc?.art ? `--bg:url('${locImg(loc.art, false)}')` : '';
+  const heroes = w.map(p => { const a = gAva(p); return `<span class="es-ava${a.frame ? ' framed' : ''}" style="--seat:${p.color};--fext:${frameExt(a)}">${avatarSVG(a, p.color)}</span>`; }).join('');
+  const places = [...g.players].sort((a, b) => (g.winners.includes(b.id) - g.winners.includes(a.id)) || b.level - a.level);
   showOverlay(`<div class="modal endscreen" id="endScreen" role="dialog" aria-label="Итоги партии">
-    ${iconSVG('crown', 'crownbig')}
-    <h2>${w.map(p => esc(p.name)).join(' и ')} ${w.length > 1 ? 'побеждают' : 'побеждает'}!</h2>
-    <p class="muted" style="margin:0">${spectating() ? 'Партия окончена. Было что посмотреть.' : w.some(p => p.id === S.room.me) ? 'Подземелье покорено. Можно гордиться.' : 'В следующий раз подставляйте лидера раньше.'}</p>
+    <div class="es-hero" style="${bg}">
+      <div class="es-heroes${w.length > 1 ? ' two' : ''}">${iconSVG('crown', 'es-crown')}${heroes}</div>
+      <h2>${w.map(p => esc(p.name)).join(' и ')} ${w.length > 1 ? 'побеждают' : 'побеждает'}!</h2>
+      <p class="es-sub">${spectating() ? 'Партия окончена. Было что посмотреть.' : w.some(p => p.id === S.room.me) ? 'Подземелье покорено. Можно гордиться.' : 'В следующий раз подставляйте лидера раньше.'}${loc ? ` · ${esc(loc.name)}` : ''} · ${g.turn.n} ${plural(g.turn.n, 'ход', 'хода', 'ходов')}</p>
+    </div>
     ${daily}
+    ${endNominations(g)}
+    <ol class="es-places">${places.map((p, i) => `<li class="${g.winners.includes(p.id) ? 'win' : ''}${p.id === S.room.me ? ' me' : ''}"><span class="es-n">${i + 1}</span><span class="es-mini" style="--seat:${p.color}">${avatarSVG({ ...gAva(p), frame: 0 }, p.color)}</span><b>${esc(p.name)}</b><span class="es-lv">${p.level} ур.</span></li>`).join('')}</ol>
     <div class="row" style="justify-content:center">${isHost ? '<button class="btn primary" data-act="toLobby">Новая партия</button>' : '<span class="muted">Новую партию запускает хозяин.</span>'}<button class="btn ghost" data-act="closeOverlay">Посмотреть стол</button></div>
   </div>`);
+}
+// Номинации партии по счёту, который вёл сервер (engine: tally): первые шесть, в которых кто-то отличился. Без счёта — ничего.
+const NOMS = [
+  ['kills', 'Мясник подземелья', 'crossed-swords', n => `${n} ${plural(n, 'монстр повержен', 'монстра повержено', 'монстров повержено')}`],
+  ['dirty', 'Подставил больше всех', 'double-face-mask', n => `${n} ${plural(n, 'пакость', 'пакости', 'пакостей')} в чужих боях`],
+  ['cursesIn', 'Самый проклятый', 'cursed-star', n => `${n} ${plural(n, 'проклятие', 'проклятия', 'проклятий')} на себе`],
+  ['cursesOut', 'Злой колдун', 'pentacle', n => `наслал ${n} ${plural(n, 'проклятие', 'проклятия', 'проклятий')}`],
+  ['spent', 'Транжира', 'coins-pile', n => `${n} ${plural(n, 'голд', 'голда', 'голдов')} спущено`],
+  ['helps', 'Верный товарищ', 'shaking-hands', n => `помог в ${n} ${plural(n, 'бою', 'боях', 'боях')}`],
+  ['earned', 'Барыга', 'two-coins', n => `наторговал ${n} ${plural(n, 'голд', 'голда', 'голдов')}`],
+  ['deaths', 'Мученик', 'tombstone', n => `${n === 1 ? 'погиб однажды' : `погибал ${n} ${plural(n, 'раз', 'раза', 'раз')}`}`],
+  ['escapes', 'Неуловимый', 'run', n => `${n} ${plural(n, 'удачный побег', 'удачных побега', 'удачных побегов')}`],
+  ['duels', 'Дуэлянт', 'duel', n => `${n} ${plural(n, 'поединок выигран', 'поединка выиграно', 'поединков выиграно')}`],
+];
+function endNominations(g) {
+  const st = g.stats;
+  if (!st) return '';
+  const cards = NOMS.map(([k, title, icon, text]) => {
+    const best = Math.max(0, ...g.players.map(p => st[p.id]?.[k] || 0));
+    if (!best) return '';
+    const who = g.players.filter(p => (st[p.id]?.[k] || 0) === best);
+    const names = who.length > 2 ? `${esc(who[0].name)}, ${esc(who[1].name)} и ещё ${who.length - 2}` : who.map(p => esc(p.name)).join(' и ');
+    return `<div class="es-nom" style="--seat:${who[0].color}"><span class="es-pic"><span class="es-mini">${avatarSVG({ ...gAva(who[0]), frame: 0 }, who[0].color)}</span><i class="es-ico">${ico(icon)}</i></span>
+      <div class="es-nt"><small>${esc(title)}</small><b>${names}</b><em>${esc(text(best))}</em></div></div>`;
+  }).filter(Boolean).slice(0, 6);
+  return cards.length ? `<section class="es-noms" aria-label="Номинации партии">${cards.join('')}</section>` : '';
 }
 
 // «Что нового»: изменения по датам; метка на кнопке гаснет, когда игрок открыл окно
@@ -2707,7 +2769,7 @@ function soundIcons() {
 }
 // живой фон: на слабых устройствах и при «уменьшить движение» по умолчанию неподвижный
 const liveBg = () => LS.get('liveBg', !(matchMedia('(prefers-reduced-motion: reduce)').matches || (navigator.hardwareConcurrency || 4) <= 2));
-const applyBg = () => $('#world').classList.toggle('still', !liveBg());
+const applyBg = () => { $('#world').classList.toggle('still', !liveBg()); homeVideo(); };
 applyBg();
 function openSoundModal() {
   const s = sfx.state;
@@ -2715,18 +2777,24 @@ function openSoundModal() {
     <h2>Звук и эффекты</h2>
     <label class="check"><input type="checkbox" id="sndOn" ${s.on ? 'checked' : ''}> Звуки игры</label>
     <label>Громкость<input type="range" id="sndVol" min="0" max="1" step="0.05" value="${s.vol}"></label>
+    <label class="check"><input type="checkbox" id="sndMus" ${s.mus ? 'checked' : ''}> Музыка локаций: своя тихая мелодия у каждой локации</label>
+    <label>Громкость музыки<input type="range" id="sndMusVol" min="0" max="1" step="0.05" value="${s.musVol}"></label>
     <label class="check"><input type="checkbox" id="sndAmb" ${s.amb ? 'checked' : ''}> Атмосфера пещеры: гул, ветер и капли</label>
     <label class="check"><input type="checkbox" id="liveBg" ${liveBg() ? 'checked' : ''}> Живой фон: вода, снег, светлячки (на слабом телефоне лучше выключить)</label>
     <label class="check"><input type="checkbox" id="cineOn" ${cine.enabled ? 'checked' : ''}> Зрелищные сцены: двери, удары, разрубленные карты, салют</label>
-    <p class="muted" style="margin:0;font-size:13.5px">Звуки — записи из свободных библиотек Kenney и OpenGameArt (лицензия CC0), мелодии сыграны на пиццикато и стальных барабанах. Значки — game-icons.net (CC BY 3.0, Lorc, Delapouite и другие). Если на телефоне тишина, проверьте беззвучный режим.</p>
+    <label class="check"><input type="checkbox" id="depthOn" ${depthOn() ? 'checked' : ''}> Объёмные карты и портреты: рисунок «выходит» из рамки за курсором</label>
+    <p class="muted" style="margin:0;font-size:13.5px">Звуки — записи из свободных библиотек Kenney и OpenGameArt (лицензия CC0), мелодии сыграны на пиццикато и стальных барабанах, музыка локаций сочиняется прямо в браузере. Значки — game-icons.net (CC BY 3.0, Lorc, Delapouite и другие). Если на телефоне тишина, проверьте беззвучный режим.</p>
     <div class="row"><button class="btn" data-act="soundTest">Послушать</button><button class="btn primary" data-act="closeOverlay">Готово</button></div>
   </div>`);
   $('#sndOn').addEventListener('change', e => { sfx.set({ on: e.target.checked }); soundIcons(); if (e.target.checked) sfx.play('yourTurn', { gap: 0 }); });
   $('#sndVol').addEventListener('input', e => { sfx.set({ vol: Number(e.target.value) }); soundIcons(); });
   $('#sndVol').addEventListener('change', () => sfx.play('coins', { n: 2, gap: 0 }));
   $('#sndAmb').addEventListener('change', e => sfx.set({ amb: e.target.checked }));
+  $('#sndMus').addEventListener('change', e => sfx.set({ mus: e.target.checked }));
+  $('#sndMusVol').addEventListener('input', e => sfx.set({ musVol: Number(e.target.value) }));
   $('#liveBg').addEventListener('change', e => { LS.set('liveBg', e.target.checked); applyBg(); });
   $('#cineOn').addEventListener('change', e => { cine.set(e.target.checked); render(); });
+  $('#depthOn').addEventListener('change', e => { LS.set('depth3d', e.target.checked); applyDepth(); });
 }
 
 // ───────────────────────── полёт сыгранной карты ─────────────────────────
@@ -2797,4 +2865,5 @@ document.addEventListener('keydown', e => {
 });
 setInterval(() => { if (S.room && document.visibilityState === 'visible') socket.emit('ping:me'); }, 20000);
 
+initDepth();
 render();

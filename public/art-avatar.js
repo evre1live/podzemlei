@@ -18,6 +18,7 @@ export const LIGHTS = [
 ];
 const LIGHT_BY_ID = Object.fromEntries(LIGHTS.map((l, i) => [l.id, i]));
 
+
 export const AV_LABELS = {
   gender: ['Мужчина', 'Женщина'],
   race: ['Человек', 'Эльф', 'Гном', 'Полурослик', 'Орк', 'Гоблин', 'Кротолюд'],
@@ -57,7 +58,7 @@ export function lightOf(v, sc = sceneOf(v)) {
 // общие для всех портретов заготовки: круг, виньетка и по фильтру и тону на каждый свет
 export const avatarDefs = () => {
   const c = h => [1, 3, 5].map(k => (parseInt(h.slice(k, k + 2), 16) / 255).toFixed(3));
-  let g = '<clipPath id="avClip" clipPathUnits="objectBoundingBox"><circle cx=".5" cy=".5" r=".5"/></clipPath>'
+  let g = '<clipPath id="avClip" clipPathUnits="userSpaceOnUse"><circle cx="50" cy="50" r="50"/></clipPath>'
     + '<radialGradient id="avVig" cx="50%" cy="44%" r="58%"><stop offset=".62" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".62"/></radialGradient>';
   LIGHTS.forEach((l, i) => {
     if (!l.halo) return;
@@ -82,15 +83,16 @@ export function avatarSVG(a, seatColor = '#3a3a42', cls = '') {
   const sc = cut ? sceneOf(v) : null;
   const li = cut ? lightOf(v, sc) : -1;
   let s = '<rect width="100" height="100" fill="#0e0d0c"/>';
-  if (sc) {
-    s += `<image href="/avatars/v1/bg/${sc[0]}.webp?v=${sc[1]}" width="100" height="100" preserveAspectRatio="xMidYMid slice"/>`;
+  if (cut) {
+    // объёмный портрет: фон и герой — отдельными слоями, при наклоне они расходятся (art/scene.py: c/ — герой, n/ — родной фон без героя)
+    const bg = sc ? `/avatars/v1/bg/${sc[0]}.webp?v=${sc[1]}` : `/avatars/v1/n/${id}.webp${cut}`;
+    s += `<g class="av-bg"><image href="${bg}" x="-4" y="-4" width="108" height="108" preserveAspectRatio="xMidYMid slice"/></g><g class="av-hero">`;
     if (li >= 0) s += `<image href="/avatars/v1/g/${id}.webp${cut}" width="100" height="100" filter="url(#avHalo${li})"/>`;
     s += `<image href="/avatars/v1/c/${id}.webp${cut}" width="100" height="100"/>`;
+    if (li >= 0) s += `<image href="/avatars/v1/g/${id}.webp${cut}" width="100" height="100" filter="url(#avRim${li})" style="mix-blend-mode:screen"/>`;
+    s += '</g>';
+    if (li >= 0) s += `<rect width="100" height="100" fill="url(#avTone${li})" opacity=".5" style="mix-blend-mode:soft-light"/>`;
   } else s += `<image href="/avatars/v1/${id}.webp?v=${p?.[0] || ''}" width="100" height="100"/>`;
-  if (li >= 0) {
-    s += `<image href="/avatars/v1/g/${id}.webp${cut}" width="100" height="100" filter="url(#avRim${li})" style="mix-blend-mode:screen"/>`
-      + `<rect width="100" height="100" fill="url(#avTone${li})" opacity=".5" style="mix-blend-mode:soft-light"/>`;
-  }
   if (sc || li >= 0) s += '<rect width="100" height="100" fill="url(#avVig)"/>';
   const pic = `<g clip-path="url(#avClip)">${s}</g>`;
   if (!fr) return `<svg class="${cls}" viewBox="0 0 100 100" aria-hidden="true">${pic}</svg>`;

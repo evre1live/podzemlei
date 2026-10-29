@@ -1,5 +1,5 @@
 // Прогон тысяч партий одними ботами: проверка инвариантов и зависаний.
-import { createGame, act, tick, check } from '../shared/engine.js';
+import { createGame, act, tick, check, view } from '../shared/engine.js';
 import { botDecide } from '../shared/bot.js';
 import { allUids, def } from '../shared/cards.js';
 
@@ -47,6 +47,7 @@ function scan(s) {
   }
   s._seen = s.logSeq;
 }
+const sumStats = {};
 let ended = 0, stuck = 0, turnsTotal = 0, actions = 0, maxTurns = 0, errs = 0;
 const stats = { deaths: 0, wins: {} , help: 0, interfere: 0, steals: 0, bossMeet: 0, bossCalm: 0, bossEscaped: 0, bossKilled: 0, bossCaught: 0,
   tamed: 0, allies: 0, mercLeft: 0, trapsDisarmed: 0, trapsFailed: 0, trapsTaken: 0, trapsPlanted: 0, lures: 0,
@@ -86,6 +87,11 @@ for (let g = 0; g < N; g++) {
   }
   if (s.phase === 'ended') {
     ended++; turnsTotal += s.turn.n; maxTurns = Math.max(maxTurns, s.turn.n);
+    // счёт партии для итогов: победы над монстрами есть у кого-то всегда, а в виде он есть только после конца партии
+    const vs = view(s, s.players[0].id).stats;
+    if (!vs || !Object.values(vs).some(x => x.kills > 0)) { console.log('NO STATS game', g, JSON.stringify(vs)); process.exit(1); }
+    for (const [k, v] of Object.entries(vs)) for (const n of Object.values(v)) if (!Number.isInteger(n) || n < 0 || !s.players.some(p => p.id === k)) { console.log('BAD STAT', k, JSON.stringify(v)); process.exit(1); }
+    for (const st of Object.values(vs)) for (const [k, n] of Object.entries(st)) (sumStats[k] = (sumStats[k] || 0) + n);
     // у кого какой класс к концу партии и кто победил
     for (const p of s.players) {
       const keys = p.classes.length ? p.classes.map(u => def(u).cls) : ['none'];
@@ -97,6 +103,7 @@ for (let g = 0; g < N; g++) {
 }
 console.log({ games: N, ended, stuck, errs, avgTurns: (turnsTotal / ended).toFixed(1), maxTurns, actionsPerGame: (actions / N).toFixed(0), ...stats });
 console.log('Покупки за партию:', Object.fromEntries(Object.entries(eco.bought).map(([k, v]) => [k, (v / N).toFixed(2)])), 'голдов в кошельке к концу (в среднем):', Math.round(eco.endGold / Math.max(1, eco.players)));
+console.log('Счёт за партию на всех (в среднем):', Object.fromEntries(Object.entries(sumStats).map(([k, v]) => [k, (v / Math.max(1, ended)).toFixed(1)])));
 console.log('Классы: доля побед среди тех, у кого класс был к концу партии');
 for (const [k, c] of Object.entries(cls).sort((a, b) => b[1].won / b[1].seen - a[1].won / a[1].seen)) console.log(`  ${k.padEnd(10)} ${(100 * c.won / c.seen).toFixed(1).padStart(5)}%  (${c.won}/${c.seen})`);
 if (ended !== N || stuck || errs) process.exit(1);

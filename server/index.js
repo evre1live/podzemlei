@@ -431,7 +431,7 @@ app.use((req, res, next) => {
 // чтобы после обновления игры ни у кого не смешались старые и новые файлы. Шрифты кэшируются надолго.
 const fresh = { etag: true, lastModified: true, setHeaders(res, file) {
   // шрифты, звуки, картинки и сторонние библиотеки (в имени — номер версии) кэшируются надолго, остальное перепроверяется
-  res.setHeader('Cache-Control', /\.(woff2?|ttf|mp3|webp)$/.test(file) || /[\\/]vendor[\\/]/.test(file) ? 'public, max-age=2592000, immutable' : 'no-cache');
+  res.setHeader('Cache-Control', /\.(woff2?|ttf|mp3|mp4|webm|webp)$/.test(file) || /[\\/]vendor[\\/]/.test(file) ? 'public, max-age=2592000, immutable' : 'no-cache');
 } };
 app.use('/shared', express.static(path.join(ROOT, 'shared'), fresh));
 app.use(express.static(path.join(ROOT, 'public'), { ...fresh, extensions: ['html'] }));

@@ -10,6 +10,7 @@
   python3 art/cut.py avindex                           — пересобрать список портретов и рамок (public/avatar-art.js)
   python3 art/cut.py thumbs                            — пересобрать маленькие портреты для каталога (public/avatars/v1/t)
   python3 art/cut.py pandora <картинка>                — Ящик Пандоры: слева закрытый, справа открытый, фон прозрачный
+  python3 art/cut.py chest <картинка>                  — сундук клада: так же, слева закрытый, справа открытый
 
 Рисунки ложатся в public/cards/v1/<id>.webp (длинная сторона до 460 px).
 Сцены локаций — в public/loc/v2/<id>.webp (1920×1080), <id>@4k.webp (3840×2160) и <id>-card.webp (960×720);
@@ -200,11 +201,11 @@ def avindex():
     h = lambda i: hashlib.md5(open(os.path.join(AVOUT, i + '.webp'), 'rb').read()).hexdigest()[:8]
     notes = {i: n for s in meta['sheets'] for i, n in zip(s['ids'], s['notes'])}
     frames = [i for s in meta['sheets'] for i in s['ids'] if i.startswith('frame_')]
-    # вырезанный герой и карта света (art/scene.py): отпечаток обоих файлов, если они есть
+    # вырезанный герой, карта света и подложка родного фона (art/scene.py): общий отпечаток, если все три есть
     def hcut(i):
-        c, g = (os.path.join(AVOUT, d, i + '.webp') for d in ('c', 'g'))
-        if not (os.path.exists(c) and os.path.exists(g)): return None
-        return hashlib.md5(open(c, 'rb').read() + open(g, 'rb').read()).hexdigest()[:8]
+        c, g, n = (os.path.join(AVOUT, d, i + '.webp') for d in ('c', 'g', 'n'))
+        if not (os.path.exists(c) and os.path.exists(g) and os.path.exists(n)): return None
+        return hashlib.md5(open(c, 'rb').read() + open(g, 'rb').read() + open(n, 'rb').read()).hexdigest()[:8]
     scenes_path = os.path.join(ROOT, 'art', 'scenes.json')
     scenes = json.load(open(scenes_path))['scenes'] if os.path.exists(scenes_path) else []
     with open(os.path.join(ROOT, 'public', 'avatar-art.js'), 'w') as f:
@@ -240,9 +241,9 @@ def avatars(img, n):
     avindex()
 
 
-def pandora(img):
-    """Ящик Пандоры с прозрачным фоном: левая половина — закрытый, правая — открытый.
-    Обе половины режутся по одной ширине, низ ящика на одной линии; закрытый — без пустого верха."""
+def pandora(img, name='pandora'):
+    """Пара «закрыт / открыт» с прозрачным фоном (Ящик Пандоры, сундук клада): левая половина — закрытый, правая — открытый.
+    Обе половины режутся по одной ширине, низ на одной линии; закрытый — без пустого верха."""
     import numpy as np
     img = img.convert('RGBA')
     W, H = img.size
@@ -254,12 +255,12 @@ def pandora(img):
     y1 = max(y[-1] for y in ys) + 1
     out = os.path.join(ROOT, 'public', 'ui', 'v3')
     os.makedirs(out, exist_ok=True)
-    for name, h, y in (('closed', halves[0], ys[0]), ('open', halves[1], ys[1])):
+    for state, h, y in (('closed', halves[0], ys[0]), ('open', halves[1], ys[1])):
         c = h.crop((x0, max(0, y[0] - 6), x1, y1))
         c = c.resize((300, round(c.height * 300 / c.width)), Image.LANCZOS)
-        path = os.path.join(out, f'pandora-{name}.webp')
+        path = os.path.join(out, f'{name}-{state}.webp')
         c.save(path, 'WEBP', quality=86, method=6)
-        print(f'  pandora-{name}: {c.size[0]}×{c.size[1]}, {os.path.getsize(path) // 1024} КБ')
+        print(f'  {name}-{state}: {c.size[0]}×{c.size[1]}, {os.path.getsize(path) // 1024} КБ')
 
 
 def main():
@@ -289,6 +290,8 @@ def main():
         thumbs()
     elif cmd == 'pandora':
         pandora(Image.open(sys.argv[2]))
+    elif cmd == 'chest':
+        pandora(Image.open(sys.argv[2]), 'chest')
     else:
         print(__doc__)
 

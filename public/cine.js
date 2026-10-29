@@ -7,7 +7,7 @@
 
 import { fx } from '/fx.js';
 import { sfx } from '/sfx.js';
-import { cardHTML, cardBackSVG, avatarSVG } from '/art.js';
+import { cardHTML, cardBackSVG, avatarSVG, cardImgUrl } from '/art.js';
 import { def, ruleText, BOSS_FLOOR, LULLABY_PENALTY, MUTAGEN_BONUS } from '/shared/cards.js';
 import { sceneKind } from '/art-monsters.js';
 
@@ -292,6 +292,7 @@ function ring(k, x, y, cls = '', size = 1, dur = 620, delay = 0) {
   const r = k.pt('cn-ring ' + cls, '', x, y);
   k.a(r, [{ transform: `scale(${0.25 * size})`, opacity: 1 }, { transform: `scale(${3.2 * size})`, opacity: 0 }], { dur, delay, ease: EASE.out });
   k.rm(r, dur + delay + 30);
+  return r;
 }
 // не даём надписи вылезти за край экрана
 function fitIn(n, x) {
@@ -454,6 +455,7 @@ S.intro = (f, o) => {
     skip() { unhide(f.card); },
     run(k) {
       closePanel();
+      if (d.boss && BOSS_SCENE[d.art?.boss]) return bossIntro(k, f, d, o);
       const c = { x: vw() / 2, y: vh() * 0.44 };
       const fit = fitBig();
       const hell = !!d.boss;
@@ -520,27 +522,166 @@ S.intro = (f, o) => {
         k.a(plate, [{ opacity: 1 }, { opacity: 0, transform: 'translateY(10px)' }], { dur: 220, fill: 'forwards' });
         k.a(aura, [{ opacity: 0.8 }, { opacity: 0 }], { dur: 260, fill: 'forwards' });
         k.rm(dim, 400); k.rm(plate, 240); k.rm(aura, 280); k.rm(rays, 300);
-        const tr = box(realCard(f.card));
-        if (!tr) { k.a(card, [{ opacity: 1 }, { opacity: 0, transform: `scale(${fit * 0.8})` }], { dur: 280, fill: 'forwards' }); k.rm(card, 300); unhide(f.card); return; }
-        const cw = card.firstElementChild.offsetWidth || 236;
-        const s = tr.width / cw;
-        const dx = tr.left + tr.width / 2 - c.x, dy = tr.top + tr.height / 2 - c.y;
-        k.a(card, [{ transform: `scale(${fit})` }, { transform: `translate(${dx * 0.45}px, ${dy * 0.45 - 50}px) scale(${(fit + s) / 2 * 1.06}) rotate(-7deg)`, offset: 0.5 }, { transform: `translate(${dx}px, ${dy}px) scale(${s}) rotate(0deg)` }], { dur: 400, ease: EASE.io, fill: 'forwards' });
-        k.snd('whoosh');
-        k.at(400, () => {
-          card.remove();
-          unhide(f.card, true);
-          const real = realCard(f.card);
-          fx.dust(real, { n: 18, rocks: 4 });
-          sfx.play('slam');
-          fx.shake(document.getElementById('stage'), 'quake');
-          clash(k);
-        });
+        landCard(k, f, card, c, fit);
       });
       return T + 520;
     },
   };
 };
+// карта монстра из центра экрана улетает на своё место на столе и сшибается щитами с героем
+function landCard(k, f, card, c, fit) {
+  const tr = box(realCard(f.card));
+  if (!tr) { k.a(card, [{ opacity: 1 }, { opacity: 0, transform: `scale(${fit * 0.8})` }], { dur: 280, fill: 'forwards' }); k.rm(card, 300); unhide(f.card); return; }
+  const cw = card.firstElementChild.offsetWidth || 236;
+  const s = tr.width / cw;
+  const dx = tr.left + tr.width / 2 - c.x, dy = tr.top + tr.height / 2 - c.y;
+  k.a(card, [{ transform: `scale(${fit})` }, { transform: `translate(${dx * 0.45}px, ${dy * 0.45 - 50}px) scale(${(fit + s) / 2 * 1.06}) rotate(-7deg)`, offset: 0.5 }, { transform: `translate(${dx}px, ${dy}px) scale(${s}) rotate(0deg)` }], { dur: 400, ease: EASE.io, fill: 'forwards' });
+  k.snd('whoosh');
+  k.at(400, () => {
+    card.remove();
+    unhide(f.card, true);
+    const real = realCard(f.card);
+    fx.dust(real, { n: 18, rocks: 4 });
+    sfx.play('slam');
+    fx.shake(document.getElementById('stage'), 'quake');
+    clash(k);
+  });
+}
+
+// ───────────── выход владыки подземелья ─────────────
+// У каждого из пяти боссов своя сцена: экран гаснет, в темноте проступает его лицо,
+// вокруг — своя стихия (адское пламя, души мёртвых, песок пустыни, метель, чёрный дым),
+// имя загорается по буквам на огненной табличке, звучит своя тема. Потом лицо сжимается в карту.
+const BOSS_SCENE = {
+  lucifer: { title: 'Владыка преисподней', flash: 'rgba(255,60,20,.6)', vig: 'rgba(200,20,0,.75)', bolts: ['#ff7a4a', '#ffb347', '#ff4a1a'],
+    embers: ['#ff4a1a', '#ff8a3d', '#ffd27a'],
+    fx(k, W, H) { hellfire(k, 2600); } },
+  hades: { title: 'Царь мёртвых', flash: 'rgba(80,255,190,.42)', vig: 'rgba(10,120,90,.7)', bolts: ['#8ff0d2', '#5ad1ff'],
+    embers: ['#8ff0d2', '#5ad1ff', '#e6fff6'],
+    fx(k, W, H) {
+      // души поднимаются со дна Стикса
+      fx.spray({ x: W / 2, y: H + 10, w: W * 0.9, h: 0 }, { n: 34, spreadX: 1, speed: [40, 110], angle: [-1.75, -1.4], g: -10, size: [9, 18], grow: [10, 24], colors: ['rgba(120,255,200,.32)', 'rgba(90,220,255,.28)'], shape: 'smoke', add: true, life: [1.8, 2.8], delay: [0, 2.4], fadeIn: true, wob: [1, 3], drag: 0.99 });
+      fx.spray({ x: W / 2, y: H + 10, w: W, h: 0 }, { n: 46, spreadX: 1, speed: [70, 190], angle: [-1.8, -1.35], g: -20, size: [1.6, 3.4], colors: ['#8ff0d2', '#b8fff0', '#5ad1ff'], shape: 'dot', life: [1.4, 2.4], delay: [0, 2.6], fadeIn: true, wob: [1, 2] });
+    } },
+  anubis: { title: 'Страж весов', flash: 'rgba(255,214,110,.5)', vig: 'rgba(150,100,10,.7)', bolts: ['#ffd27a', '#8ff0d2'],
+    embers: ['#ffd27a', '#f5c14e', '#fff3b0'],
+    fx(k, W, H) {
+      // ветер пустыни несёт золотой песок через весь экран
+      fx.spray({ x: -10, y: H * 0.55, w: 0, h: H * 0.9 }, { n: 120, spreadY: 1, speed: [280, 560], angle: [-0.16, 0.08], g: 24, size: [1, 2.4], colors: ['#ffd27a', '#f5c14e', '#e0a84a', '#fff3b0'], shape: 'dot', life: [1.4, 2.6], delay: [0, 2.8], drag: 0.995 });
+      fx.spray({ x: -10, y: H * 0.7, w: 0, h: H * 0.6 }, { n: 16, spreadY: 1, speed: [160, 300], angle: [-0.1, 0.05], g: 0, size: [14, 26], grow: [20, 40], colors: ['rgba(224,168,74,.18)', 'rgba(255,210,122,.14)'], shape: 'smoke', add: true, life: [1.6, 2.4], delay: [0, 2.2], fadeIn: true });
+    } },
+  morena: { title: 'Владычица зимы', flash: 'rgba(210,240,255,.6)', vig: 'rgba(120,190,255,.7)', bolts: ['#dff4ff', '#9cc4ff'],
+    embers: ['#ffffff', '#d8f0ff', '#9cc4ff'],
+    fx(k, W, H) {
+      // метель и иней по краям экрана
+      fx.spray({ x: W / 2, y: -12, w: W * 1.2, h: 0 }, { n: 150, spreadX: 1, speed: [60, 170], angle: [1.05, 1.75], g: 40, size: [1.4, 3.6], colors: ['#ffffff', '#e6f6ff', '#bfe6ff'], shape: 'dot', add: false, life: [2, 3.4], delay: [0, 2.8], wob: [1, 3], drag: 0.99 });
+      const fr = k.el('cn-frost');
+      k.a(fr, [{ opacity: 0 }, { opacity: 1, offset: 0.35 }, { opacity: 1, offset: 0.8 }, { opacity: 0 }], { dur: 4300, ease: EASE.lin });
+      k.rm(fr, 4350);
+    } },
+  chernobog: { title: 'Бог тьмы', flash: 'rgba(180,40,60,.5)', vig: 'rgba(60,0,40,.85)', bolts: ['#ff4a5a', '#b47bff'],
+    embers: ['#ff3a3a', '#ff7a4a', '#b47bff'],
+    eyes: true,
+    fx(k, W, H) {
+      // чёрный дым ползёт снизу, в нём искры
+      fx.spray({ x: W / 2, y: H + 20, w: W, h: 0 }, { n: 30, spreadX: 1, speed: [30, 90], angle: [-1.8, -1.35], g: -8, size: [22, 40], grow: [30, 60], colors: ['rgba(10,4,14,.75)', 'rgba(40,10,40,.6)', 'rgba(20,0,10,.7)'], shape: 'smoke', add: false, life: [2.2, 3.2], delay: [0, 2.2], fadeIn: true, wob: [1, 2] });
+      fx.spray({ x: W / 2, y: H + 6, w: W, h: 0 }, { n: 40, spreadX: 1, speed: [120, 300], angle: [-1.85, -1.3], g: -30, size: [1.4, 3], colors: ['#ff3a3a', '#ff7a4a', '#b47bff'], shape: 'spark', life: [1, 1.8], delay: [0, 2.6] });
+    } },
+};
+// картины боссов подгружаем заранее: лицо должно проступить из темноты сразу
+setTimeout(() => Object.keys(BOSS_SCENE).forEach(b => { const im = new Image(); im.decoding = 'async'; im.src = cardImgUrl('m_' + b); }), 9000);
+function bossIntro(k, f, d, o) {
+  const B = BOSS_SCENE[d.art.boss], key = d.art.boss;
+  const W = vw(), H = vh();
+  const c = { x: W / 2, y: H * 0.44 };
+  const fit = fitBig();
+  // темнота
+  const dark = k.el('cn-dark b-' + key);
+  k.a(dark, [{ opacity: 0 }, { opacity: 1 }], { dur: 650, ease: EASE.io });
+  k.snd('bossTheme', { kind: key, sp: k.sp });
+  k.snd('heartbeat', {}, 120); k.snd('heartbeat', {}, 820);
+  // лицо босса проступает из темноты
+  const side = Math.min(Math.max(W * 0.94, Math.min(W * 1.25, H * 0.5)), H * 0.74);
+  const art = k.pt('cn-bossart b-' + key, `<img src="${cardImgUrl(d.id)}" alt="">`, c.x, c.y);
+  art.style.width = art.style.height = side + 'px';
+  if (B.eyes) {
+    const eyes = k.pt('cn-eyes', '<i></i><i></i>', c.x, c.y - side * 0.36);
+    k.a(eyes, [{ opacity: 0, transform: 'scale(.6)' }, { opacity: 1, transform: 'scale(1)', offset: 0.3 }, { opacity: 1, offset: 0.7 }, { opacity: 0, transform: 'scale(1.3)' }], { dur: 1500, delay: 280 });
+    k.rm(eyes, 1820);
+  }
+  k.at(300, () => B.fx(k, W, H));
+  k.a(art, [{ opacity: 0, transform: 'scale(1.16)', filter: 'brightness(.15) saturate(.6)' }, { opacity: 1, transform: 'scale(1.04)', filter: 'brightness(.8) saturate(.9)', offset: 0.55 }, { opacity: 1, transform: 'scale(1)', filter: 'brightness(1) saturate(1)' }], { dur: 1800, delay: 500, ease: EASE.out });
+  const glow = k.pt('cn-aura b-' + key, '', c.x, c.y);
+  k.a(glow, [{ opacity: 0, transform: `scale(${fit * 0.4})` }, { opacity: 0.9, transform: `scale(${fit * 1.3})`, offset: 0.4 }, { opacity: 0.5, transform: `scale(${fit * 1.45})` }], { dur: 2600, delay: 700 });
+  // имя загорается по буквам
+  const sub = `${o.wandering ? 'Из темноты · ' : ''}сила ${f.power ?? '×2'} — ${f.power != null && f.power <= BOSS_FLOOR ? 'меньше не бывает' : 'вдвое больше героя'}`;
+  const plate = k.el('cn-bossname b-' + key, '<small></small><div class="bn-plate"><b></b></div><i></i><em></em>');
+  plate.querySelector('small').textContent = B.title;
+  const nb = plate.querySelector('b');
+  [...d.name].forEach((ch, i) => { const sp = document.createElement('span'); sp.textContent = ch === ' ' ? '\u00a0' : ch; sp.style.setProperty('--i', i); nb.append(sp); });
+  plate.querySelector('i').textContent = d.quote ? `«${d.quote}»` : '';
+  plate.querySelector('em').textContent = sub;
+  const cardBottom = c.y + 168 * fit;
+  plate.style.left = c.x + 'px';
+  plate.style.top = Math.max(8, Math.min(cardBottom + 10, H - (plate.offsetHeight || 150) - 10)) + 'px';
+  const NAME_T = 1450;
+  k.a(plate, [{ opacity: 0 }, { opacity: 1 }], { dur: 260, delay: NAME_T });
+  k.a(plate.querySelector('.bn-plate'), [{ transform: 'scaleX(.2)', opacity: 0 }, { transform: 'scaleX(1.04)', opacity: 1, offset: 0.7 }, { transform: 'none', opacity: 1 }], { dur: 380, delay: NAME_T, ease: EASE.out });
+  nb.querySelectorAll('span').forEach((sp, i) => k.a(sp, [
+    { opacity: 0, transform: 'translateY(10px) scale(1.4)', filter: 'brightness(4) blur(5px)' },
+    { opacity: 1, transform: 'translateY(-3px) scale(1.08)', filter: 'brightness(2.2) blur(0)', offset: 0.5 },
+    { opacity: 1, transform: 'none', filter: 'none' }], { dur: 420, delay: NAME_T + 200 + i * 70, ease: EASE.out }));
+  [plate.querySelector('small'), plate.querySelector('i'), plate.querySelector('em')].forEach((n, i) => k.a(n, [{ opacity: 0, transform: 'translateY(6px)' }, { opacity: 1, transform: 'none' }], { dur: 360, delay: NAME_T + 300 + i * 260 }));
+  // огонь лижет табличку
+  k.at(NAME_T + 260, () => {
+    const r = box(plate.querySelector('.bn-plate'));
+    if (r) fx.spray({ x: r.left + r.width / 2, y: r.top + 4, w: r.width * 0.9, h: 0 }, { n: 60, spreadX: 1, speed: [50, 160], angle: [-1.9, -1.25], g: -60, size: [1.4, 3.2], colors: B.embers, shape: 'spark', life: [0.5, 1.1], delay: [0, 2] });
+  });
+  // удар: вспышка, молнии, землетрясение
+  const HIT = 1900;
+  k.at(HIT, () => {
+    flash(k, B.flash, 520);
+    fx.vignette(B.vig);
+    quake(2.2);
+    ring(k, c.x, c.y, 'b-' + key, fit * 1.3, 900);
+    k.at(120, () => ring(k, c.x, c.y, 'b-' + key, fit * 0.8, 900));
+    bolt(k, c.x - 320 * fit, 0, c.x - 120 * fit, c.y + 40, B.bolts[0]);
+    k.at(110, () => bolt(k, c.x + 320 * fit, 0, c.x + 130 * fit, c.y - 20, B.bolts[1]));
+    if (B.bolts[2]) k.at(240, () => bolt(k, c.x - 40 * fit, 0, c.x + 10 * fit, c.y - 160 * fit, B.bolts[2]));
+  });
+  // лицо сжимается в карту
+  const CARD_T = 2950;
+  const card = k.pt('cn-card', cardHTML(f.card, { size: 'lg', tab: false }), c.x, c.y);
+  card.style.opacity = '0';
+  k.a(art, [{ opacity: 1, transform: 'scale(1)', filter: 'brightness(1)' }, { opacity: 0, transform: `scale(${(250 * fit) / side})`, filter: 'brightness(2.2)' }], { dur: 420, delay: CARD_T, ease: EASE.in, fill: 'forwards' });
+  k.rm(art, CARD_T + 440);
+  k.a(card, [
+    { transform: `scale(${fit * 0.5})`, opacity: 0, filter: 'brightness(3)' },
+    { transform: `scale(${fit * 1.1})`, opacity: 1, filter: 'brightness(1.5)', offset: 0.6 },
+    { transform: `scale(${fit})`, opacity: 1, filter: 'none' }], { dur: 460, delay: CARD_T + 260, ease: EASE.out });
+  k.at(CARD_T + 300, () => { ring(k, c.x, c.y, 'b-' + key, fit, 700); sfx.play('boom', { k: 0.8 }); themeBurst(d, c, fit); });
+  k.snd('growl', { pitch: 0.6, dur: 1.1, kind: 'demon' }, CARD_T + 320);
+  let T = CARD_T + 1100;
+  if (o.ambush) {
+    k.at(CARD_T + 850, () => {
+      const cl = k.pt('cn-claw big', CLAW, c.x, c.y);
+      cl.querySelectorAll('path').forEach((p, i) => k.a(p, [{ strokeDashoffset: 1 }, { strokeDashoffset: 0 }], { dur: 160, delay: Math.floor(i / 3) * 55, ease: EASE.out }));
+      k.fade(cl, 520, 260);
+      fx.vignette('rgba(210,40,20,.7)');
+      quake(1.6);
+      sfx.play('claw'); sfx.play('ambush', { delay: 0.05 });
+    });
+    T += 460;
+  }
+  k.at(T, () => {
+    k.a(dark, [{ opacity: 1 }, { opacity: 0 }], { dur: 420, fill: 'forwards' });
+    k.a(plate, [{ opacity: 1 }, { opacity: 0, transform: 'translateY(10px)' }], { dur: 240, fill: 'forwards' });
+    k.a(glow, [{ opacity: 0.5 }, { opacity: 0 }], { dur: 280, fill: 'forwards' });
+    k.rm(dark, 440); k.rm(plate, 260); k.rm(glow, 300);
+    landCard(k, f, card, c, fit);
+  });
+  return T + 520;
+}
 // щиты героев и монстров сшибаются
 function clash(k) {
   const h = document.getElementById('shieldHero'), m = document.getElementById('shieldMon');
@@ -742,7 +883,7 @@ S.helper = f => ({
 });
 
 // победа: удар разрубает карту монстра, половинки разлетаются, клад летит к победителю
-S.victory = f => ({
+S.victory = (f, loot = []) => ({
   run(k) {
     const uids = f.cards || [];
     const pos = uids.map(u => box(monEl(u))).filter(Boolean);
@@ -760,8 +901,9 @@ S.victory = f => ({
       fx.confetti({ at: { x: p.x, y: Math.min(p.y, center.y) - 40, w: 300, h: 0 }, n: 70 });
       sfx.play('victory');
     });
-    k.at(base + 620, () => treasureRain(k, f));
-    return base + 1650;
+    const T = f.treasures ? 2700 : 1650;
+    k.at(base + 620, () => treasureRain(k, f, loot));
+    return base + T;
   },
 });
 function slashCard(k, uid) {
@@ -807,17 +949,55 @@ function slashCard(k, uid) {
     sfx.play('shatter');
   });
 }
-function treasureRain(k, f) {
-  const deck = document.getElementById('deckTreasure');
+// Клад: сундук падает на стол, подпрыгивает, крышка распахивается — из него бьёт луч и вылетают карты клада.
+// Цвет луча — по самой редкой карте, но его видит только получатель (событие loot приходит лишь ему); остальным — золото.
+const BEAM = { common: ['255,226,150', '#fff3b0', '#ffd36b'], rare: ['120,190,255', '#cfe6ff', '#6fb8ff'], epic: ['200,130,255', '#ecd9ff', '#b47bff'], legendary: ['255,170,40', '#fff0b0', '#ff9a1a'] };
+const CHEST_ART = s => `/ui/v3/chest-${s}.webp`;
+setTimeout(() => ['closed', 'open'].forEach(x => { const im = new Image(); im.src = CHEST_ART(x); }), 6000);
+function treasureRain(k, f, loot = []) {
   const n = Math.min(6, f.treasures || 0);
+  if (!n) return 0;
   const to = api.avaOf(f.pid), toH = f.helper ? api.avaOf(f.helper) : null;
-  const from = box(deck) && onScreen(box(deck)) ? deck : null;
+  const me = api.meId?.();
+  const mine = loot.filter(x => x.pid === me);
+  const rar = mine.reduce((b, x) => (['common', 'rare', 'epic', 'legendary'].indexOf(x.rar) > ['common', 'rare', 'epic', 'legendary'].indexOf(b) ? x.rar : b), 'common');
+  const [rgb, c1, c2] = BEAM[rar] || BEAM.common;
+  // сундук — посреди сцены, под надписью «Победа!»
+  const p = focus();
+  const sc = Math.max(0.48, Math.min(0.72, vw() / 900));
+  const at = { x: clampX(p.x, 120), y: clampY(p.y + 140 * sc + 30, 140) };
+  const ch = k.pt('cn-chest', `<i class="cn-chestbeam" style="--bc:${rgb}"></i><img class="cl" src="${CHEST_ART('closed')}" alt=""><img class="op" src="${CHEST_ART('open')}" alt="">`, at.x, at.y);
+  ch.style.setProperty('--s', sc);
+  const [beam, cl, op] = ch.children;
+  k.a(ch, [{ transform: `translateY(-${vh() * 0.5}px) scale(${sc * 0.7}) rotate(-8deg)`, opacity: 0 }, { transform: `translateY(0) scale(${sc}) rotate(0deg)`, opacity: 1, offset: 0.7 }, { transform: `translateY(-14px) scale(${sc * 1.04}, ${sc * 0.96})`, offset: 0.85 }, { transform: `translateY(0) scale(${sc})`, opacity: 1 }], { dur: 420, ease: EASE.fall });
+  k.at(300, () => { sfx.play('slam'); fx.dust({ x: at.x, y: at.y + 70 * sc, w: 220 * sc, h: 10 }, { n: 10 }); });
+  // нетерпеливо трясётся
+  k.a(ch, [{ transform: `scale(${sc})` }, { transform: `scale(${sc}) rotate(-4deg)` }, { transform: `scale(${sc}) rotate(4deg)` }, { transform: `scale(${sc}) rotate(-2deg)` }, { transform: `scale(${sc})` }], { dur: 300, delay: 470, fill: 'none', ease: EASE.lin, comp: 'replace' });
+  k.at(500, () => sfx.play('clang'));
+  // крышка распахивается
+  const OPEN = 800;
+  k.a(cl, [{ opacity: 1 }, { opacity: 0 }], { dur: 90, delay: OPEN, fill: 'forwards' });
+  k.a(op, [{ opacity: 0, transform: 'scale(.96)' }, { opacity: 1, transform: 'scale(1.06)', offset: 0.5 }, { opacity: 1, transform: 'none' }], { dur: 260, delay: OPEN });
+  k.a(beam, [{ opacity: 0, transform: 'translateX(-50%) scaleY(.1) scaleX(.6)' }, { opacity: 1, transform: 'translateX(-50%) scaleY(1) scaleX(1)', offset: 0.25 }, { opacity: 0.85, transform: 'translateX(-50%) scaleY(1.05) scaleX(.9)', offset: 0.7 }, { opacity: 0, transform: 'translateX(-50%) scaleY(1.1) scaleX(.4)' }], { dur: 1500, delay: OPEN });
+  k.at(OPEN, () => {
+    sfx.play('door'); sfx.play('coins', { n: 6 });
+    if (rar === 'legendary' || rar === 'epic') sfx.play('legendary');
+    else if (rar === 'rare') sfx.play('modGood');
+    flash(k, `rgba(${rgb},.35)`, 260);
+    ring(k, at.x, at.y - 40 * sc, '', 0.6 * sc + (rar === 'legendary' ? 0.4 : 0), 700).style.setProperty('--rc', rgb);
+    fx.spray({ x: at.x, y: at.y - 30 * sc, w: 140 * sc, h: 10 }, { n: rar === 'legendary' ? 60 : 34, spreadX: 1, speed: [160, 420], angle: [-2.1, -1.05], g: 520, size: [2, 4.5], colors: [c1, c2, '#ffffff'], shape: 'star', life: [0.6, 1.2] });
+    fx.coins({ x: at.x, y: at.y - 20 * sc, w: 60, h: 10 }, null, { n: 10 });
+  });
+  // карты вылетают из сундука к победителю и помощнику
+  const mouth = { left: at.x - 30, top: at.y - 60 * sc, width: 60, height: 30, right: at.x + 30, bottom: at.y - 30 * sc };
+  const src = { getBoundingClientRect: () => mouth, isConnected: true };
   for (let i = 0; i < n; i++) {
     const target = toH && i % 3 === 2 ? toH : to;
-    k.at(i * 95, () => throwThing(k, `<div class="cn-tback">${cardBackSVG('treasure')}</div>`, from || document.getElementById('stage'), target, { s0: 0.6, s1: 0.45, spin: rnd(200, 420), lift: rnd(80, 170), dur: 640, trail: false,
-      hit: () => { fx.sparkle(target, { n: 6 }); sfx.play('coins', { n: 1, gap: 0 }); } }));
+    k.at(OPEN + 140 + i * 110, () => throwThing(k, `<div class="cn-tback" style="--bc:${rgb}">${cardBackSVG('treasure')}</div>`, src, target, { s0: 0.3, s1: 0.45, spin: rnd(200, 420), lift: rnd(160, 260), dur: 700, trail: [c1, c2, '#ffffff'],
+      hit: () => { fx.sparkle(target, { n: 6, colors: [c1, c2, '#fff'] }); sfx.play('coins', { n: 1, gap: 0 }); } }));
   }
-  if (to) k.at(n * 95 + 600, () => fx.coins(document.getElementById('stage'), to, { n: 8 }));
+  k.fade(ch, OPEN + 1500, 360);
+  return OPEN + 1900;
 }
 
 // не убежал: монстр бросается на героя, когти полосуют аватарку
@@ -1327,6 +1507,7 @@ export const cine = {
       switch (f.kind) {
         case 'combat': sc = S.intro(f, { door: f.card === doorCard, ambush: kinds.has('ambush') }); break;
         case 'wandering': sc = S.intro(f, { door: false, wandering: true }); break;
+        case 'victory': sc = S.victory(f, list.filter(x => x.kind === 'loot')); break;
         case 'curse': sc = S.curse(f, { fromDoor: f.card === doorCard }); break;
         case 'location': sc = S.location(f, { fromDoor: f.card === doorCard }); break;
         case 'event': sc = S.event(f, { fromDoor: f.card === doorCard }); break;

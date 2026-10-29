@@ -82,6 +82,30 @@ function log(s, text, kind = 'info') {
 function fx(s, o) {
   s.fx.push({ ...o, id: ++s.fxSeq }); // номер события всегда свой: поле id в данных события его не перебивает
   if (s.fx.length > 30) s.fx.splice(0, s.fx.length - 30);
+  tally(s, o);
+}
+// ───────────────────────── счёт партии: для итогов и номинаций ─────────────────────────
+// kills — убитые монстры, helps — победные бои в помощниках, deaths — гибели, cursesIn / cursesOut — проклятия на себя и
+// насланные, spent — голды на рынке и за Ящик Пандоры, earned — голды за проданное, escapes — побеги, caught — неудачные побеги,
+// dirty — пакости чужому бою (монстры, усиления, ловушки, проклятия), treasures — карты клада за победы.
+export const STAT_KEYS = ['kills', 'helps', 'deaths', 'cursesIn', 'cursesOut', 'spent', 'earned', 'escapes', 'caught', 'dirty', 'treasures', 'duels'];
+const stat = (s, pid, k, n = 1) => {
+  if (!pid || !n || !s.players.some(p => p.id === pid)) return;
+  const st = ((s.stats ||= {})[pid] ||= {});
+  st[k] = (st[k] || 0) + n;
+};
+function tally(s, o) {
+  switch (o.kind) {
+    case 'victory': stat(s, o.pid, 'kills', (o.cards || []).length); stat(s, o.helper, 'helps'); stat(s, o.pid, 'treasures', o.treasures || 0); break;
+    case 'death': stat(s, o.pid, 'deaths'); break;
+    case 'curse': stat(s, o.pid, 'cursesIn'); if (o.by !== o.pid) stat(s, o.by, 'cursesOut'); break;
+    case 'buy': stat(s, o.pid, 'spent', o.price || 0); break;
+    case 'pandora': stat(s, o.pid, 'spent', PANDORA_COST); break;
+    case 'gold': stat(s, o.pid, 'earned', o.n || 0); break;
+    case 'escaped': stat(s, o.pid, 'escapes'); break;
+    case 'caught': stat(s, o.pid, 'caught'); break;
+    case 'duelEnd': stat(s, o.pid, 'duels'); break;
+  }
 }
 function draw(s, deck, rng) {
   if (!s.decks[deck].length && s.discard[deck].length) {
@@ -687,6 +711,7 @@ function checkOutfit(s, p, rng) {
 // кто кому мешал: мстительные боты это помнят
 function grudge(s, victimId, byId) {
   if (!victimId || !byId || victimId === byId) return;
+  stat(s, byId, 'dirty');
   const g = (s.grudges ||= {});
   const v = (g[victimId] ||= {});
   v[byId] = (v[byId] || 0) + 1;
@@ -944,8 +969,11 @@ function shareTreasure(s, count, rng, want = 0) {
   }
   if (h) h.hand.push(...hp);
   f.hand.push(...fp);
-  return { total: drawn.length, share };
+  return { total: drawn.length, share, fp, hp };
 }
+// самая редкая карта среди полученных — для цвета луча из сундука (видит только получатель)
+const RAR_RANK = { common: 0, rare: 1, epic: 2, legendary: 3 };
+const topRarity = us => us.reduce((b, u) => ((RAR_RANK[def(u).rarity] || 0) > RAR_RANK[b] ? def(u).rarity : b), 'common');
 
 function afterMonstersGone(s, rng) {
   // все монстры убраны без убийства: только клад за усыплённых
@@ -967,6 +995,7 @@ function resolveVictory(s, rng) {
   if (h && hasRace(h, 'elf')) setLevel(s, h, h.level + c.monsters.length, { canWin: true });
   const r = shareTreasure(s, n.treasures, rng, n.helperShare);
   fx(s, { kind: 'victory', pid: f.id, helper: c.helper || null, cards: c.monsters.map(m => m.uid), levels: n.levels, treasures: r.total });
+  for (const [x, part] of [[f, r.fp], [h, r.hp]]) if (x && part.length) fx(s, { kind: 'loot', pid: x.id, n: part.length, rar: topRarity(part), only: x.id });
   log(s, `⚔️ ${f.name}${h ? ' и ' + h.name : ''} ${h ? 'побеждают' : 'побеждает'} ${names}! ${f.name} получает +${n.levels} ур. и ${r.total - r.share} клада${h && r.share ? `, ${h.name} — ${r.share}` : ''}.`, 'good');
   for (const m of c.monsters) contractEvent(s, f, 'kill', { uid: m.uid }, rng);
   // рой не погибает, а разлетается и ждёт за следующей дверью — слабее
@@ -2334,6 +2363,7 @@ export function view(s, pid) {
   const c = s.combat;
   return {
     phase: s.phase, version: s.version, turn: { ...s.turn, boughtLevel: undefined }, winners: [...s.winners],
+    stats: s.phase === 'ended' ? JSON.parse(JSON.stringify(s.stats || {})) : null,
     reveal: s.reveal, opts: { winDelayMs: s.opts.winDelayMs, winLevel: winLevel(s), daily: s.opts.daily || null, dailyId: s.opts.dailyId || null }, location: s.location,
     trap: s.trap ? { ...s.trap } : null, tame: s.tame ? { ...s.tame } : null,
     shop: { items: shopList(s, me), note: locationOf(s)?.priceNote || null, fair: s.opts?.dailyId === 'fair' },
