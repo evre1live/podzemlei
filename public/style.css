@@ -4000,3 +4000,68 @@ body.is-dragging .drop-ok { transition: box-shadow .2s, filter .2s; }
 .tb-torch { inset: calc(var(--fw) * .55); border-radius: 4px; pointer-events: none; mix-blend-mode: screen; opacity: var(--to, 0);
   background: radial-gradient(circle 260px at calc(var(--tx, 50%) - var(--fw) * .55) calc(var(--ty, 50%) - var(--fw) * .55), rgb(255 214 150 / .17), rgb(255 170 90 / .07) 45%, transparent 72%); }
 @media (hover: none), (pointer: coarse) { .tb-torch { display: none; } }
+
+/* ═════════ живые предметы на раме ═════════ */
+.tb-prop { transform-origin: 50% 85%; transition: filter .2s ease; }
+.tb-prop.hov { filter: brightness(1.18) drop-shadow(0 0 6px rgb(255 214 140 / .55)); }
+body.prop-hover .game, body.prop-hover .game #stage { cursor: pointer; }
+/* задули свечу: пламя гаснет, стол темнеет */
+.tb-prop.out .tb-flame { animation: none; transform: scale(.15, .1); opacity: 0; transition: transform .25s ease-in, opacity .25s ease-in; }
+.tb-prop .tb-flame { transition: transform .5s cubic-bezier(.2,1.6,.4,1), opacity .4s ease; }
+.table-bg .tb-mat { transition: filter .5s ease; }
+.table-bg.dim .tb-mat { filter: brightness(.72) saturate(.9); }
+.table-bg.dim .tb-glow { visibility: hidden; }
+/* подсказка со свитка */
+.prop-tip { position: fixed; z-index: 70; translate: 0 -100%; padding: 10px 14px; pointer-events: none; text-align: center;
+  font: 600 14px/1.35 var(--display); color: #3a2410; background: linear-gradient(180deg, #f6e8c8, #e6d0a0); border-radius: 4px;
+  box-shadow: 0 0 0 1px #8a6a3a, 0 0 0 3px rgb(40 24 10 / .75), 0 12px 26px rgb(0 0 0 / .55); animation: propTip .32s cubic-bezier(.2,1.4,.4,1); transition: opacity .35s, translate .35s; }
+.prop-tip.gone { opacity: 0; translate: 0 calc(-100% - 8px); }
+@keyframes propTip { from { opacity: 0; transform: translateY(10px) scale(.9); } }
+
+/* ═════════ погода на столе (под картами) ═════════ */
+.tb-wx { position: absolute; pointer-events: none; z-index: 1; }
+/* капля: круги по воде расходятся и тают */
+.wx-ripple { width: 12px; height: 6px; margin: -3px 0 0 -6px; border-radius: 50%; box-shadow: 0 0 0 1.5px rgb(190 240 255 / .55), inset 0 0 4px rgb(190 240 255 / .4);
+  animation: wxRipple 2.4s cubic-bezier(.2,.6,.4,1) forwards; }
+.wx-ripple::after { content: ''; position: absolute; inset: -60%; border-radius: 50%; box-shadow: 0 0 0 1px rgb(190 240 255 / .35); animation: wxRipple2 2.4s .25s cubic-bezier(.2,.6,.4,1) both; }
+@keyframes wxRipple { from { transform: scale(.4); opacity: .9; } to { transform: scale(9); opacity: 0; } }
+@keyframes wxRipple2 { from { transform: scale(.3); opacity: .8; } to { transform: scale(1.6); opacity: 0; } }
+/* кузня: уголёк бежит по полю и гаснет */
+.wx-ember { width: 6px; height: 6px; margin: -3px; border-radius: 50%; background: #fff0b0; box-shadow: 0 0 6px 3px rgb(255 150 40 / .95), 0 0 18px 6px rgb(255 90 20 / .5);
+  mix-blend-mode: screen; animation: wxEmber 2.4s ease-out forwards; }
+@keyframes wxEmber { from { transform: translate(0, 0) scale(1); opacity: 0; } 15% { opacity: 1; } to { transform: translate(var(--dx, 40px), -60px) scale(.3); opacity: 0; } }
+/* Кощей и кладбище: дымок из трещины */
+.wx-wisp { width: 140px; height: 120px; margin: -60px -70px; border-radius: 50%; background: radial-gradient(closest-side, rgb(130 255 170 / .42), rgb(80 210 130 / .18) 55%, transparent);
+  filter: blur(6px); mix-blend-mode: screen; animation: wxWisp 4s ease-out forwards; }
+.cave[data-loc="loc_graveyard"] .wx-wisp { background: radial-gradient(closest-side, rgb(210 220 240 / .34), rgb(160 170 200 / .14) 55%, transparent); }
+@keyframes wxWisp { from { transform: translateY(10px) scale(.4); opacity: 0; } 25% { opacity: 1; } to { transform: translateY(-50px) scale(1.4); opacity: 0; } }
+/* лёд: на краях карт на столе — иней */
+.cave[data-loc="loc_ice"] #stage .card::after { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; z-index: 6;
+  background: radial-gradient(ellipse 46% 30% at 0 0, rgb(240 250 255 / .78), rgb(200 230 255 / .25) 45%, transparent 72%), radial-gradient(ellipse 40% 26% at 100% 100%, rgb(240 250 255 / .7), rgb(200 230 255 / .2) 45%, transparent 72%),
+    radial-gradient(ellipse 34% 20% at 100% 0, rgb(240 250 255 / .5), transparent 70%), radial-gradient(ellipse 30% 18% at 0 100%, rgb(240 250 255 / .4), transparent 70%);
+  box-shadow: inset 0 0 0 1.5px rgb(225 244 255 / .55), inset 0 0 20px rgb(210 236 255 / .6); mix-blend-mode: screen; animation: frostIn 2.4s ease both; }
+@keyframes frostIn { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .tb-wx { display: none; } }
+
+/* ═════════ рамка медальона растёт с уровнем: железо → бронза → серебро → золото ═════════ */
+.hero-pill.medal.tier-0:not(.framed) .ring { background: conic-gradient(from 210deg, #34373c, #9aa0a8, #4b5056, #c9ced6, #3e4248, #868c94, #34373c); }
+.hero-pill.medal.tier-1:not(.framed) .ring { background: conic-gradient(from 210deg, #4e2c12, #d99a62, #844e22, #f2c492, #5e3416, #c07e48, #4e2c12); }
+.hero-pill.medal.tier-2:not(.framed) .ring { background: conic-gradient(from 210deg, #5f646c, #eef2f6, #949ca6, #ffffff, #737a84, #d2d8e0, #5f646c); }
+.hero-pill.medal.tier-3 .ring { animation: tierGlow 2.2s ease-in-out infinite; }
+@keyframes tierGlow { 50% { box-shadow: 0 0 0 2px #0a0806, 0 10px 24px rgb(0 0 0 / .55), 0 0 22px 4px rgb(255 200 90 / .55), 0 0 44px rgb(255 170 60 / .35); } }
+/* мой портрет слева: тонкое кольцо ступени снаружи, цвет места не трогаем */
+.me-ava[class*="tier-"] { --tier: #7d838b; box-shadow: 0 0 0 2px var(--ink, #0a0806), 0 0 0 4px var(--tier), 0 6px 14px rgb(0 0 0 / .4); }
+.me-ava.tier-1 { --tier: #b87440; } .me-ava.tier-2 { --tier: #dfe5ec; } .me-ava.tier-3 { --tier: #f0c860; animation: tierGlowAva 2.2s ease-in-out infinite; }
+@keyframes tierGlowAva { 50% { box-shadow: 0 0 0 2px var(--ink, #0a0806), 0 0 0 4px var(--tier), 0 0 22px 4px rgb(255 200 90 / .55); } }
+/* новая ступень — вспышка по кольцу */
+.hero-pill.medal.tier-up .ring, .me-ava.tier-up { animation: tierUp 1.2s ease-out; }
+@keyframes tierUp { 0% { filter: brightness(2.2) saturate(1.4); transform: scale(1.16); } 40% { transform: scale(.97); } 100% { filter: none; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .hero-pill.medal.tier-3 .ring, .me-ava.tier-3, .hero-pill.medal.tier-up .ring, .me-ava.tier-up { animation: none; } }
+/* флажок уровня — того же металла, что ступень: его видно и у медальонов с особой рамкой */
+.hero-pill.medal.tier-0 .hm-lvl { background: linear-gradient(180deg, #d4d8de, #7d838b 70%, #5a5f66); color: #14161a; }
+.hero-pill.medal.tier-1 .hm-lvl { background: linear-gradient(180deg, #f0c08a, #b8743e 70%, #8a4e22); color: #1e0f05; }
+.hero-pill.medal.tier-2 .hm-lvl { background: linear-gradient(180deg, #ffffff, #c4ccd6 65%, #8e97a2); color: #141820; }
+.hero-pill.medal.tier-3 .hm-lvl { background: linear-gradient(180deg, #fff1b8, #f0b840 60%, #c47c14); color: #1b1004; box-shadow: none; animation: tierFlag 2.2s ease-in-out infinite; }
+@keyframes tierFlag { 50% { filter: drop-shadow(0 0 1px #000) drop-shadow(0 0 8px rgb(255 200 90 / .9)); } }
+.hero-pill.medal.framed.tier-3 .ring { border-radius: 50%; }
+@media (prefers-reduced-motion: reduce) { .hero-pill.medal.tier-3 .hm-lvl { animation: none; } }

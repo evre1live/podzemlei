@@ -775,13 +775,27 @@ function statusTags(p) {
   else if (mem && !mem.connected) t.push('<span class="badge">нет связи</span>');
   return t.join('');
 }
+// рамка медальона растёт с уровнем: железо → бронза (треть пути) → серебро (больше половины) → золото (уровень до победы)
+function tierOf(level) {
+  const W = winLvl();
+  return level >= W - 1 ? 3 : level >= Math.ceil(W * 0.6) ? 2 : level >= Math.ceil(W * 0.3) ? 1 : 0;
+}
+// новая ступень — кольцо вспыхивает один раз (класс только в ту перерисовку, где ступень сменилась)
+function tierCls(p) {
+  const t = tierOf(p.level), seen = (S.ui.tiers ||= {});
+  const up = seen[p.id] !== undefined && t > seen[p.id];
+  seen[p.id] = t;
+  if (up) S.ui.tierUpAt = { ...(S.ui.tierUpAt || {}), [p.id]: performance.now() };
+  const fresh = performance.now() - (S.ui.tierUpAt?.[p.id] || -1e9) < 1400;
+  return ` tier-${t}${fresh ? ' tier-up' : ''}`;
+}
 function oppHTML(p) {
   const g = S.game;
   const botTip = p.isBot ? ` title="${esc(`${p.name} — бот.${p.persona ? ' ' + personaTip(p.persona) : ''}`)}"` : '';
   // соперник сидит за дальним краем стола: медальон с уровнем и силой на кольце, имя на табличке, рядом — раса, класс и карты в руке
   const a = gAva(p), rc = reactOf(p.id);
   return `<button class="opp ${g.turn.pid === p.id ? 'turn' : ''} ${p.dead ? 'dead' : ''} ${p.ghost && !p.dead ? 'ghost' : ''}${rc.cls}" data-opp="${p.id}" data-vmember="${p.id}" style="--seat:${p.color};--fext:${frameExt(a)};${rc.st}" aria-label="${esc(p.name)}, уровень ${p.level}"${botTip}>
-    <span class="hero-pill medal om${a.frame ? ' framed' : ''}"><span class="ring"><span class="ava">${avatarSVG(a, p.color)}</span>
+    <span class="hero-pill medal om${a.frame ? ' framed' : ''}${tierCls(p)}"><span class="ring"><span class="ava">${avatarSVG(a, p.color)}</span>
       <b class="hm-lvl" title="Уровень">${p.level}</b><b class="hm-str" title="Сила: уровень и надетые вещи">${ico('crossed-swords')}<span>${p.power}</span></b></span>
       <span class="hp-plate"><b class="oname">${esc(p.name)}</b></span></span>
     <span class="om-info"><span class="ometa" title="${esc(raceText(p))} · ${esc(classText(p))}">${traitBadges(p)}<span class="sr">${esc(raceText(p))}, ${esc(classText(p))}</span></span>
@@ -800,7 +814,7 @@ function traitBadges(p) {
 // под кольцом имя на шестигранной табличке (как названия на картах)
 function heroMedal(p, { str, sub = '', vmember = false, foe = false } = {}) {
   const a = gAva(p);
-  return `<div class="hero-pill medal${a.frame ? ' framed' : ''}${foe ? ' foe' : ''}" data-pid="${p.id}"${vmember ? ` data-vmember="${p.id}"` : ''} style="--seat:${p.color};--fext:${frameExt(a)}">
+  return `<div class="hero-pill medal${a.frame ? ' framed' : ''}${foe ? ' foe' : ''} tier-${tierOf(p.level)}" data-pid="${p.id}"${vmember ? ` data-vmember="${p.id}"` : ''} style="--seat:${p.color};--fext:${frameExt(a)}">
     <span class="ring"><span class="ava">${avatarSVG(a, p.color)}</span>
       <b class="hm-lvl" title="Уровень ${p.level}">${p.level}</b>
       <b class="hm-str" title="Сила ${str}">${ico('crossed-swords')}<span>${str}</span></b></span>
@@ -858,6 +872,184 @@ function syncTable(art) {
     return `<span class="tb-prop tp-${slot} p-${n}${fl ? ' lit' : ''}"><img src="/ui/table/${TABLE_V}/${n}.webp" alt="" decoding="async"${flip ? ' style="transform:scaleX(-1)"' : ''}>${fl}</span>`;
   }).join('');
 }
+// ───────────── живые предметы на столе ─────────────
+// Предметы на раме можно трогать, пока ждёшь чужой ход: свеча гаснет и разгорается снова, кубики катятся,
+// монеты звенят и рассыпаются, кубок качается и плещет, у кузни летят искры, свиток подсказывает правило.
+// Слой стола лежит под сценой, поэтому попадание считаем по рамкам предметов, если под курсором нет ничего своего.
+const PROP_SKIP = 'button, a, input, textarea, select, label, .card, .chip, [data-act], [data-uid], [data-opp], .hero-pill, .deck, .wheel-mini, .modal, .pop, .pop-back, #sidepanel, #hand, #mecard, .fuse-note';
+const PROP_TIPS = [
+  'Воин побеждает монстра и при равной силе.',
+  'Помощнику можно пообещать часть клада — так он охотнее соглашается.',
+  'Разовые карты играют и в чужом бою: помочь герою или подкинуть силы монстру.',
+  'Пока после «Добить!» идёт отсчёт, соседи ещё могут помешать.',
+  'Колесо Подлеца крутят за голды: выпадет и удача, и пакость.',
+  'На рынке за голды продаются разовые, зелья, проклятия и уровни.',
+  'Ворон-разведчик подсказывает, кто ждёт за следующей дверью.',
+  'Нажмите на соперника — откроются его вещи и всё, что на нём надето.',
+];
+let propTip = 0;
+function propAt(x, y) {
+  for (const p of document.querySelectorAll('#tableProps .tb-prop')) {
+    const r = p.getBoundingClientRect();
+    if (r.width && x >= r.left + r.width * 0.08 && x <= r.right - r.width * 0.08 && y >= r.top + r.height * 0.08 && y <= r.bottom - r.height * 0.08) return p;
+  }
+  return null;
+}
+const propBusy = new WeakSet();
+function poke(prop) {
+  if (propBusy.has(prop)) return;
+  const kind = [...prop.classList].find(c => c.startsWith('p-'))?.slice(2);
+  const R = prop.getBoundingClientRect(), c = { x: R.left + R.width / 2, y: R.top + R.height / 2, w: R.width, h: R.height };
+  const anim = (frames, dur, ease = 'cubic-bezier(.3,.7,.4,1)') => prop.animate(frames, { duration: dur, easing: ease });
+  const busy = ms => { propBusy.add(prop); setTimeout(() => propBusy.delete(prop), ms); };
+  switch (kind) {
+    case 'candles': case 'lamp': { // задуть: пламя гаснет с дымком, стол темнеет; через пару секунд разгорается само
+      if (prop.classList.contains('out')) return;
+      busy(2600);
+      prop.classList.add('out'); $('#tableBg')?.classList.add('dim');
+      sfx.play('whoosh', { gap: 0 });
+      prop.querySelectorAll('.tb-flame').forEach(f => { const r = f.getBoundingClientRect(); fx.smoke({ x: r.left + r.width / 2, y: r.top, w: 6, h: 6 }, { n: 4, colors: ['rgba(200,200,200,.35)', 'rgba(150,150,150,.3)'] }); });
+      setTimeout(() => {
+        prop.classList.remove('out');
+        if (!document.querySelector('#tableProps .tb-prop.out')) $('#tableBg')?.classList.remove('dim');
+        prop.querySelectorAll('.tb-flame').forEach(f => { const r = f.getBoundingClientRect(); fx.burst({ x: r.left + r.width / 2, y: r.top + r.height * 0.6 }, { n: 6, speed: 60, g: -40, colors: ['#ffe08a', '#ffb347', '#fff'] }); });
+        sfx.play('zap', { gap: 0 });
+      }, 2200);
+      break;
+    }
+    case 'dice': { // бросок: кубики подпрыгивают и кувыркаются, сверху всплывает выпавшее
+      busy(800);
+      const n = 1 + Math.floor(Math.random() * 6);
+      anim([{ transform: 'none' }, { transform: 'translate(-6px,-26px) rotate(-160deg)', offset: 0.35 }, { transform: 'translate(-10px,0) rotate(-300deg)', offset: 0.62 },
+        { transform: 'translate(-12px,-8px) rotate(-340deg)', offset: 0.78 }, { transform: 'translate(-12px,0) rotate(-360deg)' }], 700, 'ease-out')
+        .onfinish = () => { fx.float({ x: c.x, y: c.y - c.h * 0.4 }, String(n), n === 6 ? 'good' : ''); if (n === 6) fx.sparkle(prop, { n: 10 }); };
+      sfx.play('dice', { gap: 0 });
+      setTimeout(() => fx.dust({ x: c.x, y: c.y + c.h * 0.35, w: c.w, h: 6 }, { n: 6 }), 430);
+      break;
+    }
+    case 'coins': { // монеты звенят: стопка вздрагивает, пара монет подлетает и рассыпается
+      busy(500);
+      anim([{ transform: 'none' }, { transform: 'translateY(2px) scale(1.04,.95)', offset: 0.2 }, { transform: 'translateY(-3px)', offset: 0.5 }, { transform: 'none' }], 380);
+      fx.coins({ x: c.x, y: c.y - c.h * 0.1, w: c.w * 0.5, h: 6 }, null, { n: 6 });
+      sfx.play('coins', { n: 3, gap: 0 });
+      break;
+    }
+    case 'goblet': case 'mug': case 'potion': { // кубок, кружка, склянка качаются и плещут через край
+      busy(900);
+      anim([{ transform: 'none' }, { transform: 'rotate(-14deg)', offset: 0.25 }, { transform: 'rotate(10deg)', offset: 0.5 }, { transform: 'rotate(-5deg)', offset: 0.75 }, { transform: 'none' }], 820, 'ease-in-out');
+      const col = kind === 'goblet' ? ['#8a1424', '#c4283c', '#ff6a7a'] : kind === 'mug' ? ['#fff8e6', '#f4e2b8', '#ffffff'] : ['#7fe0ff', '#b8f0ff', '#4fb4e8'];
+      setTimeout(() => fx.spray({ x: c.x - c.w * 0.12, y: c.y - c.h * 0.32, w: 10, h: 4 }, { n: 12, speed: [60, 160], angle: [-2.6, -1.6], g: 700, size: [1.6, 3], colors: col, shape: 'drop', add: false, life: [0.5, 0.8] }), 180);
+      if (kind === 'potion') fx.spray({ x: c.x, y: c.y - c.h * 0.2, w: c.w * 0.3, h: 4 }, { n: 10, spreadX: 1, speed: [20, 50], angle: [-1.8, -1.3], g: -40, size: [1.5, 3], colors: ['rgba(190,240,255,.85)'], shape: 'spore', life: [0.6, 1.1] });
+      sfx.play('drip', { gap: 0 });
+      break;
+    }
+    case 'dagger': { // кинжал крутится на столе
+      busy(1000);
+      anim([{ transform: 'none' }, { transform: 'rotate(540deg)', offset: 0.7 }, { transform: 'rotate(700deg)', offset: 0.9 }, { transform: 'rotate(720deg)' }], 950, 'cubic-bezier(.2,.6,.3,1)');
+      sfx.play('shing', { gap: 0 });
+      break;
+    }
+    case 'hammer': { // молот бьёт по наковальне — искры
+      busy(600);
+      anim([{ transform: 'none' }, { transform: 'rotate(-22deg) translateY(-6px)', offset: 0.4 }, { transform: 'rotate(8deg) translateY(2px)', offset: 0.6 }, { transform: 'none' }], 480);
+      setTimeout(() => { fx.spray({ x: c.x, y: c.y + c.h * 0.2, w: 10, h: 4 }, { n: 22, speed: [120, 300], angle: [-2.8, -0.3], g: 600, size: [1.4, 2.6], colors: ['#fff3b0', '#ffb347', '#ff7a2a'], shape: 'spark', life: [0.3, 0.6] }); sfx.play('clang', { gap: 0 }); }, 290);
+      break;
+    }
+    case 'coals': { // угли вспыхивают
+      busy(700);
+      anim([{ filter: 'none' }, { filter: 'brightness(1.7) saturate(1.3)', offset: 0.3 }, { filter: 'none' }], 700);
+      fx.spray({ x: c.x, y: c.y, w: c.w * 0.6, h: c.h * 0.3 }, { n: 26, spreadX: 1, spreadY: 1, speed: [40, 160], angle: [-2.4, -0.7], g: -90, size: [1.4, 2.8], colors: ['#ffb347', '#ff7a2a', '#ffe08a'], shape: 'spark', life: [0.5, 1.1] });
+      sfx.play('zap', { gap: 0 });
+      break;
+    }
+    case 'crystals': case 'egg': { // кристаллы звенят, яйцо Кощея вздрагивает и отсвечивает зеленью
+      busy(800);
+      anim([{ transform: 'none' }, { transform: 'rotate(-6deg)', offset: 0.2 }, { transform: 'rotate(5deg)', offset: 0.45 }, { transform: 'rotate(-3deg)', offset: 0.7 }, { transform: 'none' }], 700, 'ease-in-out');
+      fx.sparkle(prop, { n: 10, colors: kind === 'egg' ? ['#9fffb8', '#d6ffe0', '#ffd27a'] : ['#e6f6ff', '#a8dcff', '#ffffff'] });
+      sfx.play(kind === 'egg' ? 'tick' : 'bell', { gap: 0 });
+      break;
+    }
+    case 'keys': case 'mushrooms': { // ключи звякают, грибы пыхают спорами
+      busy(600);
+      anim([{ transform: 'none' }, { transform: 'translateY(-5px) rotate(-5deg)', offset: 0.3 }, { transform: 'translateY(1px) rotate(3deg)', offset: 0.6 }, { transform: 'none' }], 520);
+      if (kind === 'mushrooms') fx.spray({ x: c.x, y: c.y - c.h * 0.2, w: c.w * 0.5, h: 6 }, { n: 18, spreadX: 1, speed: [20, 70], angle: [-2.4, -0.7], g: -16, size: [1.5, 3], colors: ['rgba(214,255,140,.9)', 'rgba(250,200,255,.85)'], shape: 'spore', life: [1, 1.8], wob: [2, 4] });
+      sfx.play(kind === 'keys' ? 'clang' : 'poof', { gap: 0 });
+      break;
+    }
+    case 'scroll': case 'book': { // свиток и книга шуршат и подсказывают правило
+      busy(3200);
+      anim([{ transform: 'none' }, { transform: 'translateY(-4px) rotate(-3deg)', offset: 0.4 }, { transform: 'none' }], 420);
+      sfx.play('flip', { gap: 0 });
+      const tip = document.createElement('div');
+      tip.className = 'prop-tip';
+      tip.textContent = PROP_TIPS[propTip++ % PROP_TIPS.length];
+      document.body.append(tip);
+      const tw = Math.min(280, innerWidth - 24);
+      tip.style.width = tw + 'px';
+      tip.style.left = Math.max(12, Math.min(innerWidth - tw - 12, c.x - tw / 2)) + 'px';
+      tip.style.top = Math.max(12, R.top - 12) + 'px';
+      setTimeout(() => tip.classList.add('gone'), 2800);
+      setTimeout(() => tip.remove(), 3200);
+      break;
+    }
+    default: {
+      busy(400);
+      anim([{ transform: 'none' }, { transform: 'translateY(-4px)', offset: 0.4 }, { transform: 'none' }], 360);
+    }
+  }
+}
+document.addEventListener('click', e => {
+  if (!document.querySelector('.game') || drag?.on || performance.now() - dragEnd < 350 || e.target.closest(PROP_SKIP)) return;
+  const p = propAt(e.clientX, e.clientY);
+  if (p) poke(p);
+});
+// курсор-«рука» над предметом (на компьютере)
+{ let raf = 0, last = null;
+  document.addEventListener('pointermove', e => {
+    if (e.pointerType !== 'mouse' || raf) return;
+    raf = requestAnimationFrame(() => {
+      raf = 0;
+      const p = document.querySelector('.game') && !drag?.on && !e.target.closest?.(PROP_SKIP) ? propAt(e.clientX, e.clientY) : null;
+      if (p === last) return;
+      last?.classList.remove('hov'); p?.classList.add('hov'); last = p;
+      document.body.classList.toggle('prop-hover', !!p);
+    });
+  }, { passive: true });
+}
+
+// ───────────── погода на столе ─────────────
+// У воды по полю расходятся круги от капель (и от каждой брошенной карты), в кузне по полю бегут угли,
+// у Кощея и на кладбище из трещин поднимается дымок. Всё это — в слое стола, под картами.
+const WEATHER = { loc_flooded: 'ripple', loc_cove: 'ripple', loc_forge: 'ember', loc_koschei: 'wisp', loc_graveyard: 'wisp' };
+function weatherAt(kind, x, y) {
+  const tb = $('#tableBg');
+  if (!tb || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const r = tb.getBoundingClientRect();
+  const i = document.createElement('i');
+  i.className = 'tb-wx wx-' + kind;
+  i.style.left = (x ?? r.width * (0.12 + Math.random() * 0.76)) + 'px';
+  i.style.top = (y ?? r.height * (0.15 + Math.random() * 0.7)) + 'px';
+  if (kind === 'ember') i.style.setProperty('--dx', (Math.random() * 160 - 80).toFixed(0) + 'px');
+  tb.append(i);
+  setTimeout(() => i.remove(), kind === 'wisp' ? 4200 : 2600);
+}
+// круги на воде под упавшей картой (координаты экрана)
+function rippleAt(cx, cy) {
+  const tb = $('#tableBg'), art = $('#cave')?.dataset.loc;
+  if (!tb || WEATHER[art] !== 'ripple') return;
+  const r = tb.getBoundingClientRect();
+  weatherAt('ripple', cx - r.left, cy - r.top);
+  setTimeout(() => weatherAt('ripple', cx - r.left, cy - r.top), 220);
+}
+{ let next = 0;
+  setInterval(() => {
+    const art = $('#cave')?.dataset.loc, kind = WEATHER[art];
+    if (!kind || document.hidden || !document.querySelector('.game') || performance.now() < next) return;
+    weatherAt(kind);
+    next = performance.now() + (kind === 'ember' ? 160 + Math.random() * 260 : kind === 'wisp' ? 700 + Math.random() * 700 : 1300 + Math.random() * 1600);
+  }, 200);
+}
+
 // толщина колоды по числу карт: слой — около дюжины карт
 const deckStack = n => {
   const k = Math.max(1, Math.min(9, Math.round(n / 12)));
@@ -1368,7 +1560,7 @@ function renderMine() {
   const run = 5 - p.runBonus;
   el.innerHTML = `
     <div class="me-top" style="--seat:${p.color}" data-vmember="${p.id}">
-      <div class="me-ava${reactOf(p.id).cls}" id="meava" style="${reactOf(p.id).st}" data-act="avatar" role="button" tabindex="0" title="Сменить портрет" aria-label="Сменить портрет">${avatarSVG(gAva(p), p.color)}</div>
+      <div class="me-ava${reactOf(p.id).cls}${tierCls(p)}" id="meava" style="${reactOf(p.id).st}" data-act="avatar" role="button" tabindex="0" title="Сменить портрет" aria-label="Сменить портрет">${avatarSVG(gAva(p), p.color)}</div>
       <div><div class="me-name">${esc(p.name)}</div>
         <div class="me-stats"><span class="lvl" title="Уровень">${p.level}</span><span class="pow" title="Сила: уровень и надетые вещи">${ico('crossed-swords')}${p.power}</span><span class="gold" data-act="market" role="button" title="Кошелёк: голды за проданные вещи и контракты, тратятся на рынке">${ico('two-coins')}${p.gold || 0}</span>
         <span class="badge" title="Сколько нужно выбросить на кубике, чтобы убежать">${p.classes.some(u => def(u).cls === 'warlock') ? 'побег всегда' : `побег ${run <= 1 ? 'всегда' : run > 6 ? 'никогда' : run + '+'}`}</span>
@@ -3427,6 +3619,7 @@ async function dragDrop(st) {
   setTimeout(() => st.g.remove(), 360);
   sfx.play('place'); fx.dust({ x: st.lx, y: st.ly + st.h * 0.3, w: st.w, h: 8 }, { n: 10 });
   if (hov.z === 'table') tableKick(cardWeight(def(st.uid)));
+  rippleAt(st.lx, st.ly);
   const r = await act(acts[0]);
   if (r.ok) fx.burst({ x: st.lx, y: st.ly }, { n: 10, speed: 160, g: 200 });
 }
@@ -3486,6 +3679,7 @@ function flyCard(src, a) {
     sfx.play('place');
     const target = to || $('#stage');
     const w = cardWeight(d);
+    { const tr = target?.getBoundingClientRect?.(); if (tr) rippleAt(tr.left + tr.width / 2, tr.top + tr.height / 2); }
     if (target === $('#stage') || target?.closest?.('#stage')) { tableKick(w); if (w >= 0.9) fx.dust(target === $('#stage') ? $('#stage .stage-inner') || target : target, { n: Math.round(8 + w * 8) }); }
     else if (w >= 0.9) fx.shake(target.closest('.ava, .me-ava, .opp') || target, 'bump');
     if (d.type === 'curse') fx.smoke(target, { n: 14 });
