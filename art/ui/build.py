@@ -10,6 +10,8 @@
                        железная оправа с полупрозрачной серединой (собирается здесь из iron)
   beam.webp            дубовая балка шапки с коваными хомутами (срез 180 px с торцов)
   roller.webp          валик свитка: пергамент на оси, латунные навершия (срез 120 px с торцов)
+  tavern-table.webp    стол лобби-таверны сверху (art/ui/tavern.py): доски, гвозди, потёртости, круги от кружек
+  chair.webp           стул сверху, спинкой вниз кадра — на странице стулья расставляют вокруг стола и поворачивают
 Blender — модулем Python (pip install bpy; bpy 5.x, Python 3.13), путь к интерпретатору — BLENDER_PY.
 """
 import os, sys, subprocess
@@ -41,11 +43,47 @@ def ghost(src, dst):
     Image.fromarray(np.clip(a, 0, 255).astype(np.uint8), 'RGBA').save(dst, 'WEBP', quality=90, alpha_quality=95, method=6)
 
 
+def fade(a, k=0.12):
+    """тень от площадного света не должна упираться в край кадра: гасим альфу у краёв"""
+    H, W = a.shape[:2]; y, x = np.mgrid[0:H, 0:W].astype(np.float32)
+    d = np.minimum(np.minimum(x, W - 1 - x) / (W * k), np.minimum(y, H - 1 - y) / (H * k))
+    a[..., 3] *= np.clip(d, 0, 1) ** 1.5
+    return a
+
+
+def tavern(src, dst):
+    """столешница: грязь и затёртости пятнами, к краю темнее, круги от кружек, царапины ножом"""
+    sys.path.insert(0, HERE); from textures import fbm
+    a = np.asarray(Image.open(src).convert('RGBA')).astype(np.float32)
+    H, W = a.shape[:2]; y, x = np.mgrid[0:H, 0:W].astype(np.float32)
+    top = a[..., 3] > 250                                     # сама столешница (тень полупрозрачная)
+    grime = 0.8 + 0.32 * fbm(W, H, 5, 4, 5, 91)
+    e = np.hypot((x - W / 2) / 720, (y - H / 2) / 450)          # 1 — край овала
+    rim = 1 - 0.28 * np.clip((e - 0.72) / 0.28, 0, 1) ** 1.5
+    L = grime * rim
+    rng = np.random.default_rng(5)
+    for cx, cy, r in [(560, 420, 40), (1140, 700, 38), (980, 330, 36), (640, 760, 37)]:
+        d = np.hypot(x - cx, y - cy) - r + 3 * np.sin(np.arctan2(y - cy, x - cx) * 3 + cx)
+        L *= 1 - 0.22 * np.exp(-(d / 3.2) ** 2) - 0.06 * (d < 0)
+    for _ in range(14):                                       # царапины: тонкие светлые штрихи
+        cx, cy = rng.uniform(400, 1300), rng.uniform(260, 880); ang = rng.uniform(0, np.pi); ln = rng.uniform(30, 110)
+        u = (x - cx) * np.cos(ang) + (y - cy) * np.sin(ang); v = -(x - cx) * np.sin(ang) + (y - cy) * np.cos(ang)
+        L *= 1 + 0.35 * np.exp(-(v / 0.9) ** 2) * (np.abs(u) < ln)
+    a[..., :3] = np.where(top[..., None], a[..., :3] * L[..., None], a[..., :3])
+    a = fade(a)
+    Image.fromarray(np.clip(a, 0, 255).astype(np.uint8), 'RGBA').save(dst, 'WEBP', quality=86, alpha_quality=92, method=6)
+
+
 def main():
     os.makedirs(TMP, exist_ok=True); os.makedirs(OUT, exist_ok=True)
     subprocess.run([sys.executable, os.path.join(HERE, 'textures.py')], check=True)
     r = subprocess.run([PY, os.path.join(HERE, 'objects.py'), '--o', TMP, '--s', '48', '--parch', os.path.join(TMP, 'parchment.png')], capture_output=True, text=True)
     if r.returncode: print(r.stdout[-2000:], r.stderr[-2000:]); raise SystemExit('objects.py: ошибка')
+    r = subprocess.run([PY, os.path.join(HERE, 'tavern.py'), '--o', TMP, '--s', '40'], capture_output=True, text=True)
+    if r.returncode: print(r.stdout[-2000:], r.stderr[-2000:]); raise SystemExit('tavern.py: ошибка')
+    tavern(os.path.join(TMP, 'tavern-table.png'), os.path.join(OUT, 'tavern-table.webp'))
+    c = fade(np.asarray(Image.open(os.path.join(TMP, 'chair.png')).convert('RGBA')).astype(np.float32), 0.15)
+    Image.fromarray(c.astype(np.uint8), 'RGBA').save(os.path.join(OUT, 'chair.webp'), 'WEBP', quality=88, alpha_quality=92, method=6)
     for n in ['plate-iron', 'plate-brass', 'plate-danger', 'plate-hero', 'beam', 'roller']:
         Image.open(os.path.join(TMP, n + '.png')).save(os.path.join(OUT, n + '.webp'), 'WEBP', quality=88, alpha_quality=95, method=6)
     ghost(os.path.join(TMP, 'plate-iron.png'), os.path.join(OUT, 'plate-ghost.webp'))

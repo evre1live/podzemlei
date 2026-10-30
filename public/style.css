@@ -2836,41 +2836,41 @@ body:has(#world.still) .g-grain { display: none; }
 }
 
 /* летопись и чат — свиток: пергамент между двумя валиками, текст чернилами */
-.game .sidepanel { --ink: #34230f; --ink-2: #6b5134; --ink-line: rgb(96 62 28 / .32);
+:is(.game .sidepanel, .lobby .side) { --ink: #34230f; --ink-2: #6b5134; --ink-line: rgb(96 62 28 / .32);
   position: relative; overflow: visible; border: 0; border-radius: 0 !important; -webkit-backdrop-filter: none; backdrop-filter: none;
   margin: 20px 12px 20px; padding: 18px 0 16px;
   background: linear-gradient(180deg, rgb(70 40 14 / .55), rgb(70 40 14 / 0) 22px), linear-gradient(0deg, rgb(70 40 14 / .5), rgb(70 40 14 / 0) 20px),
     url(/ui/obj/v1/parchment.webp) 0 0 / 256px;
   box-shadow: inset 0 0 34px rgb(120 72 28 / .5), inset 12px 0 16px -12px rgb(80 48 18 / .6), inset -12px 0 16px -12px rgb(80 48 18 / .6), 0 22px 36px -14px rgb(0 0 0 / .75);
 }
-.game .sidepanel::before, .game .sidepanel::after { content: ''; position: absolute; left: -15px; right: -15px; height: 38px; z-index: 4; pointer-events: none;
+:is(.game .sidepanel, .lobby .side)::before, :is(.game .sidepanel, .lobby .side)::after { content: ''; position: absolute; left: -15px; right: -15px; height: 38px; z-index: 4; pointer-events: none;
   border-style: solid; border-color: transparent; border-width: 0 41px; border-image: url(/ui/obj/v1/roller.webp) 0 120 fill / 0 41px stretch;
   filter: drop-shadow(0 4px 4px rgb(0 0 0 / .5)); }
-.game .sidepanel::before { top: -20px; }
-.game .sidepanel::after { bottom: -20px; transform: scaleY(-1); filter: drop-shadow(0 -4px 4px rgb(0 0 0 / .45)); }
-.game .sidepanel, .game .sidepanel .feed { text-shadow: none; }
-.game .sidepanel .tabs { border-bottom: 1px solid var(--ink-line); margin: 0 14px; }
-.game .sidepanel .tabs button { color: var(--ink-2); text-shadow: none; font-size: 16px; }
-.game .sidepanel .tabs button:hover { color: var(--ink); }
-.game .sidepanel .tabs button[aria-selected=true] { color: var(--ink); border-bottom-color: #8e2a1a; }
-.game .sidepanel .tabs .dot { background: radial-gradient(circle at 40% 35%, #e0553e, #8a1a0e); box-shadow: 0 1px 1px rgb(60 10 0 / .5); }
-.game .sidepanel .feed { color: var(--ink); scrollbar-color: rgb(110 72 36 / .5) transparent; padding-inline: 16px; }
-.game .sidepanel .feed .li { color: var(--ink-2); }
-.game .sidepanel .feed .l-turn { color: var(--ink); border-top-color: var(--ink-line); }
-.game .sidepanel .feed .l-good, .game .sidepanel .feed .l-good .li { color: #1f6232; }
-.game .sidepanel .feed .l-bad, .game .sidepanel .feed .l-bad .li { color: #8e2414; }
-.game .sidepanel .feed .l-curse, .game .sidepanel .feed .l-curse .li { color: #5a2a86; }
-.game .sidepanel .feed .l-win { color: #7a4a06; }
-.game .sidepanel .feed .l-event { color: #4a2c12; }
-.game .sidepanel .feed .l-combat { color: var(--ink); }
-.game .sidepanel .feed :is(.sys, .l-sys, .l-info) { color: var(--ink-2); }
-.game .sidepanel .feed .msg { color: var(--ink); }
-.game .sidepanel .feed .msg b { color: color-mix(in oklab, var(--pc, #6b4a2a) 52%, #23140a) !important; }
-.game .sidepanel .feed .msg small { color: var(--ink-2); }
-.game .sidepanel .chatform { border-top: 1px solid var(--ink-line); margin: 0 10px; padding: 10px 4px 2px; }
-.game .sidepanel .chatform input { background: rgb(255 246 226 / .35); border: 1px solid rgb(96 62 28 / .4); color: var(--ink); box-shadow: inset 0 1px 3px rgb(80 50 20 / .3); text-shadow: none; }
-.game .sidepanel .chatform input::placeholder { color: #8a7052; }
-.game .sidepanel .chatform input:focus { border-color: #8e2a1a; box-shadow: inset 0 1px 3px rgb(80 50 20 / .3), 0 0 0 2px rgb(142 42 26 / .2); }
+:is(.game .sidepanel, .lobby .side)::before { top: -20px; }
+:is(.game .sidepanel, .lobby .side)::after { bottom: -20px; transform: scaleY(-1); filter: drop-shadow(0 -4px 4px rgb(0 0 0 / .45)); }
+:is(.game .sidepanel, .lobby .side), :is(.game .sidepanel, .lobby .side) .feed { text-shadow: none; }
+:is(.game .sidepanel, .lobby .side) .tabs { border-bottom: 1px solid var(--ink-line); margin: 0 14px; }
+:is(.game .sidepanel, .lobby .side) .tabs button { color: var(--ink-2); text-shadow: none; font-size: 16px; }
+:is(.game .sidepanel, .lobby .side) .tabs button:hover { color: var(--ink); }
+:is(.game .sidepanel, .lobby .side) .tabs button[aria-selected=true] { color: var(--ink); border-bottom-color: #8e2a1a; }
+:is(.game .sidepanel, .lobby .side) .tabs .dot { background: radial-gradient(circle at 40% 35%, #e0553e, #8a1a0e); box-shadow: 0 1px 1px rgb(60 10 0 / .5); }
+:is(.game .sidepanel, .lobby .side) .feed { color: var(--ink); scrollbar-color: rgb(110 72 36 / .5) transparent; padding-inline: 16px; }
+:is(.game .sidepanel, .lobby .side) .feed .li { color: var(--ink-2); }
+:is(.game .sidepanel, .lobby .side) .feed .l-turn { color: var(--ink); border-top-color: var(--ink-line); }
+:is(.game .sidepanel, .lobby .side) .feed .l-good, :is(.game .sidepanel, .lobby .side) .feed .l-good .li { color: #1f6232; }
+:is(.game .sidepanel, .lobby .side) .feed .l-bad, :is(.game .sidepanel, .lobby .side) .feed .l-bad .li { color: #8e2414; }
+:is(.game .sidepanel, .lobby .side) .feed .l-curse, :is(.game .sidepanel, .lobby .side) .feed .l-curse .li { color: #5a2a86; }
+:is(.game .sidepanel, .lobby .side) .feed .l-win { color: #7a4a06; }
+:is(.game .sidepanel, .lobby .side) .feed .l-event { color: #4a2c12; }
+:is(.game .sidepanel, .lobby .side) .feed .l-combat { color: var(--ink); }
+:is(.game .sidepanel, .lobby .side) .feed :is(.sys, .l-sys, .l-info) { color: var(--ink-2); }
+:is(.game .sidepanel, .lobby .side) .feed .msg { color: var(--ink); }
+:is(.game .sidepanel, .lobby .side) .feed .msg b { color: color-mix(in oklab, var(--pc, #6b4a2a) 52%, #23140a) !important; }
+:is(.game .sidepanel, .lobby .side) .feed .msg small { color: var(--ink-2); }
+:is(.game .sidepanel, .lobby .side) .chatform { border-top: 1px solid var(--ink-line); margin: 0 10px; padding: 10px 4px 2px; }
+:is(.game .sidepanel, .lobby .side) .chatform input { background: rgb(255 246 226 / .35); border: 1px solid rgb(96 62 28 / .4); color: var(--ink); box-shadow: inset 0 1px 3px rgb(80 50 20 / .3); text-shadow: none; }
+:is(.game .sidepanel, .lobby .side) .chatform input::placeholder { color: #8a7052; }
+:is(.game .sidepanel, .lobby .side) .chatform input:focus { border-color: #8e2a1a; box-shadow: inset 0 1px 3px rgb(80 50 20 / .3), 0 0 0 2px rgb(142 42 26 / .2); }
 @media (max-width: 900px) {
   .cave .sidepanel.open { inset: auto 14px 22px 14px; height: calc(60dvh - 14px); margin: 0; background: linear-gradient(180deg, rgb(70 40 14 / .55), rgb(70 40 14 / 0) 22px), linear-gradient(0deg, rgb(70 40 14 / .5), rgb(70 40 14 / 0) 20px), url(/ui/obj/v1/parchment.webp) 0 0 / 256px; }
 }
@@ -2923,3 +2923,71 @@ body:has(#world.still) .g-grain { display: none; }
   .modal.shop::before { left: -18px; right: -18px; top: -36px; height: 60px; }
   .modal.shop::after { left: -24px; right: -24px; top: -42px; height: 16px; }
 }
+
+/* ═════════ лобби — таверна: овальный стол сверху, стулья вокруг, на занятых — портреты героев ═════════
+   место на круге задаёт угол --a (90° — низ, моё место); стул повёрнут спинкой от стола, перед героем — кружка,
+   табличка с именем — на спинке стула, со стороны от стола */
+.tavern { position: relative; width: 100%; aspect-ratio: 16 / 9; max-height: 64vh; min-height: 420px; margin: 4px auto 46px;
+  --rx: 35%; --ry: 36%; --ava: 96px; --chair: 214px; --mug: 50px; --mx: 98px; --my: 78px; --px: 108px; --py: 70px; --co: 20px; }
+.tv-table { position: absolute; left: 50%; top: 50%; width: min(66%, calc(64vh * 16 / 9 * .66)); translate: -50% -50%; pointer-events: none; user-select: none;
+  filter: drop-shadow(0 18px 26px rgb(0 0 0 / .45)); }
+.tv-props { position: absolute; left: 50%; top: 50%; width: 0; height: 0; pointer-events: none; }
+.tavern .tv-prop { position: absolute; translate: -50% -50%; }
+.tv-candles { width: 96px; left: -24px; top: -14px; }
+.tv-dice { width: 62px; left: 70px; top: 26px; rotate: 14deg; }
+.tv-coins { width: 64px; left: -112px; top: 34px; }
+.tv-scroll { width: 92px; left: 92px; top: -38px; rotate: -18deg; }
+.tv-ring { position: absolute; inset: 0; }
+.tavern .tv-seat, .has-world .tavern .tv-seat, .tavern .tv-seat.me, .tavern .tv-seat.emptyseat {
+  position: absolute; width: 0; height: 0; padding: 0; min-height: 0; margin: 0; display: block; border: 0 !important; background: none; box-shadow: none;
+  -webkit-backdrop-filter: none; backdrop-filter: none; text-shadow: none;
+  left: calc(50% + var(--rx) * cos(var(--a))); top: calc(50% + var(--ry) * sin(var(--a))); }
+/* стул чуть отодвинут от стола: герой сидит на передней части сиденья, спинка видна за портретом */
+.tv-chair { position: absolute; left: calc(cos(var(--a)) * var(--co)); top: calc(sin(var(--a)) * var(--co)); width: var(--chair); aspect-ratio: 1; translate: -50% -50%; rotate: calc(var(--a) - 90deg);
+  background: url(/ui/obj/v1/chair.webp) center / contain no-repeat; pointer-events: none; filter: brightness(1.3) saturate(1.1); }
+.tv-mug { position: absolute; left: calc(-1 * cos(var(--a)) * var(--mx)); top: calc(-1 * sin(var(--a)) * var(--my)); width: var(--mug); translate: -50% -60%;
+  filter: drop-shadow(0 5px 5px rgb(0 0 0 / .4)); pointer-events: none; animation: tvMug .5s cubic-bezier(.2, .9, .3, 1.3) both; }
+@keyframes tvMug { from { scale: .2; opacity: 0; } }
+.tavern .tv-seat .ava { position: absolute; left: 0; top: 0; width: var(--ava); height: var(--ava); margin: 0; translate: -50% -50%; z-index: 2;
+  animation: tvSit .45s cubic-bezier(.2, .9, .3, 1.2) both; }
+@keyframes tvSit { from { scale: .6; opacity: 0; } }
+.tavern .tv-seat.me .ava { box-shadow: 0 0 0 3px rgb(var(--torch) / .7), 0 0 26px rgb(var(--torch) / .55), 0 12px 22px rgb(0 0 0 / .55); }
+.tv-plate { position: absolute; left: calc(cos(var(--a)) * var(--px)); top: calc(sin(var(--a)) * var(--py)); translate: -50% -50%; width: max-content; z-index: 3; display: grid; justify-items: center; gap: 0; white-space: nowrap;
+  padding: 3px 12px 4px; border: 1px solid transparent; border-image: url(/ui/obj/v1/plate-iron.webp) 36 fill / 9px stretch; filter: drop-shadow(0 3px 3px rgb(0 0 0 / .55)); }
+.tavern .tv-seat.me .tv-plate { border-image-source: url(/ui/obj/v1/plate-brass.webp); }
+.tavern .tv-seat .sname { font-family: var(--display); font-weight: 700; font-size: 16px; line-height: 1.15; color: #f2e6cf; text-shadow: 0 -1px 0 rgb(0 0 0 / .8); max-width: 15ch; overflow: hidden; text-overflow: ellipsis; }
+.tavern .tv-seat .stag { font-size: 11.5px; line-height: 1.1; color: #c9b998; text-shadow: 0 -1px 0 rgb(0 0 0 / .7); }
+.tavern .tv-seat.me .sname { color: #2a1604; text-shadow: 0 1px 0 rgb(255 232 170 / .5); }
+.tavern .tv-seat.me .stag { color: #4a2c0a; text-shadow: none; }
+.tavern .tv-seat .kick { position: absolute; left: calc(var(--ava) / 2 - 10px); top: calc(var(--ava) / -2 - 4px); z-index: 4; min-height: 0; width: 30px; height: 30px; padding: 0; display: grid; place-items: center; }
+.tavern .tv-seat .kick .gi { width: 14px; height: 14px; }
+.tavern .emptyseat .btn, .tavern .emptyseat .tv-free { position: absolute; left: 0; top: 0; translate: -50% -50%; z-index: 2; white-space: nowrap; }
+.tv-free { font: 600 12.5px/1 var(--ui); color: #e6d6b6; padding: 5px 10px; border-radius: 3px; background: rgb(20 12 6 / .62); box-shadow: 0 0 0 1px rgb(214 168 90 / .3); }
+.tavern .tv-seat.speaking .ava { box-shadow: 0 0 0 3px #8ff0d2, 0 0 22px rgb(143 240 210 / .9); }
+@media (max-width: 1200px) { .tavern { --ava: 84px; --chair: 186px; --mx: 88px; --my: 70px; --px: 98px; --py: 64px; --co: 16px; } }
+/* телефон: стол стоит вдоль экрана, места — по вытянутому овалу */
+@media (max-width: 700px) {
+  .tavern { aspect-ratio: 3 / 4; max-height: none; min-height: 0; margin: 30px auto 34px; --rx: 33%; --ry: 37%; --ava: 62px; --chair: 132px; --mug: 32px; --mx: 58px; --my: 66px; --px: 64px; --py: 50px; --co: 12px; }
+  .tv-table { width: 104%; rotate: 90deg; }
+  .tv-candles { width: 70px; left: -6px; top: -26px; } .tv-dice { width: 44px; left: 30px; top: 56px; } .tv-coins { width: 46px; left: -40px; top: 60px; } .tv-scroll { width: 64px; left: 10px; top: -96px; rotate: 72deg; }
+  .tavern .tv-seat .sname { font-size: 13.5px; max-width: 11ch; } .tavern .tv-seat .stag { font-size: 10.5px; }
+  .tv-plate { padding: 2px 8px 3px; border-image-width: 7px; left: 0; top: calc(var(--ava) / 2 + 14px); } /* узко: табличка всегда под портретом */
+  .tavern .tv-seat .kick { width: 26px; height: 26px; }
+  .tavern .emptyseat .btn { font-size: 12px; padding: 3px 8px; min-height: 28px; }
+}
+@media (prefers-reduced-motion: reduce) { .tv-mug, .tavern .tv-seat .ava { animation: none; } }
+
+/* настройки комнаты — лист пергамента на столе хозяина; разделы — кованые таблички */
+.lobby .settings { position: relative; max-width: 560px; padding: 18px 22px 20px; color: #34230f; text-shadow: none;
+  background: linear-gradient(180deg, rgb(70 40 14 / .25), rgb(70 40 14 / 0) 26px), url(/ui/obj/v1/parchment.webp) 0 0 / 256px;
+  box-shadow: inset 0 0 34px rgb(120 72 28 / .5), 0 18px 30px -12px rgb(0 0 0 / .7); rotate: -.4deg; }
+.lobby .settings h3 { color: #34230f; text-shadow: none; }
+.lobby .settings .muted { color: #6b5134 !important; text-shadow: none; }
+.lobby .settings .seg { display: flex; flex-wrap: wrap; gap: 6px; border: 0; background: none; box-shadow: none; overflow: visible; }
+.lobby .settings .seg button { min-height: 34px; padding: 4px 12px; background: none; border: 1px solid transparent; box-shadow: none !important; border-image: url(/ui/obj/v1/plate-iron.webp) 36 fill / 9px stretch;
+  color: #e9dcc4; text-shadow: 0 -1px 0 rgb(0 0 0 / .8); filter: drop-shadow(0 2px 2px rgb(0 0 0 / .4)); }
+.lobby .settings .seg button:hover { filter: brightness(1.15) drop-shadow(0 2px 2px rgb(0 0 0 / .4)); }
+.lobby .settings .seg button[aria-pressed=true] { border-image-source: url(/ui/obj/v1/plate-brass.webp); color: #2a1604; text-shadow: 0 1px 0 rgb(255 232 170 / .5); }
+.lobby .settings .seg button .gi { color: inherit; }
+.lobby .startbar .muted { text-shadow: 0 1px 2px rgb(0 0 0 / .9); }
+@media (max-width: 700px) { .lobby .settings { padding: 16px 14px 18px; rotate: 0deg; } }

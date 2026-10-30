@@ -477,7 +477,7 @@ mount.lobby = () => {
     <section class="band b-clay pebbles">
       <div class="lobby-body">
         <div>
-          <div class="seats" id="seats"></div>
+          <div class="tavern" id="tavern">${tavernTable()}<div class="tv-ring" id="seats"></div></div>
           <div id="settings"></div>
           <div class="startbar" id="startbar"></div>
         </div>
@@ -499,15 +499,19 @@ update.lobby = () => {
   $('#rcode').textContent = r.id;
   const cp = app.querySelector('.topbar [data-act="copy"]');
   if (cp) cp.textContent = r.spectator ? 'Ссылка для зрителей' : 'Скопировать приглашение';
-  const seats = r.members.map(m => `
-    <div class="seat ${m.id === r.me ? 'me' : ''}" style="--seat:${m.color}" data-vmember="${m.id}">
-      ${isHost && m.id !== r.me ? `<button class="btn ghost small kick" data-kick="${m.id}" title="Убрать из-за стола" aria-label="Убрать ${esc(m.name)}">${ico('cross-mark')}</button>` : ''}
+  // таверна: стулья по кругу у стола, моё место — внизу, остальные — по часовой стрелке в порядке прихода
+  const n = Math.max(r.maxPlayers, r.members.length), mi = Math.max(0, r.members.findIndex(m => m.id === r.me));
+  const ang = i => `--a:${(90 + (i - mi) * 360 / n).toFixed(1)}deg`;
+  const seats = r.members.map((m, i) => `
+    <div class="seat tv-seat${m.id === r.me ? ' me' : ''}" style="--seat:${m.color};${ang(i)}" data-vmember="${m.id}">
+      <i class="tv-chair" aria-hidden="true"></i><img class="tv-mug" src="/ui/table/${TABLE_V}/mug.webp" alt="" decoding="async">
       ${m.id === r.me ? `<button class="ava ava-edit" data-act="avatar" aria-label="Настроить облик" title="Настроить облик">${avatarSVG(m.avatar, m.color)}<i>${ico('quill-ink')}</i></button>` : `<div class="ava">${avatarSVG(m.avatar, m.color)}</div>`}
-      <div class="sname">${esc(m.name)}</div>
-      <div class="stag">${m.id === r.hostId ? 'хозяин' : m.isBot ? 'бот' : m.connected ? 'готов' : 'нет связи'}${m.id === r.me ? ', это вы' : ''}</div>
+      ${isHost && m.id !== r.me ? `<button class="btn ghost small kick" data-kick="${m.id}" title="Убрать из-за стола" aria-label="Убрать ${esc(m.name)}">${ico('cross-mark')}</button>` : ''}
+      <div class="tv-plate"><div class="sname">${esc(m.name)}</div>
+      <div class="stag">${m.id === r.hostId ? 'хозяин' : m.isBot ? 'бот' : m.connected ? 'готов' : 'нет связи'}${m.id === r.me ? ', это вы' : ''}</div></div>
     </div>`);
-  for (let i = r.members.length; i < r.maxPlayers; i++) {
-    seats.push(`<div class="seat emptyseat">${isHost ? `<button class="btn small" data-act="addBot">Посадить бота</button>` : 'свободно'}</div>`);
+  for (let i = r.members.length; i < n; i++) {
+    seats.push(`<div class="seat tv-seat emptyseat" style="${ang(i)}"><i class="tv-chair" aria-hidden="true"></i>${isHost ? `<button class="btn small" data-act="addBot">Посадить бота</button>` : '<span class="tv-free">свободно</span>'}</div>`);
   }
   $('#seats').innerHTML = seats.join('');
   $('#settings').innerHTML = isHost ? `
@@ -537,6 +541,14 @@ update.lobby = () => {
     : `<span class="muted">Ждём, пока хозяин начнёт партию.</span>`;
   renderChat();
 };
+
+// стол таверны (art/ui/tavern.py) и предметы на нём: ставятся один раз, стулья с героями — поверх
+function tavernTable() {
+  const fl = TABLE_FLAMES.candles.map(([x, y, k]) => `<i class="tb-flame" style="left:${(x * 100).toFixed(1)}%;top:${(y * 100).toFixed(1)}%;--k:${k}"></i>`).join('');
+  const prop = (n, cls, extra = '') => `<span class="tb-prop tv-prop ${cls}"><img src="/ui/table/${TABLE_V}/${n}.webp" alt="" decoding="async">${extra}</span>`;
+  return `<img class="tv-table" src="/ui/obj/v1/tavern-table.webp" alt="" decoding="async" aria-hidden="true">
+    <div class="tv-props" aria-hidden="true">${prop('candles', 'tv-candles lit', fl)}${prop('dice', 'tv-dice')}${prop('coins', 'tv-coins')}${prop('scroll', 'tv-scroll')}</div>`;
+}
 
 function chatFormHTML() {
   return `<form class="chatform" id="chatform" autocomplete="off"><input type="text" id="chatinput" maxlength="300" placeholder="Написать за столом" aria-label="Сообщение"><button class="btn small" type="submit">Отправить</button></form>`;
