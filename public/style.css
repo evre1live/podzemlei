@@ -2742,3 +2742,13 @@ body.is-dragging .pop, body.is-dragging .tip { display: none; }
   filter: drop-shadow(0 26px 36px rgb(0 0 0 / .7)) drop-shadow(0 0 22px rgb(255 214 140 / .18)); }
 .card-peek.on { opacity: 1; transform: none; }
 .card-peek > .card { transform: none !important; }
+
+/* ═════════ настоящий кубик (dice3d) ═════════ */
+.die3.die3d { animation: none; position: fixed; inset: 0; display: block; }
+.die3d .die3-scene { position: fixed; width: 92px; height: 92px; perspective: none; border-radius: 50%; opacity: 0; transition: opacity .3s; }
+.die3d.landed .die3-scene { opacity: 1; animation: d3ring 1s ease-out both; }
+.die3d.ok .die3-scene { box-shadow: 0 0 0 3px rgb(116 212 168 / .8), 0 0 40px 10px rgb(116 212 168 / .45); }
+.die3d.fail .die3-scene { box-shadow: 0 0 0 3px rgb(224 96 74 / .8), 0 0 40px 10px rgb(224 96 74 / .45); }
+@keyframes d3ring { 0% { transform: scale(.5); opacity: 1; } 100% { transform: scale(1.6); opacity: 0; } }
+.die3d .dlabel { position: fixed; left: var(--dx, 50%); top: calc(var(--dy, 50%) + 58px); translate: -50% 0; white-space: nowrap; }
+.die3d-cv { z-index: 1; filter: drop-shadow(0 0 0 transparent); }

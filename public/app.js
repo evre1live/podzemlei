@@ -2,7 +2,7 @@
 import { def, RACE_NAMES, CLASS_NAMES, SETS, ALLY_SLOT_NAMES, ALLY_SLOT_TEXT, FEMME_LEVELS, REGULAR_DISCOUNT, setRuleVars, ruleText, BOSS_FLOOR, TROUBLE_BONUS, LULLABY_PENALTY, MUTAGEN_BONUS, DISTILL_COST,
   PERSONAS, GHOST_BONUS, DEATH_LEVELS, DEPTH, DEPTH_TREASURE_EVERY, TRADE_TIMEOUT_MS, TAME_MARGIN, WARLOCK_TAME, PANDORA_COST, PANDORA_MULT, PANDORA_ESCAPE, tameBonus, TRAP_FAIL_LEVELS, SHOP_CATS, dailyOf, dailyDate } from '/shared/cards.js';
 import { esc, cardHTML, chipHTML, avatarSVG, iconSVG, cardBackSVG, locationSVG, cardIcon, cardText, locImg } from '/art.js';
-import { fx } from '/fx.js';
+import { fx, preloadDice } from '/fx.js';
 import { sfx } from '/sfx.js';
 import { setWorld, worldMood } from '/world.js';
 import { cine, growlKind } from '/cine.js';
@@ -612,6 +612,7 @@ mount.game = () => {
   </div>`;
   bindChat();
   setTab(S.ui.tab);
+  preloadDice();
 };
 
 function setTab(t) {

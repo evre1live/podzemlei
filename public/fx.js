@@ -382,8 +382,30 @@ export const fx = {
     ], { duration: o.duration || 620, easing: 'cubic-bezier(.3,.7,.4,1)' });
     anim.onfinish = () => { d.remove(); if (o.onArrive) o.onArrive(); };
   },
-  // 3D-кубик: крутится и встаёт на нужную грань.
+  // Кубик. Если есть WebGL — настоящий: летит из-под руки на стол, бьётся о борт и замирает нужной гранью (dice3d).
+  // Иначе (и пока библиотека не загрузилась) — CSS-кубик крутится и встаёт на грань.
   dice(host, value, ok, label) {
+    const stage = document.getElementById('stage');
+    const r = stage?.getBoundingClientRect();
+    if (dice3d && !reduced() && r && r.width > 260 && r.height > 200 && r.bottom > 0 && r.top < innerHeight) {
+      host.innerHTML = `<div class="die3 die3d ${ok ? 'ok' : 'fail'}"><div class="die3-scene"></div><div class="dlabel"></div></div>`;
+      host.querySelector('.dlabel').textContent = label;
+      const die = host.querySelector('.die3');
+      const area = { left: Math.max(0, r.left), top: Math.max(0, r.top), width: Math.min(innerWidth, r.right) - Math.max(0, r.left), height: Math.min(innerHeight, r.bottom) - Math.max(0, r.top) };
+      dice3d.roll3d(host, value, area, { duration: 900 }).then(res => {
+        if (!die.isConnected) { res.dispose(); return; }
+        const sc = die.querySelector('.die3-scene');
+        Object.assign(sc.style, { position: 'fixed', left: res.x - 46 + 'px', top: res.y - 46 + 'px' });
+        die.style.setProperty('--dx', res.x + 'px'); die.style.setProperty('--dy', res.y + 'px');
+        die.classList.add('landed');
+        fx.burst({ x: res.x, y: res.y }, { n: ok ? 26 : 14, colors: ok ? PAL.green : PAL.red, speed: 240, g: 300 });
+        // убираем холст вместе с подписью, когда слой очистят
+        const mo = new MutationObserver(() => { if (!die.isConnected) { mo.disconnect(); res.dispose(); } });
+        mo.observe(host, { childList: true });
+      }).catch(() => {});
+      return;
+    }
+    loadDice3d();
     const rot = { 1: [0, 0], 2: [0, -90], 3: [-90, 0], 4: [90, 0], 5: [0, 90], 6: [0, 180] }[value] || [0, 0];
     const pip = n => {
       const P = { 1: [5], 2: [1, 9], 3: [1, 5, 9], 4: [1, 3, 7, 9], 5: [1, 3, 5, 7, 9], 6: [1, 3, 4, 6, 7, 9] }[n];
@@ -399,6 +421,16 @@ export const fx = {
     }, reduced() ? 0 : 900);
   },
 };
+
+// библиотека кубика (three.js + cannon-es) подгружается заранее, когда браузер свободен
+let dice3d = null, diceLoading = false;
+function loadDice3d() {
+  if (dice3d || diceLoading || reduced()) return;
+  try { const c = document.createElement('canvas'); if (!(c.getContext('webgl2') || c.getContext('webgl'))) return; } catch { return; }
+  diceLoading = true;
+  import('/vendor/dice3d-1.min.mjs').then(m => { dice3d = m; }).catch(() => {}).finally(() => { diceLoading = false; });
+}
+export const preloadDice = () => (window.requestIdleCallback || setTimeout)(loadDice3d, { timeout: 4000 });
 
 // ───────────── наклон карт за указателем ─────────────
 const fine = matchMedia('(hover: hover) and (pointer: fine)');
