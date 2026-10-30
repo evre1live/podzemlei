@@ -1,6 +1,6 @@
 // «Под Землёй» — клиент.
 import { def, RACE_NAMES, CLASS_NAMES, SETS, ALLY_SLOT_NAMES, ALLY_SLOT_TEXT, FEMME_LEVELS, REGULAR_DISCOUNT, setRuleVars, ruleText, BOSS_FLOOR, TROUBLE_BONUS, LULLABY_PENALTY, MUTAGEN_BONUS, DISTILL_COST,
-  PERSONAS, GHOST_BONUS, DEATH_LEVELS, DEPTH, DEPTH_TREASURE_EVERY, TRADE_TIMEOUT_MS, TAME_MARGIN, WARLOCK_TAME, PANDORA_COST, PANDORA_MULT, PANDORA_ESCAPE, tameBonus, TRAP_FAIL_LEVELS, SHOP_CATS, dailyOf, dailyDate } from '/shared/cards.js';
+  PERSONAS, GHOST_BONUS, DEATH_LEVELS, DEPTH, DEPTH_TREASURE_EVERY, TRADE_TIMEOUT_MS, TAME_MARGIN, WARLOCK_TAME, WHEEL, WHEEL_COST, tameBonus, TRAP_FAIL_LEVELS, SHOP_CATS, dailyOf, dailyDate } from '/shared/cards.js';
 import { esc, cardHTML, chipHTML, avatarSVG, iconSVG, cardBackSVG, locationSVG, cardIcon, cardText, locImg } from '/art.js';
 import { fx, preloadDice } from '/fx.js';
 import { sfx } from '/sfx.js';
@@ -11,6 +11,7 @@ import { AV_LABELS, LIGHTS, lookNote, portraitThumb, setAvatarLocation, sceneOf,
 import { FRAMES } from '/avatar-art.js';
 import { createVoice } from '/voice.js';
 import { ico } from '/icons.js';
+import { wheelSVG, WHEEL_LOOK, wheelChance } from '/wheel.js';
 import { initDepth, depthOn, applyDepth } from '/depth.js';
 import { NEWS, NEWS_LATEST } from '/news.js';
 
@@ -705,7 +706,7 @@ function statusTags(p) {
   if (g.turn.pid === p.id && g.phase === 'playing') t.push('<span class="badge lamp">ходит</span>');
   if (c?.fighter === p.id) t.push('<span class="badge warn">в бою</span>');
   if (c?.helper === p.id) t.push('<span class="badge">помогает</span>');
-  if (p.banished) t.push('<span class="badge warn" title="«Прощай навсегда»: выбыл из партии, пока кто-нибудь не откроет Ящик Пандоры">выбыл</span>');
+  if (p.banished) t.push('<span class="badge warn" title="«Прощай навсегда»: выбыл из партии">выбыл</span>');
   else if (p.dead) t.push('<span class="badge warn">погиб</span>');
   else if (p.ghost) t.push(`<span class="badge ghost" title="Погиб и ждёт своего хода. Раз за ход может подкинуть +${GHOST_BONUS} героям или монстрам в чужом бою">призрак</span>`);
   if (p.isBot) t.push(`<span class="badge bot"${p.persona ? ` title="${esc(personaTip(p.persona))}"` : ''}>бот${p.persona ? ' · ' + esc(PERSONAS[p.persona] || '') : ''}</span>`);
@@ -807,8 +808,8 @@ function renderStage() {
     lp.innerHTML = loc ? `<button class="loc-banner" id="locBanner" data-uid="${esc(g.location)}" data-zone="view" title="${esc(loc.text)}">${locationSVG(loc.art)}<span><small>Локация</small><b>${esc(loc.name)}</b></span></button>`
       : `<span class="loc-banner is-default" title="Подземелье: особых правил нет. Карта локации перенесёт весь стол в новое место."><img src="/loc/v2/default-card.webp" alt="" decoding="async"><span><small>Локация</small><b>Подземелье</b></span></span>`;
   }
-  // на телефоне Ящик Пандоры стоит в углу сцены рядом с колодами — вне общего потока боя
-  if (g.combat) { el.innerHTML = decks + pandoraHTML(g.combat, h, 'pb-corner') + `<div class="stage-inner">${fightHTML()}</div>`; afterStage(); return; }
+  // на телефоне Колесо Подлеца стоит в углу сцены рядом с колодами — вне общего потока боя
+  if (g.combat) { el.innerHTML = decks + wheelHTML(g.combat, h, 'wl-corner') + `<div class="stage-inner">${fightHTML()}</div>`; afterStage(); return; }
   if (g.duel && g.phase === 'playing') { el.innerHTML = decks + `<div class="stage-inner">${duelHTML()}</div>`; afterStage(); return; }
   const tp = pl(g.turn.pid);
   const mine = tp?.id === S.room.me;
@@ -910,31 +911,30 @@ function actionButtons() {
 }
 
 const SWORDS = ico('crossed-swords');
-// Ящик Пандоры: шкатулка чёрно-красного дерева в золотой оковке с аметистом, из-под крышки сочится лиловый дым;
-// открытая — из неё рвутся тени в столбе лилового света (art/cut.py pandora; фон прозрачный)
-function pandoraArt(open = false) {
-  return `<img class="pb-img${open ? ' open' : ''}" src="/ui/v3/pandora-${open ? 'open' : 'closed'}.webp" alt="" width="300" height="${open ? 293 : 194}" decoding="async" draggable="false">`;
+// Колесо Подлеца на столе в бою: кто может крутить — кнопка, остальным — подпись, кто уже крутил
+function wheelHTML(c, h, at = 'wl-top') {
+  const spun = (c.wheel || []).length;
+  const cap = spun ? `крутили: ${spun}` : `${WHEEL_COST} г`;
+  const tip = `Колесо Подлеца: в чужом бою любой может крутить его за ${WHEEL_COST} г — раз за бой. Нажмите, чтобы посмотреть сектора и шансы`;
+  return `<button type="button" class="wheel-mini ${at}${h?.wheel ? ' ready' : ''}" data-act="wheel" title="${tip}">${wheelSVG({ big: false })}<span class="wl-cap">${cap}</span></button>`;
 }
-// шкатулка в бою: закрытая — кнопка (кто может заплатить), открытая — кто её открыл
-function pandoraHTML(c, h, at = 'pb-top') {
-  if (c.pandora) return `<div class="pandora open ${at}" title="Ящик Пандоры открыт: сила монстров ×${PANDORA_MULT}, героям −${PANDORA_ESCAPE} к побегу. Кто не убежит — лишится всех вещей и питомца">${pandoraArt(true)}<span class="pb-cap">Открыл ${esc(pname(c.pandora.by))}</span></div>`;
-  const p = me();
-  if (!p || p.banished) return `<div class="pandora ${at}" title="Ящик Пандоры: открыть может любой игрок за ${PANDORA_COST} г">${pandoraArt()}<span class="pb-cap">${PANDORA_COST} г</span></div>`;
-  return `<button type="button" class="pandora ${at}${h?.pandora ? ' ready' : ''}" data-act="pandora" title="Ящик Пандоры: открыть за ${PANDORA_COST} г">${pandoraArt()}<span class="pb-cap">${PANDORA_COST} г</span></button>`;
-}
-function openPandoraModal() {
+function openWheelModal() {
   const c = S.game?.combat, h = hints(), p = me();
-  if (!c || !p) return;
-  const why = c.pandora ? 'В этом бою ящик уже открыт.' : p.dead ? 'Мёртвые ящики не открывают.' : p.gold < PANDORA_COST ? `Нужно ${PANDORA_COST} г, а в кошельке ${p.gold} г.` : '';
-  popOpts = [{ fn: async () => { const r = await act({ type: 'pandora' }); if (r.ok) closeOverlay(); } }];
-  const self = c.fighter === p.id || c.helper === p.id;
-  showOverlay(`<div class="modal pandora-modal" role="dialog" aria-label="Ящик Пандоры">
-    <div class="pb-big">${pandoraArt()}</div>
-    <h2>Ящик Пандоры</h2>
-    <p>Откройте его за <b>${PANDORA_COST} голдов</b> — и в этом бою вся сила монстров <b>удваивается</b> (сейчас ${c.numbers?.monsters ?? '?'} → ${(c.numbers?.monsters ?? 0) * PANDORA_MULT}), а героям <b>−${PANDORA_ESCAPE} к побегу</b>. Кто из героев не убежит, лишится <b>всех вещей и питомца</b>: их раздадут другим игрокам наугад. Чернокнижник уходит тенью и ничего не теряет. В одном бою — один ящик.</p>
-    ${self ? `<p class="warn-note">Это ваш собственный бой — ящик ударит по вам.</p>` : ''}
-    ${why ? `<p class="muted">${esc(why)}</p>` : ''}
-    <div class="row"><button class="btn danger" data-popopt="0" ${h?.pandora ? '' : 'disabled'}>Открыть за ${PANDORA_COST} г</button><button class="btn ghost" data-act="closeOverlay">Не трогать</button></div>
+  if (!c) return;
+  const mine = p && (c.fighter === p.id || c.helper === p.id);
+  const done = p && (c.wheel || []).some(w => w.by === p.id);
+  const why = !p ? 'Вы зритель: смотреть можно, крутить — нет.' : mine ? 'Это ваш бой — колесо крутят соперники.' : p.dead ? 'Мёртвые колесо не крутят.' : done ? 'Вы уже крутили колесо в этом бою.' : (p.gold || 0) < WHEEL_COST ? `Нужно ${WHEEL_COST} г, а в кошельке ${p.gold || 0} г.` : '';
+  popOpts = [{ fn: async () => { const r = await act({ type: 'wheel' }); if (r.ok) closeOverlay(); } }];
+  const rows = WHEEL.map(w => { const L = WHEEL_LOOK[w.id]; return `<li class="wl-row t-${L.tone}"><i style="--c1:${L.c1};--c2:${L.c2}">${ico(L.icon)}</i><b>${esc(w.name)}</b><span>${esc(w.text)}</span><em>${w.n} из 16 · ${wheelChance(w)} %</em></li>`; }).join('');
+  const spins = (c.wheel || []).map(w => `${esc(pname(w.by))} — ${esc(WHEEL.find(x => x.id === w.sector)?.name || '')}`).join(', ');
+  showOverlay(`<div class="modal wheel-modal" role="dialog" aria-label="Колесо Подлеца">
+    <div class="wl-head"><div class="wl-big">${wheelSVG()}<i class="wl-ptr"></i></div>
+      <div><h2>Колесо Подлеца</h2>
+      <p>В чужом бою любой игрок может крутить колесо за <b>${WHEEL_COST} голдов</b> — раз за бой. Что выпадет, то и случится: монстры станут злее, из темноты вылезет ещё один монстр, а то и <b>босс войдёт в комнату</b>. Бывают и осечки — колесо помогает герою или бьёт по тому, кто крутил. Крутили колесо — отсчёт «помешать» начинается заново.</p>
+      ${spins ? `<p class="muted">В этом бою: ${spins}.</p>` : ''}</div></div>
+    <ul class="wl-list">${rows}</ul>
+    ${why ? `<p class="muted wl-why">${esc(why)}</p>` : ''}
+    <div class="row"><button class="btn danger big" data-popopt="0" ${h?.wheel ? '' : 'disabled'}>${ico('cycle')}Крутить за ${WHEEL_COST} г</button><button class="btn ghost" data-act="closeOverlay">Не крутить</button></div>
   </div>`);
 }
 // в летописи эмодзи из движка заменяются гравированными значками
@@ -969,7 +969,6 @@ function fightHTML() {
   for (const [id, v] of Object.entries(c.turnUndead || {})) if (v) pm.push({ side: 'player', t: `${esc(pname(id))}: изгнание +${v}` });
   for (const bs of c.backstabs) pm.push({ side: 'monster', t: `${esc(pname(bs.by))} бьёт в спину ${esc(pname(bs.on))}: −2` });
   for (const [id, v] of Object.entries(c.escape || {})) if (v) pm.push({ side: 'player', t: `${esc(pname(id))}: левитация, побег +${v}` });
-  if (c.pandora) pm.push({ side: 'player', t: `Ящик Пандоры: побег −${PANDORA_ESCAPE}` }, { side: 'monster', t: `${esc(pname(c.pandora.by))}: Ящик Пандоры ×${PANDORA_MULT}` });
   const mods = side => pm.filter(x => x.side === side).map(x => `<span class="mod ${side === 'player' ? 'p' : 'm'}">${x.t}</span>`).join('');
   const monsters = c.monsters.map((m, i) => `
     <div class="mon-wrap">
@@ -1002,13 +1001,14 @@ function fightHTML() {
     b.push(`<span class="hint">${who} ${canMeddle ? 'Карты, которыми можно вмешаться, подсвечены в руке.' : ''}</span>`);
     if (h.haunt?.player) b.push(`<button class="btn spook" data-act="haunt" data-side="player" title="Вы призрак: раз за ход можно подкинуть +${GHOST_BONUS} одной стороне">${ico('ghost')} +${GHOST_BONUS} героям</button>`);
     if (h.haunt?.monster) b.push(`<button class="btn spook" data-act="haunt" data-side="monster" title="Вы призрак: раз за ход можно подкинуть +${GHOST_BONUS} одной стороне">${ico('ghost')} +${GHOST_BONUS} монстрам</button>`);
+    if (h.wheel) b.push(`<button class="btn danger" data-act="wheel" title="Колесо Подлеца: крутить за ${WHEEL_COST} г — раз за бой">${ico('cycle')}Колесо · ${WHEEL_COST} г</button>`);
     if (h.pass) b.push(`<button class="btn ghost" data-act="pass">Не мешаю</button>`);
   }
   if (c.winAt && c.passed?.length) b.push(`<span class="hint passed">Не мешают: ${c.passed.map(id => esc(pname(id))).join(', ')}</span>`);
   return `
     <div class="fight${c.monsters.length >= 4 ? ' m4' : c.monsters.length === 3 ? ' m3' : ''}" style="--ha:${n.winning ? 0.34 : 0.12};--ma:${n.winning ? 0.12 : 0.36}">
       <div class="side-col hero"><div class="side-main"><div class="shield hero${n.winning ? ' lead' : ''}" id="shieldHero" title="Сила героев">${SHIELD('hero')}<b data-roll="${n.heroes}">${prev ? prev.heroes : n.heroes}</b></div><div class="heroes-row${c.helper ? ' duo' : ''}">${heroes}</div></div><div class="mods">${mods('player')}</div></div>
-      <div class="versus">${pandoraHTML(c, h)}${center}${verdict}</div>
+      <div class="versus">${wheelHTML(c, h)}${center}${verdict}</div>
       <div class="side-col mon"><div class="side-main"><div class="shield mon${n.winning ? '' : ' lead'}" id="shieldMon" title="Сила монстров">${SHIELD('mon')}<b data-roll="${n.monsters}">${prev ? prev.monsters : n.monsters}</b></div><div class="monsters-row">${monsters}</div></div><div class="mods">${mods('monster')}</div></div>
     </div>
     <div class="tug" style="--k:${(prev ? prev.k : tk).toFixed(3)}" data-k="${tk.toFixed(3)}" title="Перевес сил: ${n.heroes} против ${n.monsters}"><i class="tug-fill"></i><i class="tug-mark"></i></div>
@@ -1159,7 +1159,7 @@ function renderMine() {
       </div>
     </div>
     <div class="traits">${traits.join('')}${abil ? `<span class="abilities">${abil}</span>` : ''}</div>
-    ${p.banished ? `<div class="ghost-note banished">${ico('tombstone')} Вас настигло «Прощай навсегда»: вы выбыли из партии. Вернуть вас может только Ящик Пандоры — его можно открыть в любом бою за ${PANDORA_COST} г.</div>` : ''}
+    ${p.banished ? `<div class="ghost-note banished">${ico('tombstone')} Вас настигло «Прощай навсегда»: вы выбыли из партии.</div>` : ''}
     ${p.ghost ? `<div class="ghost-note">${ico('ghost')} Вы призрак до своего хода: раз за ход можно подкинуть +${GHOST_BONUS} героям или монстрам в чужом бою.</div>` : ''}
     <div class="slots">${slots}</div>
     ${setsHTML(p)}
@@ -2030,24 +2030,16 @@ function extraFx(fresh) {
         break;
       case 'farewell':
         sfx.play('death'); sfx.play('bell', { delay: 0.4 });
-        fx.banner('Прощай навсегда', `${pname(f.pid)} выбывает из партии — вернуть может только Ящик Пандоры`, 'bad');
+        fx.banner('Прощай навсегда', `${pname(f.pid)} выбывает из партии`, 'bad');
         break;
       case 'reborn':
         sfx.play('portal');
-        fx.banner('Возвращение', `${pname(f.pid)} снова в игре`, 'pandora');
+        fx.banner('Возвращение', `${pname(f.pid)} снова в игре`, 'good');
         if (ava) fx.sparkle(ava, { n: 14, colors: ['#f3d9ff', '#c77dff', '#ffffff'] });
         break;
-      case 'pandora': {
-        sfx.play('portal'); sfx.play('bossRise', { delay: 0.25 });
-        fx.banner('Ящик Пандоры открыт!', `${pname(f.pid)}: сила монстров ×${PANDORA_MULT}, героям −${PANDORA_ESCAPE} к побегу`, 'pandora');
-        const box = [...document.querySelectorAll('#stage .pandora')].find(e => e.offsetParent); if (box) { fx.ring(box, { n: 3, size: 30, grow: 520, color: 'rgba(200,125,255,.9)' }); fx.sparkle(box, { n: 14, colors: ['#f3d9ff', '#c77dff', '#ffd56a'] }); }
-        fx.shake($('#stage'), 'bump');
-        break;
-      }
-      case 'pandoraLoss':
-        sfx.play('shatter');
-        if (f.n) fx.banner(`${pname(f.pid)} теряет всё`, `Ящик Пандоры раздал ${f.n} ${plural(f.n, 'вещь', 'вещи', 'вещей')} другим игрокам`, 'pandora');
-        for (const id of f.to || []) fx.float(avaOf(id), 'Подарок ящика', 'good');
+      case 'wheel':
+        // сцену вращения показывает cine.js; без сцен — коротко табличкой
+        if (!cine.on) { const w = WHEEL.find(x => x.id === f.sector); sfx.play('tick'); fx.banner('Колесо Подлеца', `${pname(f.pid)}: ${w?.name || ''}`, w && ['mon7', 'mon10', 'mon20', 'monster', 'boss'].includes(w.id) ? 'bad' : 'good'); }
         break;
       case 'buy':
         sfx.play('coins'); fx.float(ava, def(f.card).name, 'good'); fx.coins(ava, ava, { n: 6 });
@@ -2220,9 +2212,9 @@ const RULES = `<div class="modal rules" role="dialog" aria-label="Как игр�
   <p>Карта «Вызов на поединок» играется в свой ход вне боя: выберите соперника. Сравнивается сила — уровень, вещи и бонусы «в следующем бою»; остальные могут подкинуть разовые бонусы любой стороне, и тогда отсчёт начинается заново. При равенстве побеждает вызванный (а воин-зачинщик — и при равенстве). Проигравший отдаёт победителю свою лучшую вещь со стола, легендарки не отдаются.</p>
   <p>«Роковая женщина» тоже играется в свой ход вне боя, но на двух соперников: из-за неё они бьются между собой по тем же правилам, остальные могут подкинуть бонусы. Проигравший теряет свою самую ценную большую вещь (легендарки не теряются) и ${FEMME_LEVELS} уровня. Ничья — оба уходят целыми. Обе карты продаются на рынке в разделе «Поединки»: вызов — около 700 голдов, роковая женщина — около 1000.</p>
   <h3>Кошелёк и подземный рынок</h3>
-  <p>У каждого есть кошелёк: голды в него приходят за проданные вещи и выполненные контракты. Сколько голдов у вас, видите только вы — чужие кошельки скрыты. Рынок открыт всегда — кнопка в шапке стола. В свой ход вне боя на голды можно купить разовые карты для боя, зелья, проклятия, чтобы наслать на соперников, и «Получи уровень» (не больше одного за ход, последний уровень так не взять). Продаётся только то, что ещё лежит в колоде, поэтому товар кончается. У каждой локации своя ценовая политика: в таверне еда за полцены, в Звёздной библиотеке дешевле уровни и свитки, на кладбище — проклятия, а в Небесной цитадели уровни в полтора раза дороже. Цены локации написаны на её карте. Карты «Сокровища Атлантиды» и «Сундук мертвеца» (по одной в колоде) сразу кладут в кошелёк по 3000 голдов, а единственное проклятие «Прощай навсегда» (на рынке — около 3000) отнимает у жертвы всё и выбивает её из партии, пока кто-нибудь не откроет Ящик Пандоры.</p>
-  <h3>Ящик Пандоры</h3>
-  <p>Во время любого боя — своего или чужого — на столе стоит резная шкатулка. Любой игрок может открыть её за ${PANDORA_COST} голдов: в этом бою вся сила монстров удваивается (и всё, что им подкинут после), героям −${PANDORA_ESCAPE} к побегу, а кто из героев не убежит, лишится всех вещей и питомца — их раздадут другим игрокам наугад. Спутник остаётся. Чернокнижник уходит тенью и ничего не теряет. В одном бою — один ящик.</p>
+  <p>У каждого есть кошелёк: голды в него приходят за проданные вещи и выполненные контракты. Сколько голдов у вас, видите только вы — чужие кошельки скрыты. Рынок открыт всегда — кнопка в шапке стола. В свой ход вне боя на голды можно купить разовые карты для боя, зелья, проклятия, чтобы наслать на соперников, и «Получи уровень» (не больше одного за ход, последний уровень так не взять). Продаётся только то, что ещё лежит в колоде, поэтому товар кончается. У каждой локации своя ценовая политика: в таверне еда за полцены, в Звёздной библиотеке дешевле уровни и свитки, на кладбище — проклятия, а в Небесной цитадели уровни в полтора раза дороже. Цены локации написаны на её карте. Карты «Сокровища Атлантиды» и «Сундук мертвеца» (по одной в колоде) сразу кладут в кошелёк по 3000 голдов.</p>
+  <h3>Колесо Подлеца</h3>
+  <p>Во время чужого боя на столе стоит Колесо Подлеца. Любой игрок, кроме бойца и помощника, может крутить его за ${WHEEL_COST} голдов — раз за бой. На колесе 16 равных секторов, и шанс исхода — ровно столько секторов, сколько ему отведено: +7 монстрам (4 из 16), +10 (3), +20 (1), ещё один монстр не ниже 10-го уровня (2), босс входит в комнату (1); осечка — +5 герою (2), сглаз — тот, кто крутил, теряет уровень (1), куш — он же берёт карту клада (1), пшик — ничего (1). Крутили колесо — отсчёт «помешать» начинается заново. Нажмите на колесо в бою, чтобы увидеть сектора.</p>
   <h3>Ловушки</h3>
   <p>Ловушка за дверью срабатывает на того, кто её открыл. Можно рискнуть и обезвредить — на кубике 4+ (плуту и механику 2+): тогда ловушка ваша и её можно подложить сопернику. Сорвалась — расплата и ещё −1 уровень. Можно не рисковать и просто принять расплату. Подложенную ловушку соперник обезвреживает тем же броском, но без лишнего штрафа. Противогаз и каска с канарейкой спасают от газа.</p>
   <h3>Расы и классы</h3>
@@ -2611,7 +2603,7 @@ document.addEventListener('click', async e => {
     case 'disarm': return act({ type: 'trap', disarm: true });
     case 'market': return openMarketModal();
     case 'contract': return openContractModal();
-    case 'pandora': return openPandoraModal();
+    case 'wheel': return openWheelModal();
     case 'takeTrap': return act({ type: 'trap', disarm: false });
     case 'bribe': {
       // какую вещь бросить монстру: любую со стола, кроме легендарных

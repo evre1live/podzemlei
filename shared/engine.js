@@ -2,7 +2,7 @@
 // Сервер хранит состояние, вызывает act()/tick() и рассылает view() каждому игроку.
 import { def, allUids, RACE_NAMES, CLASS_NAMES, ALLY_SLOT_TEXT, ruleText, BOSS_MULT, BOSS_MIN_LEVEL, BOSS_FLOOR, TROUBLE_BONUS, WITCHER_BONUS, MUTAGEN_BONUS, LULLABY_PENALTY, LULLABY_MAX, DISTILL_COST,
   DEPTH, DEPTH_TREASURE_EVERY, DEATH_LEVELS, GHOST_BONUS, CONTRACTS, CONTRACT_DEFS, SETS, rewardText,
-  TAME_MARGIN, WARLOCK_TAME, FEMME_LEVELS, REGULAR_SPEND, REGULAR_DISCOUNT, PANDORA_COST, PANDORA_MULT, PANDORA_ESCAPE, tameBonus, TRAP_ROLL, TRAP_SKILL, TRAP_FAIL_LEVELS, SHOP_IDS, shopCat, shopBase, roundPrice, dailyOf } from './cards.js';
+  TAME_MARGIN, WARLOCK_TAME, FEMME_LEVELS, REGULAR_SPEND, REGULAR_DISCOUNT, WHEEL_COST, WHEEL, WHEEL_RING, WHEEL_SECTORS, tameBonus, TRAP_ROLL, TRAP_SKILL, TRAP_FAIL_LEVELS, SHOP_IDS, shopCat, shopBase, roundPrice, dailyOf } from './cards.js';
 
 export const WIN_LEVEL = 10;
 // до какого уровня идёт партия: 10 по умолчанию, в лобби можно выбрать 15 или 20
@@ -86,7 +86,7 @@ function fx(s, o) {
 }
 // ───────────────────────── счёт партии: для итогов и номинаций ─────────────────────────
 // kills — убитые монстры, helps — победные бои в помощниках, deaths — гибели, cursesIn / cursesOut — проклятия на себя и
-// насланные, spent — голды на рынке и за Ящик Пандоры, earned — голды за проданное, escapes — побеги, caught — неудачные побеги,
+// насланные, spent — голды на рынке и за Колесо Подлеца, earned — голды за проданное, escapes — побеги, caught — неудачные побеги,
 // dirty — пакости чужому бою (монстры, усиления, ловушки, проклятия), treasures — карты клада за победы.
 export const STAT_KEYS = ['kills', 'helps', 'deaths', 'cursesIn', 'cursesOut', 'spent', 'earned', 'escapes', 'caught', 'dirty', 'treasures', 'duels'];
 const stat = (s, pid, k, n = 1) => {
@@ -100,7 +100,7 @@ function tally(s, o) {
     case 'death': stat(s, o.pid, 'deaths'); break;
     case 'curse': stat(s, o.pid, 'cursesIn'); if (o.by !== o.pid) stat(s, o.by, 'cursesOut'); break;
     case 'buy': stat(s, o.pid, 'spent', o.price || 0); break;
-    case 'pandora': stat(s, o.pid, 'spent', PANDORA_COST); break;
+    case 'wheel': stat(s, o.pid, 'spent', WHEEL_COST); break;
     case 'gold': stat(s, o.pid, 'earned', o.n || 0); break;
     case 'escaped': stat(s, o.pid, 'escapes'); break;
     case 'caught': stat(s, o.pid, 'caught'); break;
@@ -454,7 +454,7 @@ function kill(s, p, rng) {
   log(s, `💀 ${p.name} погибает${before > p.level ? ` и теряет ${before - p.level} ур. (теперь ${p.level})` : ''}. Раса и класс остаются.${taken.length ? ' Труп обшарили: ' + taken.join(', ') + '.' : ''} До своего хода — призрак.`, 'bad');
 }
 
-// «Прощай навсегда»: всё имущество и уровни — в сброс, герой выбывает из партии до открытия Ящика Пандоры
+// «Прощай навсегда» (карта убрана из колоды): всё имущество и уровни — в сброс, герой выбывает из партии
 function banish(s, p, rng) {
   for (const u of [...p.equipped, ...p.carried, ...p.hand, ...(p.ally ? [p.ally] : []), ...(p.allyGear || []), ...(p.beast ? [p.beast] : [])]) toDiscard(s, u);
   p.equipped = []; p.carried = []; p.hand = []; p.ally = null; p.allyGear = []; p.allySlots = null; p.beast = null;
@@ -473,20 +473,9 @@ function banish(s, p, rng) {
     if (c.fighter === p.id) endCombat(s);
   }
   fx(s, { kind: 'farewell', pid: p.id });
-  log(s, `⚰ ${p.name} получает «Прощай навсегда»: все вещи, карты и уровни пропали, герой выбывает из партии. Вернуть его может только Ящик Пандоры.`, 'bad');
+  log(s, `⚰ ${p.name} получает «Прощай навсегда»: все вещи, карты и уровни пропали, герой выбывает из партии.`, 'bad');
   if (s.turn.pid === p.id && s.phase === 'playing') nextTurn(s, rng);
 }
-// открытый Ящик Пандоры возвращает всех выбывших: с 1-го уровня и со стартовыми картами
-function unbanish(s, rng) {
-  for (const x of s.players) {
-    if (!x.banished) continue;
-    x.banished = false; x.dead = false;
-    for (let i = 0; i < startCards(s); i++) { give(x, draw(s, 'door', rng)); give(x, drawFor(s, x, rng)); }
-    fx(s, { kind: 'reborn', pid: x.id });
-    log(s, `📦 Ящик Пандоры выпускает ${x.name} из небытия: снова в игре с 1-го уровня и с новыми картами.`, 'good');
-  }
-}
-
 function resolveCurse(s, target, uid, rng, byName, byId = null) {
   const d = def(uid);
   toDiscard(s, uid);
@@ -858,9 +847,7 @@ export function combatNumbers(s) {
   const heroes = parts.reduce((a, p) => a + heroStrength(s, p), 0)
     + (levelOnlyFight(s) ? 0 : c.mods.filter(m => m.side === 'player').reduce((a, m) => a + m.n, 0));
   const perMonster = c.monsters.map(m => monsterStrength(s, m));
-  // Ящик Пандоры удваивает всю сторону монстров — и то, что подкинут после открытия
-  const monsters = (perMonster.reduce((a, b) => a + b, 0)
-    + c.mods.filter(m => m.side === 'monster').reduce((a, m) => a + m.n, 0)) * (c.pandora ? PANDORA_MULT : 1);
+  const monsters = perMonster.reduce((a, b) => a + b, 0) + c.mods.filter(m => m.side === 'monster').reduce((a, m) => a + m.n, 0);
   const warrior = parts.some(p => hasClass(p, 'warrior'));
   const winning = c.monsters.length > 0 && (heroes > monsters || (warrior && heroes === monsters));
   const f = P(s, c.fighter);
@@ -1057,7 +1044,7 @@ function resolveEscape(s, rng) {
         continue;
       }
       const noEsc = d.escape === false || m.enh.some(u => def(u).noEscape);
-      const bonus = runBonusOf(s, p) + (c.escape[pid] || 0) + (d.escapeMod || 0) - (c.pandora ? PANDORA_ESCAPE : 0);
+      const bonus = runBonusOf(s, p) + (c.escape[pid] || 0) + (d.escapeMod || 0);
       let r = 0, ok = false;
       if (noEsc) log(s, `От ${q(d.name)} не убежать!`, 'bad');
       else {
@@ -1076,8 +1063,6 @@ function resolveEscape(s, rng) {
       }
       const sign = bonus ? (bonus > 0 ? '+' : '') + bonus : '';
       if (ok) { fx(s, { kind: 'escaped', pid, card: m.uid }); log(s, `${p.name} удирает от ${q(d.name)} (${r}${sign}).`, 'good'); contractEvent(s, p, 'escape', {}, rng); continue; }
-      // открытый Ящик Пандоры: не убежавший теряет все вещи и питомца (один раз за бой)
-      if (c.pandora && !(c.pandoraHit ||= []).includes(pid)) { c.pandoraHit.push(pid); pandoraLoss(s, p, rng); }
       if (monTags(m.uid).some(t => itemList(p, 'immune').includes(t))) {
         fx(s, { kind: 'escaped', pid, card: m.uid, calm: true });
         log(s, `${p.name} не убежал от ${q(d.name)}, но противогаз спас от расплаты.`, 'good');
@@ -1689,51 +1674,68 @@ H.haunt = {
   },
 };
 
-// ───────────────────────── Ящик Пандоры ─────────────────────────
-// В любом бою любой живой игрок может открыть ящик за голды: сила монстров ×2, героям −3 к побегу.
-// Кто из героев не убежит — теряет все вещи и питомца, их раздают другим игрокам наугад.
-H.pandora = {
+// ───────────────────────── Колесо Подлеца ─────────────────────────
+// В чужом бою любой живой игрок, кроме бойца и помощника, крутит колесо за голды — раз за бой каждый.
+// Исход решает сервер: один из 16 равных секторов (WHEEL_RING), картинка колеса в игре — та же.
+const WHEEL_MON_MIN = 10;   // «ещё монстр» — не ниже этого уровня
+H.wheel = {
   check(s, p) {
     if (p.dead) return 'Вы мертвы до начала следующего хода';
     const c = s.combat;
-    if (!c) return 'Ящик Пандоры открывают только во время боя';
-    if (c.pandora) return 'Ящик Пандоры в этом бою уже открыт';
-    return (p.gold || 0) < PANDORA_COST ? `Нужно ${PANDORA_COST} голдов, в кошельке ${p.gold || 0}` : null;
+    if (!c) return 'Колесо Подлеца крутят только во время боя';
+    if (isParticipant(s, p.id)) return 'Колесо крутят в чужом бою, не в своём';
+    if ((c.wheel || []).some(w => w.by === p.id)) return 'Вы уже крутили колесо в этом бою';
+    return (p.gold || 0) < WHEEL_COST ? `Нужно ${WHEEL_COST} голдов, в кошельке ${p.gold || 0}` : null;
   },
   run(s, p, a, rng) {
-    const c = s.combat;
-    p.gold -= PANDORA_COST;
-    const was = combatNumbers(s).monsters;
-    c.pandora = { by: p.id };
-    if (!isParticipant(s, p.id)) grudge(s, c.fighter, p.id);
-    fx(s, { kind: 'pandora', pid: p.id, to: c.fighter });
-    unbanish(s, rng);
-    log(s, `📦 ${p.name} открывает Ящик Пандоры за ${PANDORA_COST} голдов: сила монстров ×${PANDORA_MULT} (${was} → ${combatNumbers(s).monsters}), героям −${PANDORA_ESCAPE} к побегу. Кто не убежит — лишится всех вещей и питомца!`, 'curse');
+    const c = s.combat, f = P(s, c.fighter);
+    p.gold -= WHEEL_COST;
+    grudge(s, c.fighter, p.id);
+    const slot = Math.min(WHEEL_SECTORS - 1, Math.floor(rng() * WHEEL_SECTORS));
+    let sec = WHEEL[WHEEL_RING[slot]];
+    let card = null, power = null, note = '';
+    // монстр или босс приходят из колоды дверей или из сброса — если подходящего нет, колесо даёт +20
+    const fromPiles = test => {
+      const all = [...s.decks.door.map(u => ['deck', u]), ...s.discard.door.map(u => ['discard', u])].filter(([, u]) => test(def(u)) && !c.monsters.some(m => m.uid === u));
+      if (!all.length) return null;
+      const [pile, u] = pick(all, rng);
+      without(pile === 'deck' ? s.decks.door : s.discard.door, u);
+      return u;
+    };
+    if (sec.id === 'monster') { card = fromPiles(d => d.type === 'monster' && !d.boss && d.level >= WHEEL_MON_MIN); if (!card) { sec = WHEEL.find(w => w.id === 'mon20'); note = ' (подходящих монстров не осталось)'; } }
+    if (sec.id === 'boss') { card = fromPiles(d => d.type === 'monster' && d.boss); if (!card) { sec = WHEEL.find(w => w.id === 'mon20'); note = ' (боссов не осталось)'; } }
+    // стрелка встаёт на выпавший сектор; если исход заменён (+20 вместо монстра) — на ближайший сектор «+20»
+    const at = WHEEL[WHEEL_RING[slot]] === sec ? slot : WHEEL_RING.indexOf(WHEEL.indexOf(sec));
+    (c.wheel ||= []).push({ by: p.id, sector: sec.id });
+    fx(s, { kind: 'wheel', pid: p.id, to: c.fighter, slot: at, sector: sec.id, ...(card ? { card } : {}) });
+    log(s, `🎡 ${p.name} крутит Колесо Подлеца за ${WHEEL_COST} голдов — выпадает «${sec.name}»${note}!`, ['hero5', 'dud', 'jinx', 'loot'].includes(sec.id) ? 'info' : 'curse');
+    switch (sec.id) {
+      case 'mon7': case 'mon10': case 'mon20': {
+        const n = { mon7: 7, mon10: 10, mon20: 20 }[sec.id];
+        c.mods.push({ side: 'monster', n, by: p.id, label: 'Колесо Подлеца' });
+        break;
+      }
+      case 'monster': case 'boss': {
+        const d = def(card), wm = { uid: card, enh: [] };
+        if (d.boss) wm.power = bossPower(s, f);
+        c.monsters.push(wm);
+        if (d.onAppear) bossAppear(s, d, f, rng);
+        log(s, `Колесо Подлеца: в комнату входит ${q(d.name)} (${wm.power ? `босс, сила ${wm.power}` : `ур. ${d.level}`})!`, 'combat');
+        fx(s, { kind: 'wandering', pid: p.id, card, wheel: true, ...(wm.power ? { power: wm.power } : {}) });
+        break;
+      }
+      case 'hero5': c.mods.push({ side: 'player', n: 5, by: p.id, label: 'Колесо Подлеца: осечка' }); break;
+      case 'jinx':
+        if (p.level > 1) { setLevel(s, p, p.level - 1); log(s, `Сглаз: ${p.name} теряет уровень — теперь ${p.level} ур.`, 'bad'); }
+        else log(s, `Сглаз: ${p.name} и так на 1-м уровне — терять нечего.`, 'info');
+        break;
+      case 'loot': { const u = drawFor(s, p, rng); give(p, u); if (u) log(s, `${p.name} забирает куш: карту клада.`, 'good'); break; }
+      case 'dud': break;
+    }
   },
 };
-function pandoraLoss(s, p, rng) {
-  const lost = [...p.equipped, ...p.carried, ...(p.allyGear || []), ...(p.beast ? [p.beast] : [])];
-  p.equipped = []; p.carried = []; p.allyGear = []; p.beast = null;
-  let to = s.players.filter(x => x !== p && !x.dead);
-  if (!to.length) to = s.players.filter(x => x !== p);
-  const got = {};
-  for (const u of lost) {
-    const x = to.length ? pick(to, rng) : null;
-    if (!x) { toDiscard(s, u); continue; }
-    if (def(u).type === 'monster') {
-      // приручённый зверь идёт к новому хозяину, а если у того уже есть свой — убегает
-      if (x.beast) { toDiscard(s, u); continue; }
-      for (const v of x.equipped.filter(y => def(y).slot === 'pet')) { without(x.equipped, v); x.carried.push(v); }
-      x.beast = u;
-    } else x.carried.push(u);
-    (got[x.id] ||= []).push(u);
-  }
-  for (const x of s.players) normalize(s, x);
-  fx(s, { kind: 'pandoraLoss', pid: p.id, n: lost.length, to: Object.keys(got) });
-  log(s, lost.length
-    ? `📦 Ящик Пандоры забирает у ${p.name} всё: ${Object.entries(got).map(([id, l]) => `${P(s, id).name} — ${l.map(u => q(def(u).name)).join(', ')}`).join('; ')}.`
-    : `📦 Ящик Пандоры ищет у ${p.name} вещи — но там пусто.`, 'bad');
-}
+// средняя прибавка монстрам от одного вращения — для ботов
+export const WHEEL_EV = WHEEL.reduce((a, w) => a + w.n * ({ mon7: 7, mon10: 10, mon20: 20, monster: 12, boss: 24, hero5: -5 }[w.id] || 0), 0) / WHEEL_SECTORS;
 
 // Ржавник: брось ему вещь — уползёт жевать, бой без наград
 H.bribe = {
@@ -2235,7 +2237,7 @@ export function check(s, pid, a) {
   if (s.phase !== 'playing') return 'Партия окончена';
   const p = P(s, pid);
   if (!p) return 'Вы не в игре';
-  if (p.banished) return 'Вы выбыли: «Прощай навсегда». Вернуть в игру может только открытый Ящик Пандоры';
+  if (p.banished) return 'Вы выбыли из партии: «Прощай навсегда»';
   const h = Object.hasOwn(H, a.type) ? H[a.type] : null;
   if (!h) return 'Неизвестное действие';
   return h.check(s, p, a) || null;
@@ -2321,7 +2323,7 @@ export function hints(s, pid) {
     autoEquip: ok({ type: 'autoEquip' }),
     bribe: s.combat?.fighter === pid && s.combat.monsters.some(m => def(m.uid).bribe) ? inPlayItems(p).filter(u => ok({ type: 'bribe', item: u })) : [],
     tame: ok({ type: 'tame' }) ? s.tame.uid : null,
-    pandora: ok({ type: 'pandora' }),
+    wheel: ok({ type: 'wheel' }),
     buy: !buyErr(s, p),
     shop: SHOP_IDS.filter(id => ok({ type: 'buy', id })),
     trap: ok({ type: 'trap' }) ? { uid: s.trap.uid, need: trapNeed(p) } : null,
@@ -2392,7 +2394,7 @@ export function view(s, pid) {
       fighter: c.fighter, helper: c.helper, helpOffer: c.helpOffer, helpReq: c.helpReq,
       monsters: c.monsters.map(m => ({ uid: m.uid, enh: [...m.enh], strength: monsterStrength(s, m), treasure: monsterTreasure(s, m),
         level: monsterBaseLevel(s, def(m.uid)) - SPLIT_STEP * (s.splits?.[m.uid] || 0), noEscape: def(m.uid).escape === false || m.enh.some(u => def(u).noEscape) })),
-      pandora: c.pandora ? { ...c.pandora } : null, pandoraCost: PANDORA_COST,
+      wheel: (c.wheel || []).map(w => ({ ...w })), wheelCost: WHEEL_COST,
       mods: c.mods, backstabs: c.backstabs, rage: c.rage, turnUndead: c.turnUndead, escape: c.escape,
       winAt: c.winAt, winStart: c.winStart || null, passed: [...(c.passed || [])], numbers: combatNumbers(s),
       heroStrengths: Object.fromEntries(participants(s).map(id => [id, heroStrength(s, P(s, id))])),

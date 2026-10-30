@@ -10,6 +10,8 @@ import { sfx } from '/sfx.js';
 import { cardHTML, cardBackSVG, avatarSVG, cardImgUrl } from '/art.js';
 import { def, ruleText, BOSS_FLOOR, LULLABY_PENALTY, MUTAGEN_BONUS } from '/shared/cards.js';
 import { sceneKind } from '/art-monsters.js';
+import { wheelSVG, WHEEL_POINTER, WHEEL_LOOK, WHEEL_STEP, wheelAt } from '/wheel.js';
+import { WHEEL } from '/shared/cards.js';
 
 const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 const rnd = (a, b) => a + Math.random() * (b - a);
@@ -127,6 +129,7 @@ function clearAll() {
   if (layer) layer.innerHTML = '';
   document.getElementById('fx')?.replaceChildren();
   closePanel(true);
+  document.getElementById('stage')?.classList.remove('cine-under');
   [...hidden.keys()].forEach(unhide);
 }
 document.addEventListener('visibilitychange', () => { if (document.hidden) clearAll(); });
@@ -1469,9 +1472,68 @@ S.dice = f => ({
   },
 });
 
+// Колесо Подлеца: зал темнеет, в центре — колесо; оно раскручивается, лампочки бегут по ободу, стрелка щёлкает
+// на каждом секторе, колесо замирает на выпавшем секторе (f.slot) — и табличка говорит, что случилось
+S.wheel = f => ({
+  minDur: 4600,
+  // пока колесо крутится, панель боя под ним скрыта — иначе новая сила монстров выдала бы исход раньше времени
+  skip() { document.getElementById('stage')?.classList.remove('cine-under'); },
+  run(k) {
+    const stage = document.getElementById('stage');
+    stage?.classList.add('cine-under');
+    const w = WHEEL.find(x => x.id === f.sector) || wheelAt(f.slot), L = WHEEL_LOOK[w.id];
+    const size = Math.min(vw() * 0.78, vh() * 0.52, 440);
+    const back = k.el('cn-wheel-back', '');
+    k.a(back, [{ opacity: 0 }, { opacity: 1 }], { dur: 280 });
+    const box = k.pt('cn-wheel', `<div class="cn-wheel-in" style="--ws:${size}px">
+      <div class="cn-wheel-title"><small>Колесо Подлеца</small><b>${api.pname(f.pid)} крутит</b></div>
+      <div class="cn-wheel-stage"><div class="cn-wheel-disc">${wheelSVG()}</div><div class="cn-wheel-ptr">${WHEEL_POINTER}</div></div></div>`, vw() / 2, vh() * 0.47);
+    const inner = box.querySelector('.cn-wheel-in'), disc = box.querySelector('.cn-wheel-disc'), ptr = box.querySelector('.cn-wheel-ptr');
+    k.a(inner, [{ opacity: 0, transform: 'scale(.6) rotate(-20deg)' }, { opacity: 1, transform: 'scale(1) rotate(0)' }], { dur: 420, ease: EASE.back });
+    // сектор f.slot встаёт под стрелку: его середина уходит на 12 часов; плюс пять оборотов и чуть-чуть мимо середины
+    const mid = f.slot * WHEEL_STEP + WHEEL_STEP / 2;
+    const end = 360 * 5 + (360 - mid) + rnd(-WHEEL_STEP * 0.3, WHEEL_STEP * 0.3);
+    const SPIN = 3300;
+    box.classList.add('spinning');
+    k.snd('whoosh', {}, 380);
+    const anim = k.a(disc, [{ transform: 'rotate(0deg)' }, { transform: `rotate(${end}deg)` }], { dur: SPIN, delay: 420, ease: 'cubic-bezier(.12,.62,.1,1)', fill: 'forwards' });
+    // щелчки: каждый раз, когда под стрелкой проходит граница сектора
+    let last = 0, lastT = 0, live = true;
+    const tick = () => {
+      if (!live || !anim) return;
+      const p = anim.effect.getComputedTiming().progress;
+      if (p != null) {
+        const n = Math.floor((p * end) / WHEEL_STEP);
+        const t = performance.now();
+        if (n !== last && t - lastT > 45) { last = n; lastT = t; sfx.play('tick', { gap: 0 }); ptr.animate([{ transform: 'rotate(-14deg)' }, { transform: 'rotate(0)' }], { duration: 140, easing: EASE.out }); }
+      }
+      requestAnimationFrame(tick);
+    };
+    k.at(420, () => requestAnimationFrame(tick));
+    // остановка: сектор вспыхивает, лампочки горят, искры у стрелки, табличка с итогом
+    k.at(420 + SPIN, () => {
+      live = false;
+      box.classList.remove('spinning'); box.classList.add('stopped');
+      box.querySelector(`.wh-sec[data-slot="${f.slot}"]`)?.classList.add('win');
+      const r = ptr.getBoundingClientRect(), c = { x: r.left + r.width / 2, y: r.bottom };
+      ring(k, c.x, c.y, L.tone === 'good' ? 'good' : L.tone === 'boss' ? 'bad' : 'gold', size / 340, 620);
+      fx.spray(c, { n: 26, speed: [90, 280], shape: 'star', size: [2.5, 5], colors: [L.ink, '#ffd56a', '#ffffff'], life: [0.5, 1.1] });
+      const res = k.el('cn-wheel-res t-' + L.tone, `<b>${w.name}</b><span>${w.text}</span>`, null, inner.querySelector('.cn-wheel-stage'));
+      k.a(res, [{ opacity: 0, transform: 'translateY(14px) scale(.9)' }, { opacity: 1, transform: 'none' }], { dur: 320, ease: EASE.back });
+      const S2 = { mon7: 'modBad', mon10: 'modBad', mon20: 'thunder', monster: 'growl', boss: 'bossRise', hero5: 'modGood', jinx: 'curse', loot: 'coins', dud: 'poof' };
+      sfx.play('clang'); k.snd(S2[w.id] || 'pop', {}, 120);
+      if (w.id === 'boss' || w.id === 'mon20') fx.shake(document.getElementById('stage'), 'bump');
+    });
+    const out = 420 + SPIN + 1300;
+    k.fade(box, out, 320); k.fade(back, out, 320);
+    k.at(out, () => document.getElementById('stage')?.classList.remove('cine-under'));
+    return out + 340;
+  },
+});
+
 const PANEL_KINDS = new Set(['victory', 'caught', 'escaped', 'pet', 'vanish']);
 // порядок внутри одной пачки событий: появление → вмешательство → кубик → развязка → последствия
-const RANK = { combat: 1, wandering: 1, strike: 2, helper: 2, mod: 2, enhance: 2, backstab: 2, lullaby: 2, mutagen: 2, power: 2, buff: 2, dice: 3, escaped: 4, caught: 4, pet: 4, vanish: 4, victory: 5, location: 6, event: 6, curse: 6, ward: 6.5, death: 7, levelUp: 8, levelDown: 8, legendary: 9 };
+const RANK = { wheel: 0.5, combat: 1, wandering: 1, strike: 2, helper: 2, mod: 2, enhance: 2, backstab: 2, lullaby: 2, mutagen: 2, power: 2, buff: 2, dice: 3, escaped: 4, caught: 4, pet: 4, vanish: 4, victory: 5, location: 6, event: 6, curse: 6, ward: 6.5, death: 7, levelUp: 8, levelDown: 8, legendary: 9 };
 
 export const cine = {
   get on() { return enabled && !reduced(); },

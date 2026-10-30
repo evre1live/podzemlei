@@ -1,9 +1,9 @@
 // Простой ИИ для ботов «Под Землёй». Возвращает одно действие или null.
-import { def, TROUBLE_BONUS, MUTAGEN_BONUS, LULLABY_PENALTY, LULLABY_MAX, DISTILL_COST, tameBonus, TRAP_FAIL_LEVELS, SHOP_IDS, PANDORA_COST, PANDORA_MULT } from './cards.js';
+import { def, TROUBLE_BONUS, MUTAGEN_BONUS, LULLABY_PENALTY, LULLABY_MAX, DISTILL_COST, tameBonus, TRAP_FAIL_LEVELS, SHOP_IDS, WHEEL_COST } from './cards.js';
 import {
   P, check, act, combatNumbers, playOptions, handLimit, hasClass, hasRace, cardWorth, shopPrice, shopStock, depthBonus,
   equipError, participants, heroStrength, levelOnlyFight, winLevel, luxLevel, saleValue, monsterBaseLevel, powerOf, locationOf,
-  isGhost, grudgeOf, trapNeed, duelNumbers, duelStrength, duelPrize, troubleBand,
+  isGhost, grudgeOf, trapNeed, duelNumbers, duelStrength, duelPrize, troubleBand, WHEEL_EV,
 } from './engine.js';
 import { GHOST_BONUS } from './cards.js';
 
@@ -241,9 +241,10 @@ function interfere(s, p) {
       if (m) opts.push({ v: def(m).boss ? 2 * heroStrength(s, f) : monsterBaseLevel(s, def(m)), a: { type: 'playCard', uid: u, with: m } });
     }
   }
-  // Ящик Пандоры — дорого, поэтому только чтобы не дать сопернику выиграть партию (или лидеру, если голдов с запасом)
+  // Колесо Подлеца — игра наудачу: крутим, чтобы не дать сопернику выиграть партию, а лидеру мешаем, только если голдов с запасом.
+  // В среднем оно даёт монстрам около +7; ставим его ниже карт, которые бьют наверняка
   const gold = p.gold || 0;
-  if (!c.pandora && !participants(s).includes(p.id) && (forGame || (isLeader && gold >= PANDORA_COST * 2)) && gold >= PANDORA_COST) opts.push({ v: combatNumbers(s).monsters * (PANDORA_MULT - 1), a: { type: 'pandora' } });
+  if (!(c.wheel || []).some(w => w.by === p.id) && (forGame || ((isLeader || revenge) && gold >= WHEEL_COST * 3)) && gold >= WHEEL_COST) opts.push({ v: Math.floor(WHEEL_EV), a: { type: 'wheel' } });
   if (hasClass(p, 'warlock') && !(c.summoned || []).includes(p.id)) {
     for (const m of p.hand.filter(x => def(x).type === 'monster')) {
       const v = def(m).boss ? 2 * heroStrength(s, f) : monsterBaseLevel(s, def(m)) + depthBonus(s);

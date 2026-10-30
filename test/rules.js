@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createGame, act, tick, view, combatNumbers, P, saleValue, fillText, orderCard, grantCard, playOptions, troubleBand, shopPrice, trickStart, trickBuy, trickPlay, trickOptions, trickOf } from '../shared/engine.js';
 import { cheatCard, cheatCardNow, cheatGold } from '../server/cheats.js';
 import { botDecide } from '../shared/bot.js';
-import { def, dailyOf, SHOP_IDS } from '../shared/cards.js';
+import { def, dailyOf, SHOP_IDS, WHEEL, WHEEL_RING } from '../shared/cards.js';
 import { AVATAR_PARTS, cleanAvatar, avatarFromSeed, portraitId, pickCode, avatarInGame, gameRaces } from '../shared/avatar.js';
 
 let seed = 7; const rng = () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
@@ -1480,59 +1480,60 @@ t('чернокнижник подкидывает монстра с руки в
   assert.match(A(u, 'p1', { type: 'playCard', uid: 'm_mosquito#0', into: true }).error, /турникет/);
 });
 
-t('Ящик Пандоры: за 3000 голдов сила монстров ×2, героям −3 к побегу, раз за бой', () => {
+t('Колесо Подлеца: крутит не участник чужого боя за 1000 голдов, раз за бой; отсчёт сбрасывается', () => {
   const s = fresh(); const p = P(s, 'p0'), q = P(s, 'p1');
   p.level = 5; fight(s, 'm_mole#0'); // 5 против 3
-  const before = combatNumbers(s).monsters;
-  assert.equal(view(s, 'p1').hints.pandora, false);
-  assert.match(A(s, 'p1', { type: 'pandora' }).error, /3000/);
-  q.gold = 3500;
-  assert.equal(view(s, 'p1').hints.pandora, true);
-  assert.equal(A(s, 'p1', { type: 'pandora' }).ok, true);
-  assert.equal(q.gold, 500);
-  assert.equal(combatNumbers(s).monsters, before * 2);
-  assert.ok(s.log.some(l => l.text.includes(`×2 (${before} → ${before * 2})`)));
-  // всё, что подкинут монстрам после открытия, тоже удваивается
-  q.hand.push(take(s, 'e_armored#0'));
-  assert.equal(A(s, 'p1', { type: 'playCard', uid: 'e_armored#0', monster: 0 }).ok, true);
-  assert.equal(combatNumbers(s).monsters, (before + def('e_armored#0').bonus) * 2);
-  assert.ok(view(s, 'p0').combat.pandora);
-  P(s, 'p2').gold = 5000;
-  assert.match(A(s, 'p2', { type: 'pandora' }).error, /уже открыт/);
-  assert.match(A(s, 'p0', { type: 'kick' }).error || '', /боя/);
+  assert.equal(view(s, 'p1').hints.wheel, false);
+  assert.match(A(s, 'p1', { type: 'wheel' }).error, /1000/);
+  q.gold = 2500; p.gold = 5000;
+  assert.match(A(s, 'p0', { type: 'wheel' }).error, /чужом бою/);
+  assert.equal(view(s, 'p1').hints.wheel, true);
+  A(s, 'p0', { type: 'fight' }); assert.ok(s.combat.winAt);
+  assert.equal(dice(s, 'p1', { type: 'wheel' }, 0.3).ok, true);      // сектор 4 — «+7»
+  assert.equal(q.gold, 1500);
+  assert.equal(s.combat.winAt, null, 'вмешались — отсчёт заново');
+  assert.match(A(s, 'p1', { type: 'wheel' }).error, /уже крутили/);
+  assert.equal(view(s, 'p0').combat.wheel.length, 1);
+  assert.ok(s.fx.some(f => f.kind === 'wheel' && f.pid === 'p1' && f.slot === 4 && f.sector === 'mon7'));
+  assert.equal((s.stats?.p1?.spent || 0) >= 1000, true);
   const t = fresh(); t.players[1].gold = 3000;
-  assert.match(A(t, 'p1', { type: 'pandora' }).error, /во время боя/);
+  assert.match(A(t, 'p1', { type: 'wheel' }).error, /во время боя/);
 });
 
-t('Ящик Пандоры: не убежал — все вещи и питомец разлетаются по другим игрокам', () => {
-  const s = fresh(); const p = P(s, 'p0'), q = P(s, 'p1');
-  p.equipped.push(take(s, 'i_helmet#0'), take(s, 'p_rat#0')); p.carried.push(take(s, 'i_ladle#0')); p.ally = take(s, 'a_guide#0');
-  fight(s, 'm_gossip#0'); // 6 против 1
-  q.gold = 3000; A(s, 'p1', { type: 'pandora' });
-  // выпало 5: без ящика побег удался бы (5 + 2 от проводника), с ящиком 5 + 2 − 3 = 4 — мимо
-  assert.equal(dice(s, 'p0', { type: 'runAway' }, 0.7).ok, true);
-  assert.deepEqual(p.equipped, []); assert.deepEqual(p.carried, []);
-  assert.equal(p.ally, 'a_guide#0', 'спутник остаётся');
-  const others = [P(s, 'p1'), P(s, 'p2')].flatMap(x => [...x.equipped, ...x.carried]);
-  for (const u of ['i_helmet#0', 'p_rat#0', 'i_ladle#0']) assert.ok(others.includes(u), u + ' у кого-то из соперников');
-  assert.ok(s.log.some(l => /Ящик Пандоры забирает у/.test(l.text)));
-  assert.ok(s.fx.some(f => f.kind === 'pandoraLoss' && f.pid === 'p0'));
-  // убежал — ничего не теряет
-  const u = fresh(); const a = P(u, 'p0'); a.equipped.push(take(u, 'i_helmet#0'), take(u, 'i_runners#0'));
-  fight(u, 'm_gossip#0'); P(u, 'p1').gold = 3000; A(u, 'p1', { type: 'pandora' });
-  dice(u, 'p0', { type: 'runAway' }, 0.99); // 6 + 2 − 3 = 5
-  assert.equal(a.equipped.length, 2);
-  // приручённый зверь уходит к новому хозяину
-  const w = fresh(); const b = P(w, 'p0'); b.beast = take(w, 'm_mole#0');
-  fight(w, 'm_gossip#0'); P(w, 'p1').gold = 3000; A(w, 'p1', { type: 'pandora' });
-  dice(w, 'p0', { type: 'runAway' }, 0);
-  assert.equal(b.beast, null);
-  assert.ok(w.players.some(x => x.beast === 'm_mole#0'));
-  // чернокнижник уходит тенью и ничего не теряет
-  const z = fresh(); const k = P(z, 'p0'); k.classes.push(take(z, 'c_warlock#0')); k.equipped.push(take(z, 'i_helmet#0'));
-  fight(z, 'm_gossip#0'); P(z, 'p1').gold = 3000; A(z, 'p1', { type: 'pandora' });
-  dice(z, 'p0', { type: 'runAway' }, 0);
-  assert.deepEqual(k.equipped, ['i_helmet#0']);
+t('Колесо Подлеца: 16 равных секторов — шанс исхода по числу секторов; что выпало, то и случилось', () => {
+  assert.equal(WHEEL_RING.length, 16);
+  assert.equal(WHEEL.reduce((a, w) => a + w.n, 0), 16);
+  const spin = (slot, prep) => {
+    const s = fresh(); const p = P(s, 'p0'), q = P(s, 'p1');
+    p.level = 5; fight(s, 'm_mole#0'); q.gold = 1000; q.level = 4;
+    if (prep) prep(s);
+    const before = { ...combatNumbers(s), mons: s.combat.monsters.length, hand: q.hand.length };
+    assert.equal(dice(s, 'p1', { type: 'wheel' }, (slot + 0.5) / 16).ok, true);
+    return { s, q, before, after: combatNumbers(s), f: s.fx.findLast(x => x.kind === 'wheel') };
+  };
+  const at = id => WHEEL_RING.findIndex(x => WHEEL[x].id === id);
+  let r = spin(at('mon7')); assert.equal(r.after.monsters, r.before.monsters + 7);
+  r = spin(at('mon10')); assert.equal(r.after.monsters, r.before.monsters + 10);
+  r = spin(at('mon20')); assert.equal(r.after.monsters, r.before.monsters + 20);
+  r = spin(at('monster')); assert.equal(r.s.combat.monsters.length, 2);
+  assert.ok(def(r.s.combat.monsters[1].uid).level >= 10 && !def(r.s.combat.monsters[1].uid).boss);
+  assert.ok(r.s.fx.some(x => x.kind === 'wandering' && x.wheel));
+  r = spin(at('boss')); const b = r.s.combat.monsters[1];
+  assert.ok(def(b.uid).boss && b.power > 0, 'в комнату вошёл босс');
+  r = spin(at('hero5')); assert.equal(r.after.heroes, r.before.heroes + 5);
+  r = spin(at('jinx')); assert.equal(r.q.level, 3, 'подлец теряет уровень');
+  r = spin(at('loot')); assert.equal(r.q.hand.length, r.before.hand + 1, 'подлецу карта клада');
+  r = spin(at('dud')); assert.equal(r.after.monsters, r.before.monsters); assert.equal(r.after.heroes, r.before.heroes);
+  // боссов не осталось — колесо даёт +20, стрелка встаёт на сектор «+20»
+  r = spin(at('boss'), s => { for (const pile of [s.decks.door, s.discard.door]) for (const u of [...pile]) if (def(u).boss) pile.splice(pile.indexOf(u), 1); });
+  assert.equal(r.after.monsters, r.before.monsters + 20);
+  assert.equal(r.f.sector, 'mon20'); assert.equal(r.f.slot, at('mon20'));
+});
+
+t('Ящика Пандоры больше нет: ни действия, ни подсказки', () => {
+  const s = fresh(); fight(s, 'm_mole#0'); P(s, 'p1').gold = 5000;
+  assert.match(A(s, 'p1', { type: 'pandora' }).error, /Неизвестное действие/);
+  assert.equal('pandora' in view(s, 'p1').hints, false);
 });
 
 t('«Прощай навсегда» убрана из игры: нет ни в колоде, ни на рынке, но старые сохранения её узнают', () => {

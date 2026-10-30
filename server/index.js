@@ -33,12 +33,12 @@ const BOT_DELAY_MS = Number(process.env.BOT_DELAY_MS || 1100);
 // Боты ждут, пока у живых игроков доиграет сцена: появление монстра, удар, кубик.
 // В быстрых тестах (короткая задержка ботов) паузы не нужны.
 const CINE_PAD = Number(process.env.CINE_PAD ?? (BOT_DELAY_MS >= 300 ? 1 : 0));
-const CINE_MS = { combat: 1700, wandering: 1300, ambush: 500, victory: 1500, caught: 1100, escaped: 600, dice: 1700, legendary: 2100, curse: 900, death: 900, location: 1200, event: 1100, vanish: 800, helper: 600, pet: 600 };
+const CINE_MS = { combat: 1700, wandering: 1300, ambush: 500, victory: 1500, caught: 1100, escaped: 600, dice: 1700, legendary: 2100, curse: 900, death: 900, location: 1200, event: 1100, vanish: 800, helper: 600, pet: 600, wheel: 4600 };
 function cinePad(g, fromId) {
   if (!CINE_PAD) return 0;
   let ms = 0;
   for (const f of g.fx || []) if (f.id > fromId) ms += CINE_MS[f.kind] || 0;
-  return Math.min(4200, ms) * CINE_PAD;
+  return Math.min(6000, ms) * CINE_PAD;
 }
 const AFK_MS = Number(process.env.AFK_MS || 45000);
 const IDLE_TURN_MS = Number(process.env.IDLE_TURN_MS || 180000);
@@ -351,8 +351,8 @@ function load() {
       r.members.forEach(m => { m.socketId = null; m.connected = false; m.lastSeen = now(); });
       r.seatVote = null;
       if (r.game?.combat) r.game.combat.winAt = null;
-      // старые партии: открытый Ящик Пандоры давал монстрам +10 отдельным бонусом — теперь он удваивает силу сам
-      if (r.game?.combat?.pandora) r.game.combat.mods = r.game.combat.mods.filter(m => m.label !== 'Ящик Пандоры');
+      // старые партии: Ящика Пандоры больше нет — открытый ящик в бою просто исчезает
+      if (r.game?.combat?.pandora) { delete r.game.combat.pandora; delete r.game.combat.pandoraHit; r.game.combat.mods = r.game.combat.mods.filter(m => m.label !== 'Ящик Пандоры'); }
       // старые партии: отложенные легендарки возвращаются в колоду клада вперемешку
       if (r.game?.rig) {
         for (const u of r.game.rig.queue || []) r.game.decks.treasure.splice(Math.floor(Math.random() * (r.game.decks.treasure.length + 1)), 0, u);
