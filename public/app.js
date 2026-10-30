@@ -145,7 +145,8 @@ socket.on('connect', async () => {
     const pk = await call('room:peek', { roomId: S.pendingRoom });
     if (pk.ok && !pk.exists) roomGone(S.pendingRoom);
     else if (S.pendingRoom && !S.room) openJoinModal(S.pendingRoom);
-  } else if (S.pendingWatch && !S.room) tryWatch(S.pendingWatch);
+  } else if (S.pendingWatch && !S.room) await tryWatch(S.pendingWatch);
+  splashOff();   // по ссылке так и не попали за стол (комнаты нет, нужен пароль) — заставка уходит
 });
 socket.on('watch:end', ({ reason }) => {
   vc.leave();
@@ -218,6 +219,34 @@ socket.on('room:state', ({ room, game, serverTime }) => {
 });
 
 // ───────────────────────── маршрутизация экранов ─────────────────────────
+// ───────── заставка и прогрев картинок ─────────
+// заставка (index.html) уходит, когда первый экран дорисован: шрифты готовы и картинки на нём декодированы
+let splashGone = false;
+function splashOff() {
+  if (splashGone) return;
+  splashGone = true;
+  const sp = document.getElementById('splash');
+  if (!sp) return;
+  const imgs = [...document.querySelectorAll('#app img')].filter(i => !i.complete || !i.naturalWidth).slice(0, 8);
+  Promise.race([Promise.all([document.fonts?.ready, ...imgs.map(i => i.decode?.().catch(() => {}))]), new Promise(r => setTimeout(r, 1800))])
+    .then(() => requestAnimationFrame(() => { sp.classList.add('gone'); setTimeout(() => sp.remove(), 900); }));
+}
+setTimeout(splashOff, 6000);   // ссылка устарела и мы остались на главной — заставка всё равно уходит
+// пока игрок на одном экране, в простое подгружаем картинки следующего: таверна и стол появляются целиком, а не по кусочкам
+const WARM = () => ({
+  home: ['/ui/obj/v2/tavern-table.webp', '/ui/obj/v2/chair.webp', '/ui/obj/v2/mug-top.webp', '/ui/obj/v2/parchment.webp', '/ui/obj/v2/roller.webp',
+    ...['candles', 'dice', 'coins', 'scroll'].map(n => `/ui/table/${TABLE_V}/${n}.webp`)],
+  lobby: ['/ui/table/v2/mat-default.webp', '/ui/table/v2/frame-oak.webp', '/ui/obj/v2/beam.webp', '/ui/obj/v2/awning.webp', '/ui/obj/v2/boards.webp', '/ui/obj/v2/plank.webp',
+    ...['candles', 'coins', 'dice', 'goblet', 'dagger'].map(n => `/ui/table/${TABLE_V}/${n}.webp`)],
+});
+const warmed = new Set();
+function warmNext(scr) {
+  const list = (WARM()[scr] || []).filter(u => !warmed.has(u));
+  if (!list.length) return;
+  const go = () => list.forEach(u => { warmed.add(u); const i = new Image(); i.decoding = 'async'; i.src = u; });
+  (window.requestIdleCallback || (f => setTimeout(f, 1200)))(go, { timeout: 3000 });
+}
+
 function render() {
   const scr = !S.room ? 'home' : S.game ? 'game' : 'lobby';
   // сцена «Локация партии»: за портретами — текущая локация стола
@@ -227,7 +256,9 @@ function render() {
   document.body.dataset.grade = scr === 'game' ? locArt || 'default' : scr;
   // музыка локации: играет, пока идёт партия
   sfx.music(scr === 'game' && S.game.phase === 'playing' ? locArt || 'default' : null);
-  if (scr !== S.screen) { S.screen = scr; mount[scr](); soundIcons(); }
+  if (scr !== S.screen) { S.screen = scr; mount[scr](); soundIcons(); warmNext(scr); }
+  // по ссылке на комнату заставка ждёт саму комнату, чтобы не мелькнула главная
+  if (scr !== 'home' || !/[?&](room|watch)=/.test(location.search)) splashOff();
   setWorld($('#world'), scr === 'home' ? null : scr === 'game' && S.game.location ? def(S.game.location).art : 'default');
   // фон откликается на бой: края кадра наливаются тревожным светом, у босса — лиловым
   { const g = scr === 'game' ? S.game : null, c = g?.phase === 'playing' ? g.combat : null;
@@ -273,7 +304,7 @@ function homeVideo() {
 mount.home = () => {
   app.innerHTML = `
   <div class="home">
-    <div class="home-bg" aria-hidden="true"><img class="home-poster" src="${MENU.poster}" srcset="${MENU.poster720} 1280w, ${MENU.poster} 1920w" sizes="max(100vw, 140vh)" alt="" decoding="async"><video class="home-video" muted loop playsinline preload="none" disablepictureinpicture></video></div>
+    <div class="home-bg" aria-hidden="true"><img class="home-poster" src="${MENU.poster}" srcset="${MENU.poster720} 1280w, ${MENU.poster} 1920w" sizes="max(100vw, 178vh)" alt="" decoding="async"><video class="home-video" muted loop playsinline preload="none" disablepictureinpicture></video></div>
     <header class="band b-surface"><div class="grassline"></div>
       <div class="home-top"><div class="logo-row">${HATCH}<span class="spacer"></span><a class="btn ghost small" href="/guide">Справочник</a><button class="btn ghost small news-btn" data-act="news" title="Новые механики и карты по датам">Что нового${newsUnseen() ? '<i class="news-dot" aria-label="есть новое"></i>' : ''}</button><button class="btn ghost small" data-act="rules">Как играть</button></div></div>
     </header>
@@ -474,21 +505,21 @@ mount.lobby = () => {
       <div class="topbar">
         <span class="rtitle" id="rtitle"></span>
         <span class="code-pill" id="rcode" title="Код комнаты"></span>
-        <button class="btn small" data-act="copy">Скопировать приглашение</button>
+        <button class="btn small primary hud-btn" data-act="copy" title="Скопировать приглашение">${ico('scroll-unfurled')}<span class="lbl">Скопировать приглашение</span></button>
         <span class="spacer"></span>
         <span class="voice-ctl"></span>
-        <button class="btn ghost small" data-act="guide">Справочник</button>
-        <button class="btn ghost small" data-act="rules">Как играть</button>
+        <button class="btn ghost small hud-btn" data-act="guide" title="Справочник карт" aria-label="Справочник карт">${ico('open-book')}<span class="lbl">Справочник</span></button>
+        <button class="btn ghost small hud-btn" data-act="rules" title="Как играть" aria-label="Как играть">${ico('rule-book')}<span class="lbl">Как играть</span></button>
         <button class="btn ghost small icon-btn sound-btn" data-act="sound" aria-label="Звук" title="Звук"></button>
-        <button class="btn ghost small" data-act="leave">Выйти</button>
+        <button class="btn ghost small hud-btn" data-act="leave" title="Выйти из комнаты" aria-label="Выйти из комнаты">${ico('exit-door')}<span class="lbl">Выйти</span></button>
       </div>
     </header>
     <section class="band b-clay pebbles">
       <div class="lobby-body">
         <div>
           <div class="tavern" id="tavern">${tavernTable()}<div class="tv-ring" id="seats"></div></div>
-          <div id="settings"></div>
           <div class="startbar" id="startbar"></div>
+          <div id="settings"></div>
         </div>
         <aside class="side" style="min-height:420px">
           <div class="tabs"><button aria-selected="true">Чат комнаты</button></div>
@@ -507,7 +538,7 @@ update.lobby = () => {
   $('#rtitle').textContent = r.name;
   $('#rcode').textContent = r.id;
   const cp = app.querySelector('.topbar [data-act="copy"]');
-  if (cp) cp.textContent = r.spectator ? 'Ссылка для зрителей' : 'Скопировать приглашение';
+  if (cp) { const t = r.spectator ? 'Ссылка для зрителей' : 'Скопировать приглашение'; cp.title = t; cp.setAttribute('aria-label', t); cp.querySelector('.lbl').textContent = t; }
   // таверна: стулья по кругу у стола, моё место — внизу, остальные — по часовой стрелке в порядке прихода
   const n = Math.max(r.maxPlayers, r.members.length), mi = Math.max(0, r.members.findIndex(m => m.id === r.me));
   const ang = i => `--a:${(90 + (i - mi) * 360 / n).toFixed(1)}deg`;
@@ -546,7 +577,7 @@ update.lobby = () => {
     return;
   }
   $('#startbar').innerHTML = isHost
-    ? `<button class="btn primary big" data-act="start" ${enough ? '' : 'disabled'}>Начать партию</button><span class="muted">${enough ? (r.members.length < 3 ? 'Веселее от трёх: посадите бота.' : 'Все в сборе?') : 'Нужен хотя бы ещё один игрок или бот.'}</span>`
+    ? `<button class="btn primary big${enough && r.members.length >= 3 ? ' ready' : ''}" data-act="start" ${enough ? '' : 'disabled'}>Начать партию</button><span class="muted">${enough ? (r.members.length < 3 ? 'Веселее от трёх: посадите бота.' : 'Все в сборе?') : 'Нужен хотя бы ещё один игрок или бот.'}</span>`
     : `<span class="muted">Ждём, пока хозяин начнёт партию.</span>`;
   renderChat();
 };
@@ -1039,7 +1070,9 @@ function duelHTML() {
     : `<span class="verdict ${n.winner === d.from ? 'win' : 'lose'}">${esc(pname(n.winner))} сильнее${tie ? (n.winner === d.to ? ' (ничья — за вызванным)' : ' (ничья — за воином)') : ''}</span>`;
   const b = [];
   const canBoost = Object.values(h.cards || {}).some(o => o.some(a => a.side === 'from' || a.side === 'to'));
-  b.push(d.femme
+  // пояснение — отдельной строкой над кнопками: на телефоне кнопки прилипают к низу экрана, и длинный текст в них
+  // закрывал бы второго бойца
+  const note = (d.femme
     ? `<span class="hint">«Роковая женщина» от ${esc(pname(d.by))}: ${esc(pname(d.from))} и ${esc(pname(d.to))} бьются из-за неё. ${canBoost ? 'Разовые бонусы в руке можно подкинуть любой стороне.' : 'Когда отсчёт кончится, слабейший потеряет большую вещь и уровни.'}</span>`
     : `<span class="hint">Поединок: ${esc(pname(d.from))} против ${esc(pname(d.to))}. ${canBoost ? 'Разовые бонусы в руке можно подкинуть любой стороне.' : 'Когда отсчёт кончится, сильнейший забирает вещь.'}</span>`);
   if (h.pass) b.push(`<button class="btn ghost" data-act="pass">Не мешаю</button>`);
@@ -1051,6 +1084,7 @@ function duelHTML() {
       ${side('to')}
     </div>
     <div class="tug" style="--k:${k.toFixed(3)}" data-k="${k.toFixed(3)}" title="Перевес: ${n.from} против ${n.to}"><i class="tug-fill"></i><i class="tug-mark"></i></div>
+    <p class="duel-note">${note}</p>
     <div class="act-bar">${b.join('')}</div>`;
 }
 
@@ -1242,7 +1276,8 @@ const AMBIENT = {
   boss: el => { if (Math.random() < 0.45) heatFlame(el); fx.spray(el, { n: 7, spreadX: 1, spreadY: 0.2, dy: 0.45, speed: [40, 120], angle: [-2.3, -0.85], size: [2, 3.6], colors: ['#ff8a3d', '#ff4a1a', '#ffd27a', '#d96bff'], shape: 'spark', life: [0.6, 1.2], g: -70 });
     if (Math.random() < 0.3) fx.ring(el, { size: 34, grow: 240, width: 3, color: 'rgba(220,80,255,.75)', life: 0.8 }); },
   fire: el => { if (Math.random() < 0.4) heatFlame(el); return fx.spray(el, { n: 6, spreadX: 0.9, spreadY: 0.1, dy: 0.45, speed: [30, 90], angle: [-2.1, -1.05], size: [1.8, 3.2], colors: ['#ffd27a', '#ff8a3d', '#ff5a1a'], shape: 'spark', life: [0.7, 1.3], g: -90 }); },
-  undead: el => fx.spray(el, { n: 3, spreadX: 0.8, spreadY: 0.3, dy: 0.3, speed: [10, 30], angle: [-2, -1.1], size: [10, 18], grow: [14, 24], colors: ['rgba(120,255,180,.28)', 'rgba(170,140,255,.22)'], shape: 'smoke', add: false, life: [1.4, 2.2], fadeIn: true, wob: [1, 2] }),
+  // дымка нежити стелется из-под карты и по её бокам, а не поверх рисунка
+  undead: el => fx.spray(el, { n: 3, spreadX: 1.25, spreadY: 0.04, dy: 0.56, speed: [6, 18], angle: [-2.2, -0.9], size: [9, 15], grow: [10, 18], colors: ['rgba(120,255,180,.2)', 'rgba(170,140,255,.16)'], shape: 'smoke', add: false, life: [1.4, 2.2], fadeIn: true, wob: [1, 2] }),
   water: el => fx.spray(el, { n: 4, spreadX: 0.9, spreadY: 0.1, dy: -0.35, speed: [10, 40], angle: [1.2, 1.9], size: [2, 3], colors: ['#cfefff', '#9fd8e8'], shape: 'drop', add: false, life: [0.6, 0.9], g: 520 }),
   fungus: el => fx.spray(el, { n: 5, spreadX: 0.9, spreadY: 0.4, speed: [8, 26], angle: [-2.4, -0.7], size: [1.6, 3], colors: ['#c4ef86', '#8ff0d2', '#fff3b0'], shape: 'dot', life: [1.4, 2.4], fadeIn: true, wob: [2, 4], g: -12 }),
   machine: el => { if (Math.random() < 0.6) fx.spray(el, { n: 6, spreadX: 0.7, spreadY: 0.5, speed: [120, 260], size: [1.2, 2], colors: ['#bcd8ff', '#ffffff', '#7fb0ff'], shape: 'spark', life: [0.18, 0.35], g: 300 }); },
@@ -1561,7 +1596,7 @@ function openOppPop(pid) {
   }
   if (mine && h.tradeTargets?.includes(pid)) popOpts.push({ label: 'Предложить обмен', fn: () => openTrade(pid), cls: 'hero' });
   const items = [...p.equipped.map(u => chipHTML(u)), ...(p.beast ? [beastChip(p.beast, 'view')] : []), ...(p.ally ? [allyChip(p.ally, 'view')] : []), ...(p.allyGear || []).map(u => chipHTML(u, { cls: 'ally-worn', zone: 'view' })), ...p.carried.map(u => chipHTML(u, { cls: 'off' }))].join('') || '<p class="muted">Вещей нет.</p>';
-  showOverlay(`<div class="modal" role="dialog" aria-label="${esc(p.name)}">
+  showOverlay(`<div class="modal opp-modal" role="dialog" aria-label="${esc(p.name)}">
     <div class="row"><span class="me-ava" style="--seat:${p.color}">${avatarSVG(gAva(p), p.color)}</span><div><h2>${esc(p.name)}</h2><div class="me-stats"><span class="lvl">${p.level}</span><span class="pow">${ico('crossed-swords')}${p.power}</span>${p.gold != null ? `<span class="gold" title="Кошелёк: голды за проданные вещи и контракты, тратятся на рынке">${ico('two-coins')}${p.gold}</span>` : ''}<span class="badge">${esc(raceText(p))}, ${esc(classText(p))}</span><span class="handcount"><i></i>${p.handCount}</span></div></div></div>
     <div class="opp-items" data-zone-view>${items}</div>
     ${setsHTML(p)}

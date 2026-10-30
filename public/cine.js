@@ -107,6 +107,16 @@ function watchFps() {
   requestAnimationFrame(f);
 }
 
+// ───────────── что под сценой ─────────────
+// Надпись и кнопки сцены стола (#stage .stage-inner) прячутся, пока поверх идёт что-то своё: копия панели боя
+// с развязкой, колесо, карта посреди стола (проклятие, локация, событие, уровень…). Причин может быть несколько
+// сразу — сцена открывается, только когда ушла последняя, иначе старый бой и «Ходит …» видны одновременно.
+const unders = new Set();
+function under(key, on) {
+  if (on) unders.add(key); else unders.delete(key);
+  document.getElementById('stage')?.classList.toggle('cine-under', unders.size > 0);
+}
+
 // ───────────── очередь ─────────────
 function pump() {
   if (busy || !Q.length) return;
@@ -116,10 +126,11 @@ function pump() {
   const sp = (Q.length >= 4 ? 1.8 : Q.length >= 2 ? 1.35 : 1) / (cine.slow || 1);
   busy = true;
   if (!sc.minor) watchFps();
+  if (sc.under) under('scene', true);
   let dur = 0;
   try { dur = sc.run(ctx(sp)) ?? sc.dur ?? 0; } catch (e) { console.warn('cine', e); sc.skip?.(); }
   const wait = Math.max((sc.minDur || 0) * (cine.slow || 1), dur / sp);
-  pumpTimer = setTimeout(() => { busy = false; pump(); }, wait);
+  pumpTimer = setTimeout(() => { busy = false; if (sc.under) under('scene', false); pump(); }, wait);
 }
 function enqueue(...scenes) { Q.push(...scenes.filter(Boolean)); pump(); }
 function clearAll() {
@@ -129,7 +140,7 @@ function clearAll() {
   if (layer) layer.innerHTML = '';
   document.getElementById('fx')?.replaceChildren();
   closePanel(true);
-  document.getElementById('stage')?.classList.remove('cine-under');
+  unders.clear(); under('all', false);
   [...hidden.keys()].forEach(unhide);
 }
 document.addEventListener('visibilitychange', () => { if (document.hidden) clearAll(); });
@@ -177,7 +188,7 @@ function openPanel(snap) {
   n.style.left = snap.left + 'px'; n.style.top = snap.top + 'px'; n.style.width = snap.w + 'px';
   n.querySelectorAll('.mon-body').forEach(phase);
   cave.append(n);
-  document.getElementById('stage')?.classList.add('cine-under');
+  under('panel', true);
   panel = {
     node: n,
     card: uid => n.querySelector(`.mon-wrap .card[data-uid="${CSS.escape(uid)}"]`),
@@ -188,7 +199,7 @@ function openPanel(snap) {
 function closePanel(now = false) {
   if (!panel) return;
   const p = panel; panel = null;
-  document.getElementById('stage')?.classList.remove('cine-under');
+  under('panel', false);
   if (now) { p.node.remove(); return; }
   p.node.animate([{ opacity: 0, transform: 'scale(.97) translateY(6px)' }], { duration: 360, easing: EASE.in, fill: 'forwards' }).onfinish = () => p.node.remove();
 }
@@ -1477,10 +1488,9 @@ S.dice = f => ({
 S.wheel = f => ({
   minDur: 4600,
   // пока колесо крутится, панель боя под ним скрыта — иначе новая сила монстров выдала бы исход раньше времени
-  skip() { document.getElementById('stage')?.classList.remove('cine-under'); },
+  skip() { under('wheel', false); },
   run(k) {
-    const stage = document.getElementById('stage');
-    stage?.classList.add('cine-under');
+    under('wheel', true);
     const w = WHEEL.find(x => x.id === f.sector) || wheelAt(f.slot), L = WHEEL_LOOK[w.id];
     const size = Math.min(vw() * 0.78, vh() * 0.52, 440);
     const back = k.el('cn-wheel-back', '');
@@ -1526,13 +1536,18 @@ S.wheel = f => ({
     });
     const out = 420 + SPIN + 1300;
     k.fade(box, out, 320); k.fade(back, out, 320);
-    k.at(out, () => document.getElementById('stage')?.classList.remove('cine-under'));
+    k.at(out, () => under('wheel', false));
     return out + 340;
   },
 });
 
 const PANEL_KINDS = new Set(['victory', 'caught', 'escaped', 'pet', 'vanish']);
 // порядок внутри одной пачки событий: появление → вмешательство → кубик → развязка → последствия
+// сцены с картой или надписью посреди стола: на время сцены надпись и кнопки стола прячутся под ней
+for (const n of ['reveal', 'curse', 'location', 'event', 'legendary', 'legendDrop']) {
+  const make = S[n];
+  if (make) S[n] = (...a) => { const sc = make(...a); if (sc) sc.under = true; return sc; };
+}
 const RANK = { wheel: 0.5, combat: 1, wandering: 1, strike: 2, helper: 2, mod: 2, enhance: 2, backstab: 2, lullaby: 2, mutagen: 2, power: 2, buff: 2, dice: 3, escaped: 4, caught: 4, pet: 4, vanish: 4, victory: 5, location: 6, event: 6, curse: 6, ward: 6.5, death: 7, levelUp: 8, levelDown: 8, legendary: 9 };
 
 export const cine = {

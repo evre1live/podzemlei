@@ -1,5 +1,6 @@
 // Точечные проверки правил.
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import { createGame, act, tick, view, combatNumbers, P, saleValue, fillText, orderCard, grantCard, playOptions, troubleBand, shopPrice, trickStart, trickBuy, trickPlay, trickOptions, trickOf } from '../shared/engine.js';
 import { cheatCard, cheatCardNow, cheatGold } from '../server/cheats.js';
 import { botDecide } from '../shared/bot.js';
@@ -1900,6 +1901,24 @@ t('испытание дня: одна колода на всех и услов�
   const b = mk(dateFor('beasts'));
   assert.equal(view(b, 'a').opts.dailyId, 'beasts');
   assert.equal(createGame(seat, {}, rng).opts.daily, undefined);
+});
+
+t('заставка: предзагрузка меню и модулей совпадает с настоящими адресами', () => {
+  const html = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  const app = fs.readFileSync(new URL('../public/app.js', import.meta.url), 'utf8');
+  const menu = app.match(/const MENU = \{([\s\S]*?)\n\};/)[1];
+  for (const k of ['title', 'title2x', 'poster', 'poster720']) {
+    const url = menu.match(new RegExp(`\\b${k}: '([^']+)'`))[1];
+    assert.ok(html.includes(url), `index.html не предзагружает ${k}: ${url}`);
+  }
+  // все статические импорты app.js (кроме самого app.js) — в modulepreload
+  const seen = new Set(), walk = u => {
+    if (seen.has(u)) return; seen.add(u);
+    const file = new URL((u.startsWith('/shared/') ? '..' : '../public') + u, import.meta.url);
+    for (const m of fs.readFileSync(file, 'utf8').matchAll(/(?:^|\n)\s*import\s+(?:[^'"]*?\sfrom\s+)?['"]([^'"]+)['"]/g)) walk(m[1]);
+  };
+  walk('/app.js'); seen.delete('/app.js');
+  for (const u of seen) assert.ok(html.includes(`<link rel="modulepreload" href="${u}">`), `нет modulepreload для ${u}`);
 });
 
 console.log(`Правила: ${n} проверок пройдено.`);

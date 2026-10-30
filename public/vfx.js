@@ -409,7 +409,9 @@ function syncStill() {
 
 // ───── излучатели ─────
 function makeScene(key, bgUrl) {
-  const S = { key, bgUrl, alpha: 0, target: 1, emitters: [], statics: [], waters: [], bolts: null };
+  // новая сцена проявляется, только когда её картинка уже в видеокарте, а старая гаснет в тот же момент —
+  // иначе между ними на секунду виден чёрный холст
+  const S = { key, bgUrl, alpha: 0, target: 0, loading: true, emitters: [], statics: [], waters: [], bolts: null };
   const dyn = { position: true, rotation: true, color: true, vertex: true, uvs: true };
   S.pcAdd = new PIXI.ParticleContainer({ texture: frames.glow, dynamicProperties: dyn }); S.pcAdd.blendMode = 'add';
   S.pcNorm = new PIXI.ParticleContainer({ texture: frames.glow, dynamicProperties: dyn });
@@ -428,7 +430,7 @@ function makeScene(key, bgUrl) {
     if (S.dead) return;
     const sp = new PIXI.Sprite(tex); sp.width = W; sp.height = H; S.bgC.addChild(sp);
     for (const w of S.waters) buildWater(S, w, tex);
-  }).catch(() => {});
+  }).catch(() => {}).finally(() => { S.loading = false; if (!S.dead && current === key) swapTo(S); });
   return S;
 }
 function makeStatic(S, spec) {
@@ -603,7 +605,7 @@ function step(dt) {
     updBolts(S, dt, f);
   }
   // погасшие сцены удаляем
-  const gone = scenes.filter(S => S.target === 0 && S.alpha <= 0);
+  const gone = scenes.filter(S => S.target === 0 && S.alpha <= 0 && !S.loading);
   if (gone.length) { scenes = scenes.filter(S => !gone.includes(S)); gone.forEach(dropScene); }
 }
 
@@ -625,9 +627,9 @@ export async function showVfx(hostEl, key, bgUrl) {
   if (worldA === 0 && host.querySelector('.world.on')) worldA = 1;
   worldTarget = 1;
   const same = scenes.find(S => S.key === key);
-  for (const S of scenes) S.target = S === same ? 1 : 0;
-  if (!same) scenes.push(makeScene(key, bgUrl));
+  if (same) swapTo(same); else scenes.push(makeScene(key, bgUrl));
 }
+function swapTo(S0) { for (const S of scenes) S.target = S === S0 ? 1 : 0; }
 // Настроение фона от событий партии: бой, вспышки, огни
 export function vfxMood(kind, o = {}) {
   if (!app) return;

@@ -996,7 +996,10 @@ body.has-world { background: #120e22; }
 .cine > * { position: absolute; pointer-events: none; }
 .cn-pt { translate: -50% -50%; }
 .cn-dim { inset: 0; background: radial-gradient(ellipse 62% 58% at 50% 44%, rgba(16,10,26,.36), rgba(6,3,10,.86)); }
-.cn-dim.soft { background: radial-gradient(ellipse 62% 58% at 50% 44%, rgba(16,10,26,.2), rgba(6,3,10,.68)); }
+/* затемнение по силе события: мелкий монстр и карта из двери — только края кадра, середина и стол видны */
+.cn-dim.low { background: radial-gradient(ellipse 70% 64% at 50% 44%, rgba(16,10,26,.04), rgba(6,3,10,.5)); }
+.cn-dim.mid { background: radial-gradient(ellipse 66% 60% at 50% 44%, rgba(16,10,26,.16), rgba(6,3,10,.72)); }
+.cn-dim.soft { background: radial-gradient(ellipse 70% 64% at 50% 44%, rgba(16,10,26,.06), rgba(6,3,10,.52)); }
 .cn-dim.high { background: radial-gradient(ellipse 62% 58% at 50% 44%, rgba(60,14,10,.4), rgba(10,3,4,.88)); }
 .cn-dim.boss { background: radial-gradient(ellipse 62% 58% at 50% 44%, rgba(80,8,24,.46), rgba(10,2,6,.92)); }
 .cn-dim.hell { background: radial-gradient(ellipse 62% 58% at 50% 44%, rgba(120,16,6,.5), rgba(14,2,2,.94)); }
@@ -3304,3 +3307,56 @@ body:has(#world.still) .g-grain { display: none; }
   .home .p-join .room-row .pips { margin: 0; }
   .home .p-join .room-main .status { grid-column: 2; justify-self: start; }
 }
+
+/* табличка поверх стола (кто победил в поединке и т. п.) — заголовок сцены на это время уходит */
+#stage .stage-msg { transition: opacity .3s ease; }
+.banner-on #stage .stage-msg { opacity: 0; }
+
+/* ═════════ лобби: шапка — та же дубовая балка, что над игровым столом; «Начать партию» — сразу под столом ═════════ */
+.has-world .lobby .topbar, .lobby .topbar {
+  background: none; -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: none; border-radius: 0 !important;
+  border-style: solid; border-color: transparent; border-width: 0 46px; border-image: url(/ui/obj/v2/beam.webp) 0 150 fill / 0 44px / 0 6px stretch;
+  padding: 9px 0; margin: 8px 10px 0; gap: 8px; flex-wrap: nowrap; filter: drop-shadow(0 8px 10px rgb(0 0 0 / .55)); }
+.lobby .topbar .rtitle { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border-right: 0; color: #f4d79a; text-shadow: 0 2px 0 rgb(0 0 0 / .7), 0 0 14px rgb(255 190 100 / .2); }
+.lobby .topbar .code-pill { background: none; border: 1px solid transparent; box-shadow: none; border-image: url(/ui/obj/v2/plate-brass.webp) 46 fill / 9px stretch;
+  color: #2a1604; text-shadow: 0 1px 0 rgb(255 236 180 / .55); filter: drop-shadow(0 2px 2px rgb(0 0 0 / .55)); }
+.lobby .topbar .hud-btn .gi { display: none; }
+.lobby .topbar .hud-btn.primary .gi { color: #2a1604; }
+@media (max-width: 700px) {
+  .has-world .lobby .topbar, .lobby .topbar { border-width: 0 30px; border-image-width: 0 36px; border-image-outset: 0 4px; padding: 7px 0; margin: 6px 6px 0; gap: 5px;
+    overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; }
+  .lobby .topbar::-webkit-scrollbar { display: none; }
+  .lobby .topbar > * { flex: none; }
+  .lobby .topbar .spacer { flex: 1 0 4px; }
+  .lobby .topbar .lbl { display: none; }
+  .lobby .topbar .rtitle { font-size: 16px; max-width: 30vw; padding-right: 2px; }
+  .lobby .topbar .code-pill { height: 30px; padding: 0 8px; font-size: 13px; letter-spacing: .12em; }
+  .lobby .topbar .hud-btn .gi { display: block; width: 18px; height: 18px; }
+  .lobby .topbar .hud-btn, .lobby .topbar .btn.icon-btn { min-width: 32px; padding: 0 7px; }
+}
+.lobby .startbar { margin: -22px 0 26px; justify-content: center; }
+.lobby .startbar .btn.big { min-width: 260px; min-height: 54px; font-size: 19px; }
+/* все за столом — табличка дышит светом */
+.lobby .startbar .btn.ready { animation: startGlow 1.9s ease-in-out infinite alternate; }
+@keyframes startGlow { from { filter: drop-shadow(0 2px 2px rgb(0 0 0 / .5)) drop-shadow(0 0 4px rgb(255 196 120 / .2)); } to { filter: brightness(1.1) drop-shadow(0 2px 2px rgb(0 0 0 / .5)) drop-shadow(0 0 16px rgb(255 196 120 / .6)); } }
+@media (prefers-reduced-motion: reduce) { .lobby .startbar .btn.ready { animation: none; } }
+@media (max-width: 700px) { .lobby .startbar { margin: -14px 0 22px; } .lobby .startbar .btn.big { min-width: 0; width: 100%; } }
+/* поединок: пояснение отдельной строкой над кнопками */
+.duel-note { margin: 2px auto 0; max-width: 64ch; text-align: center; font-size: 14px; line-height: 1.45; color: var(--text-2, #d8cdb8); text-shadow: 0 1px 2px rgb(0 0 0 / .85); text-wrap: balance; }
+@media (max-width: 700px) { .duel-note { font-size: 13px; } }
+/* итоги на телефоне: места — столбиком, имя и уровень целиком */
+@media (max-width: 560px) {
+  .es-places { grid-template-columns: minmax(0, 1fr); max-width: 320px; margin-inline: auto; width: 100%; }
+  .es-places li { padding-right: 12px; }
+  .es-places b { flex: 1; }
+  .es-places .es-lv { white-space: nowrap; }
+}
+/* окно соперника: рамка медальона выходит за круг портрета — отодвигаем имя, чтобы рамка его не накрывала */
+.opp-modal > .row:first-child { gap: 18px; align-items: center; }
+.opp-modal > .row:first-child > .me-ava { flex: none; }
+.opp-modal > .row:first-child > .me-ava:has(> svg.av-framed) { margin: 14px 10px 14px 12px; }
+/* облик героя на телефоне: ряды фильтров листаются вбок — край ряда тает, чтобы было видно, что он продолжается */
+@media (max-width: 700px) { .av-chips { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent); } }
+/* шапка лобби в одну строку не должна раздвигать страницу шире экрана */
+.lobby { grid-template-columns: minmax(0, 1fr); }
+.lobby > * { min-width: 0; }

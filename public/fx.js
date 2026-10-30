@@ -167,7 +167,8 @@ function emit(n, at, mk) {
 }
 const PAL = {
   gold: ['#ffe08a', '#f5b83d', '#fff3b0', '#ffd36b'],
-  confetti: ['#f5b83d', '#d2502f', '#3fa38c', '#4a7fc1', '#e86fa1', '#fff3b0', '#a6f2b7'],
+  // праздник в подземелье — не цветная бумага, а сусальное золото, медь и тёплые искры
+  confetti: ['#f7d27a', '#e0a23a', '#fff0b8', '#c9832a', '#ffdf96', '#a86a1c', '#fff8e0'],
   green: ['#8ff0d2', '#3fa38c', '#c4ef86', '#ffffff'],
   red: ['#ff8a66', '#d2502f', '#ffb08a'],
   purple: ['rgba(190,140,255,.55)', 'rgba(120,70,200,.5)', 'rgba(220,180,255,.45)'],
@@ -188,8 +189,10 @@ function explode(x, y, pal) {
   }
   add({ x, y, vx: 0, vy: 0, g: 0, rot: 0, vr: 0, size: 70, grow: 120, color: 'rgba(255,240,200,.5)', shape: 'glow', add: true, life: 0.45, max: 0.45, seed: 0 });
 }
-const FIRE_PALS = [['#ffe08a', '#f5b83d', '#fff3b0'], ['#ff8ab6', '#e86fa1', '#ffd0e4'], ['#8ff0d2', '#3fa38c', '#e6fff6'], ['#9cc4ff', '#4a7fc1', '#e6f0ff'], ['#d9b3ff', '#8f6bc9', '#f3e6ff'], ['#ffb08a', '#d2502f', '#ffe0c8']];
+// салют — золото, янтарь, угли, серебро и медь
+const FIRE_PALS = [['#ffe08a', '#f5b83d', '#fff3b0'], ['#ffc46b', '#e08a2a', '#fff0c8'], ['#ffb08a', '#d2502f', '#ffe0c8'], ['#f4f1ea', '#c9c3b8', '#ffffff'], ['#f0b27a', '#b86a32', '#ffe6cc'], ['#fff2c0', '#ffd36b', '#ffffff']];
 
+let banners = 0;
 export const fx = {
   // универсальный «распылитель» частиц: форма, цвета, разброс скоростей и углов задаются снаружи
   spray(el, o = {}) {
@@ -262,7 +265,12 @@ export const fx = {
     const c = o.at ? center(o.at) : { x: W / 2, y: H * 0.35, w: W, h: 0 };
     emit(o.n || 120, c, () => {
       const a = rnd(-Math.PI * 0.95, -Math.PI * 0.05), v = rnd(260, 720);
-      return { vx: Math.cos(a) * v, vy: Math.sin(a) * v, g: 620, drag: 0.965, vr: rnd(-10, 10), size: rnd(3, 6), color: pick(PAL.confetti), shape: 'confetti', life: rnd(1.6, 2.8), fade: 3, wob: rnd(2, 5) };
+      return { vx: Math.cos(a) * v, vy: Math.sin(a) * v, g: 620, drag: 0.965, vr: rnd(-10, 10), size: rnd(2.6, 5), color: pick(PAL.confetti), shape: 'confetti', life: rnd(1.6, 2.8), fade: 3, wob: rnd(2, 5) };
+    });
+    // между листками золота — тёплые искры, которые гаснут на лету
+    emit(Math.round((o.n || 120) * 0.35), c, () => {
+      const a = rnd(-Math.PI * 0.95, -Math.PI * 0.05), v = rnd(200, 560);
+      return { vx: Math.cos(a) * v, vy: Math.sin(a) * v, g: 260, drag: 0.95, size: rnd(1.4, 2.4), color: pick(PAL.gold), shape: 'spark', add: true, life: rnd(0.7, 1.4) };
     });
   },
   coins(from, to, o = {}) {
@@ -279,7 +287,7 @@ export const fx = {
   },
   hearts(el) {
     const c = center(el);
-    emit(10, c, () => ({ x: c.x + rnd(-c.w * 0.3, c.w * 0.3), y: c.y, vx: rnd(-30, 30), vy: rnd(-120, -50), size: rnd(5, 8), color: pick(['#ff7aa8', '#e86fa1', '#ffb0c8']), shape: 'heart', life: rnd(0.9, 1.4), wob: 3, delay: rnd(0, 0.25), fadeIn: true }));
+    emit(10, c, () => ({ x: c.x + rnd(-c.w * 0.3, c.w * 0.3), y: c.y, vx: rnd(-30, 30), vy: rnd(-120, -50), size: rnd(5, 8), color: pick(['#e0604a', '#ff9a7a', '#f2c08a']), shape: 'heart', life: rnd(0.9, 1.4), wob: 3, delay: rnd(0, 0.25), fadeIn: true }));
   },
   notes(el, toEl) {
     const c = center(el), d = toEl ? center(toEl) : null;
@@ -367,7 +375,9 @@ export const fx = {
     d.querySelector('b').textContent = title;
     if (sub) d.querySelector('small').textContent = sub;
     document.body.append(d);
-    setTimeout(() => d.remove(), 2300);
+    // пока висит табличка, заголовок сцены стола («Ходит …») уходит, чтобы надписи не легли друг на друга
+    banners++; document.body.classList.add('banner-on');
+    setTimeout(() => { d.remove(); if (--banners <= 0) { banners = 0; document.body.classList.remove('banner-on'); } }, 2300);
     return d;
   },
   vignette(color = 'rgba(210,80,47,.55)') {

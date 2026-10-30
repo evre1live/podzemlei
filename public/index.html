@@ -10,10 +10,70 @@
   <link rel="preload" href="/fonts/cormorant-sc-cyrillic-700-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="/fonts/golos-text-cyrillic-400-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="/fonts/literata-cyrillic-600-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <!-- все модули сразу, а не цепочкой: иначе браузер узнаёт о следующем уровне импортов, только скачав предыдущий -->
+  <link rel="modulepreload" href="/shared/cards.js">
+  <link rel="modulepreload" href="/art-bosses.js">
+  <link rel="modulepreload" href="/art-monsters.js">
+  <link rel="modulepreload" href="/shared/avatar.js">
+  <link rel="modulepreload" href="/avatar-art.js">
+  <link rel="modulepreload" href="/art-avatar.js">
+  <link rel="modulepreload" href="/icons.js">
+  <link rel="modulepreload" href="/card-art.js">
+  <link rel="modulepreload" href="/art.js">
+  <link rel="modulepreload" href="/fx.js">
+  <link rel="modulepreload" href="/sfx.js">
+  <link rel="modulepreload" href="/world.js">
+  <link rel="modulepreload" href="/wheel.js">
+  <link rel="modulepreload" href="/cine.js">
+  <link rel="modulepreload" href="/voice.js">
+  <link rel="modulepreload" href="/depth-art.js">
+  <link rel="modulepreload" href="/depth.js">
+  <link rel="modulepreload" href="/news.js">
+  <!-- таблички кнопок нужны на любом экране -->
+  <link rel="preload" as="image" href="/ui/obj/v2/plate-iron.webp">
+  <link rel="preload" as="image" href="/ui/obj/v2/plate-brass.webp">
+  <link rel="preload" as="image" href="/ui/obj/v2/plate-ghost.webp">
+  <!-- главное меню: название, первый кадр фона и рама панелей — только если открыта главная, а не ссылка на комнату.
+       Адреса совпадают с MENU в app.js (проверяет test/rules.js) -->
+  <script>
+    if (!/[?&](room|watch)=/.test(location.search)) [
+      ['/ui/v4/title.webp?v=f7196a8c', '/ui/v4/title.webp?v=f7196a8c 1000w, /ui/v4/title@2x.webp?v=063c5828 2000w', '(max-width: 1100px) 92vw, 1000px'],
+      ['/ui/v4/menu-poster.webp?v=8fe4b431', '/ui/v4/menu-poster-720.webp?v=3660a312 1280w, /ui/v4/menu-poster.webp?v=8fe4b431 1920w', 'max(100vw, 178vh)'],
+      ['/ui/table/v2/frame-steel.webp'],
+    ].forEach(([href, set, sizes]) => {
+      const l = document.createElement('link'); l.rel = 'preload'; l.as = 'image'; l.href = href;
+      if (set) { l.setAttribute('imagesrcset', set); l.setAttribute('imagesizes', sizes); }
+      document.head.append(l);
+    });
+  </script>
+  <!-- заставка, пока грузятся скрипты: рисуется сразу, без них; убирает её app.js, когда экран готов -->
+  <style>
+    #splash { position: fixed; inset: 0; z-index: 300; display: grid; place-items: center; transition: opacity .7s ease, visibility 0s linear .7s;
+      background: radial-gradient(ellipse 58% 46% at 50% 47%, #2c1c10 0%, #140e0a 52%, #070605 100%); }
+    #splash.gone { opacity: 0; visibility: hidden; pointer-events: none; }
+    #splash .sp-in { display: grid; justify-items: center; translate: 0 -4vh; }
+    #splash svg { width: 86px; height: 86px; animation: spGlow 2.2s ease-in-out infinite alternate; }
+    #splash .sp-t { margin-top: 14px; font: 700 clamp(36px, 7vw, 58px)/1 'Cormorant SC', Georgia, serif; letter-spacing: .06em; color: #e6c27a;
+      background: linear-gradient(180deg, #fff1cc 0%, #e6c27a 40%, #b0843a 64%, #e6be74 100%); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+      filter: drop-shadow(0 2px 0 #000) drop-shadow(0 8px 22px rgba(0, 0, 0, .8)); }
+    #splash .sp-bar { position: relative; width: 190px; height: 3px; margin-top: 24px; border-radius: 3px; overflow: hidden; background: rgba(255, 214, 140, .12); }
+    #splash .sp-bar i { position: absolute; inset: 0 auto 0 0; width: 38%; background: linear-gradient(90deg, transparent, #f2c27a, #fff0c8, #f2c27a, transparent); animation: spRun 1.25s ease-in-out infinite; }
+    #splash .sp-e { position: absolute; left: 50%; top: 50%; width: 3px; height: 3px; border-radius: 50%; background: #ffc46b; box-shadow: 0 0 8px 2px rgba(255, 160, 70, .7); opacity: 0; animation: spEmber 3.2s linear infinite; }
+    @keyframes spRun { from { transform: translateX(-110%); } to { transform: translateX(270%); } }
+    @keyframes spGlow { from { filter: drop-shadow(0 0 8px rgba(255, 160, 70, .28)); } to { filter: drop-shadow(0 0 26px rgba(255, 170, 80, .62)); } }
+    @keyframes spEmber { 0% { opacity: 0; transform: translate(var(--x), 60px); } 15% { opacity: 1; } 100% { opacity: 0; transform: translate(calc(var(--x) * 1.6), -220px); } }
+    @media (prefers-reduced-motion: reduce) { #splash *, #splash svg { animation: none !important; } }
+  </style>
   <link rel="stylesheet" href="/fonts/fonts.css">
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
+  <div id="splash" aria-hidden="true"><div class="sp-in">
+    <svg viewBox="0 0 512 512"><defs><linearGradient id="spg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff1cc"/><stop offset=".45" stop-color="#e6c27a"/><stop offset="1" stop-color="#9a6a24"/></linearGradient></defs><path fill="url(#spg)" d="m194 26l35.2 84c14.9 7.7 33.1 6.7 47.5-1.3l40.3-86c-45.6-7.3-84.5-4.9-123 3.3m137 7.6l-32 71.4c12.5 12.3 37.2 18.9 47 15.4l31.2-64.7c-12.4-8.4-27.4-15.9-46.2-22.1zm-155-2c-21.8 6.5-41 16.4-56.1 28.6c14.9 15.8 28.9 34.2 38.2 52.8c24.5 6.1 35.5-6.8 47.5-18.6zm-74.2 34.8c-36.5 32.9-66.5 76.4-78.1 125l66 3.4c12-30.5 24.6-56.3 54.2-72.8c-9.9-20.2-23.6-39.4-42.1-55.8m293-0.3l-31.9 61c32.5 21 43.6 41.3 52.6 69l72.5-8.4c-9.6-55.9-42.2-107-93.2-122m-52.2 137c4.8 12.9-15.8 29.7-9.1 39.4c-4 0.8-8.9 1.6-14.4-9c-1.1 12.5 2.2 19.6 12.2 29.2c-2.7 0.8-8 2.8-12.1 0.6c-1.2 7.4 10.9 13.9 20.7 14.8l8.4-2.2c-6.1-1.1-7.9-3.3-10.6-6.1c3-1.3 12.6-7.1 2.1-14.8c12.6-2.8 6-14.9 4.1-21.9c7.5 7.8 15.2 22.5 21.9 7.1c4.2 12.6 6.6 12.1 13.6 9.1c1.1 9.2-3 14.8-8.8 22.5l12.5-5c6-5 20.2-25.5 6.4-35.5c2.6 12.4-5.6 14.4-18.7-10.9c-4.4 30.8-12.2-7.5-28.3-17.4m-322 2.1v66.2l72.8-11.9l1.6-49.9zm143 0.4c3.7 8.7-14.5 45.2-18.9 14.5c-13.1 25.3-23.9 24.3-21.3 11.8c-13.7 10-1.3 33.5 4.7 38.5l11.2 3c-5.8-7.7-11.6-13.6-10.5-22.8c7.1 3 10.5 5.6 14.7-7c6.6 15.5 17.3-4.4 24.8-12.2c-1.6 11.5-6.3 22.4 7.3 25.2c-9.1 10.1 1.9 20-12.7 22.8l8.4 2.2c9.9-1 20.4-10.6 19.1-18c-4 2.2-7.8 3.4-10.5 2.6c10-9.6 10.7-21.5 9.5-34c-5.5 10.6-7.9 11.7-11.8 13.7c6.8-9.7-5.9-32.3-14.2-40.3m328 1.2l-77.6 5.7l1.2 79.2l75.5 2.8zM98.3 280l-80 9.8l1.2 99.8l83.5 1.2zm281 7.3l-28.3 7l21.5 68.3l16.1-5zm-247 3.3l-9.2 70.3l16.1 5l21.5-68.3zM412 310v83.6l79.2-8l2.3-75.5zm84.6 91.7l-88.9 9.9l-1.2 80.7l90.7 0.6zm-396 2l-81.8 2.3l-4.7 86.2h90z"/></svg>
+    <div class="sp-t">Под Землёй</div>
+    <div class="sp-bar"><i></i></div>
+  </div>
+  <i class="sp-e" style="--x:-90px;animation-delay:-.4s"></i><i class="sp-e" style="--x:40px;animation-delay:-1.3s"></i><i class="sp-e" style="--x:120px;animation-delay:-2.1s"></i><i class="sp-e" style="--x:-30px;animation-delay:-2.8s"></i><i class="sp-e" style="--x:70px;animation-delay:-.9s"></i></div>
   <div id="world" aria-hidden="true"></div>
   <main id="app" aria-live="polite"></main>
   <div id="layer"></div>
