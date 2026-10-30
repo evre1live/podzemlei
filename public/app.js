@@ -103,6 +103,13 @@ const watchLink = () => `${location.origin}/?watch=${S.room?.id}`;
 const spectating = () => !!S.room?.spectator;
 
 // ───────────────────────── связь ─────────────────────────
+// после выкладки новой версии сервер присылает другой отпечаток — перезагружаемся, чтобы взять свежие стили и скрипты
+let buildId = null;
+socket.on('build', ({ id } = {}) => {
+  if (!id) return;
+  if (buildId && id !== buildId) { toast('Вышла новая версия — обновляю страницу…', true); setTimeout(() => location.reload(), 1200); return; }
+  buildId = id;
+});
 socket.on('connect', async () => {
   // смотрим комнату, где у нас есть своё место, — возвращаемся за стол, а не на трибуну
   if (S.watch && S.tokens[S.watch.id]) {

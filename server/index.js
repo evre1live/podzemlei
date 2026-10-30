@@ -16,6 +16,14 @@ const PERSONA_KEYS = Object.keys(PERSONAS);
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
+// отпечаток интерфейса: меняется с каждой выкладкой новых стилей и скриптов — открытые вкладки перезагружаются сами
+const BUILD = (() => {
+  const h = crypto.createHash('md5');
+  for (const dir of ['public', 'shared']) {
+    for (const f of fs.readdirSync(path.join(ROOT, dir)).filter(f => /\.(js|css|html)$/.test(f)).sort()) h.update(fs.readFileSync(path.join(ROOT, dir, f)));
+  }
+  return h.digest('hex').slice(0, 12);
+})();
 const PORT = Number(process.env.PORT || 3000);
 const DATA_DIR = process.env.DATA_DIR || path.join(ROOT, 'data');
 const GONE = 'Комната не найдена: её закрыли или сервер перезапускался. Создайте новую комнату и отправьте друзьям свежую ссылку.';
@@ -442,6 +450,7 @@ const io = new Server(server, { cors: { origin: false }, maxHttpBufferSize: 64 *
 
 // ───────────────────────── сокеты ─────────────────────────
 io.on('connection', socket => {
+  socket.emit('build', { id: BUILD });
   // данные события — всегда объект: emit('x', null) или число вместо объекта не роняет обработчики с (p = {})
   socket.use((packet, next) => {
     if (packet.length > 1 && typeof packet[1] !== 'function' && (packet[1] === null || typeof packet[1] !== 'object')) packet[1] = {};
