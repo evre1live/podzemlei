@@ -979,7 +979,7 @@ function fightHTML() {
     </div>`).join('');
   let center;
   if (c.winAt) {
-    center = `<div class="countdown" data-until="${c.winAt}" data-total="${g.opts.winDelayMs}"><svg viewBox="0 0 74 74"><circle cx="37" cy="37" r="32" fill="rgba(0,0,0,.55)" stroke="rgba(255,255,255,.12)" stroke-width="5"/><circle class="ring" cx="37" cy="37" r="32" fill="none" stroke="#e8e4dc" stroke-width="5" stroke-linecap="round" stroke-dasharray="201" stroke-dashoffset="0"/></svg><b>…</b></div>`;
+    center = countdownHTML(c.winAt, g.opts.winDelayMs);
   } else center = `<span class="vs-emblem">${SWORDS}<span class="vs-word">против</span></span>`;
   const flip = prev && prev.win !== n.winning ? ' flip' : '';
   const verdict = n.winning ? `<span class="verdict win${flip}">Герои сильнее${n.warrior && n.heroes === n.monsters ? ' (ничья — за воином)' : ''}</span>` : `<span class="verdict lose${flip}">Монстры сильнее</span>`;
@@ -1033,7 +1033,7 @@ function duelHTML() {
         : prize ? `Проиграет — отдаст <b data-uid="${esc(prize)}" data-zone="view">«${esc(def(prize).name)}»</b>` : 'Отдать нечего'}</div></div>`;
   };
   const tie = n.from === n.to;
-  const center = `<div class="countdown" data-until="${d.winAt}" data-total="${g.opts.winDelayMs}"><svg viewBox="0 0 74 74"><circle cx="37" cy="37" r="32" fill="rgba(0,0,0,.55)" stroke="rgba(255,255,255,.12)" stroke-width="5"/><circle class="ring" cx="37" cy="37" r="32" fill="none" stroke="#e8e4dc" stroke-width="5" stroke-linecap="round" stroke-dasharray="201" stroke-dashoffset="0"/></svg><b>…</b></div>`;
+  const center = countdownHTML(d.winAt, g.opts.winDelayMs);
   const verdict = !n.winner ? `<span class="verdict lose">Ничья — оба уйдут целыми</span>`
     : `<span class="verdict ${n.winner === d.from ? 'win' : 'lose'}">${esc(pname(n.winner))} сильнее${tie ? (n.winner === d.to ? ' (ничья — за вызванным)' : ' (ничья — за воином)') : ''}</span>`;
   const b = [];
@@ -1053,13 +1053,46 @@ function duelHTML() {
     <div class="act-bar">${b.join('')}</div>`;
 }
 
-// таймер отсчёта
+// таймер отсчёта: кованый медальон с латунным ободом и насечками; по тёмному желобу прогорает огненная дуга-фитиль,
+// на её конце бежит искра, цифра в центре чеканная. В последние три секунды фитиль краснеет, медальон бьётся
+const CD_R = 36, CD_C = 2 * Math.PI * CD_R;
+const CD_TICKS = Array.from({ length: 30 }, (_, i) => { const a = i * 12 * Math.PI / 180, r0 = i % 5 ? 41.5 : 40, r1 = 44.5;
+  return `<line x1="${(50 + r0 * Math.cos(a)).toFixed(2)}" y1="${(50 + r0 * Math.sin(a)).toFixed(2)}" x2="${(50 + r1 * Math.cos(a)).toFixed(2)}" y2="${(50 + r1 * Math.sin(a)).toFixed(2)}"${i % 5 ? '' : ' class="maj"'}/>`; }).join('');
+let cdSeq = 0;
+function countdownHTML(until, total) {
+  const k = 'cd' + (++cdSeq); // свои id градиентов: копия панели в развязке боя не должна ссылаться на исчезнувший оригинал
+  return `<div class="countdown" data-until="${until}" data-total="${total}"><svg viewBox="0 0 100 100" aria-hidden="true">
+    <defs>
+      <linearGradient id="${k}Bezel" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f7dc95"/><stop offset=".35" stop-color="#a8742a"/><stop offset=".6" stop-color="#ffe7a6"/><stop offset="1" stop-color="#6e4613"/></linearGradient>
+      <radialGradient id="${k}Face" cx=".42" cy=".38" r=".7"><stop offset="0" stop-color="#3a2e26"/><stop offset=".7" stop-color="#1a130e"/><stop offset="1" stop-color="#0b0806"/></radialGradient>
+      <radialGradient id="${k}Core" cx=".4" cy=".35" r=".75"><stop offset="0" stop-color="#2e2018"/><stop offset="1" stop-color="#0a0605"/></radialGradient>
+      <linearGradient id="${k}Ember" x1="0" y1="0" x2="1" y2="1"><stop offset="0" class="e1"/><stop offset=".55" class="e2"/><stop offset="1" class="e3"/></linearGradient>
+      <radialGradient id="${k}Spark"><stop offset="0" stop-color="#fff"/><stop offset=".35" stop-color="#ffe9a0"/><stop offset=".7" stop-color="#ff9a2a" stop-opacity=".7"/><stop offset="1" stop-color="#ff5a10" stop-opacity="0"/></radialGradient>
+      <filter id="${k}Glow" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="2.2"/></filter>
+    </defs>
+    <circle cx="50" cy="50" r="48" fill="#0b0806"/>
+    <circle cx="50" cy="50" r="46" fill="url(#${k}Face)" stroke="url(#${k}Bezel)" stroke-width="3.2"/>
+    <g class="cd-ticks">${CD_TICKS}</g>
+    <circle cx="50" cy="50" r="${CD_R}" fill="none" stroke="#070504" stroke-width="7.5"/>
+    <circle cx="50" cy="50" r="${CD_R}" fill="none" stroke="rgb(255 255 255 / .06)" stroke-width="7.5" stroke-dasharray="1 2.2"/>
+    <circle class="ring ring-glow" cx="50" cy="50" r="${CD_R}" fill="none" stroke="url(#${k}Ember)" stroke-width="7" stroke-linecap="round" stroke-dasharray="${CD_C.toFixed(2)}" stroke-dashoffset="0" filter="url(#${k}Glow)"/>
+    <circle class="ring" cx="50" cy="50" r="${CD_R}" fill="none" stroke="url(#${k}Ember)" stroke-width="4.4" stroke-linecap="round" stroke-dasharray="${CD_C.toFixed(2)}" stroke-dashoffset="0"/>
+    <g class="cd-spark"><circle cx="${50 + CD_R}" cy="50" r="8" fill="url(#${k}Spark)"/><circle cx="${50 + CD_R}" cy="50" r="2.2" fill="#fff8e0"/></g>
+    <circle cx="50" cy="50" r="27" fill="url(#${k}Core)" stroke="#0a0605" stroke-width="1.2"/>
+    <circle cx="50" cy="50" r="25.4" fill="none" stroke="url(#${k}Bezel)" stroke-width=".9" stroke-opacity=".7"/>
+  </svg><b>…</b></div>`;
+}
 function tickCountdowns() {
   document.querySelectorAll('.countdown[data-until]').forEach(el => {
     const left = Number(el.dataset.until) - serverNow();
     const total = Number(el.dataset.total) || 5000;
     const sec = left > 0 ? Math.ceil(left / 1000) : 0;
-    el.querySelector('b').textContent = sec || '…';
+    const num = el.querySelector('b');
+    if (num.textContent !== String(sec || '…')) {
+      num.textContent = sec || '…';
+      // цифра «вбивается» чеканом на каждой секунде
+      if (sec) num.animate([{ transform: 'scale(1.35)', filter: 'brightness(1.8)' }, { transform: 'scale(.94)', offset: 0.45 }, { transform: 'none', filter: 'none' }], { duration: 380, easing: 'cubic-bezier(.2,.8,.3,1)' });
+    }
     const key = `${el.dataset.until}:${sec}`;
     if (sec > 0 && key !== S.ui.lastTick) {
       if (S.ui.lastTick?.startsWith(el.dataset.until + ':')) { sfx.play('tick', { last: sec === 1, gap: 0 }); if (sec <= 3) sfx.play('heartbeat', { gap: 0, delay: 0.05 }); }
@@ -1067,7 +1100,10 @@ function tickCountdowns() {
     }
     const urgent = sec > 0 && sec <= 3;
     if (el.classList.contains('urgent') !== urgent) { el.classList.toggle('urgent', urgent); $('#cave')?.classList.toggle('urgent', urgent); }
-    el.querySelector('.ring').setAttribute('stroke-dashoffset', String(201 * (1 - Math.max(0, left) / total)));
+    const f = Math.max(0, Math.min(1, left / total));
+    for (const r of el.querySelectorAll('.ring')) r.setAttribute('stroke-dashoffset', String(CD_C * (1 - f)));
+    el.querySelector('.cd-spark')?.setAttribute('transform', `rotate(${(f * 360).toFixed(2)} 50 50)`);
+    el.classList.toggle('done', f <= 0);
   });
   const cave = $('#cave');
   if (cave?.classList.contains('urgent') && !document.querySelector('#stage .countdown.urgent')) cave.classList.remove('urgent');

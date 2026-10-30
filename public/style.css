@@ -3148,3 +3148,24 @@ body:has(#world.still) .g-grain { display: none; }
 .cn-wheel-res.t-boss b { color: #3a1004; text-shadow: 0 1px 0 rgb(255 240 200 / .6); } .cn-wheel-res.t-boss span { color: #4a2006; text-shadow: none; }
 @media (max-width: 700px) { .cn-wheel-title b { font-size: 19px; } .cn-wheel-res b { font-size: 21px; } .cn-wheel-res span { font-size: 12.5px; } }
 @media (prefers-reduced-motion: reduce) { .wheel-mini.ready .wheel-svg { animation: none; } }
+
+/* ═════════ таймер «помешать»: горящий фитиль в кованом медальоне (countdownHTML в app.js) ═════════ */
+.countdown { position: relative; width: 92px; height: 92px; filter: drop-shadow(0 8px 12px rgb(0 0 0 / .65)); }
+.countdown svg { transform: rotate(-90deg); width: 100%; height: 100%; overflow: visible; }
+.countdown .cd-ticks line { stroke: #c9a15a; stroke-opacity: .55; stroke-width: .9; stroke-linecap: round; }
+.countdown .cd-ticks line.maj { stroke: #f2d28a; stroke-opacity: .9; stroke-width: 1.6; }
+.countdown .e1 { stop-color: #fff3b0; } .countdown .e2 { stop-color: #ffb43a; } .countdown .e3 { stop-color: #e2621a; }
+.countdown .ring-glow { opacity: .75; }
+.countdown .cd-spark { animation: cdSpark .18s steps(2) infinite; transform-box: view-box; }
+.countdown.done .cd-spark, .countdown.done .ring { opacity: 0; }
+@keyframes cdSpark { 50% { opacity: .65; } }
+.countdown b { position: absolute; inset: 0; display: grid; place-items: center; font-family: var(--display); font-weight: 800; font-size: 34px; line-height: 1;
+  font-variant-numeric: lining-nums tabular-nums; color: #ffe2a0; text-shadow: 0 1px 0 #3a2406, 0 -1px 0 rgb(255 250 220 / .35), 0 0 12px rgb(255 170 60 / .35); }
+/* последние три секунды: фитиль краснеет, искра больше, медальон бьётся вместе с сердцем */
+.countdown.urgent { animation: beat 1s ease-in-out infinite; filter: drop-shadow(0 8px 12px rgb(0 0 0 / .65)) drop-shadow(0 0 16px rgb(255 70 40 / .55)); }
+.countdown.urgent .e1 { stop-color: #ffd0a0; } .countdown.urgent .e2 { stop-color: #ff5a2a; } .countdown.urgent .e3 { stop-color: #b0100a; }
+.countdown.urgent .ring-glow { opacity: 1; }
+.countdown.urgent .cd-spark circle:first-child { r: 11px; }
+.countdown.urgent b { color: #ff9a7a; text-shadow: 0 1px 0 #3a0604, 0 0 14px rgb(255 60 30 / .7); }
+@media (max-width: 900px) { .countdown { width: 76px; height: 76px; } .countdown b { font-size: 28px; } }
+@media (prefers-reduced-motion: reduce) { .countdown .cd-spark { animation: none; } }
