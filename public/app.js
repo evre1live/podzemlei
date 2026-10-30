@@ -609,7 +609,7 @@ mount.game = () => {
     </div>
     <div class="band b-clay pebbles"><div class="opps" id="opps"></div></div>
     <div class="band b-rock cave" id="cave">
-      <div class="table-bg" id="tableBg" aria-hidden="true"><div class="tb-mat"></div><div class="tb-glow"></div><div class="tb-frame"></div><div class="tb-props" id="tableProps"></div></div>
+      <div class="table-bg" id="tableBg" aria-hidden="true"><div class="tb-mat"></div><div class="tb-glow"></div><div class="tb-frame"><i class="f-t"></i><i class="f-b"></i><i class="f-l"></i><i class="f-r"></i><i class="f-tl"></i><i class="f-tr"></i><i class="f-bl"></i><i class="f-br"></i></div><div class="tb-props" id="tableProps"></div></div>
       <div class="cave-stage" id="stage"></div>
       <div class="motes" aria-hidden="true">${'<i></i>'.repeat(12)}</div>
       <div class="sidepanel side" id="sidepanel">

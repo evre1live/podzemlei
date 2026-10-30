@@ -2563,8 +2563,22 @@ svg.av-hover .av-bg, svg.av-hover .av-hero { transition: transform .18s ease-out
   background: radial-gradient(ellipse 75% 70% at 50% 46%, rgb(var(--tb-tint, 255 200 140) / .07), transparent 70%),
     url(/ui/table/v2/mat-default.webp) center / cover, #1a110b;
   box-shadow: inset 0 0 0 1px rgb(0 0 0 / .8), inset 0 0 calc(var(--fw) * 1.6) rgb(0 0 0 / .85), inset 0 calc(var(--fw) * .5) calc(var(--fw) * .9) rgb(0 0 0 / .55); }
-/* толщина рамы — прямо в пикселях, без var(): Safari не рисует border-image с переменной внутри (на телефоне рама пропадала) */
-.tb-frame { inset: 0; border: 34px solid transparent; border-image: url(/ui/table/v2/frame-oak.webp) 118 / 34px stretch; }
+/* рама — из восьми кусков обычного фона (углы и стороны одной картинки 1024×1024 с краем 118 px), без border-image:
+   Safari на телефонах не рисовал её боковые стороны. Сторона: картинка растянута так, что её середина (118…906)
+   ложится ровно в кусок, а сдвиг 50 % попадает точно на начало середины — потому что края с двух сторон равны */
+.tb-frame { inset: 0; }
+.tb-frame > i { position: absolute; background: url(/ui/table/v2/frame-oak.webp) no-repeat; }
+.tb-frame > :is(.f-tl, .f-tr, .f-bl, .f-br) { width: var(--fw); height: var(--fw); background-size: calc(var(--fw) * 1024 / 118) calc(var(--fw) * 1024 / 118); }
+.tb-frame > .f-tl { left: 0; top: 0; background-position: 0 0; }
+.tb-frame > .f-tr { right: 0; top: 0; background-position: 100% 0; }
+.tb-frame > .f-bl { left: 0; bottom: 0; background-position: 0 100%; }
+.tb-frame > .f-br { right: 0; bottom: 0; background-position: 100% 100%; }
+.tb-frame > :is(.f-t, .f-b) { left: calc(var(--fw) - .5px); right: calc(var(--fw) - .5px); height: var(--fw); background-size: calc(100% * 1024 / 788) calc(var(--fw) * 1024 / 118); }
+.tb-frame > .f-t { top: 0; background-position: 50% 0; }
+.tb-frame > .f-b { bottom: 0; background-position: 50% 100%; }
+.tb-frame > :is(.f-l, .f-r) { top: calc(var(--fw) - .5px); bottom: calc(var(--fw) - .5px); width: var(--fw); background-size: calc(var(--fw) * 1024 / 118) calc(100% * 1024 / 788); }
+.tb-frame > .f-l { left: 0; background-position: 0 50%; }
+.tb-frame > .f-r { right: 0; background-position: 100% 50%; }
 /* свет: тёплое пятно у свечей и общее мерцание пламени по полю */
 .tb-glow { inset: calc(var(--fw) * .55); border-radius: 4px; mix-blend-mode: screen; opacity: .9;
   background: radial-gradient(ellipse 34% 48% at 6% 6%, rgb(var(--tb-light, 255 160 70) / .32), transparent 70%),
@@ -2614,7 +2628,6 @@ svg.av-hover .av-bg, svg.av-hover .av-hero { transition: transform .18s ease-out
 @media (max-width: 900px) {
   .table-bg { --fw: 26px; }
   .tb-mat { background-image: radial-gradient(ellipse 75% 70% at 50% 46%, rgb(var(--tb-tint, 255 200 140) / .07), transparent 70%), url(/ui/table/v2/mat-default-1024.webp); }
-  .tb-frame { border-width: 26px; border-image-width: 26px; }
   .game #stage.cave-stage { --fw: 26px; padding: 32px 26px 112px; }
   .game #stage .decks { transform: scale(.78); transform-origin: left bottom; }
   .game #stage.cave-stage::before { inset: 26px; }
@@ -3002,29 +3015,29 @@ body:has(#world.still) .g-grain { display: none; }
    и красное дерево, оазис — ковёр и песчаник, станция — рифлёная ржавая сталь, роща — грибница и кора, Кощей — чёрный камень */
 .cave[data-loc="loc_tavern"] .tb-mat { background-image: radial-gradient(ellipse 75% 70% at 50% 46%, rgb(var(--tb-tint, 255 200 140) / .07), transparent 70%), url(/ui/table/v2/mat-tavern.webp); }
 .cave[data-loc="loc_dungeon"] .tb-mat { background-image: radial-gradient(ellipse 75% 70% at 50% 46%, rgb(var(--tb-tint, 255 200 140) / .07), transparent 70%), url(/ui/table/v2/mat-dungeon.webp); }
-.cave[data-loc="loc_dungeon"] .tb-frame { border-image-source: url(/ui/table/v2/frame-ebony.webp); }
+.cave[data-loc="loc_dungeon"] .tb-frame > i { background-image: url(/ui/table/v2/frame-ebony.webp); }
 .cave[data-loc="loc_glade"] .tb-mat { background-image: radial-gradient(ellipse 75% 70% at 50% 46%, rgb(var(--tb-tint, 255 200 140) / .07), transparent 70%), url(/ui/table/v2/mat-glade.webp); }
-.cave[data-loc="loc_glade"] .tb-frame { border-image-source: url(/ui/table/v2/frame-birch.webp); }
+.cave[data-loc="loc_glade"] .tb-frame > i { background-image: url(/ui/table/v2/frame-birch.webp); }
 .cave[data-loc="loc_forge"] .tb-mat { background-image: radial-gradient(ellipse 75% 70% at 50% 46%, rgb(var(--tb-tint, 255 200 140) / .07), transparent 70%), url(/ui/table/v2/mat-forge.webp); }
-.cave[data-loc="loc_forge"] .tb-frame { border-image-source: url(/ui/table/v2/frame-steel.webp); }
+.cave[data-loc="loc_forge"] .tb-frame > i { background-image: url(/ui/table/v2/frame-steel.webp); }
 .cave[data-loc="loc_ice"] .tb-mat { background-image: radial-gradient(ellipse 75% 70% at 50% 46%, rgb(var(--tb-tint, 255 200 140) / .07), transparent 70%), url(/ui/table/v2/mat-ice.webp); }
-.cave[data-loc="loc_ice"] .tb-frame { border-image-source: url(/ui/table/v2/frame-ice.webp); }
+.cave[data-loc="loc_ice"] .tb-frame > i { background-image: url(/ui/table/v2/frame-ice.webp); }
 .cave[data-loc="loc_graveyard"] .tb-mat { background-image: radial-gradient(ellipse 75% 70% at 50% 46%, rgb(var(--tb-tint, 255 200 140) / .07), transparent 70%), url(/ui/table/v2/mat-graveyard.webp); }
-.cave[data-loc="loc_graveyard"] .tb-frame { border-image-source: url(/ui/table/v2/frame-stone.webp); }
+.cave[data-loc="loc_graveyard"] .tb-frame > i { background-image: url(/ui/table/v2/frame-stone.webp); }
 .cave[data-loc="loc_sky"] .tb-mat { background-image: radial-gradient(ellipse 75% 70% at 50% 46%, rgb(var(--tb-tint, 255 200 140) / .07), transparent 70%), url(/ui/table/v2/mat-sky.webp); }
-.cave[data-loc="loc_sky"] .tb-frame { border-image-source: url(/ui/table/v2/frame-marble.webp); }
+.cave[data-loc="loc_sky"] .tb-frame > i { background-image: url(/ui/table/v2/frame-marble.webp); }
 .cave[data-loc="loc_cove"] .tb-mat { background-image: radial-gradient(ellipse 75% 70% at 50% 46%, rgb(var(--tb-tint, 255 200 140) / .07), transparent 70%), url(/ui/table/v2/mat-cove.webp); }
-.cave[data-loc="loc_cove"] .tb-frame { border-image-source: url(/ui/table/v2/frame-ship.webp); }
+.cave[data-loc="loc_cove"] .tb-frame > i { background-image: url(/ui/table/v2/frame-ship.webp); }
 .cave[data-loc="loc_library"] .tb-mat { background-image: radial-gradient(ellipse 75% 70% at 50% 46%, rgb(var(--tb-tint, 255 200 140) / .07), transparent 70%), url(/ui/table/v2/mat-library.webp); }
-.cave[data-loc="loc_library"] .tb-frame { border-image-source: url(/ui/table/v2/frame-mahogany.webp); }
+.cave[data-loc="loc_library"] .tb-frame > i { background-image: url(/ui/table/v2/frame-mahogany.webp); }
 .cave[data-loc="loc_oasis"] .tb-mat { background-image: radial-gradient(ellipse 75% 70% at 50% 46%, rgb(var(--tb-tint, 255 200 140) / .07), transparent 70%), url(/ui/table/v2/mat-oasis.webp); }
-.cave[data-loc="loc_oasis"] .tb-frame { border-image-source: url(/ui/table/v2/frame-sand.webp); }
+.cave[data-loc="loc_oasis"] .tb-frame > i { background-image: url(/ui/table/v2/frame-sand.webp); }
 .cave[data-loc="loc_flooded"] .tb-mat { background-image: radial-gradient(ellipse 75% 70% at 50% 46%, rgb(var(--tb-tint, 255 200 140) / .07), transparent 70%), url(/ui/table/v2/mat-flooded.webp); }
-.cave[data-loc="loc_flooded"] .tb-frame { border-image-source: url(/ui/table/v2/frame-rust.webp); }
+.cave[data-loc="loc_flooded"] .tb-frame > i { background-image: url(/ui/table/v2/frame-rust.webp); }
 .cave[data-loc="loc_grove"] .tb-mat { background-image: radial-gradient(ellipse 75% 70% at 50% 46%, rgb(var(--tb-tint, 255 200 140) / .07), transparent 70%), url(/ui/table/v2/mat-grove.webp); }
-.cave[data-loc="loc_grove"] .tb-frame { border-image-source: url(/ui/table/v2/frame-bark.webp); }
+.cave[data-loc="loc_grove"] .tb-frame > i { background-image: url(/ui/table/v2/frame-bark.webp); }
 .cave[data-loc="loc_koschei"] .tb-mat { background-image: radial-gradient(ellipse 75% 70% at 50% 46%, rgb(var(--tb-tint, 255 200 140) / .07), transparent 70%), url(/ui/table/v2/mat-koschei.webp); }
-.cave[data-loc="loc_koschei"] .tb-frame { border-image-source: url(/ui/table/v2/frame-black.webp); }
+.cave[data-loc="loc_koschei"] .tb-frame > i { background-image: url(/ui/table/v2/frame-black.webp); }
 @media (max-width: 900px) {
   .cave[data-loc="loc_tavern"] .tb-mat { background-image: radial-gradient(ellipse 75% 70% at 50% 46%, rgb(var(--tb-tint, 255 200 140) / .07), transparent 70%), url(/ui/table/v2/mat-tavern-1024.webp); }
   .cave[data-loc="loc_dungeon"] .tb-mat { background-image: radial-gradient(ellipse 75% 70% at 50% 46%, rgb(var(--tb-tint, 255 200 140) / .07), transparent 70%), url(/ui/table/v2/mat-dungeon-1024.webp); }
