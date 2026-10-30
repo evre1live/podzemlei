@@ -3681,25 +3681,26 @@ body:has(#world.still) .g-grain { display: none; }
   .game .handzone { overflow: visible; position: relative; z-index: 6; }
   .game .hand:not(.fan) { overflow: visible; padding: 16px 18px 20px; justify-content: center; }
   .game .hand:not(.fan) .card { transform-origin: 50% 120%; }
-  .game .hand:not(.fan) .card:hover, .game .hand:not(.fan) .card:focus-visible { --lift: calc(-58px - var(--hand-cut, 0px)); --sc: 1.14; z-index: 20; }
+  /* подъём считает app.js (--hl): насколько можно, чтобы карта показалась целиком, но курсор остался на ней */
+  .game .hand:not(.fan) .card:hover, .game .hand:not(.fan) .card:focus-visible { --lift: var(--hl, -58px); --sc: 1.14; z-index: 20; }
   /* что можно сыграть — светится снизу золотом, как в руке на телефоне */
   .game .hand:not(.fan) .card.playable { box-shadow: inset 0 0 0 1px rgb(255 255 255 / .3), 0 0 0 2px #e0b25a, 0 0 18px rgb(255 190 90 / .45), 6px 12px 18px rgb(0 0 0 / .5); }
 }
 @media (min-width: 901px) and (max-height: 760px) {
-  .game .hand:not(.fan) .card:hover, .game .hand:not(.fan) .card:focus-visible { --lift: calc(-50px - var(--hand-cut, 0px)); --sc: 1.12; }
+  .game .hand:not(.fan) .card:hover, .game .hand:not(.fan) .card:focus-visible { --lift: var(--hl, -50px); --sc: 1.12; }
 }
 /* Сцена никогда не бывает ниже своего содержимого: кнопки боя («Добить!», «Бежать», «Позвать на помощь») всегда
    внутри рамы и нажимаются. Раньше на невысоком экране сцену сплющивало, кнопки съезжали под раму, а пластина руки
    (она лежит выше сцены, чтобы поднятая карта была над столом) закрывала их. Теперь места не хватает — рука уходит
    за нижний край экрана, как в карточных играх на компьютере; наведённая карта по-прежнему поднимается целиком. */
+/* Высоту сцены считает app.js (fitStage → --stage-min): сколько нужно её содержимому, но не больше экрана за вычетом
+   полосы под руку. Не влезает — содержимое сцены чуть уменьшается. Так кнопки всегда на сцене, а стол не съедает руку. */
 @media (min-width: 901px) {
-  .game { grid-template-rows: auto auto minmax(min-content, 1fr) auto; }
+  .game { grid-template-rows: auto auto minmax(var(--stage-min, 0px), 1fr) auto; }
   /* боковые колонны (мой герой, летопись) тянутся во всю высоту и прокручиваются внутри — своей длиной ряды не раздувают */
   .game #mecard, .game #sidepanel { contain: size; }
   /* рука не сжимается: если пластина ниже карт, карты уходят вниз за край, а не наползают на стол */
   .game .handzone > .hand { flex: none; }
-  /* поднятая карта уходит из-под курсора у нижнего края — под ней остаётся невидимая «ножка», чтобы она не дрожала */
-  .game .hand:not(.fan) .card:hover::after { content: ''; position: absolute; left: 6%; right: 6%; top: 100%; height: calc(var(--hand-cut, 0px) + 70px); }
 }
 @media (min-width: 901px) and (max-height: 860px) {
   .game .table-bg, .game #stage.cave-stage { --fw: 28px; }
@@ -4303,3 +4304,13 @@ button.pf-tile { cursor: pointer; } button.pf-tile:hover { box-shadow: inset 0 0
   .cave.bm-art[data-boss="anubis"] .tb-mat { background-image: url(/ui/table/v3/mat-boss-anubis-1024.webp); }
   .cave.bm-art[data-boss="chernobog"] .tb-mat { background-image: url(/ui/table/v3/mat-boss-chernobog-1024.webp); }
 }
+/* на нарисованном поле владений наложения из кода не нужны — остаются только живые: пульс лавы, туман Аида, молнии */
+.cave.bm-art[data-boss] .tb-boss .bd-a, .cave.bm-art[data-boss] .tb-boss .bd-b { background: none; animation: none; }
+.cave.bm-art[data-boss="lucifer"] .tb-boss .bd-a { background: radial-gradient(ellipse 90% 80% at 50% 50%, transparent 45%, rgb(255 90 20 / .16)); mix-blend-mode: screen; animation: bdLava 2.6s ease-in-out infinite alternate; }
+.cave.bm-art[data-boss="hades"] .tb-boss .bd-b { background: radial-gradient(ellipse 40% 22% at 30% 70%, rgb(120 160 255 / .12), transparent), radial-gradient(ellipse 36% 20% at 72% 30%, rgb(160 120 255 / .1), transparent); mix-blend-mode: screen; animation: bdMist 7s ease-in-out infinite alternate; }
+.cave.bm-art[data-boss="chernobog"] .tb-boss .bd-a { background: radial-gradient(ellipse 70% 65% at 50% 48%, transparent 40%, rgb(2 2 8 / .45)); }
+.cave.bm-art[data-boss="chernobog"] .table-bg.bd-flash .bd-b { background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 600 340' preserveAspectRatio='none'%3E%3Cpath d='M380 -10 L350 70 L372 78 L320 170 L346 176 L290 300 L300 350' fill='none' stroke='%23ffffff' stroke-width='3'/%3E%3C/svg%3E") center / 100% 100% no-repeat; mix-blend-mode: screen; animation: bdBolt .7s ease-out; }
+.cave.bm-art[data-boss="chernobog"] .table-bg.bd-flash .bd-a { animation: bdFlash .7s ease-out; }
+/* светлые поля (лёд Морены, песок Анубиса): посередине лёгкая тень, чтобы надписи боя читались */
+.cave.bm-art[data-boss="morena"] .tb-boss .bd-a { background: radial-gradient(ellipse 62% 52% at 50% 56%, rgb(8 18 36 / .42), rgb(8 18 36 / .12) 60%, transparent 80%); }
+.cave.bm-art[data-boss="anubis"] .tb-boss .bd-a { background: radial-gradient(ellipse 62% 52% at 50% 56%, rgb(36 20 6 / .45), rgb(36 20 6 / .12) 60%, transparent 80%); }

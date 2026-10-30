@@ -201,7 +201,10 @@ socket.on('room:state', ({ room, game, serverTime }) => {
   if (first) { setUrl(room.id, room.spectator); S.ui.lastFx = null; S.ui.watchPid = null; S.ui.mode = null; S.ui.prevHand = new Set(); S.ui.legReady = false; }
   // звук: начало моего хода и чужие сообщения в чате
   const tk = game?.phase === 'playing' ? `${game.turn.n}:${game.turn.pid}` : '';
-  if (!first && tk && tk !== S.ui.turnKey && game.turn.pid === room.me) { sfx.play('yourTurn', { always: true, delay: 0.25 }); cine.turn(); }
+  if (!first && tk && tk !== S.ui.turnKey && game.turn.pid === room.me) {
+    sfx.play('yourTurn', { always: true, delay: 0.25 }); cine.turn();
+    if (!S.ui.voTurn || Math.random() < 0.3) { S.ui.voTurn = true; sfx.voice('n_turn', { delay: 0.5 }); }
+  }
   if (!first && tk && tk !== S.ui.turnKey) { worldMood('flare', { n: 1 }); setTimeout(() => turnSweep(game.turn.pid), 60); }
   S.ui.turnKey = tk;
   const lastMsg = room.chat.at(-1);
@@ -1049,7 +1052,7 @@ function rippleAt(cx, cy) {
   setTimeout(() => weatherAt('ripple', cx - r.left, cy - r.top), 220);
 }
 // коврики владений, которые уже нарисованы (art/gen/import3.py): для них поле стола меняется на картину босса
-const BOSS_MATS = new Set([]);
+const BOSS_MATS = new Set(['lucifer', 'morena', 'hades', 'anubis', 'chernobog']);
 // владения босса: свои частицы — угли из трещин, снег, души, струи песка, молнии во тьме
 const BOSS_WX = { lucifer: 'ember', morena: 'snow', hades: 'soul', anubis: 'sand', chernobog: 'bolt' };
 { let next = 0;
@@ -1216,6 +1219,7 @@ function showEmote(pid, i) {
   emoteBubbles.set(pid, b);
   el.animate([{ transform: 'none' }, { transform: 'rotate(-6deg) scale(1.06)', offset: 0.25 }, { transform: 'rotate(5deg) scale(1.04)', offset: 0.55 }, { transform: 'none' }], { duration: 560, easing: 'ease-in-out' });
   sfx.play('pop', { gap: 0 });
+  sfx.voice(`e_${pl(pid)?.avatar?.gender ? 'f' : 'm'}_${i}`, { prio: 2, delay: 0.05 });
   setTimeout(() => { b.classList.add('gone'); setTimeout(() => { b.remove(); if (emoteBubbles.get(pid) === b) emoteBubbles.delete(pid); }, 300); }, 2600);
 }
 socket.on('emote', ({ pid, i } = {}) => { if (S.screen === 'game') showEmote(pid, i); });
@@ -1842,8 +1846,25 @@ function fitFight() {
   const need = f.scrollWidth, have = f.clientWidth;
   if (need > have + 2) f.style.zoom = Math.max(0.62, have / need).toFixed(3);
 }
+// Сцена на компьютере: её ряд в сетке не ниже содержимого (иначе кнопки боя уходят под руку), но и не выше экрана
+// за вычетом полосы под руку (иначе рука пропадает целиком). Если содержимое выше — оно уменьшается до того, что есть.
+const HAND_STRIP = 150;
+function fitStage() {
+  const game = document.querySelector('.game'), st = $('#stage'), inner = st?.querySelector('.stage-inner');
+  if (!game || !inner) return;
+  inner.style.zoom = '';
+  if (FAN.matches) { game.style.removeProperty('--stage-min'); return; }
+  const cs = getComputedStyle(st);
+  const pad = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
+  const need = inner.scrollHeight + pad;
+  const top = st.getBoundingClientRect().top - game.getBoundingClientRect().top;
+  const avail = Math.max(240, game.clientHeight - top - HAND_STRIP - 18);
+  game.style.setProperty('--stage-min', Math.round(Math.min(need, avail)) + 'px');
+  if (need > avail) inner.style.zoom = Math.max(0.55, (avail - pad) / (need - pad)).toFixed(3);
+}
 function fitHand() {
   fitFight();
+  fitStage();
   const el = $('#hand');
   if (!el) return;
   const cards = [...el.querySelectorAll('.card')];
@@ -1882,6 +1903,29 @@ function fitHand() {
   el.style.setProperty('--ov', ov + 'px');
 }
 window.addEventListener('resize', () => fitHand());
+// Подъём карты в руке на компьютере. Раньше карта поднималась на постоянную высоту: если курсор был у её нижнего
+// края (или рука ушла за край экрана), карта уезжала из-под курсора, опускалась, снова ловила его — и прыгала
+// вверх-вниз. Теперь подъём — сколько нужно, чтобы карта показалась целиком, но не выше курсора: он всегда на карте.
+{ let cur = null, base = 0;
+  const lift = (c, y) => {
+    const cut = parseFloat(c.parentElement?.style.getPropertyValue('--hand-cut')) || 0;
+    const room = base - y - 18; // от курсора до нижнего края карты в покое, с запасом на увеличение
+    c.style.setProperty('--hl', -Math.round(Math.max(8, Math.min(58 + cut, room))) + 'px');
+  };
+  document.addEventListener('pointerover', e => {
+    if (e.pointerType !== 'mouse' || FAN.matches) return;
+    const c = e.target.closest?.('#hand .card:not(.hand-back)');
+    if (c === cur) return;
+    cur?.style.removeProperty('--hl');
+    cur = c;
+    if (!c) return;
+    // нижний край в покое: подъём только начинается (у карты плавный переход), поэтому рамка ещё прежняя
+    const r = c.getBoundingClientRect();
+    base = r.bottom - (parseFloat(c.style.getPropertyValue('--hl')) || 0);
+    lift(c, e.clientY);
+  }, { passive: true });
+  document.addEventListener('pointermove', e => { if (cur && e.pointerType === 'mouse' && cur.isConnected) lift(cur, e.clientY); }, { passive: true });
+}
 
 // ───────────────────────── режимы выбора карт ─────────────────────────
 function modeAccepts(uid, zone) {
@@ -2567,6 +2611,7 @@ function portraitReact(fresh) {
 }
 function extraFx(fresh) {
   achFx(fresh);
+  voiceFx(fresh);
   moodFx(fresh);
   portraitReact(fresh);
   for (const f of fresh) {
@@ -2685,6 +2730,26 @@ function unlock(key, quiet = false) {
   if (i && !quiet) { setTimeout(() => { fx.banner('Новая рамка!', `«${AV_LABELS.frame[i]}» — ${ACH[key][1]}. Наденьте её в облике героя.`, 'legend'); sfx.play('legendary', { always: true }); }, 1800); }
   return i ? AV_LABELS.frame[i] : '';
 }
+// рассказчик и боссы: реплики на мои события — не на каждое, чтобы не надоедали
+const voRoll = (key, p, gap) => { const t = performance.now(), last = (S.ui.voAt ||= {})[key] || -1e9; if (t - last < gap || Math.random() > p) return false; S.ui.voAt[key] = t; return true; };
+const bossKey = uid => String(uid || '').split('#')[0].replace(/^m_/, '');
+function voiceFx(fresh) {
+  const me = S.room?.me;
+  if (!me) return;
+  for (const f of fresh) {
+    const mine = f.pid === me;
+    const boss = (f.cards || [f.card]).find(u => u && def(u)?.boss);
+    if (f.kind === 'combat' && boss && !cine.on) sfx.voice('b_' + bossKey(boss), { prio: 4, delay: 0.4 });
+    else if (f.kind === 'victory' && boss) sfx.voice('b_' + bossKey(boss) + '_die', { prio: 4, delay: 0.9 });
+    else if (f.kind === 'victory' && (mine || f.helper === me) && voRoll('win', 0.5, 15000)) sfx.voice('n_victory', { prio: 2, delay: 0.7 });
+    else if (f.kind === 'caught' && mine) sfx.voice('n_caught', { prio: 2, delay: 0.6 });
+    else if (f.kind === 'death' && mine) sfx.voice('n_death', { prio: 3, delay: 0.5 });
+    else if (f.kind === 'legendary' && mine) sfx.voice('n_legend', { prio: 3, delay: 0.6 });
+    else if (f.kind === 'levelUp' && mine && voRoll('lvl', 0.4, 20000)) sfx.voice('n_level', { prio: 1, delay: 0.8 });
+    else if (f.kind === 'curse' && mine && voRoll('curse', 0.45, 20000)) sfx.voice('n_curse', { prio: 2, delay: 0.5 });
+    else if (f.kind === 'reveal' && mine && voRoll('door', 0.2, 90000)) sfx.voice('n_door', { prio: 1, delay: 0.2 });
+  }
+}
 function achFx(fresh) {
   const me = S.room?.me;
   if (!me || spectating()) return;
@@ -2708,6 +2773,7 @@ function maybeEndScreen() {
   const isHost = S.room.hostId === S.room.me;
   const iWon = w.some(p => p.id === S.room.me);
   const newFrame = iWon ? unlock('win', true) : '';
+  if (!spectating()) sfx.voice(iWon ? 'n_win' : 'n_lose', { prio: 5, delay: 0.9, always: true });
   setTimeout(() => endChest(iWon, newFrame), 450);
   // испытание дня: запоминаем свой лучший результат за этот день
   let daily = '';
@@ -2758,6 +2824,7 @@ function gameIntro(g) {
     <div class="in-first">${first ? `Первым ходит <b>${esc(first.name)}</b>` : ''}<span>${esc(loc?.name || 'Подземелье')} · до ${winLvl()}-го уровня</span></div>`;
   document.body.append(d);
   S.ui.introUntil = performance.now() + 3000;
+  sfx.voice('n_start', { prio: 4, delay: 1.15, always: true });
   const gong = [setTimeout(() => { sfx.play('boom', { always: true }); sfx.play('bell', { always: true }); fx.ring({ x: innerWidth / 2, y: innerHeight * 0.3 }, { n: 2, color: 'rgba(255,214,140,.8)', grow: 600 }); }, 950)];
   const end = () => { if (!d.isConnected) return; gong.forEach(clearTimeout); S.ui.introUntil = Math.min(S.ui.introUntil, performance.now() + 380); d.classList.add('out'); setTimeout(() => d.remove(), 420); };
   gong.push(setTimeout(end, 2620));
@@ -3676,17 +3743,19 @@ function openSoundModal() {
     <label>Громкость<input type="range" id="sndVol" min="0" max="1" step="0.05" value="${s.vol}"></label>
     <label class="check"><input type="checkbox" id="sndMus" ${s.mus ? 'checked' : ''}> Музыка локаций: своя тихая мелодия у каждой локации</label>
     <label>Громкость музыки<input type="range" id="sndMusVol" min="0" max="1" step="0.05" value="${s.musVol}"></label>
+    <label class="check"><input type="checkbox" id="sndVoice" ${s.voice !== false ? 'checked' : ''}> Голоса: рассказчик, боссы и эмоции героев</label>
     <label class="check"><input type="checkbox" id="sndAmb" ${s.amb ? 'checked' : ''}> Атмосфера пещеры: гул, ветер и капли</label>
     <label class="check"><input type="checkbox" id="liveBg" ${liveBg() ? 'checked' : ''}> Живой фон: вода, снег, светлячки (на слабом телефоне лучше выключить)</label>
     <label class="check"><input type="checkbox" id="cineOn" ${cine.enabled ? 'checked' : ''}> Зрелищные сцены: двери, удары, разрубленные карты, салют</label>
     <label class="check"><input type="checkbox" id="depthOn" ${depthOn() ? 'checked' : ''}> Объёмные карты и портреты: рисунок «выходит» из рамки за курсором</label>
-    <p class="muted" style="margin:0;font-size:13.5px">Звуки — записи из свободных библиотек Kenney и OpenGameArt (лицензия CC0), мелодии сыграны на пиццикато и стальных барабанах, музыка локаций сочиняется прямо в браузере. Значки — game-icons.net (CC BY 3.0, Lorc, Delapouite и другие). Если на телефоне тишина, проверьте беззвучный режим.</p>
+    <p class="muted" style="margin:0;font-size:13.5px">Звуки — записи из свободных библиотек Kenney и OpenGameArt (лицензия CC0), мелодии сыграны на пиццикато и стальных барабанах, музыка локаций сочиняется прямо в браузере. Значки — game-icons.net (CC BY 3.0, Lorc, Delapouite и другие). Голоса озвучены в ElevenLabs. Если на телефоне тишина, проверьте беззвучный режим.</p>
     <div class="row"><button class="btn" data-act="soundTest">Послушать</button><button class="btn primary" data-act="closeOverlay">Готово</button></div>
   </div>`);
   $('#sndOn').addEventListener('change', e => { sfx.set({ on: e.target.checked }); soundIcons(); if (e.target.checked) sfx.play('yourTurn', { gap: 0 }); });
   $('#sndVol').addEventListener('input', e => { sfx.set({ vol: Number(e.target.value) }); soundIcons(); });
   $('#sndVol').addEventListener('change', () => sfx.play('coins', { n: 2, gap: 0 }));
   $('#sndAmb').addEventListener('change', e => sfx.set({ amb: e.target.checked }));
+  $('#sndVoice').addEventListener('change', e => { sfx.set({ voice: e.target.checked }); if (e.target.checked) sfx.voice('n_turn', { prio: 9 }); });
   $('#sndMus').addEventListener('change', e => sfx.set({ mus: e.target.checked }));
   $('#sndMusVol').addEventListener('input', e => sfx.set({ musVol: Number(e.target.value) }));
   $('#liveBg').addEventListener('change', e => { LS.set('liveBg', e.target.checked); applyBg(); });

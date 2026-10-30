@@ -5,7 +5,7 @@
 
 const KEY = 'pz.sfx';
 const st = (() => {
-  const d = { on: true, vol: 0.7, amb: false, mus: true, musVol: 0.5 };
+  const d = { on: true, vol: 0.7, amb: false, mus: true, musVol: 0.5, voice: true };
   try { return { ...d, ...JSON.parse(localStorage.getItem(KEY) || '{}') }; } catch { return d; }
 })();
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(st)); } catch { /* приватный режим */ } };
@@ -909,6 +909,53 @@ document.addEventListener('visibilitychange', () => {
   musSync();
 });
 
+// ───────────── голоса: рассказчик, боссы, эмоции (ElevenLabs → art/gen/pz-voice.py → /sfx/voice/v1) ─────────────
+// Список записанных фраз — в manifest.json; нет файла или фразы — молчим. Фраза идёт сухо, мимо пещерного эха,
+// музыка на это время приглушается. Важная фраза (prio выше) перебивает менее важную, равная — ждёт тишины.
+const VOICE_DIR = '/sfx/voice/v1/';
+let voiceSet = null, voiceSetP = null, voiceSrc = null, voicePrio = 0, voiceEnd = 0;
+const voiceBuf = new Map();
+function voiceList() {
+  if (voiceSet) return Promise.resolve(voiceSet);
+  return (voiceSetP ||= fetch(VOICE_DIR + 'manifest.json').then(r => (r.ok ? r.json() : [])).catch(() => []).then(a => (voiceSet = new Set(Array.isArray(a) ? a : Object.keys(a || {})))));
+}
+function voiceLoad(name) {
+  if (!voiceBuf.has(name)) voiceBuf.set(name, fetch(VOICE_DIR + name + '.mp3').then(r => r.arrayBuffer())
+    .then(d => new Promise((res, rej) => { const p = ac.decodeAudioData(d, res, rej); if (p && p.then) p.then(res, rej); }))
+    .catch(() => { voiceBuf.delete(name); return null; }));
+  return voiceBuf.get(name);
+}
+function voiceDuck(on) {
+  if (!mus || !ac) return;
+  mus.bus.gain.setTargetAtTime(on ? st.musVol * 0.35 : st.musVol, ac.currentTime, on ? 0.08 : 0.4);
+}
+async function voicePlay(name, o) {
+  const list = await voiceList();
+  if (!list.has(name) || !ac || !E) return;
+  const prio = o.prio || 1;
+  const buf = await voiceLoad(name);
+  if (!buf || !st.on || st.voice === false || document.hidden) return;
+  const now = ac.currentTime;
+  if (now < voiceEnd && prio <= voicePrio) return;
+  try { voiceSrc?.stop(); } catch { /* уже закончилась */ }
+  const src = ac.createBufferSource(), g = ac.createGain();
+  src.buffer = buf;
+  g.gain.value = o.vol ?? 1.15;
+  src.connect(g); g.connect(E.master);
+  const t = now + 0.02 + (o.delay || 0);
+  src.start(t);
+  voiceSrc = src; voicePrio = prio; voiceEnd = t + buf.duration;
+  voiceDuck(true);
+  src.onended = () => { if (voiceSrc === src) { voiceSrc = null; voicePrio = 0; voiceDuck(false); } };
+}
+// после первого звука потихоньку подгружаем все фразы, чтобы первая реплика не опаздывала
+let voiceWarm = false;
+function voicePreload() {
+  if (voiceWarm || !ac || !st.on || st.voice === false) return;
+  voiceWarm = true;
+  setTimeout(() => voiceList().then(list => { const a = [...list]; let i = 0; const next = () => { if (i < a.length) voiceLoad(a[i++]).then(() => setTimeout(next, 120)); }; next(); next(); }), 4000);
+}
+
 export const sfx = {
   // o.delay — задержка в секундах; o.always — играть даже во вкладке на фоне; o.gap — защита от повторов, мс
   play(name, o = {}) {
@@ -922,6 +969,13 @@ export const sfx = {
     if (last[name] && now - last[name] < (o.gap ?? 45)) return;
     last[name] = now;
     try { fn(E, ac.currentTime + 0.01 + (o.delay || 0), o); } catch { /* звук — не главное */ }
+  },
+  // голосовая фраза по имени файла (n_turn, b_lucifer, e_f_0…); o.prio — важность, o.delay — задержка в секундах
+  voice(name, o = {}) {
+    if (!st.on || st.voice === false || !ac || (document.hidden && !o.always)) return;
+    if (ac.state !== 'running') wake();
+    voicePreload();
+    voicePlay(name, o).catch(() => {});
   },
   get state() { return { ...st, ready: !!E, ctx: ac?.state || null }; },
   // для проверки: живой звуковой контекст

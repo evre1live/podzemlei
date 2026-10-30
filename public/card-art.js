@@ -1,5 +1,13 @@
 // Карты, у которых есть живописный рисунок в /cards/v1, и отпечаток файла для кэша (файл обновляет art/cut.py)
 export const CARD_IMG = new Map([
+  ['back_treasure_royal', '2e1e96a4'],
+  ['back_door_royal', 'b1d1251c'],
+  ['back_treasure_gold', '1ad74379'],
+  ['back_door_gold', 'a7dfc6e2'],
+  ['back_treasure_ice', '513a7997'],
+  ['back_door_ice', '153f3278'],
+  ['back_treasure_ember', '4c6c8544'],
+  ['back_door_ember', '4d56035e'],
   ['a_guide', 'f895fe83'], ['a_merc', 'a68453ed'], ['a_porter', 'f1dbdd7d'], ['b_courage', '759421bc'], ['b_energy', 'ae510134'], ['b_pies', '1961b926'],
   ['back_door', 'a40b94f2'], ['back_treasure', '1487fcf3'], ['c_alchemist', 'd408129d'], ['c_bard', 'f60245ae'], ['c_cleric', '38e11b19'], ['c_engineer', '4b82602d'],
   ['c_mage', '171b976b'], ['c_rogue', 'f396e660'], ['c_warlock', 'bbc4662a'], ['c_warrior', '1e66494c'], ['c_witcher', 'fdf602a3'], ['d_duel', '8d3d33a1'],

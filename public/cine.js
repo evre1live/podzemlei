@@ -559,6 +559,7 @@ S.intro = (f, o) => {
           sfx.play('thunder');
           fx.vignette('rgba(200,20,0,.75)');
           k.at(260, () => stamp(k, c.x, Math.max(70, c.y - 168 * fit - 34), 'Босс!', d.quote || '', 'hell', 1300));
+          if (d.boss) k.at(420, () => sfx.voice('b_' + String(d.id).replace(/^m_/, ''), { prio: 4 }));
         } else if (boss) {
           flash(k, 'rgba(255,40,30,.42)', 360);
           bolt(k, c.x - 260 * fit, 0, c.x - 110 * fit, c.y + 40, '#ff9a8a');
@@ -694,6 +695,8 @@ function bossIntro(k, f, d, o) {
   plate.style.top = Math.max(8, Math.min(cardBottom + 10, H - (plate.offsetHeight || 150) - 10)) + 'px';
   const NAME_T = 1450;
   k.a(plate, [{ opacity: 0 }, { opacity: 1 }], { dur: 260, delay: NAME_T });
+  // босс произносит свою фразу, пока она горит на табличке
+  k.at(NAME_T + 300, () => sfx.voice('b_' + key, { prio: 4 }));
   k.a(plate.querySelector('.bn-plate'), [{ transform: 'scaleX(.2)', opacity: 0 }, { transform: 'scaleX(1.04)', opacity: 1, offset: 0.7 }, { transform: 'none', opacity: 1 }], { dur: 380, delay: NAME_T, ease: EASE.out });
   nb.querySelectorAll('span').forEach((sp, i) => k.a(sp, [
     { opacity: 0, transform: 'translateY(10px) scale(1.4)', filter: 'brightness(4) blur(5px)' },
