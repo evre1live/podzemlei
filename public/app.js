@@ -536,7 +536,7 @@ mount.lobby = () => {
   bindChat();
   // таверна появляется целиком, когда стол загружен, а не по предмету
   const tv = $('#tavern'), tt = tv?.querySelector('.tv-table');
-  if (tt && !tt.complete) {
+  if (tt) {   // и когда картинка уже в кэше: decoding="async" рисует её только после декодирования
     tv.classList.add('wait');
     const done = () => tv.classList.remove('wait');
     (tt.decode ? tt.decode() : Promise.reject()).then(done, done);
@@ -788,6 +788,12 @@ function heroMedal(p, { str, sub = '', vmember = false, foe = false } = {}) {
       <b class="hm-str" title="Сила ${str}">${ico('crossed-swords')}<span>${str}</span></b></span>
     <span class="hp-plate"><b>${esc(p.name)}</b></span>${sub ? `<small class="hp-sub">${sub}</small>` : ''}</div>`;
 }
+// весы: латунная стойка, коромысло с двумя чашами; коромысло наклонено на --tilt, чаши висят отвесно
+const scalesSVG = tilt => `<svg class="scales" viewBox="0 0 64 48" style="--tilt:${tilt}deg" aria-hidden="true"><defs><linearGradient id="scB" x1="0" x2="1"><stop offset="0" stop-color="#8a5a16"/><stop offset=".5" stop-color="#ffe3a0"/><stop offset="1" stop-color="#8a5a16"/></linearGradient></defs>
+  <path d="M30 10h4v31h-4z M22 42h20v4H22z" fill="url(#scB)" stroke="#3a2406" stroke-width="1"/><circle cx="32" cy="9" r="3.6" fill="#ffe3a0" stroke="#3a2406"/>
+  <g class="sc-beam"><path d="M6 9h52" stroke="url(#scB)" stroke-width="3.2" stroke-linecap="round"/>
+    <g class="sc-pan l"><path d="M8 9 3 24M8 9l5 15" stroke="#c9963c" stroke-width="1"/><path d="M1 24h14a7 4 0 0 1-14 0z" fill="url(#scB)" stroke="#3a2406"/></g>
+    <g class="sc-pan r"><path d="M56 9l-5 15M56 9l5 15" stroke="#c9963c" stroke-width="1"/><path d="M49 24h14a7 4 0 0 1-14 0z" fill="url(#scB)" stroke="#3a2406"/></g></g></svg>`;
 const SHIELD = side => {
   const [a, b, c] = side === 'mon' ? ['#c2412f', '#6e160e', '#2a0503'] : ['#4f9a84', '#1f5545', '#081d17'];
   return `<svg viewBox="0 0 100 116" aria-hidden="true"><defs>
@@ -1020,7 +1026,8 @@ function fightHTML() {
   const prev = S.ui.fightNums?.key === fk ? S.ui.fightNums : null;
   const tk = n.heroes + n.monsters > 0 ? Math.max(0.04, Math.min(0.96, n.heroes / (n.heroes + n.monsters))) : 0.5;
   S.ui.fightNums = { key: fk, heroes: n.heroes, monsters: n.monsters, k: tk, win: n.winning };
-  const heroes = [c.fighter, c.helper].filter(Boolean).map(id => heroMedal(pl(id), { str: c.heroStrengths[id], vmember: true })).join('');
+  // помощник стоит плечом к плечу с бойцом, под табличкой — «помогает»
+  const heroes = [c.fighter, c.helper].filter(Boolean).map(id => heroMedal(pl(id), { str: c.heroStrengths[id], vmember: true, sub: c.helper && id === c.helper ? 'помогает' : c.helper ? 'бьётся' : '' })).join('');
   const pm = [];
   for (const m of c.mods) pm.push({ side: m.side, t: `${m.anon ? '' : esc(pname(m.by)) + ': '}${esc(m.uid ? def(m.uid).name : m.label || 'эффект')} ${m.n > 0 ? '+' : '−'}${Math.abs(m.n)}` });
   for (const id of [c.fighter, c.helper].filter(Boolean)) { const v = pl(id)?.nextCombat; if (v) pm.push({ side: 'player', t: `${esc(pname(id))}: ${v > 0 ? 'зелье +' + v : 'слабость −' + Math.abs(v)}` }); }
@@ -1031,7 +1038,7 @@ function fightHTML() {
   const mods = side => pm.filter(x => x.side === side).map(x => `<span class="mod ${side === 'player' ? 'p' : 'm'}">${x.t}</span>`).join('');
   const monsters = c.monsters.map((m, i) => `
     <div class="mon-wrap">
-      <div class="mon-body ${def(m.uid).boss ? 'boss hell' : tierClass(m.strength)}">${cardHTML(m.uid, { size: 'sm', attrs: `data-zone="view"` })}</div>
+      <div class="mon-body ${def(m.uid).boss ? 'boss hell' : tierClass(m.strength)}">${cardHTML(m.uid, { size: c.monsters.length <= 2 ? 'md' : 'sm', attrs: `data-zone="view"` })}</div>
       <span class="mon-str">сила ${m.strength}${def(m.uid).mirror != null ? ` <small>(лидер ${m.level - def(m.uid).mirror} + ${def(m.uid).mirror})</small>` : ''}${def(m.uid).boss ? ` <small>(вдвое больше силы ${esc(pname(c.fighter))}, но не меньше ${BOSS_FLOOR})</small>` : ''}${!def(m.uid).boss && S.game.depth?.bonus ? ` <small title="Подземелье уходит глубже — монстры злее">(глубина +${S.game.depth.bonus})</small>` : ''}</span>
       ${monFlags(m, c)}
       ${m.enh.length ? `<div class="enh-list">${m.enh.map(u => `<span class="mod m" data-uid="${u}" data-zone="view">${esc(def(u).name)} ${def(u).double ? '×2' : (def(u).bonus > 0 ? '+' : '') + def(u).bonus}</span>`).join('')}</div>` : ''}
@@ -1039,9 +1046,11 @@ function fightHTML() {
   let center;
   if (c.winAt) {
     center = countdownHTML(c.winAt, g.opts.winDelayMs);
-  } else center = `<span class="vs-emblem">${SWORDS}<span class="vs-word">против</span></span>`;
+  } else center = `<span class="vs-emblem">${SWORDS}</span>`;
   const flip = prev && prev.win !== n.winning ? ' flip' : '';
-  const verdict = n.winning ? `<span class="verdict win${flip}">Герои сильнее${n.warrior && n.heroes === n.monsters ? ' (ничья — за воином)' : ''}</span>` : `<span class="verdict lose${flip}">Монстры сильнее</span>`;
+  // чаша весов: тяжелее та сторона, что сильнее, — её чаша опускается; наклон — по перевесу
+  const tilt = Math.max(-20, Math.min(20, -(tk - 0.5) * 80)).toFixed(1);
+  const verdict = `<span class="verdict ${n.winning ? 'win' : 'lose'}${flip}">${scalesSVG(tilt)}<span>${n.winning ? `Герои сильнее${n.warrior && n.heroes === n.monsters ? ' (ничья — за воином)' : ''}` : 'Монстры сильнее'}</span></span>`;
 
   // кнопки
   const b = [];
@@ -1300,6 +1309,7 @@ function renderMine() {
   handEl.classList.toggle('has-play', !mode && p.hand.some(u => (h.cards?.[u] || []).length));
   const prev = S.ui.prevHand;
   const legNew = [];
+  const deckOn = !matchMedia('(prefers-reduced-motion: reduce)').matches && !!document.getElementById('deckDoor');
   let k = 0;
   handEl.innerHTML = p.hand.length ? p.hand.map(u => {
     let playable = (h.cards?.[u] || []).length > 0;
@@ -1308,13 +1318,33 @@ function renderMine() {
     const isNew = prev && !prev.has(u);
     // легендарка приходит не раздачей, а своей сценой
     if (isNew && def(u).rarity === 'legendary') { legNew.push(u); return cardHTML(u, { playable, selected: picked.has(u), dim, attrs: 'data-zone="hand"' }); }
-    return cardHTML(u, { playable, selected: picked.has(u), dim, cls: isNew ? 'deal-in' : '', attrs: `data-zone="hand"${isNew ? ` style="animation-delay:${(k++) * 90}ms"` : ''}` });
+    // новая карта прилетает из своей колоды на столе; если колоды не видно (бой на телефоне, прокрутка) — снизу
+    return cardHTML(u, { playable, selected: picked.has(u), dim, cls: isNew ? (deckOn ? 'deal-fly' : 'deal-in') : '', attrs: `data-zone="hand"${isNew ? ` data-deal="${k}" style="animation-delay:${(k++) * 90}ms"` : ''}` });
   }).join('') : `<p class="muted">Рука пуста.</p>`;
+  if (deckOn) requestAnimationFrame(() => dealFromDecks(handEl));
   if (S.ui.legReady) legNew.forEach(legendArrive);
   S.ui.legReady = true;
   S.ui.prevHand = new Set(p.hand);
-  for (let i = 0; i < Math.min(k, 6); i++) sfx.play('deal', { delay: i * 0.09, gap: 0 });
+  if (!deckOn) for (let i = 0; i < Math.min(k, 6); i++) sfx.play('deal', { delay: i * 0.09, gap: 0 });
   fitHand();
+}
+// карты летят в руку из колоды: из той, к которой относятся (проходы или клад), по дуге, разворачиваясь в полёте
+function dealFromDecks(hand) {
+  hand.querySelectorAll('.card.deal-fly').forEach(c => {
+    c.classList.remove('deal-fly');
+    const i = Number(c.dataset.deal || 0), d = def(c.dataset.uid);
+    const deck = document.getElementById(d.deck === 'treasure' ? 'deckTreasure' : 'deckDoor');
+    const a = deck?.getBoundingClientRect(), b = c.getBoundingClientRect();
+    const seen = a && a.width && a.bottom > 0 && a.top < innerHeight && b.width;
+    if (!seen) { c.animate([{ opacity: 0, transform: 'translateY(70px) scale(.75)' }, { opacity: 1, transform: 'none' }], { duration: 480, delay: i * 90, easing: 'cubic-bezier(.2,.8,.3,1.2)', fill: 'backwards' }); return; }
+    const dx = a.left + a.width / 2 - (b.left + b.width / 2), dy = a.top + a.height / 2 - (b.top + b.height / 2), s0 = a.width / b.width;
+    c.animate([
+      { transform: `translate(${dx}px, ${dy}px) scale(${s0}) rotate(-8deg)`, opacity: 0, filter: 'brightness(.55)' },
+      { transform: `translate(${dx}px, ${dy}px) scale(${s0 * 1.05}) rotate(-8deg)`, opacity: 1, filter: 'brightness(.55)', offset: 0.08 },
+      { transform: `translate(${dx * 0.45}px, ${dy * 0.45 - 70}px) scale(${(s0 + 1) / 2 * 1.08}) rotate(6deg)`, opacity: 1, filter: 'brightness(1.1)', offset: 0.55 },
+      { transform: 'none', opacity: 1, filter: 'none' }], { duration: 620, delay: i * 110, easing: 'cubic-bezier(.3,.7,.35,1)', fill: 'backwards' });
+    setTimeout(() => sfx.play('deal', { gap: 0 }), i * 110);
+  });
 }
 // смена хода: по фишке того, кто ходит, пробегает полоса света, портрет вспыхивает кольцом
 function turnSweep(pid) {
@@ -1465,7 +1495,7 @@ function fitHand() {
   const gap = 10;
   let ov = gap;
   // на телефоне рука листается пальцем, на широком экране — раскладывается веером
-  if (window.innerWidth >= 760 && cards.length * (w + gap) > avail) ov = Math.max(-(w - 64), (avail - w) / (cards.length - 1) - w);
+  if (window.innerWidth >= 760 && cards.length * (w + gap) > avail) ov = Math.max(-(w - 34), (avail - w) / (cards.length - 1) - w);
   el.style.setProperty('--ov', ov + 'px');
 }
 window.addEventListener('resize', () => fitHand());
@@ -1532,10 +1562,17 @@ async function modeOk() {
 }
 
 // ───────────────────────── летопись ─────────────────────────
+const LOG_MARK = { combat: 'crossed-swords', bad: 'skull-crossed-bones', good: 'laurels', curse: 'cursed-star', event: 'scroll-unfurled', win: 'trophy' };
 function renderLog() {
   const el = $('#logfeed');
   const near = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
-  el.innerHTML = S.game.log.map(l => `<div class="l-${l.kind}">${logText(l.text)}</div>`).join('');
+  // у каждой строки летописи — свой значок на полях: меч — бой, череп — расплата, звезда — удача, свиток — проклятие;
+  // заголовок хода — с сургучной печатью цвета того, кто ходит
+  el.innerHTML = S.game.log.map(l => {
+    if (l.kind === 'turn') { const who = S.game.players.find(p => l.text.includes(p.name)); return `<div class="l-turn"><i class="seal" style="--seat:${who?.color || '#8e2a1a'}"></i>${logText(l.text)}</div>`; }
+    const ic = LOG_MARK[l.kind];
+    return `<div class="l-${l.kind}${ic && !/^[💀⛏📜👹⚔🏆🤝👻🛒📅]/u.test(l.text) ? ' lm' : ''}">${ic && !/^[💀⛏📜👹⚔🏆🤝👻🛒📅]/u.test(l.text) ? ico(ic, 'lmi') : ''}${logText(l.text)}</div>`;
+  }).join('');
   if (near || !el.dataset.init) { el.scrollTop = el.scrollHeight; el.dataset.init = '1'; }
 }
 

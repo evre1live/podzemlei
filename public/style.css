@@ -3675,3 +3675,96 @@ body:has(#world.still) .g-grain { display: none; }
 .modal.endscreen { grid-template-columns: minmax(0, 1fr); }
 .es-podium { margin-top: 124px; }
 @media (max-width: 560px) { .es-podium { margin-top: 96px; } }
+
+/* ═════════ рука на компьютере — веер: карты не обрезаются, наведённая поднимается над столом целиком ═════════ */
+@media (min-width: 901px) {
+  .game .handzone { overflow: visible; position: relative; z-index: 6; }
+  .game .hand:not(.fan) { overflow: visible; padding: 16px 18px 20px; justify-content: center; }
+  .game .hand:not(.fan) .card { transform-origin: 50% 120%; }
+  .game .hand:not(.fan) .card:hover, .game .hand:not(.fan) .card:focus-visible { --lift: -58px; --sc: 1.14; z-index: 20; }
+  /* что можно сыграть — светится снизу золотом, как в руке на телефоне */
+  .game .hand:not(.fan) .card.playable { box-shadow: inset 0 0 0 1px rgb(255 255 255 / .3), 0 0 0 2px #e0b25a, 0 0 18px rgb(255 190 90 / .45), 6px 12px 18px rgb(0 0 0 / .5); }
+}
+@media (min-width: 901px) and (max-height: 760px) {
+  .game .hand:not(.fan) .card:hover, .game .hand:not(.fan) .card:focus-visible { --lift: -72px; --sc: 1.12; }
+}
+
+/* ═════════ бой: монстр крупно, вместо «против» — только мечи, перевес — чаша весов ═════════ */
+.verdict { display: inline-flex; align-items: center; gap: 8px; padding: 3px 14px 3px 8px; }
+.verdict .scales { width: 34px; height: 26px; flex: none; overflow: visible; filter: drop-shadow(0 1px 1px rgb(0 0 0 / .6)); }
+.verdict .sc-beam { transform-box: view-box; transform-origin: 32px 9px; rotate: var(--tilt, 0deg); transition: rotate .7s cubic-bezier(.3, 1.5, .5, 1); }
+/* чаши висят отвесно: поворачиваем их обратно вокруг точки подвеса */
+.verdict .sc-pan { transform-box: view-box; rotate: calc(-1 * var(--tilt, 0deg)); transition: rotate .7s cubic-bezier(.3, 1.5, .5, 1); }
+.verdict .sc-pan.l { transform-origin: 8px 9px; } .verdict .sc-pan.r { transform-origin: 56px 9px; }
+.vs-word { display: none; }
+/* помощник рядом с бойцом: подпись под табличкой */
+.heroes-row.duo { gap: 10px; }
+.heroes-row.duo .hp-sub { font-size: 11.5px; letter-spacing: .04em; text-transform: lowercase; color: #9ee0c8; }
+/* монстр крупно: карта среднего размера, но не выше, чем позволяет сцена */
+@media (min-width: 901px) {
+  .game .fight:not(.m3, .m4) .mon-body .card.md { width: 138px; height: 194px; }
+}
+.verdict { white-space: nowrap; }
+.verdict .scales { width: 42px; height: 32px; margin: -4px 0; }
+@media (max-width: 700px) { .verdict .scales { width: 36px; height: 28px; } }
+/* карта, которая сейчас прилетит из колоды, до начала полёта не видна */
+.card.deal-fly { opacity: 0; }
+
+/* ═════════ справочник — бестиарий: кованый оклад, страницы-пергаменты, разделы — латунные таблички ═════════ */
+.guide-page { background: radial-gradient(ellipse 80% 60% at 50% 0%, #2a1c12, #0e0b09 70%) fixed, #0e0b09; }
+.guide-page > header .topbar { border-style: solid; border-color: transparent; border-width: 0 46px; border-image: url(/ui/obj/v2/beam.webp) 0 150 fill / 0 44px / 0 6px stretch;
+  background: none; box-shadow: none; padding: 9px 0; margin: 8px 10px 0; filter: drop-shadow(0 8px 10px rgb(0 0 0 / .55)); }
+.guide-page > header .topbar .rtitle { font-family: var(--title); color: #f4d79a; font-size: 24px; }
+.guide-page > header .grassline { display: none; }
+.guide.standalone { margin-top: 18px; padding: 30px 30px 50px; border: 22px solid transparent; border-image: url(/ui/table/v2/frame-mahogany.webp) 118 / 22px stretch;
+  background: radial-gradient(ellipse 120% 70% at 50% 0%, rgb(70 40 14 / .18), transparent 60%), url(/ui/obj/v2/parchment.webp) 0 0 / 320px; background-clip: padding-box;
+  box-shadow: inset 0 0 60px rgb(120 72 28 / .55); filter: drop-shadow(0 30px 40px rgb(0 0 0 / .7)); color: #34230f; }
+.guide-modal .guide { --pad: 0; }
+.guide-modal { background: radial-gradient(ellipse 120% 70% at 50% 0%, rgb(70 40 14 / .18), transparent 60%), url(/ui/obj/v2/parchment.webp) 0 0 / 320px !important; color: #34230f;
+  border: 18px solid transparent; border-image: url(/ui/table/v2/frame-mahogany.webp) 118 / 18px stretch; border-radius: 0 !important; background-clip: padding-box !important;
+  box-shadow: inset 0 0 50px rgb(120 72 28 / .55) !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+:is(.guide.standalone, .guide-modal) * { text-shadow: none !important; }
+:is(.guide.standalone, .guide-modal) .g-head h2 { color: #3a1a08; font-family: var(--title); letter-spacing: .03em; }
+:is(.guide.standalone, .guide-modal) .g-head h2::first-letter { color: #8e1a12; font-size: 1.25em; }
+:is(.guide.standalone, .guide-modal) :is(p, .muted, .g-note) { color: #5a4228 !important; }
+/* поиск — прорезь в коже, порядок — латунный ярлык */
+:is(.guide.standalone, .guide-modal) .g-search, :is(.guide.standalone, .guide-modal) .g-sort select { border: 1px solid rgb(96 62 28 / .5); border-radius: 3px !important; background: rgb(255 246 222 / .45);
+  box-shadow: inset 0 1px 4px rgb(110 70 28 / .35); color: #34230f; font-family: var(--display); font-size: 16px; }
+:is(.guide.standalone, .guide-modal) .g-search::placeholder { color: rgb(107 81 52 / .7); font-style: italic; }
+:is(.guide.standalone, .guide-modal) .g-sort { color: #6b5134; }
+/* закладки-разделы — таблички */
+:is(.guide.standalone, .guide-modal) .g-cats button { min-height: 32px; padding: 4px 12px; border: 1px solid transparent; border-radius: 0 !important; background: none; box-shadow: none;
+  border-image: url(/ui/obj/v2/plate-iron.webp) 46 fill / 9px stretch; color: #e9dcc4; font: 600 13.5px/1 var(--ui); filter: drop-shadow(0 2px 2px rgb(60 30 0 / .35)); }
+:is(.guide.standalone, .guide-modal) .g-cats button small { color: #b8ab96; }
+:is(.guide.standalone, .guide-modal) .g-cats button[aria-selected="true"] { border-image-source: url(/ui/obj/v2/plate-brass.webp); color: #2a1604; }
+:is(.guide.standalone, .guide-modal) .g-cats button[aria-selected="true"] small { color: #5a3a12; }
+/* разделы — заголовок красной тушью с чертой */
+:is(.guide.standalone, .guide-modal) .g-sec { color: #6a1c0c; font-family: var(--display); padding-bottom: 6px; background: linear-gradient(90deg, rgb(96 62 28 / .6), rgb(96 62 28 / 0)) left bottom / 100% 1.5px no-repeat; }
+/* статья бестиария: карта слева, описание на листе — тонкая чернильная рамка, уголки */
+:is(.guide.standalone, .guide-modal) .g-entry { border: 0; border-radius: 2px !important; background: rgb(255 246 222 / .32);
+  box-shadow: inset 0 0 0 1px rgb(96 62 28 / .35), inset 0 0 18px rgb(120 72 28 / .25), 0 3px 8px -4px rgb(60 30 0 / .4); }
+:is(.guide.standalone, .guide-modal) .g-entry .g-card .card { box-shadow: 0 0 0 1px rgb(0 0 0 / .6), 4px 8px 12px rgb(60 30 0 / .45); }
+:is(.guide.standalone, .guide-modal) .g-info h3 { color: #2a1206; font-family: var(--display); }
+:is(.guide.standalone, .guide-modal) .g-info p { color: #34230f; }
+:is(.guide.standalone, .guide-modal) .g-info .bad { color: #8e2414; font-weight: 600; }
+:is(.guide.standalone, .guide-modal) .g-info .amb { color: #5a2a86; font-weight: 600; }
+:is(.guide.standalone, .guide-modal) .g-facts dt { color: #8a6a44; }
+:is(.guide.standalone, .guide-modal) .g-facts dd { color: #34230f; }
+@media (max-width: 700px) {
+  .guide.standalone { border-width: 12px; border-image-width: 12px; padding: 18px 12px 30px; margin: 10px 6px 0; }
+  .guide-modal { border-width: 12px; border-image-width: 12px; }
+}
+
+/* летопись: значок на полях у строки, печать у заголовка хода */
+:is(.game .sidepanel, .lobby .side) .feed > div.lm { position: relative; padding-left: 22px; }
+:is(.game .sidepanel, .lobby .side) .feed .lmi { position: absolute; left: 0; top: .25em; width: 15px; height: 15px; opacity: .8; }
+:is(.game .sidepanel, .lobby .side) .feed .l-combat .lmi { color: #4a3218; }
+:is(.game .sidepanel, .lobby .side) .feed .l-bad .lmi { color: #8e2414; }
+:is(.game .sidepanel, .lobby .side) .feed .l-good .lmi { color: #1f6232; }
+:is(.game .sidepanel, .lobby .side) .feed .l-curse .lmi { color: #5a2a86; }
+:is(.game .sidepanel, .lobby .side) .feed .l-event .lmi { color: #6b4a1a; }
+:is(.game .sidepanel, .lobby .side) .feed .l-win .lmi { color: #9a6a10; }
+:is(.game .sidepanel, .lobby .side) .feed .l-turn { display: flex; align-items: center; gap: 8px; }
+.feed .seal { flex: none; width: 18px; height: 18px; border-radius: 47% 53% 50% 46% / 52% 46% 54% 48%;
+  background: radial-gradient(circle at 38% 32%, color-mix(in oklab, var(--seat) 55%, #fff), var(--seat) 45%, color-mix(in oklab, var(--seat) 50%, #000));
+  box-shadow: 0 1px 2px rgb(60 20 0 / .5), inset 0 0 0 2px rgb(0 0 0 / .18); }
