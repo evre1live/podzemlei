@@ -1,11 +1,12 @@
 // «Под Землёй» — клиент.
 import { def, RACE_NAMES, CLASS_NAMES, SETS, ALLY_SLOT_NAMES, ALLY_SLOT_TEXT, FEMME_LEVELS, REGULAR_DISCOUNT, setRuleVars, ruleText, BOSS_FLOOR, TROUBLE_BONUS, LULLABY_PENALTY, MUTAGEN_BONUS, DISTILL_COST,
   PERSONAS, GHOST_BONUS, DEATH_LEVELS, DEPTH, DEPTH_TREASURE_EVERY, TRADE_TIMEOUT_MS, TAME_MARGIN, WARLOCK_TAME, WHEEL, WHEEL_COST, tameBonus, TRAP_FAIL_LEVELS, SHOP_CATS, dailyOf, dailyDate } from '/shared/cards.js';
-import { esc, cardHTML, chipHTML, avatarSVG, iconSVG, cardBackSVG, locationSVG, cardIcon, cardText, locImg } from '/art.js';
+import { esc, cardHTML, chipHTML, avatarSVG, iconSVG, cardBackSVG, locationSVG, cardIcon, cardText, locImg, cardImgUrl } from '/art.js';
+import { CARD_IMG } from '/card-art.js';
 import { fx, preloadDice } from '/fx.js';
 import { sfx } from '/sfx.js';
 import { setWorld, worldMood } from '/world.js';
-import { cine, growlKind } from '/cine.js';
+import { cine, growlKind, warmDoor } from '/cine.js';
 import { AVATAR_PARTS, avatarFromSeed, cleanAvatar, avatarInGame, gameRaces, pickCode } from '/shared/avatar.js';
 import { AV_LABELS, LIGHTS, lookNote, portraitThumb, setAvatarLocation, sceneOf, lightOf, frameExt } from '/art-avatar.js';
 import { FRAMES } from '/avatar-art.js';
@@ -241,6 +242,8 @@ const WARM = () => ({
 });
 const warmed = new Set();
 function warmNext(scr) {
+  // нарисованная дверь: три кадра должны быть декодированы до первого «Выбить дверь»
+  if (scr === 'lobby' || scr === 'game') (window.requestIdleCallback || (f => setTimeout(f, 800)))(warmDoor, { timeout: 2000 });
   const list = (WARM()[scr] || []).filter(u => !warmed.has(u));
   if (!list.length) return;
   const go = () => list.forEach(u => { warmed.add(u); const i = new Image(); i.decoding = 'async'; i.src = u; });
@@ -531,6 +534,14 @@ mount.lobby = () => {
     <section class="band b-deep" style="min-height:80px"></section>
   </div>`;
   bindChat();
+  // таверна появляется целиком, когда стол загружен, а не по предмету
+  const tv = $('#tavern'), tt = tv?.querySelector('.tv-table');
+  if (tt && !tt.complete) {
+    tv.classList.add('wait');
+    const done = () => tv.classList.remove('wait');
+    (tt.decode ? tt.decode() : Promise.reject()).then(done, done);
+    setTimeout(done, 3000);
+  }
 };
 update.lobby = () => {
   const r = S.room;
@@ -755,11 +766,17 @@ function oppHTML(p) {
     <span class="hero-pill medal om${a.frame ? ' framed' : ''}"><span class="ring"><span class="ava">${avatarSVG(a, p.color)}</span>
       <b class="hm-lvl" title="Уровень">${p.level}</b><b class="hm-str" title="Сила: уровень и надетые вещи">${ico('crossed-swords')}<span>${p.power}</span></b></span>
       <span class="hp-plate"><b class="oname">${esc(p.name)}</b></span></span>
-    <span class="om-info"><span class="ometa"><span>${esc(raceText(p))}</span><span>${esc(classText(p))}</span></span>
+    <span class="om-info"><span class="ometa" title="${esc(raceText(p))} · ${esc(classText(p))}">${traitBadges(p)}<span class="sr">${esc(raceText(p))}, ${esc(classText(p))}</span></span>
       <span class="ostats">${p.gold != null ? `<span class="gold" title="Кошелёк: голды за проданные вещи и контракты, тратятся на рынке">${ico('two-coins')}${p.gold}</span>` : ''}<span class="handcount" title="Карт в руке"><i></i>${p.handCount}</span>${statusTags(p)}</span></span>
   </button>`;
 }
 
+// раса и класс соперника — маленькие щитки со значками: раса — бронзовые, класс — стальные; без расы — человек
+function traitBadges(p) {
+  const b = (u, cls) => `<i class="tb-badge ${cls}" title="${esc(def(u).name)}">${iconSVG(def(u).art)}</i>`;
+  const races = p.races.length ? p.races.map(u => b(u, 'race')) : [`<i class="tb-badge race none" title="Человек">${ico('person')}</i>`];
+  return [...races, ...p.classes.map(u => b(u, 'cls')), ...[p.halfbreed, p.supermunch].filter(Boolean).map(u => b(u, 'cls'))].join('');
+}
 // геральдический щит: золотая кайма, эмаль стороны (герои — патина, монстры — кровь), заклёпки и блик
 // герой в бою — медальон: портрет в кованом золотом кольце, слева на кольце — уровень, справа — сила;
 // под кольцом имя на шестигранной табличке (как названия на картах)
@@ -825,6 +842,14 @@ const deckStack = n => {
   return `box-shadow:${sh}${(k * 0.45 + 3).toFixed(1)}px ${(k * 1.1 + 8).toFixed(1)}px 14px rgba(0,0,0,.6)`;
 };
 
+// сброс — рядом с колодами: верхние карты обеих колод лицом вверх, чуть вразнобой; нажатие покажет верхнюю
+function discardHTML(g) {
+  const d = g.discard || {}, n = (d.door?.count || 0) + (d.treasure?.count || 0);
+  const tops = [d.door?.top, d.treasure?.top].filter(Boolean);
+  if (!tops.length) return `<div class="deck pile empty" title="Сброс пуст" aria-label="Сброс пуст"></div>`;
+  return `<div class="deck pile" title="Сброс: ${n}" aria-label="Сброс: ${n}">${tops.map((u, i) => `<span class="pile-card p${i}" data-uid="${esc(u)}" data-zone="view">${cardHTML(u, { size: 'sm', tab: false })}</span>`).join('')}<span>${n}</span></div>`;
+}
+
 function renderStage() {
   const g = S.game;
   const el = $('#stage');
@@ -832,7 +857,7 @@ function renderStage() {
   const loc = g.location ? def(g.location) : null;
   $('#cave').dataset.loc = loc ? loc.art : '';
   syncTable(loc ? loc.art : 'default');
-  const decks = `<div class="decks"><div class="deck door" id="deckDoor" style="${deckStack(g.decks.door)}" title="Колода проходов" aria-label="Колода проходов: ${g.decks.door}">${cardBackSVG('door')}<span>${g.decks.door}</span></div><div class="deck treasure" id="deckTreasure" style="${deckStack(g.decks.treasure)}" title="Колода клада" aria-label="Колода клада: ${g.decks.treasure}">${cardBackSVG('treasure')}<span>${g.decks.treasure}</span></div></div>`;
+  const decks = `<div class="decks"><div class="deck door" id="deckDoor" style="${deckStack(g.decks.door)}" title="Колода проходов" aria-label="Колода проходов: ${g.decks.door}">${cardBackSVG('door')}<span>${g.decks.door}</span></div><div class="deck treasure" id="deckTreasure" style="${deckStack(g.decks.treasure)}" title="Колода клада" aria-label="Колода клада: ${g.decks.treasure}">${cardBackSVG('treasure')}<span>${g.decks.treasure}</span></div>${discardHTML(g)}</div>`;
   const lp = $('#locpill');
   const key = loc ? g.location : '';
   if (lp.dataset.key !== key) {
@@ -881,7 +906,9 @@ function renderStage() {
     S.ui.lastReveal = rv.seq;
     reveal = `<div class="reveal-slot ${fresh && !cine.on ? 'reveal-in' : ''}">${cardHTML(rv.uid, { size: 'md', full: true, attrs: 'data-zone="view"' })}</div>`;
   }
-  el.innerHTML = decks + `<div class="stage-inner${reveal ? ' with-reveal' : ''}"><div class="stage-msg"><h2>${title}</h2><p class="muted" style="margin:0">${text}</p></div>${reveal}<div class="act-bar">${actionButtons()}</div></div>`;
+  // лента с заголовком разворачивается, только когда заголовок сменился, а не при каждом обновлении стола
+  const freshTitle = title !== S.ui.stageTitle; S.ui.stageTitle = title;
+  el.innerHTML = decks + `<div class="stage-inner${reveal ? ' with-reveal' : ''}"><div class="stage-msg"><h2${freshTitle ? ' class="rb-in"' : ''}>${title}</h2><p class="muted" style="margin:0">${text}</p></div>${reveal}<div class="act-bar">${actionButtons()}</div></div>`;
   if (reveal.includes('reveal-in')) requestAnimationFrame(() => { const r = $('#stage .reveal-in'); if (r) { fx.dust(r, { n: 18 }); fx.burst(r, { n: 16, speed: 200, g: 200 }); } });
   afterStage();
 }
@@ -1167,6 +1194,40 @@ const allySlot = (p, zone, picked = new Set()) => {
   }).join('');
   return slotBox('ally', `Спутник: ${ALLY_SLOT_TEXT(slots)}`, allyChip(p.ally, zone)) + gear;
 };
+// ───── кукла героя: снаряжение — гнёзда с рисунками вещей, а не столбик названий ─────
+// у каждой вещи — миниатюра её рисунка и бонус на латунной бляшке; пустое место — тиснёный значок;
+// вещь на две руки занимает два гнезда; ненадетое — отдельным рядом. Кнопки — те же .chip[data-uid]:
+// нажатие, выбор в режимах и крупная карта при наведении работают как раньше
+const GEAR_SOCKETS = [['head', 'Головняк'], ['armor', 'Броник'], ['feet', 'Обувка'], ['hand', 'В руках'], ['pet', 'Питомец'], ['none', 'Прочее']];
+function gearTileBase(u, o = {}) {
+  const d = def(u);
+  const val = d.bonus ? `+${d.bonus}` : d.runBonus ? `бег +${d.runBonus}` : d.handBonus ? `рука +${d.handBonus}` : '';
+  const art = CARD_IMG.has(d.id) ? `<i class="gt-art" style="background-image:url('${cardImgUrl(d.id)}')"></i>` : `<i class="gt-art plain">${ico(cardIcon(d))}</i>`;
+  return `<button class="chip gt${o.cls ? ' ' + o.cls : ''}${d.rarity && d.rarity !== 'common' ? ' r-' + d.rarity : ''}" data-uid="${esc(u)}"${o.zone ? ` data-zone="${o.zone}"` : ''} title="${esc(o.tip || d.name)}${val ? ' (' + val + ')' : ''}">${art}${o.mark ? `<i class="gt-mark">${o.mark}</i>` : ''}${val ? `<b>${val}</b>` : ''}<span class="chip-name">${esc(d.name)}</span></button>`;
+}
+const emptyTile = (key, label, icon = SLOT_ICON[key]) => `<span class="gt empty" data-slot="${key}" title="${esc(label)}: пусто">${ico(icon, '', label)}</span>`;
+function dollHTML(p, picked = new Set(), view = false) {
+  const pk = u => (picked.has(u) ? ' picked' : '');
+  const out = [];
+  const gearTile = view ? (u, o = {}) => gearTileBase(u, { ...o, zone: 'view' }) : gearTileBase;
+  for (const [k, label] of GEAR_SOCKETS) {
+    if (k === 'pet' && !hasPetSlot(p)) continue;
+    const items = p.equipped.filter(u => def(u).slot === k);
+    out.push(...items.map(u => gearTile(u, { cls: ((def(u).hands || 1) >= 2 ? 'wide' : '') + pk(u), tip: `${label}: ${def(u).name}` })));
+    if (k === 'pet' && p.beast) out.push(gearTile(p.beast, { zone: 'ally', cls: 'tamed', mark: ico('heavy-collar'), tip: 'Приручённый зверь (спасёт от одной расплаты)' }));
+    if (k === 'hand') { const used = items.reduce((a, u) => a + (def(u).hands || 1), 0); for (let i = used; i < (p.handsLimit || 2); i++) out.push(emptyTile('hand', label)); }
+    else if (!items.length && k !== 'none' && !(k === 'pet' && p.beast)) out.push(emptyTile(k, label));
+  }
+  if (p.ally) {
+    out.push(gearTile(p.ally, { zone: 'ally', cls: 'ally', mark: ico('person'), tip: `Спутник: ${def(p.ally).name}. ${ALLY_SLOT_TEXT(p.allySlots || [])}` }));
+    for (const k of p.allySlots || []) {
+      const u = (p.allyGear || []).find(x => def(x).slot === k);
+      out.push(u ? gearTile(u, { zone: 'allygear', cls: 'ally-worn' + pk(u), mark: ico('person'), tip: `Носит спутник: ${def(u).name}` }) : emptyTile(`ally-${k}`, `Спутник: ${ALLY_SLOT_NAMES[k]}`, ALLY_GEAR_ICON[k]));
+    }
+  }
+  const bag = p.carried.map(u => gearTile(u, { cls: 'off' + pk(u), tip: `Не надето: ${def(u).name}` }));
+  return `<div class="doll">${out.join('')}</div>${bag.length ? `<div class="doll-bag"><small>${ico('knapsack')}Не надето</small><div class="doll">${bag.join('')}</div></div>` : ''}`;
+}
 // комплекты снаряжения: собранные и начатые (надета хоть одна вещь)
 function setsHTML(p) {
   const have = new Set(p.equipped.map(u => def(u).id));
@@ -1209,10 +1270,6 @@ function renderMine() {
   if (!p.classes.length) traits.push(`<span class="trait none">Без класса</span>`);
   [p.halfbreed, p.supermunch].filter(Boolean).forEach(u => traits.push(`<button class="trait" data-uid="${u}" data-zone="trait">${iconSVG(def(u).art)}${esc(def(u).name)}</button>`));
 
-  const slot = key => slotItems(p, key, u => chipHTML(u, { cls: picked.has(u) ? 'picked' : '' }), 'ally');
-  const slots = SLOT_ORDER.filter(([k]) => k !== 'pet' || hasPetSlot(p)).map(([k, label]) => k === 'hand' && p.handsLimit > 2 ? slotBox(k, `${label}: ${p.handsLimit} руки`, slot(k), `<i>${p.handsLimit}</i>`) : slotBox(k, label, slot(k))).join('')
-    + allySlot(p, 'ally', picked)
-    + slotBox('bag', 'Не надето', p.carried.map(u => chipHTML(u, { cls: 'off' + (picked.has(u) ? ' picked' : '') })).join(''));
 
   const abil = Object.entries(ABIL).filter(([k, a]) => p.classes.some(u => def(u).cls === a.cls)).map(([k, a]) => {
     const v = h.abilities?.[k];
@@ -1232,7 +1289,7 @@ function renderMine() {
     <div class="traits">${traits.join('')}${abil ? `<span class="abilities">${abil}</span>` : ''}</div>
     ${p.banished ? `<div class="ghost-note banished">${ico('tombstone')} Вас настигло «Прощай навсегда»: вы выбыли из партии.</div>` : ''}
     ${p.ghost ? `<div class="ghost-note">${ico('ghost')} Вы призрак до своего хода: раз за ход можно подкинуть +${GHOST_BONUS} героям или монстрам в чужом бою.</div>` : ''}
-    <div class="slots">${slots}</div>
+    ${dollHTML(p, picked)}
     ${setsHTML(p)}
     ${tradeWaitHTML()}`;
 
@@ -1344,10 +1401,6 @@ function renderWatcher() {
   const trait = u => `<button class="trait" data-uid="${u}" data-zone="view">${iconSVG(def(u).art)}${esc(def(u).name)}</button>`;
   const traits = [...p.races.map(trait), ...(p.races.length ? [] : ['<span class="trait none">Человек</span>']),
     ...p.classes.map(trait), ...(p.classes.length ? [] : ['<span class="trait none">Без класса</span>']), ...[p.halfbreed, p.supermunch].filter(Boolean).map(trait)];
-  const slot = key => slotItems(p, key, u => chipHTML(u), 'view');
-  const slots = SLOT_ORDER.filter(([k]) => k !== 'pet' || hasPetSlot(p)).map(([k, label]) => slotBox(k, label, slot(k))).join('')
-    + allySlot(p, 'view')
-    + slotBox('bag', 'Не надето', p.carried.map(u => chipHTML(u, { cls: 'off' })).join(''));
   const run = 5 - p.runBonus;
   const now = g.turn.pid === p.id && g.phase === 'playing';
   el.innerHTML = `
@@ -1359,7 +1412,7 @@ function renderWatcher() {
       </div>
     </div>
     <div class="traits">${traits.join('')}</div>
-    <div class="slots">${slots}</div>
+    ${dollHTML(p, new Set(), true)}
     ${setsHTML(p)}`;
   const follow = `<span class="follow-row"><span>Следить за</span>${g.players.map(x => `<button class="follow${x.id === p.id ? ' on' : ''}" data-follow="${x.id}" style="--seat:${x.color}" title="${esc(x.name)}" aria-pressed="${x.id === p.id}"><span class="ava">${avatarSVG(gAva(x), x.color)}</span></button>`).join('')}</span>`;
   $('#modebar').innerHTML = '';
@@ -1673,7 +1726,8 @@ function openMarketModal() {
     ${policy ? `<p class="shop-policy">${policy}</p>` : '<p class="shop-policy muted">Подземелье: обычные цены. На других локациях цены другие.</p>'}
     <div class="seg shop-tabs" role="group">${tabs}</div>
     <div class="shop-lots" data-zone-view>${lotHTML}</div>
-    <button class="btn ghost" data-act="closeOverlay">Закрыть</button></div>`);
+    <button class="btn ghost" data-act="closeOverlay">Закрыть</button>
+    <img class="shop-keeper" src="/ui/obj/v3/shopkeeper.webp" alt="" decoding="async" aria-hidden="true"><i class="shop-web" aria-hidden="true"></i></div>`);
   const box = $('#shopModal .shop-lots'); if (box) box.scrollTop = scroll;
 }
 async function buyLot(id) {
@@ -2223,9 +2277,18 @@ function maybeEndScreen() {
     </div>
     ${daily}
     ${endNominations(g)}
-    <ol class="es-places">${places.map((p, i) => `<li class="${g.winners.includes(p.id) ? 'win' : ''}${p.id === S.room.me ? ' me' : ''}"><span class="es-n">${i + 1}</span><span class="es-mini" style="--seat:${p.color}">${avatarSVG({ ...gAva(p), frame: 0 }, p.color)}</span><b>${esc(p.name)}</b><span class="es-lv">${p.level} ур.</span></li>`).join('')}</ol>
+    ${podiumHTML(g, places)}
+    <ol class="es-places" start="4">${places.slice(3).map((p, i) => `<li class="${g.winners.includes(p.id) ? 'win' : ''}${p.id === S.room.me ? ' me' : ''}"><span class="es-n">${i + 4}</span><span class="es-mini" style="--seat:${p.color}">${avatarSVG({ ...gAva(p), frame: 0 }, p.color)}</span><b>${esc(p.name)}</b><span class="es-lv">${p.level} ур.</span></li>`).join('')}</ol>
     <div class="row" style="justify-content:center">${isHost ? '<button class="btn primary" data-act="toLobby">Новая партия</button>' : '<span class="muted">Новую партию запускает хозяин.</span>'}<button class="btn ghost" data-act="closeOverlay">Посмотреть стол</button></div>
   </div>`);
+}
+// Пьедестал: первые три места на каменных тумбах (/ui/obj/v3/podium): первый — на высокой посередине,
+// второй — слева, третий — справа; остальные — списком ниже
+function podiumHTML(g, places) {
+  const spots = [[0, 'mid'], [1, 'left'], [2, 'right']].filter(([i]) => places[i]);
+  return `<div class="es-podium${places.length < 3 ? ' two' : ''}">${spots.map(([i, pos]) => { const p = places[i]; return `<div class="pd-spot pd-${pos}${p.id === S.room.me ? ' me' : ''}" style="--seat:${p.color}">
+    <span class="pd-ava">${avatarSVG({ ...gAva(p), frame: 0 }, p.color)}</span><span class="pd-plate"><b>${esc(p.name)}</b><small>${i + 1}-е место · ${p.level} ур.</small></span></div>`; }).join('')}
+    <img class="pd-stone" src="/ui/obj/v3/podium.webp" alt="" decoding="async"></div>`;
 }
 // Номинации партии по счёту, который вёл сервер (engine: tally): первые шесть, в которых кто-то отличился. Без счёта — ничего.
 const NOMS = [
@@ -2243,12 +2306,15 @@ const NOMS = [
 function endNominations(g) {
   const st = g.stats;
   if (!st) return '';
+  const metal = i => (i < 2 ? 'gold' : i < 4 ? 'silver' : 'bronze');
+  let n = 0;
   const cards = NOMS.map(([k, title, icon, text]) => {
     const best = Math.max(0, ...g.players.map(p => st[p.id]?.[k] || 0));
     if (!best) return '';
     const who = g.players.filter(p => (st[p.id]?.[k] || 0) === best);
     const names = who.length > 2 ? `${esc(who[0].name)}, ${esc(who[1].name)} и ещё ${who.length - 2}` : who.map(p => esc(p.name)).join(' и ');
-    return `<div class="es-nom" style="--seat:${who[0].color}"><span class="es-pic"><span class="es-mini">${avatarSVG({ ...gAva(who[0]), frame: 0 }, who[0].color)}</span><i class="es-ico">${ico(icon)}</i></span>
+    const m = metal(n++);
+    return `<div class="es-nom m-${m}" style="--seat:${who[0].color}"><span class="es-medal" style="background-image:url(/ui/obj/v3/medal-${m}.webp)">${ico(icon)}</span><span class="es-pic"><span class="es-mini">${avatarSVG({ ...gAva(who[0]), frame: 0 }, who[0].color)}</span></span>
       <div class="es-nt"><small>${esc(title)}</small><b>${names}</b><em>${esc(text(best))}</em></div></div>`;
   }).filter(Boolean).slice(0, 6);
   return cards.length ? `<section class="es-noms" aria-label="Номинации партии">${cards.join('')}</section>` : '';

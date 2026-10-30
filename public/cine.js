@@ -174,7 +174,8 @@ export function snapStage() {
   const node = inner.cloneNode(true);
   node.querySelectorAll('.act-bar, .reward').forEach(e => e.remove());
   node.querySelectorAll('[data-until]').forEach(e => e.removeAttribute('data-until'));
-  node.querySelectorAll('[id]').forEach(e => e.removeAttribute('id'));
+  // id убираем, кроме градиентов и масок внутри <defs>: на них ссылаются щиты (url(#…)), без них щиты чернеют
+  node.querySelectorAll('[id]').forEach(e => { if (!e.closest('defs')) e.removeAttribute('id'); });
   node.querySelectorAll('[tabindex]').forEach(e => e.setAttribute('tabindex', '-1'));
   node.querySelectorAll('[data-roll]').forEach(e => { e.textContent = e.dataset.roll; e.removeAttribute('data-roll'); });
   return { node, left: r.left - cr.left, top: r.top - cr.top, w: r.width };
@@ -433,7 +434,20 @@ function hellfire(k, dur = 1600) {
 
 // ───────────── дверь ─────────────
 // возвращает момент (мс), когда из двери вылетает карта
-function door(k, c, fit) {
+// дверь подземелья — три нарисованных кадра одной двери в каменной арке (art/gen/import2.py → /ui/obj/v3):
+// закрыта → два удара (дверь вздрагивает, сыплется пыль) → приоткрыта, из щели бьёт свет → выбита, летят щепки,
+// за аркой — свет комнаты, оттуда выходит то, что за дверью
+const DOOR_IMG = ['closed', 'ajar', 'broken'].map(k => `/ui/obj/v3/door-${k}.webp`);
+const DOOR2 = `<div class="cn-door2-glow"></div>${DOOR_IMG.map((u, i) => `<img class="cn-door2-f f${i}" src="${u}" alt="" decoding="async" draggable="false">`).join('')}`;
+// картинки двери подгружаются заранее (app.js зовёт warmDoor в лобби и за столом); пока все три не готовы —
+// рисуем прежнюю дверь из SVG, чтобы не было пустого проёма или рывка на декодировании
+let doorPre = null;
+export function warmDoor() {
+  if (doorPre) return;
+  doorPre = DOOR_IMG.map(u => { const i = new Image(); i.decoding = 'async'; i.src = u; i.decode?.().then(() => { i.ok = true; }).catch(() => {}); return i; });
+}
+const doorReady = () => !!doorPre && doorPre.every(i => i.ok);
+function doorSvg(k, c, fit) {
   const dr = k.pt('cn-door', DOOR, c.x, c.y);
   const sc = fit * 1.02;
   k.a(dr, [{ transform: `scale(${sc * 0.6})`, opacity: 0 }, { transform: `scale(${sc})`, opacity: 1 }], { dur: 260, ease: EASE.back });
@@ -450,6 +464,42 @@ function door(k, c, fit) {
   k.at(620, () => fx.spray({ x: c.x, y: c.y + 40 * fit, w: 180 * fit, h: 240 * fit }, { n: 18, spreadX: 0.9, spreadY: 0.9, speed: [20, 90], size: [2, 4], colors: ['#fff3b0', '#ffe08a', '#ffffff'], shape: 'star', life: [0.6, 1.1], fadeIn: true }));
   k.fade(dr, 1050, 320);
   return 640;
+}
+
+function door(k, c, fit) {
+  if (!doorReady()) { warmDoor(); return doorSvg(k, c, fit); }
+  const dr = k.pt('cn-door2', DOOR2, c.x, c.y);
+  const [f0, f1, f2] = dr.querySelectorAll('.cn-door2-f'), glow = dr.querySelector('.cn-door2-glow');
+  const sc = fit * 1.04;
+  k.a(dr, [{ transform: `scale(${sc * 0.82}) translateY(18px)`, opacity: 0 }, { transform: `scale(${sc})`, opacity: 1 }], { dur: 240, ease: EASE.out });
+  // два удара: дверь вздрагивает, с притолоки сыплется пыль
+  const hit = (t, power) => k.at(t, () => {
+    k.a(dr, [{ transform: `scale(${sc})` }, { transform: `scale(${sc * 1.012}) translateX(${-5 * power}px) rotate(${-0.8 * power}deg)` }, { transform: `scale(${sc}) translateX(${3 * power}px) rotate(${0.5 * power}deg)` }, { transform: `scale(${sc})` }], { dur: 180, ease: EASE.out, fill: 'none' });
+    fx.dust({ x: c.x, y: c.y - 150 * fit, w: 170 * fit, h: 4 }, { n: 6 + 4 * power });
+    k.snd(power > 1 ? 'slam' : 'door');
+  });
+  hit(260, 1); hit(470, 1.6);
+  // приоткрыта: щель светится
+  k.at(560, () => {
+    f1.style.opacity = 1; f0.style.opacity = 0;
+    k.a(glow, [{ opacity: 0, transform: 'scaleX(.3)' }, { opacity: 0.9, transform: 'scaleX(1)' }], { dur: 160 });
+    fx.spray({ x: c.x, y: c.y + 20 * fit, w: 16 * fit, h: 240 * fit }, { n: 12, spreadX: 0.3, spreadY: 1, speed: [40, 140], size: [2, 3.5], colors: ['#fff3b0', '#ffd27a', '#ffb347'], shape: 'spark', life: [0.4, 0.8] });
+  });
+  // выбита: щепки, пыль, свет комнаты
+  k.at(700, () => {
+    f2.style.opacity = 1; f1.style.opacity = 0;
+    k.a(dr, [{ transform: `scale(${sc * 1.03})` }, { transform: `scale(${sc})` }], { dur: 260, ease: EASE.out, fill: 'none' });
+    k.a(glow, [{ opacity: 0.9, transform: 'scale(1)' }, { opacity: 1, transform: 'scale(1.25)', offset: 0.3 }, { opacity: 0.55, transform: 'scale(1.1)' }], { dur: 700 });
+    fx.spray({ x: c.x, y: c.y + 30 * fit, w: 150 * fit, h: 200 * fit }, { n: 22, spreadX: 0.9, spreadY: 0.8, speed: [180, 480], size: [2.5, 5], colors: ['#6b4a2a', '#8a6236', '#3e2a16', '#a87a46'], shape: 'rock', g: 900, life: [0.6, 1.1] });
+    fx.dust({ x: c.x, y: c.y + 150 * fit, w: 240 * fit, h: 10 }, { n: 14 });
+    quake(0.5);
+  });
+  const light = k.pt('cn-doorglow', '', c.x, c.y);
+  k.a(light, [{ opacity: 0, transform: `scale(${fit * 0.35})` }, { opacity: 1, transform: `scale(${fit * 1.2})`, offset: 0.3 }, { opacity: 0, transform: `scale(${fit * 1.9})` }], { dur: 1000, delay: 700 });
+  k.rm(light, 1750);
+  k.snd('doorOpen', {}, 640);
+  k.fade(dr, 1150, 320);
+  return 760;
 }
 function sigil(k, c, fit, cls) {
   const w = k.pt('cn-sigil ' + cls, `<div class="cn-sigil-tilt"><div class="cn-sigil-in">${SIGIL}</div></div>`, c.x, c.y + 150 * fit);
@@ -735,7 +785,7 @@ S.reveal = f => ({
     k.a(rays, [{ opacity: 0, transform: `scale(${fit * 0.5})` }, { opacity: 1, transform: `scale(${fit}) rotate(25deg)`, offset: 0.35 }, { opacity: 0, transform: `scale(${fit * 1.1}) rotate(60deg)` }], { dur: 1300, delay: t0 - 60, ease: EASE.lin });
     k.rm(rays, t0 + 1300);
     const card = k.pt('cn-card', cardHTML(f.card, { size: 'lg', tab: false }), c.x, c.y);
-    k.a(card, [{ transform: `scale(${fit * 0.1}) rotateY(180deg)`, opacity: 0 }, { transform: `scale(${fit * 1.1}) rotateY(-20deg)`, opacity: 1, offset: 0.6 }, { transform: `scale(${fit}) rotateY(0deg)`, opacity: 1 }], { dur: 520, delay: t0, ease: EASE.out });
+    k.a(card, [{ transform: `scale(${fit * 0.1}) rotateY(88deg)`, opacity: 0 }, { transform: `scale(${fit * 0.6}) rotateY(60deg)`, opacity: 1, offset: 0.25 }, { transform: `scale(${fit * 1.1}) rotateY(-20deg)`, opacity: 1, offset: 0.6 }, { transform: `scale(${fit}) rotateY(0deg)`, opacity: 1 }], { dur: 520, delay: t0, ease: EASE.out });
     k.snd('flip', {}, t0);
     k.at(t0 + 280, () => {
       fx.spray(c, { n: 26, speed: [120, 320], size: [2, 4], colors: kind === 'curse' ? ['#d9b3ff', '#b88ae6', '#fff'] : ['#fff3b0', '#ffe08a', '#ffffff'], shape: 'star', life: [0.5, 1] });

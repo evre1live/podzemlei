@@ -3503,3 +3503,175 @@ body:has(#world.still) .g-grain { display: none; }
 }
 .modal.news .sc-paper .news-day li b { color: #6a1c0c; }
 .modal.news .sc-paper .news-day h3 { color: #3a1a08; }
+
+/* ═════════ кукла героя: гнёзда снаряжения ═════════
+   гнездо — кармашек в тёмной коже с железным кантом; в нём миниатюра рисунка вещи, бонус — на латунной бляшке */
+.doll { display: grid; grid-template-columns: repeat(auto-fill, minmax(50px, 1fr)); gap: 6px; }
+#mecard .chip.gt, .chip.gt { position: relative; display: block; width: auto; min-width: 0; min-height: 0; aspect-ratio: 1; padding: 0; border: 0; border-radius: 6px !important; overflow: hidden; cursor: pointer;
+  background: radial-gradient(circle at 50% 38%, #2a2018, #120d09); color: inherit;
+  box-shadow: inset 0 0 0 2px #1a1410, inset 0 0 0 3px #6a5432, inset 0 2px 6px rgb(0 0 0 / .7), 0 2px 4px rgb(0 0 0 / .55);
+  transition: transform .15s ease, filter .15s ease, box-shadow .2s; }
+.chip.gt .gt-art { position: absolute; inset: 3px; border-radius: 4px; background: center 32% / cover no-repeat; box-shadow: inset 0 0 10px rgb(0 0 0 / .65); }
+.chip.gt .gt-art.plain { display: grid; place-items: center; background: radial-gradient(circle at 50% 40%, #3a2e22, #18120d); }
+.chip.gt .gt-art.plain .gi { width: 58%; height: 58%; color: #d9b977; }
+.chip.gt > b { position: absolute; right: 2px; bottom: 2px; z-index: 2; min-width: 20px; padding: 2px 5px 1px; border-radius: 9px; text-align: center;
+  font: 800 11.5px/1.05 var(--ui); color: #2a1604; text-shadow: 0 1px 0 rgb(255 236 180 / .5);
+  background: radial-gradient(circle at 40% 30%, #fff1c0, #e0b25a 55%, #9a6a1e); box-shadow: 0 1px 2px rgb(0 0 0 / .7), inset 0 0 0 1px rgb(90 50 0 / .45); }
+.chip.gt .chip-name { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.chip.gt .gt-mark { position: absolute; left: 2px; top: 2px; z-index: 2; width: 17px; height: 17px; display: grid; place-items: center; border-radius: 50%;
+  background: radial-gradient(circle at 40% 30%, #6f97c8, #2a4670); box-shadow: 0 1px 2px rgb(0 0 0 / .7); font-style: normal; }
+.chip.gt .gt-mark .gi { width: 11px; height: 11px; color: #e6f0ff; }
+.chip.gt.tamed .gt-mark { background: radial-gradient(circle at 40% 30%, #a6d27a, #4a6a26); }
+.chip.gt.wide { grid-column: span 2; aspect-ratio: auto; height: 100%; min-height: 50px; }
+.chip.gt.wide .gt-art { background-position: center 40%; }
+.chip.gt:hover, .chip.gt:focus-visible { transform: translateY(-2px); filter: brightness(1.12); z-index: 1; box-shadow: inset 0 0 0 2px #1a1410, inset 0 0 0 3px #c9963c, 0 6px 10px rgb(0 0 0 / .6), 0 0 10px rgb(255 190 110 / .3); }
+.chip.gt:focus-visible { outline: 2px solid #f2cf86; outline-offset: 1px; }
+.chip.gt.r-rare { box-shadow: inset 0 0 0 2px #1a1410, inset 0 0 0 3px #c9ced8, inset 0 2px 6px rgb(0 0 0 / .7), 0 2px 4px rgb(0 0 0 / .55); }
+.chip.gt.r-epic { box-shadow: inset 0 0 0 2px #1a1410, inset 0 0 0 3px #f2c96a, inset 0 2px 6px rgb(0 0 0 / .7), 0 2px 4px rgb(0 0 0 / .55), 0 0 8px rgb(255 200 100 / .3); }
+.chip.gt.r-legendary { box-shadow: inset 0 0 0 2px #1a1410, inset 0 0 0 3px #f6d98a, inset 0 2px 6px rgb(0 0 0 / .7), 0 0 12px rgb(255 200 110 / .55); }
+.chip.gt.r-legendary::after { content: ''; position: absolute; inset: 0; z-index: 1; pointer-events: none; border-radius: 6px;
+  background: linear-gradient(115deg, transparent 35%, rgb(255 246 210 / .55) 48%, transparent 60%) -120% 0 / 250% 100% no-repeat; animation: gtSheen 3.6s ease-in-out infinite; }
+@keyframes gtSheen { 0%, 55% { background-position: -120% 0; } 100% { background-position: 220% 0; } }
+.chip.gt.off { filter: grayscale(.45) brightness(.78); }
+.chip.gt.off:hover { filter: grayscale(.1) brightness(1); }
+.chip.gt.picked { box-shadow: inset 0 0 0 2px #1a1410, inset 0 0 0 3px #ffd27a, 0 0 0 2px #ffd27a, 0 0 14px rgb(255 200 110 / .7); transform: translateY(-2px); }
+.chip.gt.ally, .chip.gt.ally-worn { box-shadow: inset 0 0 0 2px #1a1410, inset 0 0 0 3px #6f97c8, inset 0 2px 6px rgb(0 0 0 / .7), 0 2px 4px rgb(0 0 0 / .55); }
+/* пустое гнездо: тиснёный значок места */
+.gt.empty { position: relative; display: grid; place-items: center; aspect-ratio: 1; border-radius: 6px;
+  background: radial-gradient(circle at 50% 40%, #221a14, #0f0b08); box-shadow: inset 0 0 0 2px #1a1410, inset 0 0 0 3px rgb(106 84 50 / .45), inset 0 3px 8px rgb(0 0 0 / .8); }
+.gt.empty .gi { width: 52%; height: 52%; color: rgb(214 186 130 / .2); filter: drop-shadow(0 1px 0 rgb(255 255 255 / .05)) drop-shadow(0 -1px 0 rgb(0 0 0 / .8)); }
+.gt.empty[data-slot^="ally-"] { box-shadow: inset 0 0 0 2px #1a1410, inset 0 0 0 3px rgb(111 151 200 / .35), inset 0 3px 8px rgb(0 0 0 / .8); }
+.doll-bag { display: grid; gap: 5px; margin-top: 2px; }
+.doll-bag > small { display: flex; align-items: center; gap: 6px; font: 600 11.5px/1 var(--ui); letter-spacing: .06em; text-transform: uppercase; color: #a8987c; text-shadow: 0 1px 2px #000; }
+.doll-bag > small .gi { width: 14px; height: 14px; }
+@media (prefers-reduced-motion: reduce) { .chip.gt.r-legendary::after { animation: none; } }
+
+/* ═════════ дверь подземелья — три нарисованных кадра (cine.js door) ═════════ */
+.cn-door2 { width: 250px; height: 355px; }
+.cn-door2 > * { position: absolute; }
+.cn-door2-f { inset: 0; width: 100%; height: 100%; object-fit: contain; opacity: 0; filter: drop-shadow(0 18px 22px rgb(0 0 0 / .7)); user-select: none; }
+.cn-door2-f.f0 { opacity: 1; }
+/* свет комнаты за дверью: сперва узкая щель, после удара — весь проём */
+.cn-door2-glow { left: 22%; right: 22%; top: 14%; bottom: 6%; opacity: 0; border-radius: 50% 50% 0 0 / 30% 30% 0 0; mix-blend-mode: screen;
+  background: radial-gradient(ellipse 60% 60% at 50% 55%, #fffbe8, #ffd36b 38%, rgb(255 150 50 / .5) 64%, transparent 78%); filter: blur(6px); }
+/* гнездо — нарисованный кожаный кармашек в железной оправе (art/gen/import2.py); рисунок вещи лежит в кармашке */
+#mecard .chip.gt, .chip.gt, .gt.empty { background: url(/ui/obj/v3/slot.webp) center / 100% 100% no-repeat; border-radius: 7px !important;
+  box-shadow: 0 2px 4px rgb(0 0 0 / .55) !important; overflow: visible; }
+.chip.gt .gt-art { inset: 13%; border-radius: 3px; box-shadow: inset 0 0 8px rgb(0 0 0 / .7), 0 0 0 1px rgb(0 0 0 / .6); }
+.chip.gt.wide { aspect-ratio: 2.1 / 1; height: auto; min-height: 0; background-size: 100% 100%; }
+.chip.gt.wide .gt-art { inset: 13% 6.5%; }
+.chip.gt.r-rare .gt-art { box-shadow: inset 0 0 8px rgb(0 0 0 / .7), 0 0 0 1.5px #c9ced8; }
+.chip.gt.r-epic .gt-art { box-shadow: inset 0 0 8px rgb(0 0 0 / .7), 0 0 0 1.5px #f2c96a, 0 0 8px rgb(255 200 100 / .45); }
+.chip.gt.r-legendary .gt-art { box-shadow: inset 0 0 8px rgb(0 0 0 / .7), 0 0 0 1.5px #f6d98a, 0 0 12px rgb(255 200 110 / .7); }
+.chip.gt.ally .gt-art, .chip.gt.ally-worn .gt-art { box-shadow: inset 0 0 8px rgb(0 0 0 / .7), 0 0 0 1.5px #6f97c8; }
+.chip.gt:hover, .chip.gt:focus-visible { box-shadow: 0 6px 10px rgb(0 0 0 / .6), 0 0 12px rgb(255 190 110 / .35) !important; }
+.chip.gt.picked { box-shadow: 0 0 0 2px #ffd27a, 0 0 14px rgb(255 200 110 / .7) !important; }
+.chip.gt.r-legendary::after { inset: 13%; border-radius: 3px; }
+.gt.empty .gi { width: 44%; height: 44%; color: rgb(214 186 130 / .22); }
+.gt.empty[data-slot^="ally-"] .gi { color: rgb(150 180 220 / .25); }
+.chip.gt > b { right: 1px; bottom: 1px; }
+.chip.gt .gt-mark { left: 1px; top: 1px; }
+.tavern > * { transition: opacity .45s ease; }
+.tavern.wait > * { opacity: 0; }
+/* сцена стола прячется сразу (в тот же кадр, что появилась копия панели), а возвращается плавно */
+.cine-under .stage-inner { transition: none; }
+
+/* сброс рядом с колодами: верхние карты лицом вверх, уменьшенные до размера колоды, вразнобой */
+.game #stage .deck.pile { position: relative; overflow: visible; background: none; border: 0; box-shadow: none; }
+.game #stage .deck.pile.empty { border: 1.5px dashed rgb(255 236 200 / .18); border-radius: 6px; background: rgb(0 0 0 / .12); }
+.deck.pile .pile-card { position: absolute; left: 0; top: 0; width: 104px; height: 146px; transform-origin: 0 0; scale: calc(60 / 104); cursor: pointer; }
+.deck.pile .pile-card .card { pointer-events: none; box-shadow: 0 0 0 1px rgb(0 0 0 / .7), 4px 8px 12px rgb(0 0 0 / .55); }
+.deck.pile .pile-card.p0 { rotate: -7deg; translate: -2px 3px; }
+.deck.pile .pile-card.p1 { rotate: 5deg; translate: 4px -1px; }
+.deck.pile:hover .pile-card.p1 { translate: 8px -6px; }
+.deck.pile > span { z-index: 2; }
+.deck.pile > .pile-card { bottom: auto; transform: none; padding: 0; background: none; box-shadow: none; border-radius: 0 !important; z-index: 0; }
+.deck.pile > .pile-card.p1 { z-index: 1; }
+
+/* ═════════ лента хода: заголовок стола («Ваш ход», «Ходит …») — на бархатной ленте с золотым шитьём (/ui/obj/v3/banner) ═════════ */
+.game #stage .stage-msg h2 { display: inline-block; max-width: 100%; margin: 0 auto 8px; padding: 9px 4px 15px; line-height: 1.15;
+  border-style: solid; border-color: transparent; border-width: 0 66px; border-image: url(/ui/obj/v3/banner.webp) 0 197 fill / 0 66px stretch;
+  color: #fff1d6; text-shadow: 0 2px 0 rgb(60 0 0 / .85), 0 0 14px rgb(0 0 0 / .5); filter: drop-shadow(0 8px 10px rgb(0 0 0 / .55)); }
+.game #stage .stage-msg h2.rb-in { animation: ribbonIn .5s cubic-bezier(.2, .9, .3, 1.2) both; }
+.game #stage .stage-msg h2:empty { display: none; }
+@keyframes ribbonIn { from { opacity: 0; clip-path: inset(0 50% 0 50%); } to { opacity: 1; clip-path: inset(-20px -40px -20px -40px); } }
+@media (max-width: 700px) { .game #stage .stage-msg h2 { border-width: 0 46px; border-image-width: 0 46px; padding: 7px 2px 12px; font-size: 22px; } }
+@media (prefers-reduced-motion: reduce) { .game #stage .stage-msg h2.rb-in { animation: none; } }
+/* пролетающая лента «Ваш ход» — та же лента */
+.cn-turn b, .cine .cn-turn b { background: none; padding: 10px 6px 18px; border-style: solid; border-color: transparent; border-width: 0 90px;
+  border-image: url(/ui/obj/v3/banner.webp) 0 197 fill / 0 90px stretch; color: #fff1d6; text-shadow: 0 2px 0 rgb(60 0 0 / .85), 0 0 18px rgb(0 0 0 / .5);
+  filter: drop-shadow(0 10px 14px rgb(0 0 0 / .6)); }
+
+/* соперники: раса и класс — щитки со значками вместо обрезанной подписи «Человек · …» */
+.game .opp .ometa, .opp .ometa { display: flex !important; gap: 3px; align-items: center; overflow: visible; white-space: normal; }
+.opp .ometa .sr, .ometa .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.tb-badge { display: inline-grid; place-items: center; width: 20px; height: 22px; flex: none; font-style: normal;
+  clip-path: polygon(50% 100%, 6% 74%, 6% 8%, 50% 0, 94% 8%, 94% 74%); box-shadow: inset 0 0 0 1.5px rgb(0 0 0 / .5); }
+.tb-badge.race { background: radial-gradient(circle at 40% 30%, #e8c27a, #a26a2a 60%, #5a3a12); }
+.tb-badge.cls { background: radial-gradient(circle at 40% 30%, #d6dbe2, #7a828e 60%, #3a3f46); }
+.tb-badge.none { opacity: .55; }
+.tb-badge svg, .tb-badge .gi { width: 14px; height: 14px; color: #2a1604; fill: currentColor; }
+.tb-badge.cls svg, .tb-badge.cls .gi { color: #1a1e24; }
+
+/* ═════════ итоги партии: медали номинаций и пьедестал ═════════ */
+.es-nom { padding: 8px 10px 8px 8px; gap: 9px; }
+.es-medal { flex: none; position: relative; width: 50px; height: 54px; display: grid; place-items: center; padding-top: 6px; background: center / contain no-repeat;
+  filter: drop-shadow(0 3px 4px rgb(0 0 0 / .6)); animation: medalIn .55s cubic-bezier(.2, .9, .3, 1.35) both; }
+.es-nom:nth-child(2) .es-medal { animation-delay: .08s; } .es-nom:nth-child(3) .es-medal { animation-delay: .16s; } .es-nom:nth-child(4) .es-medal { animation-delay: .24s; }
+.es-nom:nth-child(5) .es-medal { animation-delay: .32s; } .es-nom:nth-child(6) .es-medal { animation-delay: .4s; }
+@keyframes medalIn { from { opacity: 0; transform: translateY(-14px) rotate(-18deg) scale(.6); } }
+/* значок номинации — чеканка: тёмный рельеф с бликом */
+.es-medal .gi { width: 22px; height: 22px; color: rgb(70 40 6 / .82); filter: drop-shadow(0 1px 0 rgb(255 240 200 / .55)); }
+.m-silver .es-medal .gi { color: rgb(40 44 50 / .8); filter: drop-shadow(0 1px 0 rgb(255 255 255 / .6)); }
+.m-bronze .es-medal .gi { color: rgb(46 24 8 / .82); filter: drop-shadow(0 1px 0 rgb(255 210 170 / .4)); }
+.es-nom .es-pic .es-mini { width: 32px; height: 32px; }
+.es-nom.m-gold .es-nt small { color: #f2cf7a; } .es-nom.m-silver .es-nt small { color: #d6dbe2; } .es-nom.m-bronze .es-nt small { color: #d89a64; }
+/* пьедестал */
+.es-podium { position: relative; width: min(520px, 94%); margin: 64px auto 2px; aspect-ratio: 900 / 332; }
+.pd-stone { position: absolute; inset: 0; width: 100%; height: 100%; filter: drop-shadow(0 14px 18px rgb(0 0 0 / .6)); }
+.pd-spot { position: absolute; z-index: 1; translate: -50% -100%; display: grid; justify-items: center; gap: 0; width: 34%; animation: podIn .6s cubic-bezier(.2, .9, .3, 1.3) both; }
+.pd-mid { left: 50.5%; top: 3%; animation-delay: .5s; } .pd-left { left: 18.7%; top: 15%; animation-delay: .3s; } .pd-right { left: 82%; top: 34%; animation-delay: .15s; }
+@keyframes podIn { from { opacity: 0; translate: -50% -80%; } }
+.pd-ava { width: 64px; height: 64px; border-radius: 50%; overflow: hidden; box-shadow: 0 0 0 3px #1a1410, 0 0 0 5px var(--seat, #c9963c), 0 8px 12px rgb(0 0 0 / .6); }
+.pd-mid .pd-ava { width: 84px; height: 84px; box-shadow: 0 0 0 3px #1a1410, 0 0 0 6px #e6b65a, 0 0 22px rgb(255 200 100 / .55), 0 8px 12px rgb(0 0 0 / .6); }
+.pd-ava svg { display: block; width: 100%; height: 100%; }
+.pd-plate { margin-top: -6px; max-width: 100%; display: grid; justify-items: center; padding: 3px 12px 4px; border: 1px solid transparent; border-image: url(/ui/obj/v2/plate-iron.webp) 46 fill / 8px stretch;
+  filter: drop-shadow(0 3px 3px rgb(0 0 0 / .55)); line-height: 1.15; }
+.pd-mid .pd-plate { border-image-source: url(/ui/obj/v2/plate-brass.webp); }
+.pd-plate b { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 700 14px/1.15 var(--display); color: #f2e6cf; text-shadow: 0 -1px 0 rgb(0 0 0 / .8); }
+.pd-plate small { font: 600 10.5px/1.1 var(--ui); color: #c9b998; white-space: nowrap; }
+.pd-mid .pd-plate b { color: #2a1604; text-shadow: 0 1px 0 rgb(255 236 180 / .55); }
+.pd-mid .pd-plate small { color: #4a2c0a; }
+.pd-spot.me .pd-plate b { text-decoration: underline; text-underline-offset: 3px; }
+.es-places:empty { display: none; }
+@media (max-width: 560px) {
+  .es-podium { margin-top: 58px; width: 100%; }
+  .pd-ava { width: 46px; height: 46px; } .pd-mid .pd-ava { width: 60px; height: 60px; }
+  .pd-plate { padding: 2px 7px 3px; border-image-width: 6px; } .pd-plate b { font-size: 12px; } .pd-plate small { font-size: 9.5px; }
+  .es-medal { width: 42px; height: 46px; } .es-medal .gi { width: 18px; height: 18px; }
+}
+@media (prefers-reduced-motion: reduce) { .es-medal, .pd-spot { animation: none; } }
+
+/* рынок: за прилавком — гном-лавочник, в углу лавки — паутина */
+.modal.shop .shop-keeper { position: absolute; z-index: 1; right: 14px; top: -6px; width: 150px; pointer-events: none; user-select: none;
+  filter: drop-shadow(0 10px 12px rgb(0 0 0 / .6)); animation: keeperIn .6s .15s cubic-bezier(.2, .9, .3, 1.2) both; -webkit-mask-image: linear-gradient(180deg, #000 78%, transparent); mask-image: linear-gradient(180deg, #000 78%, transparent); }
+@keyframes keeperIn { from { opacity: 0; transform: translateY(26px); } }
+.modal.shop .shop-head { position: relative; z-index: 2; padding-right: 150px; }
+.modal.shop .shop-head .wallet { margin-left: auto; }
+.modal.shop .shop-web { position: absolute; z-index: 1; left: 0; bottom: 0; width: 120px; height: 120px; pointer-events: none; opacity: .55;
+  background: url(/ui/obj/v3/cobweb.webp) center / contain no-repeat; transform: scaleY(-1); }
+@media (max-width: 700px) {
+  .modal.shop .shop-keeper { width: 96px; right: 4px; top: -2px; }
+  .modal.shop .shop-head { padding-right: 92px; }
+  .modal.shop .shop-web { width: 80px; height: 80px; }
+}
+@media (prefers-reduced-motion: reduce) { .modal.shop .shop-keeper { animation: none; } }
+.es-nom { min-width: 0; }
+@media (max-width: 560px) {
+  .es-noms { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .es-nom { gap: 6px; padding: 6px; }
+  .es-nom .es-pic { display: none; }
+}
+.modal.endscreen { grid-template-columns: minmax(0, 1fr); }
+.es-podium { margin-top: 124px; }
+@media (max-width: 560px) { .es-podium { margin-top: 96px; } }
