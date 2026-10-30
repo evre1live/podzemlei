@@ -2707,3 +2707,38 @@ body.my-turn .game #mecard .me-ava { box-shadow: 0 0 0 3px #0a0806, 0 0 0 5px #f
 .game #stage.drop-ok { outline-offset: -26px; }
 body.is-dragging { cursor: grabbing; user-select: none; }
 body.is-dragging .pop, body.is-dragging .tip { display: none; }
+
+/* ═════════ лицо карты: меньше текста, металл, фольга ═════════ */
+/* в руке и на столе — коротко: значки меток и одна фраза; полный текст — при наведении и в окне карты */
+.card:not(.lg) .c-text { display: grid; align-content: center; padding-top: 12px; }
+.card:not(.lg) .c-text::after { display: none; }
+.c-brief { display: block; font-size: 10.2px; line-height: 1.25; font-weight: 600; }
+.card .c-tags { position: absolute; top: 4px; right: 4px; z-index: 3; display: flex; flex-direction: column; gap: 3px; }
+.card .c-tags .bt { display: grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; background: radial-gradient(circle at 40% 30%, #4a3a2a, #1b130c); color: #f0e0b8;
+  box-shadow: 0 0 0 1px #000, 0 0 0 2px rgb(200 190 170 / .7), 0 0 0 2.8px #000, 0 2px 4px rgb(0 0 0 / .7); }
+.card .c-tags .bt.warn { background: radial-gradient(circle at 40% 30%, #8e2a22, #3a0c08); color: #ffe0d4; }
+.card .c-tags .bt.amb { background: radial-gradient(circle at 40% 30%, #5a3a8a, #22123a); color: #ecdcff; }
+.card .c-tags .bt .gi { width: 11px; height: 11px; }
+.card.sm .c-tags .bt { width: 15px; height: 15px; } .card.sm .c-tags .bt .gi { width: 9px; height: 9px; }
+.c-brief .bad { color: #7a1a0e; }
+.c-brief .b-skull { width: 10px; height: 10px; vertical-align: -1px; margin-right: 2px; color: #7a1a0e; }
+.card.sm .c-brief { display: none; }
+/* рельеф рамки: свет сверху слева, тень снизу справа, кованая фактура — поверх цвета категории */
+.card .c-rim { position: absolute; inset: 0; z-index: 2; pointer-events: none; border-radius: inherit; mix-blend-mode: overlay;
+  border: 6px solid transparent; border-image: url(/ui/card/v1/rim.webp) 16 / 6px stretch; opacity: .95; }
+.card.lg .c-rim { border-width: 10px; border-image-width: 10px; }
+.card.sm .c-rim { border-width: 5px; border-image-width: 5px; }
+/* фольга на рисунке: переливается радугой за курсором — у легенд ярко, у эпических — золотом, у боссов — огнём */
+.card .c-foil { position: absolute; inset: 0; z-index: 2; pointer-events: none; opacity: .14; mix-blend-mode: color-dodge;
+  background: repeating-linear-gradient(115deg, #ff7a7a 0%, #ffd67a 7%, #8affc4 14%, #7ab8ff 21%, #c07aff 28%, #ff7a7a 35%) calc(var(--gx, 50%) * 1.4) calc(var(--gy, 50%) * 1.4) / 300% 300%;
+  transition: opacity .3s; }
+.card.r-epic .c-foil { opacity: .1; background: repeating-linear-gradient(115deg, #fff0b0 0%, #c8902a 9%, #fff6d0 18%, #9a6a1c 27%, #fff0b0 36%) calc(var(--gx, 50%) * 1.4) 0 / 300% 300%; }
+.card.boss .c-foil { opacity: .12; background: repeating-linear-gradient(115deg, #ffdf8a 0%, #ff5a1a 10%, #ffb347 20%, #a3120a 30%, #ffdf8a 40%) calc(var(--gx, 50%) * 1.4) 0 / 300% 300%; }
+.card.tilting .c-foil, .card-peek .c-foil { opacity: .32; }
+.card.r-epic.tilting .c-foil, .card.boss.tilting .c-foil { opacity: .22; }
+@media (prefers-reduced-motion: reduce) { .card .c-foil { opacity: .12; } }
+/* крупная карта при наведении */
+.card-peek { position: fixed; z-index: 80; pointer-events: none; opacity: 0; transform: translateY(10px) scale(.94); transition: opacity .16s ease, transform .2s cubic-bezier(.2,.8,.3,1.2);
+  filter: drop-shadow(0 26px 36px rgb(0 0 0 / .7)) drop-shadow(0 0 22px rgb(255 214 140 / .18)); }
+.card-peek.on { opacity: 1; transform: none; }
+.card-peek > .card { transform: none !important; }

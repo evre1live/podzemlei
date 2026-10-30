@@ -373,6 +373,27 @@ export function cardText(d) {
   return esc(ruleText(d.text || ''));
 }
 
+// Короткий текст для карты в руке и на столе: значки меток и одна-две фразы; полный — в окне карты и при наведении.
+const TAG_ICO = { undead: 'skeleton', rat: 'rat', fungus: 'mushroom-gills', water: 'water-drop', fire: 'flame', insect: 'beetle-shell', metro: 'subway-train',
+  rock: 'stone-block', beast: 'paw-print', machine: 'cog', gas: 'poison-gas' };
+const clip = (t, n) => { t = t.trim(); if (t.length <= n) return t; const c = t.slice(0, n); const i = c.lastIndexOf(' '); return (i > n * 0.6 ? c.slice(0, i) : c).replace(/[,;:—–-]\s*$/, '') + '…'; };
+const firstSentence = t => (t.match(/^.+?[.!?](?=\s|$)/) || [t])[0];
+// метки монстра — значками в правом верхнем углу рисунка
+export function cardTags(d) {
+  if (d.type !== 'monster') return '';
+  const icons = [];
+  for (const t of d.tags || []) icons.push(`<i class="bt" title="${esc(TAG_NAMES[t] || t)}">${ico(TAG_ICO[t] || 'cursed-star')}</i>`);
+  if (d.levelOnly) icons.push(`<i class="bt warn" title="Вещи, зелья и способности не помогают — только уровень">${ico('crossed-swords')}</i>`);
+  if (d.noHelp) icons.push(`<i class="bt warn" title="Позвать на помощь нельзя">${ico('cross-mark')}</i>`);
+  if (d.ambush) icons.push(`<i class="bt amb" title="Засада: срабатывает при встрече">${ico('claw-slashes')}</i>`);
+  return icons.length ? `<span class="c-tags">${icons.join('')}</span>` : '';
+}
+export function cardBrief(d) {
+  if (d.type === 'monster') return `<span class="bad">${ico('skull-crossed-bones', 'b-skull')}${esc(clip(firstSentence(d.bad?.text || ''), 34))}</span>`;
+  const t = d.short || firstSentence(ruleText(d.text || ''));
+  return esc(clip(t, 52));
+}
+
 function nameClass(n) {
   const longest = Math.max(...n.split(/\s+/).map(w => w.length));
   if (n.length > 24 || longest > 11) return 'xlong';
@@ -423,11 +444,11 @@ export function cardHTML(uid, o = {}) {
   const big = o.size === 'lg';
   return `<div class="${cls.join(' ')}" data-uid="${esc(uid)}" ${o.attrs || ''} tabindex="${o.tab === false ? -1 : 0}" role="button" aria-label="${esc(d.name)}">
     <div class="c-name ${nameClass(d.name)}"><span>${esc(d.name)}</span></div>
-    <div class="c-art"><div class="c-pic">${cardArt(d, uid)}</div>${corner}<i class="c-medal" title="${esc(label)}">${ico(CARD_IMG.has(d.id) || (d.type === 'location' && LOC_IMG.has(d.art)) ? cardIcon(d) : kindIcon(d))}</i></div>
-    <div class="c-text">${cardText(d)}</div>
+    <div class="c-art"><div class="c-pic">${cardArt(d, uid)}${d.rarity === 'legendary' || d.rarity === 'epic' || d.boss ? '<i class="c-foil" aria-hidden="true"></i>' : ''}</div>${corner}${!big && !o.full ? cardTags(d) : ''}<i class="c-medal" title="${esc(label)}">${ico(CARD_IMG.has(d.id) || (d.type === 'location' && LOC_IMG.has(d.art)) ? cardIcon(d) : kindIcon(d))}</i></div>
+    <div class="c-text">${big || o.full ? cardText(d) : `<span class="c-brief">${cardBrief(d)}</span>`}</div>
     <div class="c-foot"><span class="fl">${fl}</span><b class="fc">${esc(label)}</b><span class="fr">${fr}</span></div>
     <i class="c-orn" aria-hidden="true"></i>
-    ${d.rarity === 'legendary' ? LEG_AURA : ''}<i class="c-glare" aria-hidden="true"></i>
+    ${d.rarity === 'legendary' ? LEG_AURA : ''}<i class="c-rim" aria-hidden="true"></i><i class="c-glare" aria-hidden="true"></i>
   </div>`;
 }
 

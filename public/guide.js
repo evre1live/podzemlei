@@ -134,7 +134,7 @@ function fullText(d) {
 
 function entryHTML(d) {
   return `<article class="g-entry" data-cat="${catOf(d)}">
-    <button class="g-card" data-guide-card="${esc(d.id)}" aria-label="Показать карту «${esc(d.name)}» крупно">${cardHTML(d.id + '#0', { size: 'md', tab: false })}</button>
+    <button class="g-card" data-guide-card="${esc(d.id)}" aria-label="Показать карту «${esc(d.name)}» крупно">${cardHTML(d.id + '#0', { size: 'md', tab: false, full: true })}</button>
     <div class="g-info">
       <h3>${esc(d.name)}</h3>
       <div class="g-text">${fullText(d)}</div>

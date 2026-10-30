@@ -823,7 +823,7 @@ function renderStage() {
   if (rv && g.phase === 'playing') {
     const fresh = rv.seq !== S.ui.lastReveal;
     S.ui.lastReveal = rv.seq;
-    reveal = `<div class="reveal-slot ${fresh && !cine.on ? 'reveal-in' : ''}">${cardHTML(rv.uid, { size: 'md', attrs: 'data-zone="view"' })}</div>`;
+    reveal = `<div class="reveal-slot ${fresh && !cine.on ? 'reveal-in' : ''}">${cardHTML(rv.uid, { size: 'md', full: true, attrs: 'data-zone="view"' })}</div>`;
   }
   el.innerHTML = decks + `<div class="stage-inner${reveal ? ' with-reveal' : ''}"><div class="stage-msg"><h2>${title}</h2><p class="muted" style="margin:0">${text}</p></div>${reveal}<div class="act-bar">${actionButtons()}</div></div>`;
   if (reveal.includes('reveal-in')) requestAnimationFrame(() => { const r = $('#stage .reveal-in'); if (r) { fx.dust(r, { n: 18 }); fx.burst(r, { n: 16, speed: 200, g: 200 }); } });
@@ -2864,6 +2864,37 @@ function openSoundModal() {
 }
 
 // ───────────────────────── полёт сыгранной карты ─────────────────────────
+// ───────────────────────── карта крупно при наведении ─────────────────────────
+// На компьютере: задержали курсор на карте в руке, на столе или на вещи — рядом всплывает крупная карта с полным текстом.
+const PEEK_ZONES = '#hand .card[data-uid], #stage .card[data-uid], #mecard .chip[data-uid], .opp-items .chip[data-uid]';
+let peekT = 0, peekEl = null, peekFor = null;
+function peekHide() { clearTimeout(peekT); peekFor = null; if (peekEl) { peekEl.classList.remove('on'); } }
+function peekShow(src) {
+  if (drag?.on || document.body.classList.contains('is-dragging') || layer?.childElementCount) return;
+  const uid = src.dataset.uid;
+  if (!uid || !def(uid)) return;
+  if (!peekEl) { peekEl = document.createElement('div'); peekEl.className = 'card-peek'; peekEl.setAttribute('aria-hidden', 'true'); document.body.append(peekEl); }
+  peekEl.innerHTML = cardHTML(uid, { size: 'lg', tab: false });
+  const r = src.getBoundingClientRect(), W = 236, H = 336, m = 12;
+  // над картой в руке; если не помещается — сбоку
+  let x = r.left + r.width / 2 - W / 2, y = r.top - H - 16;
+  if (y < m) { y = Math.max(m, Math.min(innerHeight - H - m, r.top + r.height / 2 - H / 2)); x = r.right + 16 + W > innerWidth - m ? r.left - W - 16 : r.right + 16; }
+  x = Math.max(m, Math.min(innerWidth - W - m, x));
+  peekEl.style.left = x + 'px'; peekEl.style.top = y + 'px';
+  requestAnimationFrame(() => peekEl.classList.add('on'));
+}
+document.addEventListener('pointerover', e => {
+  if (e.pointerType !== 'mouse' || !matchMedia('(hover: hover) and (pointer: fine)').matches) return;
+  const src = e.target.closest?.(PEEK_ZONES);
+  if (src === peekFor) return;
+  peekHide();
+  if (!src) return;
+  peekFor = src;
+  peekT = setTimeout(() => { if (peekFor === src && src.isConnected) peekShow(src); }, 420);
+});
+document.addEventListener('pointerdown', peekHide, { capture: true, passive: true });
+addEventListener('scroll', peekHide, { capture: true, passive: true });
+
 // ───────────────────────── карту можно бросить на стол ─────────────────────────
 // Карту из руки тянут пальцем или мышью: она следует за указателем и кренится по ходу движения, подходящие цели
 // подсвечиваются (соперник, свой герой, сторона в бою, стол). Отпустили над целью с одним действием — карта
