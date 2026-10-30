@@ -580,6 +580,9 @@ update.lobby = () => {
         <div class="muted" style="font-size:13px;margin-top:6px">${dailyNote(!!r.settings.daily)}</div></div>
       <div><div class="muted" style="font-size:14px;margin-bottom:6px">Сколько секунд даётся, чтобы помешать добить монстра</div>
         <div class="seg" role="group">${[10000, 20000, 30000].map(v => `<button type="button" data-delay="${v}" aria-pressed="${r.settings.winDelayMs === v}">${v / 1000} с</button>`).join('')}</div></div>
+      <div><div class="muted" style="font-size:14px;margin-bottom:6px">Время на раздумья</div>
+        <div class="seg" role="group" aria-label="Время на раздумья">${[0, 60000, 120000, 240000].map(v => `<button type="button" data-fuse="${v}" aria-pressed="${(r.settings.fuseMs ?? 120000) === v}">${v ? `${v / 60000} мин` : 'Без фитиля'}</button>`).join('')}</div>
+        <div class="muted" style="font-size:13px;margin-top:6px">${(r.settings.fuseMs ?? 120000) ? 'Если игрок столько не делает ни одного действия, за него ходит автопилот. Под конец над столом горит фитиль.' : 'Думать можно сколько угодно.'}</div></div>
       <div><div class="muted" style="font-size:14px;margin-bottom:6px">Мест за столом</div>
         <div class="seg" role="group">${[2, 3, 4, 5, 6].map(v => `<button type="button" data-max="${v}" aria-pressed="${r.maxPlayers === v}">${v}</button>`).join('')}</div></div>
       <div class="row"><button class="btn small" data-act="setPassword">${r.locked ? 'Сменить пароль' : 'Поставить пароль'}</button>${r.locked ? '<button class="btn ghost small" data-act="clearPassword">Убрать пароль</button>' : ''}</div>
@@ -668,7 +671,7 @@ mount.game = () => {
     </div>
     <div class="band b-clay pebbles"><div class="opps" id="opps"></div></div>
     <div class="band b-rock cave" id="cave">
-      <div class="table-bg" id="tableBg" aria-hidden="true"><div class="tb-mat"></div><div class="tb-glow"></div><div class="tb-frame"><i class="f-t"></i><i class="f-b"></i><i class="f-l"></i><i class="f-r"></i><i class="f-tl"></i><i class="f-tr"></i><i class="f-bl"></i><i class="f-br"></i></div><div class="tb-props" id="tableProps"></div></div>
+      <div class="table-bg" id="tableBg" aria-hidden="true"><div class="tb-mat"></div><div class="tb-glow"></div><div class="tb-torch"></div><div class="tb-frame"><i class="f-t"></i><i class="f-b"></i><i class="f-l"></i><i class="f-r"></i><i class="f-tl"></i><i class="f-tr"></i><i class="f-bl"></i><i class="f-br"></i></div><div class="tb-props" id="tableProps"></div></div>
       <div class="cave-stage" id="stage"></div>
       <div class="motes" aria-hidden="true">${'<i></i>'.repeat(12)}</div>
       <div class="sidepanel side" id="sidepanel">
@@ -935,8 +938,68 @@ function renderStage() {
   if (reveal.includes('reveal-in')) requestAnimationFrame(() => { const r = $('#stage .reveal-in'); if (r) { fx.dust(r, { n: 18 }); fx.burst(r, { n: 16, speed: 200, g: 200 }); } });
   afterStage();
 }
+// ───────────── свет за курсором ─────────────
+// На компьютере над полем стола — мягкое пятно тёплого света, как от фонаря в руке: идёт за курсором с лёгким
+// запаздыванием, на краю поля гаснет. Позиция — в переменных --tx/--ty на слое стола, без перерисовки.
+{ let tx = 0, ty = 0, cx = 0, cy = 0, on = 0, want = 0, raf = 0, tb = null;
+  const fine = matchMedia('(hover: hover) and (pointer: fine)');
+  const step = () => {
+    raf = 0;
+    if (!tb?.isConnected) return;
+    cx += (tx - cx) * 0.2; cy += (ty - cy) * 0.2; on += (want - on) * 0.12;
+    tb.style.setProperty('--tx', cx.toFixed(1) + 'px'); tb.style.setProperty('--ty', cy.toFixed(1) + 'px'); tb.style.setProperty('--to', on.toFixed(3));
+    if (Math.abs(tx - cx) > 0.5 || Math.abs(ty - cy) > 0.5 || Math.abs(want - on) > 0.01) raf = requestAnimationFrame(step);
+  };
+  document.addEventListener('pointermove', e => {
+    if (e.pointerType !== 'mouse' || !fine.matches) return;
+    tb = document.getElementById('tableBg');
+    if (!tb || !tb.offsetParent) return;
+    const r = tb.getBoundingClientRect();
+    const inside = e.clientX > r.left && e.clientX < r.right && e.clientY > r.top && e.clientY < r.bottom;
+    want = inside ? 1 : 0;
+    if (inside) { tx = e.clientX - r.left; ty = e.clientY - r.top; if (on < 0.02) { cx = tx; cy = ty; } }
+    if (!raf) raf = requestAnimationFrame(step);
+  }, { passive: true });
+}
+
+// ───────────── фитиль хода ─────────────
+// Когда игрок долго не делает ни одного действия, вдоль верхнего бруса рамы загорается фитиль и прогорает справа
+// налево; догорит — за игрока сходит автопилот. Видят все. Время считает сервер (S.room.fuse: когда загорится и
+// когда догорит), здесь — только картинка: задержка и длительность анимации посчитаны от этих отметок.
+function placeFuse(st) {
+  st.querySelector(':scope > .fuse')?.remove();
+  const f = S.room?.fuse;
+  if (!f || S.game?.phase !== 'playing') return;
+  const now = serverNow();
+  if (f.end <= now) return;
+  const mine = f.pid === S.room.me;
+  const d = document.createElement('div');
+  d.className = 'fuse' + (mine ? ' mine' : '');
+  d.setAttribute('aria-hidden', 'true');
+  d.style.setProperty('--dur', (f.end - f.start) + 'ms');
+  d.style.setProperty('--del', (f.start - now) + 'ms');
+  d.innerHTML = `<i class="rope"></i><i class="spark"></i>${mine ? `<span class="fuse-note">Фитиль догорает — сделайте ход${f.stays > 0 ? ', или нажмите где угодно, чтобы продлить' : ''}</span>` : `<span class="fuse-note">${esc(pname(f.pid))} долго думает</span>`}`;
+  st.append(d);
+}
+const fuseLit = () => { const f = S.room?.fuse; const t = serverNow(); return f && S.game?.phase === 'playing' && t >= f.start && t < f.end ? f : null; };
+// шевельнулся, пока горит свой фитиль, — «я тут»: сервер заводит часы заново (пару раз за ход)
+let stayAt = 0;
+document.addEventListener('pointerdown', () => {
+  const f = fuseLit();
+  if (!f || f.pid !== S.room.me || f.stays <= 0 || performance.now() - stayAt < 1500) return;
+  stayAt = performance.now();
+  socket.emit('turn:stay');
+}, { capture: true, passive: true });
+// последние секунды своего фитиля тикают
+setInterval(() => {
+  const f = fuseLit();
+  if (!f || f.pid !== S.room.me || document.hidden) return;
+  if (f.end - serverNow() <= 10000) sfx.play('tick', { gap: 0 });
+}, 1000);
+
 // эффекты, которые нужно запустить после перерисовки сцены
 function afterStage() {
+  { const st = $('#stage'); if (st) placeFuse(st); }
   liveFight();
   if (cine.on) { S.ui.slam = null; cine.decorate(); return; }
   const slam = S.ui.slam;
@@ -2745,6 +2808,8 @@ document.addEventListener('click', async e => {
   if (off) return S.ui.helpForm.setO(Number(off.dataset.offer));
   const kick = t.closest('[data-kick]');
   if (kick) { const r = await call('room:kick', { memberId: kick.dataset.kick }); if (!r.ok) toast(r.error); return; }
+  const fuseBtn = t.closest('[data-fuse]');
+  if (fuseBtn) { const r = await call('room:settings', { fuseMs: Number(fuseBtn.dataset.fuse) }); if (!r.ok) toast(r.error); return; }
   const dailyBtn = t.closest('[data-daily]');
   if (dailyBtn) { const r = await call('room:settings', { daily: dailyBtn.dataset.daily === '1' }); if (!r.ok) toast(r.error); return; }
   const winBtn = t.closest('[data-win]');
@@ -3203,6 +3268,54 @@ const dropZone = a => {
 const zoneEls = z => z === 'me' ? [$('#mecard')] : z === 'hero' ? [document.querySelector('#stage .side-col.hero')] : z === 'mon' ? [document.querySelector('#stage .side-col.mon')]
   : z === 'table' ? [$('#stage')] : [document.querySelector(`[data-opp="${CSS.escape(z.slice(4))}"]`)];
 let drag = null, dragEnd = 0;
+
+// ───────────── стрелка прицела ─────────────
+// Карта с целью (проклятие на соперника, усилитель на сторону в бою) не тащится за пальцем: она поднимается
+// над рукой, а от неё к указателю тянется изогнутая стрелка из бегущих шевронов. Над подходящей целью стрелка
+// краснеет (враг) или зеленеет (свой), на конце защёлкивается прицел; отпустили — карта летит в цель.
+const SVGNS = 'http://www.w3.org/2000/svg';
+let aimEl = null, aimRaf = 0;
+const AIM_CHEVS = 64, AIM_STEP = 26;
+function aimNode() {
+  if (aimEl) return aimEl;
+  aimEl = document.createElementNS(SVGNS, 'svg');
+  aimEl.setAttribute('class', 'aim'); aimEl.setAttribute('aria-hidden', 'true');
+  aimEl.innerHTML = `<defs><path id="aimChev" d="M-9 -11 L7 0 L-9 11 L-4 0 Z"/></defs><path class="aim-trail"/><path class="aim-core"/>
+    <g class="aim-chevs">${'<use href="#aimChev"/>'.repeat(AIM_CHEVS)}</g>
+    <g class="aim-ret"><g class="ri"><circle r="30" class="r1"/><circle r="19" class="r2"/><path d="M0 -42V-27M0 27V42M-42 0H-27M27 0H42"/></g></g>
+    <g class="aim-head"><path d="M-24 -21 L16 0 L-24 21 L-13 0 Z"/></g>`;
+  document.body.append(aimEl);
+  return aimEl;
+}
+function aimDraw(st) {
+  const svg = aimNode(), A = st.aimFrom, E = { x: st.lx, y: st.ly };
+  // изгиб: стрелка выходит из карты вверх и подходит к цели сбоку
+  const C = { x: A.x + (E.x - A.x) * 0.22, y: A.y + (E.y - A.y) * 0.78 - Math.min(90, Math.hypot(E.x - A.x, E.y - A.y) * 0.12) };
+  const q = t => ({ x: (1 - t) * (1 - t) * A.x + 2 * (1 - t) * t * C.x + t * t * E.x, y: (1 - t) * (1 - t) * A.y + 2 * (1 - t) * t * C.y + t * t * E.y });
+  const d = `M${A.x.toFixed(1)} ${A.y.toFixed(1)} Q${C.x.toFixed(1)} ${C.y.toFixed(1)} ${E.x.toFixed(1)} ${E.y.toFixed(1)}`;
+  svg.querySelector('.aim-trail').setAttribute('d', d);
+  svg.querySelector('.aim-core').setAttribute('d', d);
+  // длина дуги по точкам — чтобы шевроны шли равным шагом
+  const N = 40, pts = [A], acc = [0];
+  for (let i = 1; i <= N; i++) { const p = q(i / N); acc.push(acc[i - 1] + Math.hypot(p.x - pts[i - 1].x, p.y - pts[i - 1].y)); pts.push(p); }
+  const total = acc[N];
+  const at = dist => { let i = 1; while (i < N && acc[i] < dist) i++; const f = (dist - acc[i - 1]) / Math.max(0.001, acc[i] - acc[i - 1]); const a = pts[i - 1], b = pts[i]; return { x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f, ang: Math.atan2(b.y - a.y, b.x - a.x) * 180 / Math.PI }; };
+  const phase = (performance.now() / 14) % AIM_STEP;
+  const uses = svg.querySelectorAll('.aim-chevs use');
+  let j = 0;
+  for (let dd = phase + 18; dd < total - 30 && j < AIM_CHEVS; dd += AIM_STEP, j++) {
+    const p = at(dd), k = dd / total;
+    uses[j].setAttribute('transform', `translate(${p.x.toFixed(1)} ${p.y.toFixed(1)}) rotate(${p.ang.toFixed(1)}) scale(${(0.62 + k * 0.5).toFixed(2)})`);
+    uses[j].style.opacity = Math.min(1, (dd - 18) / 40, (total - 30 - dd) / 30).toFixed(2);
+  }
+  for (; j < AIM_CHEVS; j++) uses[j].style.opacity = '0';
+  const end = at(Math.max(0, total - 2));
+  svg.querySelector('.aim-head').setAttribute('transform', `translate(${E.x.toFixed(1)} ${E.y.toFixed(1)}) rotate(${end.ang.toFixed(1)})`);
+  svg.querySelector('.aim-ret').setAttribute('transform', `translate(${E.x.toFixed(1)} ${E.y.toFixed(1)})`);
+}
+function aimLoop() { if (!drag?.aim) { aimRaf = 0; return; } aimDraw(drag); aimRaf = requestAnimationFrame(aimLoop); }
+function aimHide() { cancelAnimationFrame(aimRaf); aimRaf = 0; aimEl?.classList.remove('on', 'hostile', 'friendly', 'lock'); }
+
 function dragStart(st, e) {
   const p = me(), h = hints();
   if (!p || S.ui.mode) return false;
@@ -3220,17 +3333,32 @@ function dragStart(st, e) {
   st.c.classList.add('dragging');
   for (const z of zones.keys()) zoneEls(z).forEach(el => el?.classList.add('drop-ok'));
   document.body.classList.add('is-dragging');
-  Object.assign(st, { on: true, g, zones, ox: e.clientX - r.left, oy: e.clientY - r.top, w: r.width, h: r.height, vx: 0, vy: 0, lx: e.clientX, ly: e.clientY, lt: performance.now(), rot: 0, hover: null });
-  sfx.play('flip', { gap: 0 });
+  // карта с целью — прицел стрелкой; вещь на себя или карта на стол — тянется за пальцем, как раньше
+  const keys = [...zones.keys()];
+  const aim = !zones.has('table') && keys.some(z => z.startsWith('opp:') || z === 'hero' || z === 'mon');
+  Object.assign(st, { on: true, g, zones, aim, ox: e.clientX - r.left, oy: e.clientY - r.top, w: r.width, h: r.height, vx: 0, vy: 0, lx: e.clientX, ly: e.clientY, lt: performance.now(), rot: 0, hover: null });
+  if (aim) {
+    g.classList.add('aiming');
+    const lift = Math.min(70, r.top - 10);
+    g.style.transition = 'transform .2s cubic-bezier(.2,1.3,.4,1)';
+    requestAnimationFrame(() => { g.style.transform = `translateY(${-lift}px) scale(1.1)`; });
+    st.aimFrom = { x: r.left + r.width / 2, y: r.top - lift + r.height * 0.12 };
+    aimNode().classList.add('on');
+    aimDraw(st);
+    aimRaf = requestAnimationFrame(aimLoop);
+    sfx.play('zap', { gap: 0 });
+  } else sfx.play('flip', { gap: 0 });
   return true;
 }
+// враг или свой: проклятие и усилитель монстра — всегда «враг», остальное на себя и своих героев — «свой»
+const aimMood = (st, z) => def(st.uid).type === 'curse' || z.startsWith('opp:') || z === 'mon' ? 'hostile' : 'friendly';
 function dragMove(st, e) {
   const t = performance.now(), dt = Math.max(8, t - st.lt);
   st.vx = st.vx * 0.6 + ((e.clientX - st.lx) / dt) * 0.4; st.vy = st.vy * 0.6 + ((e.clientY - st.ly) / dt) * 0.4;
   st.lx = e.clientX; st.ly = e.clientY; st.lt = t;
-  // карта «плывёт» за указателем и кренится по ходу движения, как настоящая
+  // карта «плывёт» за указателем и кренится по ходу движения, как настоящая; карта с прицелом стоит над рукой
   const rz = Math.max(-18, Math.min(18, st.vx * 9)), rx = Math.max(-16, Math.min(16, -st.vy * 7));
-  st.g.style.transform = `translate(${e.clientX - st.ox - parseFloat(st.g.style.left)}px, ${e.clientY - st.oy - parseFloat(st.g.style.top)}px) perspective(900px) rotateZ(${rz.toFixed(1)}deg) rotateX(${rx.toFixed(1)}deg) scale(1.08)`;
+  if (!st.aim) st.g.style.transform = `translate(${e.clientX - st.ox - parseFloat(st.g.style.left)}px, ${e.clientY - st.oy - parseFloat(st.g.style.top)}px) perspective(900px) rotateZ(${rz.toFixed(1)}deg) rotateX(${rx.toFixed(1)}deg) scale(1.08)`;
   // над какой целью
   let hov = null;
   for (const z of st.zones.keys()) {
@@ -3240,7 +3368,13 @@ function dragMove(st, e) {
       if (e.clientX >= b.left && e.clientX <= b.right && e.clientY >= b.top && e.clientY <= b.bottom) { if (!hov || z !== 'table') hov = { z, el }; }
     }
   }
-  if (st.hover?.el !== hov?.el) { st.hover?.el.classList.remove('drop-hover'); hov?.el.classList.add('drop-hover'); }
+  if (st.hover?.el !== hov?.el) {
+    st.hover?.el.classList.remove('drop-hover'); hov?.el.classList.add('drop-hover');
+    if (st.aim) {
+      aimEl?.classList.remove('hostile', 'friendly', 'lock');
+      if (hov) { aimEl?.classList.add(aimMood(st, hov.z)); void aimEl?.getBoundingClientRect(); aimEl?.classList.add('lock'); sfx.play('tick', { gap: 0 }); fx.haptic(12); }
+    }
+  }
   st.hover = hov;
 }
 async function dragDrop(st) {
@@ -3259,9 +3393,32 @@ async function dragDrop(st) {
   dragEnd = performance.now();
   const hov = st.hover;
   cleanup();
+  if (st.aim) aimHide();
   if (!hov) { back(); return; }
   const acts = st.zones.get(hov.z) || [];
   if (acts.length !== 1) { back(); openCardPop(st.uid, 'hand'); return; }
+  if (st.aim) {
+    // выстрел: карта срывается с места над рукой и летит в цель, на цели — вспышка по настроению
+    const gr = st.g.getBoundingClientRect(), tr = hov.el.getBoundingClientRect();
+    const to = hov.z.startsWith('opp:') ? (hov.el.querySelector('.ava')?.getBoundingClientRect() || tr) : tr;
+    const dx = to.left + to.width / 2 - (gr.left + gr.width / 2), dy = to.top + to.height / 2 - (gr.top + gr.height / 2);
+    const cur = st.g.style.transform;
+    st.g.style.transition = 'transform .24s cubic-bezier(.55,0,.85,.35), opacity .14s ease .16s';
+    st.g.style.transform = `${cur} translate(${dx / 1.1}px, ${dy / 1.1}px) rotate(${dx > 0 ? 14 : -14}deg) scale(.32)`;
+    st.g.style.opacity = '0';
+    setTimeout(() => st.g.remove(), 340);
+    sfx.play('whoosh');
+    const mood = aimMood(st, hov.z), hit = { x: to.left + to.width / 2, y: to.top + to.height / 2 };
+    setTimeout(() => {
+      fx.ring(hit, { n: 2, color: mood === 'hostile' ? 'rgba(255,110,80,.9)' : 'rgba(140,240,200,.9)', grow: 300 });
+      if (def(st.uid).type === 'curse') fx.smoke(hit, { n: 12 });
+      else fx.sparkle(hov.el, { n: 12, colors: mood === 'hostile' ? ['#ff8a66', '#ffd27a', '#fff'] : ['#8ff0d2', '#fff3b0', '#fff'] });
+      sfx.play('place');
+    }, 230);
+    const r = await act(acts[0]);
+    if (!r.ok) st.c.classList.remove('dragging');
+    return;
+  }
   // шлепок: карта падает на цель, поднимает пыль
   st.g.style.transition = 'transform .16s cubic-bezier(.5,0,.9,.5), opacity .2s ease .12s';
   const cur = st.g.style.transform.replace(/scale\([^)]*\)/, '').replace(/rotate[XZ]\([^)]*\)/g, '').replace(/perspective\([^)]*\)/, '');
@@ -3269,6 +3426,7 @@ async function dragDrop(st) {
   st.g.style.opacity = '0';
   setTimeout(() => st.g.remove(), 360);
   sfx.play('place'); fx.dust({ x: st.lx, y: st.ly + st.h * 0.3, w: st.w, h: 8 }, { n: 10 });
+  if (hov.z === 'table') tableKick(cardWeight(def(st.uid)));
   const r = await act(acts[0]);
   if (r.ok) fx.burst({ x: st.lx, y: st.ly }, { n: 10, speed: 160, g: 200 });
 }
@@ -3293,6 +3451,18 @@ document.addEventListener('pointercancel', e => { if (!drag || e.pointerId !== d
 // после броска не открываем окно карты от того же нажатия
 document.addEventListener('click', e => { if (performance.now() - dragEnd < 350 && e.target.closest('#hand, #stage, #opps, #mecard')) { e.stopPropagation(); e.preventDefault(); } }, true);
 
+// ───────────── вес карты ─────────────
+// Карта ложится на стол с весом: тяжёлая вещь или сильный монстр бьёт по столу сильнее — стол вздрагивает,
+// на телефоне коротко отдаёт в руку. Лёгкие карты только шлёпают.
+const cardWeight = d => d.type === 'monster' ? Math.min(1.6, 0.6 + (d.level || 1) / 12)
+  : d.type === 'item' ? Math.min(1.4, 0.35 + (d.bonus || 0) / 5 + (d.big ? 0.3 : 0)) : d.type === 'curse' ? 0.7 : 0.45;
+function tableKick(w) {
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches || w < 0.5) return;
+  const y = 1.5 + w * 3.5;
+  [$('#stage'), $('#tableBg')].forEach(el => el?.animate([{ transform: 'none' }, { transform: `translateY(${y.toFixed(1)}px) scale(${(1 - w * 0.004).toFixed(4)})`, offset: 0.22 },
+    { transform: `translateY(${(-y * 0.3).toFixed(1)}px)`, offset: 0.6 }, { transform: 'none' }], { duration: 320, easing: 'ease-out' }));
+  if (w >= 0.9) fx.haptic(Math.round(14 + w * 18));
+}
 function flySource(a) {
   const uid = a?.uid;
   if (!uid) return null;
@@ -3315,6 +3485,9 @@ function flyCard(src, a) {
   fx.fly(src.html, src.rect, to || $('#stage'), { onArrive: () => {
     sfx.play('place');
     const target = to || $('#stage');
+    const w = cardWeight(d);
+    if (target === $('#stage') || target?.closest?.('#stage')) { tableKick(w); if (w >= 0.9) fx.dust(target === $('#stage') ? $('#stage .stage-inner') || target : target, { n: Math.round(8 + w * 8) }); }
+    else if (w >= 0.9) fx.shake(target.closest('.ava, .me-ava, .opp') || target, 'bump');
     if (d.type === 'curse') fx.smoke(target, { n: 14 });
     else if (d.type === 'item' || d.type === 'race' || d.type === 'class') fx.sparkle(target, { n: 12 });
     else fx.burst(target, { n: 14, speed: 180, g: 120 });

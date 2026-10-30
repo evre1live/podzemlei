@@ -139,6 +139,33 @@ function draw(p, a) {
       ctx.beginPath(); ctx.arc(p.x, p.y, s, 0, Math.PI * 2); ctx.stroke();
       break;
     }
+    case 'gear': {
+      // шестерёнка механизма: зубцы, обод и дырка посередине
+      ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot);
+      const n = 8;
+      ctx.fillStyle = p.color; ctx.beginPath();
+      for (let i = 0; i < n * 2; i++) { const a = (i / (n * 2)) * Math.PI * 2, r = i % 2 ? s * 0.78 : s; ctx.lineTo(Math.cos(a - 0.18) * r, Math.sin(a - 0.18) * r); ctx.lineTo(Math.cos(a + 0.18) * r, Math.sin(a + 0.18) * r); }
+      ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = 'rgba(20,14,10,.7)'; ctx.lineWidth = 1; ctx.stroke();
+      ctx.globalCompositeOperation = 'destination-out'; ctx.beginPath(); ctx.arc(0, 0, s * 0.3, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+      break;
+    }
+    case 'shard': {
+      // осколок: вытянутый треугольник с бликом по ребру
+      ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot); ctx.scale(1, Math.abs(Math.cos(p.rot * 1.7)) * 0.7 + 0.3);
+      ctx.fillStyle = p.color; ctx.beginPath(); ctx.moveTo(0, -s * 1.5); ctx.lineTo(s * 0.7, s * 0.6); ctx.lineTo(-s * 0.5, s * 0.9); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,.65)'; ctx.lineWidth = 0.8; ctx.beginPath(); ctx.moveTo(0, -s * 1.5); ctx.lineTo(s * 0.7, s * 0.6); ctx.stroke();
+      ctx.restore();
+      break;
+    }
+    case 'spore': {
+      // спора: светящаяся точка в мягком ореоле, покачивается
+      const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, s * 2.2);
+      g.addColorStop(0, p.color); g.addColorStop(0.35, p.color); g.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(p.x, p.y, s * 2.2, 0, Math.PI * 2); ctx.fill();
+      break;
+    }
     case 'rock':
       ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot);
       ctx.fillStyle = p.color; ctx.beginPath(); ctx.moveTo(-s, -s * 0.4); ctx.lineTo(-s * 0.2, -s); ctx.lineTo(s, -s * 0.3); ctx.lineTo(s * 0.6, s * 0.8); ctx.lineTo(-s * 0.7, s * 0.7); ctx.closePath(); ctx.fill();
@@ -386,6 +413,10 @@ export const fx = {
     d.style.setProperty('--vc', color);
     document.body.append(d);
     setTimeout(() => d.remove(), 900);
+  },
+  // отдача в руку на телефоне: удар, расплата, победа. Только где есть вибромотор и сенсорный экран
+  haptic(pattern = 30) {
+    try { if (!reduced() && matchMedia('(pointer: coarse)').matches && localStorage.getItem('pz.haptics') !== 'false') navigator.vibrate?.(pattern); } catch { /* нет вибрации */ }
   },
   shake(el, cls = 'shake') {
     if (!el) return;

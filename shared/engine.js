@@ -981,7 +981,7 @@ function resolveVictory(s, rng) {
   setLevel(s, f, f.level + n.levels, { canWin: true });
   if (h && hasRace(h, 'elf')) setLevel(s, h, h.level + c.monsters.length, { canWin: true });
   const r = shareTreasure(s, n.treasures, rng, n.helperShare);
-  fx(s, { kind: 'victory', pid: f.id, helper: c.helper || null, cards: c.monsters.map(m => m.uid), levels: n.levels, treasures: r.total });
+  fx(s, { kind: 'victory', pid: f.id, helper: c.helper || null, cards: c.monsters.map(m => m.uid), levels: n.levels, treasures: r.total, power: n.heroes, foe: n.monsters });
   for (const [x, part] of [[f, r.fp], [h, r.hp]]) if (x && part.length) fx(s, { kind: 'loot', pid: x.id, n: part.length, rar: topRarity(part), only: x.id });
   log(s, `⚔️ ${f.name}${h ? ' и ' + h.name : ''} ${h ? 'побеждают' : 'побеждает'} ${names}! ${f.name} получает +${n.levels} ур. и ${r.total - r.share} клада${h && r.share ? `, ${h.name} — ${r.share}` : ''}.`, 'good');
   for (const m of c.monsters) contractEvent(s, f, 'kill', { uid: m.uid }, rng);

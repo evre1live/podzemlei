@@ -950,14 +950,106 @@ S.helper = f => ({
   },
 });
 
-// победа: удар разрубает карту монстра, половинки разлетаются, клад летит к победителю
+// ───────────── удар героя ─────────────
+// Медальон героя отходит назад, срывается к монстру и бьёт о край карты, потом возвращается на место.
+// На ударе над монстром выбивается число — сила героев, а карта погибает по своей природе (deathFx).
+const pillOf = pid => panel?.node.querySelector(`.hero-pill[data-pid="${CSS.escape(pid)}"]`) || document.querySelector(`#stage .hero-pill[data-pid="${CSS.escape(pid)}"]`);
+function lunge(k, pid, uid) {
+  const pill = pillOf(pid), ce = monEl(uid);
+  // расстояние — от самого портрета (кольца), а не от всей плашки: она бывает шире колонки
+  const a = box(pill?.querySelector('.ring') || pill), b = box(ce);
+  if (!a || !b || reduced()) return 0;
+  const ca = cen(a), cb = cen(b);
+  const dx = cb.x - ca.x, dy = cb.y - ca.y, dist = Math.max(1, Math.hypot(dx, dy));
+  // бьёт о край карты, а не влетает в её середину
+  const stop = Math.max(0.3, 1 - (b.width * 0.3 + a.width * 0.3) / dist);
+  const D = 560, HIT = 0.58, s = dx >= 0 ? 1 : -1;
+  if (getComputedStyle(pill).position === 'static') pill.style.position = 'relative';
+  pill.style.zIndex = '6';
+  k.a(pill, [
+    { transform: 'none', offset: 0, easing: 'cubic-bezier(.3,0,.5,1)' },
+    { transform: `translate(${-dx * 0.07}px, ${-dy * 0.07 + 4}px) scale(1.08) rotate(${-5 * s}deg)`, offset: 0.34, easing: 'cubic-bezier(.7,0,.95,.5)' },
+    { transform: `translate(${dx * stop}px, ${dy * stop}px) scale(1.24) rotate(${7 * s}deg)`, offset: HIT, easing: EASE.out },
+    { transform: `translate(${dx * stop * 0.84}px, ${dy * stop * 0.84}px) scale(1.12)`, offset: 0.72, easing: 'cubic-bezier(.4,0,.2,1)' },
+    { transform: 'none', offset: 1 }], { dur: D, ease: EASE.lin, fill: 'none' });
+  k.at(D * 0.34, () => sfx.play('dash'));
+  // шлейф искр за медальоном на рывке
+  for (let i = 0; i < 4; i++) k.at(D * (0.38 + i * 0.05), () => { const t = ((i + 1) / 5) * stop; fx.spray({ x: ca.x + dx * t, y: ca.y + dy * t }, { n: 6, speed: [20, 90], size: [1.6, 3], colors: ['#fff3b0', '#ffd36b', '#ffffff'], shape: 'spark', life: [0.25, 0.45] }); });
+  k.at(D + 30, () => { pill.style.zIndex = ''; });
+  return D * HIT;
+}
+// число удара: крупно, с «кляксой» за ним, впечатывается в карту и уплывает вверх
+function dmgNum(k, c, n) {
+  if (!Number.isFinite(n) || n <= 0) return;
+  const el = k.pt('cn-dmg', `<i></i><b>${n}</b>`, c.x, c.y);
+  const an = k.a(el, [{ opacity: 0, transform: 'scale(2.4) rotate(-12deg)', easing: 'cubic-bezier(.2,.9,.3,1)' }, { opacity: 1, transform: 'scale(.9) rotate(4deg)', offset: 0.1 },
+    { transform: 'scale(1.07) rotate(-2deg)', offset: 0.18 }, { transform: 'scale(1)', offset: 0.26 },
+    { opacity: 1, transform: 'translateY(-6px) scale(1)', offset: 0.74, easing: 'cubic-bezier(.5,0,.8,.5)' }, { opacity: 0, transform: 'translateY(-46px) scale(.86)' }], { dur: 1400, ease: EASE.lin });
+  // убираем по окончании анимации, а не по таймеру: если кадры запаздывают, число всё равно успеет показаться
+  if (an) an.finished.then(() => el.remove(), () => el.remove()); else k.rm(el, 1420);
+  k.rm(el, 5000);
+}
+// природа монстра — по меткам карты: нежить рассыпается прахом, механизм — шестерёнками, грибы — спорами…
+const natureOf = d => { const t = d?.tags || []; if (d?.boss) return 'boss'; return ['undead', 'machine', 'fungus', 'fire', 'water', 'rock', 'insect', 'rat'].find(x => t.includes(x)) || 'beast'; };
+function deathFx(k, d, c, r) {
+  const at = { x: c.x, y: c.y, w: r.width * 0.8, h: r.height * 0.7 };
+  const up = [-2.5, -0.65], all = [0, Math.PI * 2];
+  switch (natureOf(d)) {
+    case 'undead': // прах: серый пепел поднимается и тает, вылетают бледные огоньки душ
+      fx.spray(at, { n: 54, spreadX: 1, spreadY: 1, speed: [20, 90], angle: up, g: -50, size: [1.3, 3], colors: ['#d8d2c6', '#8d877e', '#efe9dd', '#5e5a55'], shape: 'dot', add: false, life: [1, 2], fadeIn: true });
+      fx.smoke(at, { n: 14, colors: ['rgba(190,185,175,.32)', 'rgba(130,125,118,.28)'] });
+      fx.spray(at, { n: 6, spreadX: 0.6, speed: [30, 70], angle: [-1.9, -1.2], g: -70, size: [2.5, 4], colors: ['rgba(170,255,220,.9)', 'rgba(200,230,255,.9)'], shape: 'spore', life: [1.3, 1.9], wob: [2, 4] });
+      break;
+    case 'machine': // механизм: шестерёнки, болты и искры из разорванного нутра
+      fx.spray(at, { n: 14, speed: [180, 380], angle: all, g: 900, size: [4, 8], colors: ['#b8b2a6', '#8f8676', '#d9c08a', '#6e675c'], shape: 'gear', add: false, life: [0.9, 1.4], drag: 0.97 });
+      fx.spray(at, { n: 26, speed: [200, 420], angle: all, g: 500, size: [1.4, 2.6], colors: ['#fff3b0', '#ffb347', '#ffffff'], shape: 'spark', life: [0.3, 0.6] });
+      fx.smoke(at, { n: 8, colors: ['rgba(80,74,68,.45)', 'rgba(120,112,100,.35)'] });
+      sfx.play('clang');
+      break;
+    case 'fungus': // грибы: облачко спор медленно расплывается и светится
+      fx.spray(at, { n: 40, spreadX: 1, spreadY: 1, speed: [10, 70], angle: all, g: -12, size: [1.6, 3.2], colors: ['rgba(214,255,140,.9)', 'rgba(250,200,255,.85)', 'rgba(150,255,200,.85)'], shape: 'spore', life: [1.4, 2.4], wob: [2, 5], fadeIn: true, drag: 0.97 });
+      fx.smoke(at, { n: 12, colors: ['rgba(190,240,120,.28)', 'rgba(230,170,255,.24)'] });
+      sfx.play('poof');
+      break;
+    case 'fire': // огонь: угли и языки пламени взлетают и гаснут
+      fx.flip(c, 'fire', { k: 1.4 });
+      fx.spray(at, { n: 44, spreadX: 1, speed: [60, 220], angle: up, g: -120, size: [1.6, 3.4], colors: ['#ffb347', '#ff7a2a', '#ffe08a', '#ff5a3d'], shape: 'spark', life: [0.6, 1.3] });
+      break;
+    case 'water': // вода: всплеск капель и брызги вниз
+      fx.spray(at, { n: 40, speed: [120, 340], angle: [-2.8, -0.35], g: 900, size: [2.2, 4.2], colors: ['#9ff0f5', '#cfefff', '#6fc7e0', '#ffffff'], shape: 'drop', add: false, life: [0.7, 1.2] });
+      fx.ring(c, { n: 2, color: 'rgba(160,230,255,.8)', grow: 380 });
+      break;
+    case 'rock': // камень: глыба раскалывается, обломки падают, пыль
+      fx.spray(at, { n: 22, speed: [160, 340], angle: all, g: 1100, size: [3, 7], colors: ['#8b8494', '#6a6572', '#a39b8a', '#544f58'], shape: 'rock', add: false, life: [0.9, 1.4] });
+      fx.dust({ x: c.x, y: c.y + r.height * 0.4, w: r.width, h: 10 }, { n: 14 });
+      sfx.play('stone');
+      break;
+    case 'insect': // насекомое: хитиновые осколки и зелёная пыльца
+      fx.spray(at, { n: 26, speed: [160, 360], angle: all, g: 700, size: [2.6, 5], colors: ['#7f9a3a', '#c4d86a', '#4f5f24', '#e6f0a0'], shape: 'shard', add: false, life: [0.8, 1.3] });
+      fx.spray(at, { n: 18, spreadX: 1, speed: [20, 80], angle: all, g: -10, size: [1.2, 2.2], colors: ['rgba(220,255,150,.8)'], shape: 'spore', life: [0.8, 1.4] });
+      break;
+    case 'boss': // босс: вспышка, кольца и золотые осколки во все стороны
+      fx.flip(c, 'magic-gold', { k: 2.2 });
+      fx.ring(c, { n: 3, color: 'rgba(255,214,120,.9)', grow: 700 });
+      fx.spray(at, { n: 40, speed: [220, 520], angle: all, g: 600, size: [3, 6], colors: ['#ffe08a', '#f5b83d', '#fff3b0', '#ffffff'], shape: 'shard', life: [0.9, 1.5] });
+      quake(1.6);
+      break;
+    default: // звери и крысы: клочья шерсти и пыль
+      fx.spray(at, { n: 22, speed: [80, 240], angle: all, g: 300, size: [2, 4], colors: ['#a88a66', '#7a6248', '#d6bc94'], shape: 'dot', add: false, life: [0.6, 1.1], wob: [1, 3] });
+      fx.dust({ x: c.x, y: c.y + r.height * 0.4, w: r.width, h: 8 }, { n: 10 });
+  }
+}
+
+// победа: герой бросается на монстра, удар разрубает карту, половинки разлетаются, клад летит к победителю
 S.victory = (f, loot = []) => ({
   run(k) {
     const uids = f.cards || [];
     const pos = uids.map(u => box(monEl(u))).filter(Boolean);
     const center = pos.length ? cen(pos[0]) : focus();
-    uids.forEach((u, i) => k.at(i * 170, () => slashCard(k, u)));
-    const base = (uids.length - 1) * 170;
+    const t0 = uids.length ? lunge(k, f.pid, uids[0]) : 0;
+    if (t0 && pos[0]) k.at(t0, () => { dmgNum(k, cen(pos[0]), f.power); fx.haptic([18, 30, 40]); });
+    uids.forEach((u, i) => k.at(t0 + i * 170, () => slashCard(k, u)));
+    const base = t0 + (uids.length - 1) * 170;
     k.at(base + 330, () => {
       const p = focus();
       stamp(k, p.x, Math.min(p.y, center.y) - 60, 'Победа!', f.helper ? `${api.pname(f.pid)} и ${api.pname(f.helper)}` : api.pname(f.pid), 'win', 1050);
@@ -1012,8 +1104,9 @@ function slashCard(k, uid) {
     const rad = ang * Math.PI / 180;
     for (let i = -3; i <= 3; i++) {
       const p = { x: c.x + Math.cos(rad) * i * r.width * 0.16, y: c.y + Math.sin(rad) * i * r.width * 0.16 };
-      fx.burst(p, { n: 7, speed: 300, colors: ['#fff3b0', '#ffffff', '#ffd36b', '#ff8a66'], g: 500 });
+      fx.burst(p, { n: 4, speed: 300, colors: ['#fff3b0', '#ffffff', '#ffd36b', '#ff8a66'], g: 500 });
     }
+    deathFx(k, def(uid), c, r);
     sfx.play('shatter');
   });
 }
@@ -1103,6 +1196,7 @@ S.caught = f => ({
       k.rm(hit, 520);
       fx.vignette('rgba(210,40,20,.6)');
       fx.spray(b, { n: 26, speed: [120, 360], size: [2.5, 5], colors: ['#ff5a3d', '#ff8a66', '#ffd27a', '#fff'], shape: 'star', g: 400, life: [0.5, 0.9] });
+      fx.haptic([50, 40, 70]);
       jolt(k, av?.closest('.opp') || av, 1.4, 480);
       quake(1);
       sfx.play('claw');

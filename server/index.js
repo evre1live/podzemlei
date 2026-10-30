@@ -84,6 +84,13 @@ const COLORS = ['#b5432f', '#c4773a', '#4f8f5c', '#3f7fb0', '#8a5cb0', '#b0587f'
 const DELAYS = [10000, 20000, 30000];
 const cleanDelay = v => (DELAYS.includes(Number(v)) ? Number(v) : DELAYS[0]);
 const cleanWin = v => (WIN_LEVELS.includes(Number(v)) ? Number(v) : WIN_LEVEL);
+// Фитиль хода: сколько живой игрок может думать без единого действия, прежде чем за него сыграет автопилот.
+// Последнюю треть (не больше 30 с) над столом горит фитиль — видят все. 0 — без фитиля.
+const FUSES = [0, 60000, 120000, 240000];
+const FUSE_DEFAULT = 120000;
+const cleanFuse = v => (FUSES.includes(Number(v)) ? Number(v) : FUSE_DEFAULT);
+const FUSE_FORCE = Number(process.env.FUSE_MS || 0); // для проверок: сжать время фитиля
+const STAYS = 2; // сколько раз за ход можно продлить фитиль нажатием «я тут»
 const cleanName = (n, fb = 'Игрок') => (String(n || '').replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, 20) || fb);
 
 // ───────────────────────── голосовой чат ─────────────────────────
@@ -146,7 +153,7 @@ function roomSummary(r) {
 function lobbyInfo(r, meId) {
   return {
     id: r.id, name: r.name, locked: !!r.pass, hostId: r.hostId, maxPlayers: r.maxPlayers,
-    settings: r.settings, status: roomSummary(r).status, me: meId, spectator: !meId, watchers: watchCount(r), voice: voiceInfo(r), seats: seatInfo(r, meId),
+    settings: r.settings, status: roomSummary(r).status, me: meId, spectator: !meId, watchers: watchCount(r), voice: voiceInfo(r), seats: seatInfo(r, meId), fuse: fuseInfo(r, meId),
     members: r.members.filter(m => !m.left).map((m, i) => ({
       id: m.id, name: m.name, isBot: m.isBot, connected: m.isBot || m.connected, ready: m.ready, color: m.color, avatar: m.avatar,
       autopilot: !!m.autopilot, persona: m.isBot ? m.persona || null : null,
@@ -363,7 +370,7 @@ function load() {
       for (const p of r.game?.players || []) p.gold ??= 0;
       // поединок после перезапуска досчитывается заново
       if (r.game?.duel) { r.game.duel.winStart = now(); r.game.duel.winAt = Math.max(r.game.duel.winAt || 0, now() + (r.game.opts?.winDelayMs || 10000)); r.game.duel.passed = []; }
-      r.settings = { ...(r.settings || {}), winDelayMs: cleanDelay(r.settings?.winDelayMs), winLevel: cleanWin(r.settings?.winLevel), daily: !!r.settings?.daily };
+      r.settings = { ...(r.settings || {}), winDelayMs: cleanDelay(r.settings?.winDelayMs), winLevel: cleanWin(r.settings?.winLevel), daily: !!r.settings?.daily, fuseMs: cleanFuse(r.settings?.fuseMs) };
       rooms.set(r.id, r);
     }
     console.log(`Восстановлено комнат: ${rooms.size}`);
@@ -371,10 +378,33 @@ function load() {
 }
 
 // ───────────────────────── игровой цикл ─────────────────────────
+// ───────────────────────── фитиль хода ─────────────────────────
+// Часы идут, только пока ход за живым игроком и ждут именно его: во время отсчёта «помешать», просьбы о помощи
+// и дуэли они стоят. Любое его действие или нажатие «я тут» (не больше STAYS раз за ход) заводит их заново.
+const fuseTotal = r => FUSE_FORCE || cleanFuse(r.settings?.fuseMs);
+function fuseTick(r, t) {
+  const g = r.game;
+  if (!g || g.phase !== 'playing') { r.idle = null; return; }
+  if (!r.idle || r.idle.n !== g.turn.n || r.idle.pid !== g.turn.pid) r.idle = { n: g.turn.n, pid: g.turn.pid, at: t, stays: 0 };
+  if (g.combat?.winAt || g.combat?.helpReq || g.duel) r.idle.at = t;
+}
+function fuseInfo(r, meId) {
+  const g = r.game, total = fuseTotal(r);
+  if (!total || !g || g.phase !== 'playing' || !r.idle || r.idle.n !== g.turn.n) return null;
+  const m = r.members.find(x => x.id === g.turn.pid);
+  if (!m || m.isBot || m.autopilot || m.left || m.quit) return null;
+  if (g.combat?.winAt || g.combat?.helpReq || g.duel) return null;
+  const burn = Math.min(30000, Math.round(total / 3));
+  const end = r.idle.at + total;
+  return { pid: m.id, start: end - burn, end, stays: m.id === meId ? STAYS - r.idle.stays : 0 };
+}
+const fuseOut = (r, pid, t) => { const f = fuseInfo(r); return !!f && f.pid === pid && t >= f.end; };
+
 function runRoom(r) {
   const g = r.game;
   if (!g || g.phase !== 'playing') return;
   const t = now();
+  fuseTick(r, t);
   // Отсчёт «помешать» ждёт только живых соседей. Когда все они нажали «Не мешаю»
   // (или живых за столом нет), бой заканчивается через пару секунд — ботам хватает, чтобы вмешаться.
   const c = g.combat;
@@ -396,7 +426,7 @@ function runRoom(r) {
       if (!m) continue;
       if (r.turnSeen?.n !== g.turn.n) r.turnSeen = { n: g.turn.n, at: t };
       const sleepy = gp.id === g.turn.pid && t - Math.max(m.lastSeen || 0, r.turnSeen.at) > IDLE_TURN_MS;
-      const afk = !m.isBot && (((!m.connected || m.left) && t - (m.lastSeen || 0) > AFK_MS) || sleepy);
+      const afk = !m.isBot && (((!m.connected || m.left) && t - (m.lastSeen || 0) > AFK_MS) || sleepy || fuseOut(r, gp.id, t) || (m.autopilot && r.idle?.burnt === g.turn.n && gp.id === g.turn.pid));
       if (!m.isBot && !afk) {
         // живому игроку, который 30 с молчит на предложение обмена, отвечаем «нет»
         const late = (g.trades || []).find(o => o.to === gp.id && t - (o.at || 0) > TRADE_TIMEOUT_MS);
@@ -408,7 +438,11 @@ function runRoom(r) {
         }
         continue;
       }
-      if (afk !== !!m.autopilot && !m.isBot) { m.autopilot = afk; }
+      if (afk !== !!m.autopilot && !m.isBot) {
+        m.autopilot = afk;
+        // фитиль догорел: до конца этого хода играет автопилот, даже если «нет действий» сбросит часы
+        if (afk && fuseOut(r, gp.id, t)) { r.idle.burnt = g.turn.n; sysChat(r, `Фитиль догорел — за ${m.name} ходит автопилот.`); }
+      }
       // за отошедшего человека автопилот сделок не заключает
       const offer = !m.isBot && (g.trades || []).find(o => o.to === gp.id);
       if (offer) { act(g, gp.id, { type: 'answerTrade', id: offer.id, accept: false }, { rng, now: t }); changed = true; break; }
@@ -641,7 +675,7 @@ io.on('connection', socket => {
     const r = {
       id: newCode(), name, pass: pw ? hashPassword(pw) : null, hidden: !!p.hidden, hostId: null,
       maxPlayers: Math.min(6, Math.max(2, Number(p.maxPlayers) || 6)),
-      settings: { winDelayMs: cleanDelay(p.winDelayMs), winLevel: cleanWin(p.winLevel), daily: false },
+      settings: { winDelayMs: cleanDelay(p.winDelayMs), winLevel: cleanWin(p.winLevel), daily: false, fuseMs: FUSE_DEFAULT },
       members: [], chat: [], game: null, createdAt: now(), lastActive: now(),
     };
     const m = addMember(r, { name: cleanName(p.playerName), avatar: p.avatar });
@@ -781,6 +815,10 @@ io.on('connection', socket => {
       r.settings.winLevel = Number(p.winLevel);
       sysChat(r, `Играем до ${r.settings.winLevel}-го уровня.`);
     }
+    if (p.fuseMs !== undefined && FUSES.includes(Number(p.fuseMs)) && Number(p.fuseMs) !== r.settings.fuseMs) {
+      r.settings.fuseMs = Number(p.fuseMs);
+      sysChat(r, r.settings.fuseMs ? `На раздумья — ${r.settings.fuseMs / 60000} мин без действий, потом за игрока сыграет автопилот.` : 'Без фитиля: думать можно сколько угодно.');
+    }
     if (typeof p.daily === 'boolean' && p.daily !== !!r.settings.daily) {
       r.settings.daily = p.daily;
       sysChat(r, p.daily ? `Играем испытание дня: «${dailyOf(dailyDate()).name}».` : 'Обычная партия, без испытания дня.');
@@ -876,6 +914,7 @@ io.on('connection', socket => {
     const { r, m } = ctx();
     if (!r || !m || !r.game) return cb({ ok: false, error: 'Игры нет' });
     m.lastSeen = now(); m.autopilot = false;
+    if (r.idle && r.game?.turn?.pid === m.id) { r.idle.at = now(); r.idle.burnt = null; }
     let action;
     try { action = JSON.parse(JSON.stringify(a)); } catch { return cb({ ok: false, error: 'Плохие данные' }); }
     if (!action || typeof action.type !== 'string') return cb({ ok: false, error: 'Плохие данные' });
@@ -988,6 +1027,14 @@ io.on('connection', socket => {
   });
 
   socket.on('ping:me', () => { const { m } = ctx(); if (m) m.lastSeen = now(); });
+  // «я тут»: игрок шевельнулся, пока горит его фитиль, — часы заводятся заново (не больше STAYS раз за ход)
+  socket.on('turn:stay', () => {
+    const { r, m } = ctx();
+    const f = r && m ? fuseInfo(r, m.id) : null;
+    if (!f || f.pid !== m.id || now() < f.start || r.idle.stays >= STAYS) return;
+    r.idle.at = now(); r.idle.stays++;
+    broadcastRoom(r);
+  });
 
   socket.on('disconnect', () => { leaveVoice(); detach(); unwatch(); });
 });
