@@ -2563,7 +2563,8 @@ svg.av-hover .av-bg, svg.av-hover .av-hero { transition: transform .18s ease-out
   background: radial-gradient(ellipse 75% 70% at 50% 46%, rgb(var(--tb-tint, 255 200 140) / .07), transparent 70%),
     var(--tb-mat, url(/ui/table/v1/mat.webp)) center / cover, #1a110b;
   box-shadow: inset 0 0 0 1px rgb(0 0 0 / .8), inset 0 0 calc(var(--fw) * 1.6) rgb(0 0 0 / .85), inset 0 calc(var(--fw) * .5) calc(var(--fw) * .9) rgb(0 0 0 / .55); }
-.tb-frame { inset: 0; border: var(--fw) solid transparent; border-image: url(/ui/table/v1/frame.webp) 118 / var(--fw) stretch; }
+/* толщина рамы — прямо в пикселях, без var(): Safari не рисует border-image с переменной внутри (на телефоне рама пропадала) */
+.tb-frame { inset: 0; border: 34px solid transparent; border-image: url(/ui/table/v1/frame.webp) 118 / 34px stretch; }
 /* свет: тёплое пятно у свечей и общее мерцание пламени по полю */
 .tb-glow { inset: calc(var(--fw) * .55); border-radius: 4px; mix-blend-mode: screen; opacity: .9;
   background: radial-gradient(ellipse 34% 48% at 6% 6%, rgb(var(--tb-light, 255 160 70) / .32), transparent 70%),
@@ -2611,9 +2612,10 @@ svg.av-hover .av-bg, svg.av-hover .av-hero { transition: transform .18s ease-out
 /* карты на поле отбрасывают тень от света сверху слева */
 .game #stage .stage-inner .card { box-shadow: 0 0 0 1px rgb(0 0 0 / .7), 7px 14px 20px rgb(0 0 0 / .55), 2px 4px 6px rgb(0 0 0 / .45); }
 @media (max-width: 900px) {
-  .table-bg { --fw: 20px; --tb-mat: url(/ui/table/v1/mat-1200.webp); }
-  .game #stage.cave-stage { --fw: 20px; padding: 28px 22px 96px; }
-  .game #stage.cave-stage::before { inset: 20px; }
+  .table-bg { --fw: 26px; --tb-mat: url(/ui/table/v1/mat-1200.webp); }
+  .tb-frame { border-width: 26px; border-image-width: 26px; }
+  .game #stage.cave-stage { --fw: 26px; padding: 32px 26px 96px; }
+  .game #stage.cave-stage::before { inset: 26px; }
   .tp-tl { width: 70px; left: -8px; top: -10px; }
   .tp-tr { width: 60px; right: -6px; top: -8px; }
   .tp-br { width: 72px; right: -6px; bottom: -8px; }
@@ -2793,12 +2795,12 @@ body:has(#world.still) .g-grain { display: none; }
 .btn.danger, .btn.danger:hover:not(:disabled), .btn.hero, .btn.hero:hover:not(:disabled), .btn.spook, .btn.spook:hover:not(:disabled) {
   background: none; border-color: transparent; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none;
 }
-.btn { border: 1px solid transparent; border-image: url(/ui/obj/v1/plate-iron.webp) 36 fill / 11px / 0 stretch; color: #efe4cf;
+.btn { border: 1px solid transparent; border-image: url(/ui/obj/v1/plate-iron.webp) 36 fill / 11px / 0 stretch; color: #f6eedf;
   filter: drop-shadow(0 2px 2px rgb(0 0 0 / .5)); transition: filter .15s, transform .1s; }
-.btn:not(.primary) { text-shadow: 0 -1px 0 rgb(0 0 0 / .8), 0 1px 0 rgb(255 255 255 / .06); }
-.btn.ghost { border-image-source: url(/ui/obj/v1/plate-ghost.webp); color: #e2d6c0; }
-.btn.primary { border-image-source: url(/ui/obj/v1/plate-brass.webp); color: #2a1604; text-shadow: 0 1px 0 rgb(255 232 170 / .55), 0 -1px 0 rgb(70 36 0 / .3); }
-.btn.primary .gi { color: #3c2306; }
+.btn:not(.primary) { text-shadow: 0 1px 2px rgb(0 0 0 / .85); }
+.btn.ghost { border-image-source: url(/ui/obj/v1/plate-ghost.webp); color: #f0e7d8; }
+.btn.primary { border-image-source: url(/ui/obj/v1/plate-brass.webp); color: #1c0e02; text-shadow: 0 1px 0 rgb(255 242 210 / .6); }
+.btn.primary .gi { color: #2a1604; }
 .btn.danger { border-image-source: url(/ui/obj/v1/plate-danger.webp); color: #ffeee6; }
 .btn.hero { border-image-source: url(/ui/obj/v1/plate-hero.webp); color: #effff8; }
 .btn.spook { border-image-source: url(/ui/obj/v1/plate-hero.webp); color: #eef1ff; filter: hue-rotate(95deg) drop-shadow(0 2px 2px rgb(0 0 0 / .5)); }
@@ -2820,8 +2822,8 @@ body:has(#world.still) .g-grain { display: none; }
   color: #eee2cb; text-shadow: 0 -1px 0 rgb(0 0 0 / .8); filter: drop-shadow(0 2px 2px rgb(0 0 0 / .55));
 }
 .game .g-head :is(.market-pill, .contract-pill, .loc-banner, .seat-pill):hover { border-color: transparent; filter: brightness(1.15) drop-shadow(0 2px 2px rgb(0 0 0 / .55)) drop-shadow(0 0 7px rgb(255 196 120 / .3)); }
-.game .g-head :is(.turninfo.mine, .market-pill) { background: none; border-image-source: url(/ui/obj/v1/plate-brass.webp); color: #2a1604; text-shadow: 0 1px 0 rgb(255 232 170 / .5);
-  filter: brightness(1.12) saturate(1.25) drop-shadow(0 2px 2px rgb(0 0 0 / .55)); }
+.game .g-head :is(.turninfo.mine, .market-pill) { background: none; border-image-source: url(/ui/obj/v1/plate-brass.webp); color: #1c0e02; text-shadow: 0 1px 0 rgb(255 242 210 / .55);
+  filter: drop-shadow(0 2px 2px rgb(0 0 0 / .55)); }
 .game .g-head .market-pill .gi { color: #4a2a06; }
 .game .g-head .market-pill.trick { border-image-source: url(/ui/obj/v1/plate-hero.webp); filter: hue-rotate(110deg) drop-shadow(0 2px 2px rgb(0 0 0 / .55)); color: #f6efff; text-shadow: 0 -1px 0 rgb(0 0 0 / .7); }
 .game .g-head .market-pill.trick .gi { color: #f1e2ff; }
