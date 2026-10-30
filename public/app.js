@@ -12,6 +12,7 @@ import { AV_LABELS, LIGHTS, lookNote, portraitThumb, setAvatarLocation, sceneOf,
 import { FRAMES } from '/avatar-art.js';
 import { createVoice } from '/voice.js';
 import { ico } from '/icons.js';
+import { profile, noteSeen, noteKills, noteGame, isGolden, slainOf, GOLD_AT, goldenCount, collectible, favorite, rankOf, BACKS, backOpen, getBack, setBack, applyBack } from '/profile.js';
 import { wheelSVG, WHEEL_LOOK, wheelChance } from '/wheel.js';
 import { initDepth, depthOn, applyDepth } from '/depth.js';
 import { NEWS, NEWS_LATEST } from '/news.js';
@@ -208,6 +209,7 @@ socket.on('room:state', ({ room, game, serverTime }) => {
   S.ui.lastMsg = lastMsg?.id;
   vc.sync(room.voice?.peers);
   const fresh = handleFx(first);
+  if (game && !room.spectator) noteSeen(seenUids(game, room.me));
   if (started) gameIntro(game);
   render();
   if ($('#shopModal')) openMarketModal();
@@ -312,7 +314,7 @@ mount.home = () => {
   <div class="home">
     <div class="home-bg" aria-hidden="true"><img class="home-poster" src="${MENU.poster}" srcset="${MENU.poster720} 1280w, ${MENU.poster} 1920w" sizes="max(100vw, 178vh)" alt="" decoding="async"><video class="home-video" muted loop playsinline preload="none" disablepictureinpicture></video></div>
     <header class="band b-surface"><div class="grassline"></div>
-      <div class="home-top"><div class="logo-row">${HATCH}<span class="spacer"></span><a class="btn ghost small" href="/guide">Справочник</a><button class="btn ghost small news-btn" data-act="news" title="Новые механики и карты по датам">Что нового${newsUnseen() ? '<i class="news-dot" aria-label="есть новое"></i>' : ''}</button><button class="btn ghost small" data-act="rules">Как играть</button></div></div>
+      <div class="home-top"><div class="logo-row">${HATCH}<span class="spacer"></span><a class="btn ghost small" href="/guide">Справочник</a><button class="btn ghost small news-btn" data-act="news" title="Новые механики и карты по датам">Что нового${newsUnseen() ? '<i class="news-dot" aria-label="есть новое"></i>' : ''}</button><button class="btn ghost small" data-act="profile">Профиль</button><button class="btn ghost small" data-act="rules">Как играть</button></div></div>
     </header>
     <section class="band b-clay pebbles title-wrap">
 <h1 class="title has-img" style="--tmask:url('${MENU.title}')"><img class="title-img" src="${MENU.title}" srcset="${MENU.title} 1000w, ${MENU.title2x} 2000w" sizes="(max-width: 1100px) 92vw, 1000px" width="1000" height="155" alt="Под Землёй"></h1>
@@ -1214,6 +1216,14 @@ document.addEventListener('click', e => {
   if (!t.closest('.emote-menu')) closeEmotes();
 });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeEmotes(); });
+// рубашка колод: выбор в профиле
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-back]');
+  if (!b) return;
+  if (b.getAttribute('aria-disabled') === 'true') { toast('Эта рубашка ещё закрыта: ' + (BACKS.find(x => x.id === b.dataset.back)?.text || '')); return; }
+  if (setBack(b.dataset.back)) { sfx.play('flip', { gap: 0 }); document.querySelectorAll('.pf-backtile').forEach(t => { const on = t.dataset.back === b.dataset.back; t.classList.toggle('on', on); t.querySelector('small').textContent = on ? 'выбрана' : t.classList.contains('locked') ? t.querySelector('small').textContent : 'выбрать'; }); }
+});
+applyBack();
 
 // ───────────── фитиль хода ─────────────
 // Когда игрок долго не делает ни одного действия, вдоль верхнего бруса рамы загорается фитиль и прогорает справа
@@ -1371,7 +1381,7 @@ function fightHTML() {
   const mods = side => pm.filter(x => x.side === side).map(x => `<span class="mod ${side === 'player' ? 'p' : 'm'}">${x.t}</span>`).join('');
   const monsters = c.monsters.map((m, i) => `
     <div class="mon-wrap">
-      <div class="mon-body ${def(m.uid).boss ? 'boss hell' : tierClass(m.strength)}">${cardHTML(m.uid, { size: c.monsters.length <= 2 ? 'md' : 'sm', attrs: `data-zone="view"` })}</div>
+      <div class="mon-body ${def(m.uid).boss ? 'boss hell' : tierClass(m.strength)}">${cardHTML(m.uid, { size: c.monsters.length <= 2 ? 'md' : 'sm', cls: !spectating() && isGolden(m.uid) ? 'golden' : '', attrs: `data-zone="view"` })}</div>
       <span class="mon-str">сила ${m.strength}${def(m.uid).mirror != null ? ` <small>(лидер ${m.level - def(m.uid).mirror} + ${def(m.uid).mirror})</small>` : ''}${def(m.uid).boss ? ` <small>(вдвое больше силы ${esc(pname(c.fighter))}, но не меньше ${BOSS_FLOOR})</small>` : ''}${!def(m.uid).boss && S.game.depth?.bonus ? ` <small title="Подземелье уходит глубже — монстры злее">(глубина +${S.game.depth.bonus})</small>` : ''}</span>
       ${monFlags(m, c)}
       ${m.enh.length ? `<div class="enh-list">${m.enh.map(u => `<span class="mod m" data-uid="${u}" data-zone="view">${esc(def(u).name)} ${def(u).double ? '×2' : (def(u).bonus > 0 ? '+' : '') + def(u).bonus}</span>`).join('')}</div>` : ''}
@@ -2654,6 +2664,10 @@ function achFx(fresh) {
   if (!me || spectating()) return;
   for (const f of fresh) {
     if (f.kind === 'victory' && (f.pid === me || f.helper === me) && (f.cards || []).some(u => def(u).boss)) unlock('boss');
+    if (f.kind === 'victory' && (f.pid === me || f.helper === me)) {
+      const gold = noteKills(f.cards || [], (f.cards || []).some(u => def(u).boss));
+      gold.forEach((id, i) => setTimeout(() => { fx.banner('Золотая карта!', `«${def(id + '#0').name}» — побеждён ${GOLD_AT} раз. Теперь он у вас золотой.`, 'legend'); sfx.play('legendary', { always: true }); }, 3200 + i * 2600));
+    }
     if (f.kind === 'tame' && f.pid === me) unlock('tame');
     if (f.kind === 'duelEnd' && f.pid === me) unlock('duel');
     if (f.kind === 'contract' && f.pid === me) { const a = achDone(); a.contractsN = (a.contractsN || 0) + 1; LS.set('ach', a); if (a.contractsN >= 5) unlock('contracts'); }
@@ -2685,6 +2699,7 @@ function maybeEndScreen() {
   const bg = loc?.art ? `--bg:url('${locImg(loc.art, false)}')` : '';
   const heroes = w.map(p => { const a = gAva(p); return `<span class="es-ava${a.frame ? ' framed' : ''}" style="--seat:${p.color};--fext:${frameExt(a)}">${avatarSVG(a, p.color)}</span>`; }).join('');
   const places = [...g.players].sort((a, b) => (g.winners.includes(b.id) - g.winners.includes(a.id)) || b.level - a.level);
+  setTimeout(() => recordGame(g, iWon), 0);
   showOverlay(`<div class="modal endscreen" id="endScreen" role="dialog" aria-label="Итоги партии">
     <div class="es-hero" style="${bg}">
       <div class="es-heroes${w.length > 1 ? ' two' : ''}">${iconSVG('crown', 'es-crown')}${heroes}</div>
@@ -2722,6 +2737,67 @@ function gameIntro(g) {
   gong.push(setTimeout(end, 2620));
   d.addEventListener('pointerdown', end, { once: true });
   for (let i = 0; i < n; i++) gong.push(setTimeout(() => sfx.play('whoosh', { gap: 0, always: true }), 160 + i * 120));
+}
+
+// ───────────── профиль: что записать ─────────────
+// встреченные карты: моя рука и вещи, вещи соперников на виду, монстры в бою, карта посреди стола, локация, верх сброса
+function seenUids(g, meId) {
+  const out = [];
+  for (const p of g.players || []) {
+    out.push(...(p.equipped || []), ...(p.races || []), ...(p.classes || []), p.ally, p.beast, p.halfbreed, p.supermunch);
+    if (p.id === meId) out.push(...(p.hand || []), ...(p.carried || []));
+  }
+  for (const m of g.combat?.monsters || []) out.push(m.uid, ...(m.enh || []));
+  out.push(g.reveal?.uid, g.location, g.discard?.door?.top, g.discard?.treasure?.top, g.tame?.uid, g.trap?.uid);
+  return out.filter(u => typeof u === 'string');
+}
+function recordGame(g, iWon) {
+  const p = me();
+  if (!p || spectating()) return;
+  const medals = [...document.querySelectorAll('#endScreen .es-nom')].filter(n => (n.dataset.pids || '').split(',').includes(S.room.me)).map(n => (n.className.match(/m-(gold|silver|bronze)/) || [])[1]).filter(Boolean);
+  noteGame({ key: `${S.room.id}:${g.turn.n}:${g.winners.join(',')}`, won: iWon, medals, races: p.races.map(u => def(u).race).filter(Boolean), classes: p.classes.map(u => def(u).cls).filter(Boolean), level: p.level });
+}
+
+// ───────────── профиль героя ─────────────
+// Окно со счётом на этом устройстве: звание, партии и победы, монстры и боссы, медали, любимые раса и класс,
+// коллекция (бестиарий, золотые карты, рамки) и выбор рубашки колод; ниже — достижения, за которые открываются рамки.
+function backPreview(id) {
+  return `<span class="pf-back back-${id}"><span class="deck-face">${cardBackSVG('door')}</span><span class="deck-face">${cardBackSVG('treasure')}</span></span>`;
+}
+function openProfile() {
+  const pr = profile(), a = achDone();
+  const name = S.name || me()?.name || 'Герой';
+  const pct = pr.games ? Math.round((pr.wins / pr.games) * 100) : 0;
+  const favR = favorite(pr.races), favC = favorite(pr.classes);
+  const seenN = (pr.seen || []).length, all = collectible();
+  const frames = Object.keys(FRAME_ACH).length, framesOpen = Object.values(FRAME_ACH).filter(k => a[k]).length;
+  const cur = getBack();
+  const stat = (n, t, icon) => `<div class="pf-stat">${ico(icon)}<b>${n}</b><small>${t}</small></div>`;
+  showOverlay(`<div class="modal profile-modal" role="dialog" aria-label="Профиль героя"><h2>Профиль героя</h2>
+    <div class="pf-head"><span class="pf-ava">${avatarSVG(S.avatar, me()?.color || '#c9a35a')}</span>
+      <div><b class="pf-name">${esc(name)}</b><span class="pf-rank">${rankOf(pr.wins)}</span><small class="muted">Счёт хранится на этом устройстве</small></div></div>
+    <div class="pf-stats">
+      ${stat(pr.games, plural(pr.games, 'партия', 'партии', 'партий'), 'rolling-dices')}
+      ${stat(pr.wins, `${plural(pr.wins, 'победа', 'победы', 'побед')}${pr.games ? ` · ${pct}%` : ''}`, 'crown')}
+      ${stat(pr.kills, plural(pr.kills, 'монстр повержен', 'монстра повержено', 'монстров повержено'), 'crossed-swords')}
+      ${stat(pr.bosses, plural(pr.bosses, 'босс', 'босса', 'боссов'), 'horned-skull')}
+    </div>
+    <div class="pf-medals"><span class="pf-medal" style="background-image:url(/ui/obj/v3/medal-gold.webp)"></span><b>${pr.medals.gold}</b>
+      <span class="pf-medal" style="background-image:url(/ui/obj/v3/medal-silver.webp)"></span><b>${pr.medals.silver}</b>
+      <span class="pf-medal" style="background-image:url(/ui/obj/v3/medal-bronze.webp)"></span><b>${pr.medals.bronze}</b><small>медали номинаций</small></div>
+    <p class="pf-fav">${favR ? `Любимая раса — <b>${esc(RACE_NAMES[favR[0]] || favR[0])}</b> (${favR[1]} ${plural(favR[1], 'партия', 'партии', 'партий')})` : 'Любимая раса появится после первых партий'}${favC ? ` · любимый класс — <b>${esc(CLASS_NAMES[favC[0]] || favC[0])}</b> (${favC[1]})` : ''}</p>
+    <h3>Коллекция</h3>
+    <div class="pf-coll">
+      <button class="pf-tile" data-act="collection"><b>${seenN} из ${all}</b><small>карт встречено</small><i class="pf-bar" style="--k:${(seenN / all).toFixed(3)}"></i><span>Бестиарий</span></button>
+      <div class="pf-tile"><b>${goldenCount()}</b><small>золотых карт</small><span>Победите монстра ${GOLD_AT} раз — он станет золотым</span></div>
+      <button class="pf-tile" data-act="avatar"><b>${framesOpen} из ${frames}</b><small>особых рамок</small><span>Облик героя</span></button>
+    </div>
+    <h3>Рубашка колод</h3>
+    <div class="pf-backs">${BACKS.map(b => { const open = backOpen(b), pg = b.prog?.(pr); return `<button class="pf-backtile${b.id === cur ? ' on' : ''}${open ? '' : ' locked'}" data-back="${b.id}" ${open ? '' : 'aria-disabled="true"'} title="${esc(open ? 'Выбрать рубашку' : 'Откроется: ' + b.text)}">
+      ${backPreview(b.id)}<b>${esc(b.name)}</b><small>${open ? (b.id === cur ? 'выбрана' : 'выбрать') : `${esc(b.text)}${pg ? ` · ${Math.min(pg[0], pg[1])}/${pg[1]}` : ''}`}</small></button>`; }).join('')}</div>
+    <h3>Достижения</h3>
+    <ul class="pf-ach">${Object.entries(ACH).map(([k, [t]]) => { const fi = Object.keys(FRAME_ACH).find(i => FRAME_ACH[i] === k); return `<li class="${a[k] ? 'done' : ''}">${ico(a[k] ? 'laurels' : 'padlock')}<span>${esc(t)}</span>${fi ? `<small>рамка «${esc(AV_LABELS.frame[fi])}»</small>` : ''}</li>`; }).join('')}</ul>
+    <button class="btn ghost" data-act="closeOverlay">Закрыть</button></div>`);
 }
 
 // ───────────── сундук наград ─────────────
@@ -3277,6 +3353,7 @@ document.addEventListener('click', async e => {
       }
       return showOverlay(`<div class="modal" role="dialog" aria-label="Меню"><h2>Меню</h2>
         <button class="btn" data-act="avatar">Облик героя</button>
+        <button class="btn" data-act="profile">Профиль и коллекция</button>
         <button class="btn" data-act="copy">Скопировать приглашение</button>
         <button class="btn" data-act="copyWatch">Ссылка для зрителей</button>
         <button class="btn" data-act="guide">Справочник карт</button>
@@ -3284,6 +3361,14 @@ document.addEventListener('click', async e => {
         ${isHost && S.game.phase === 'ended' ? '<button class="btn primary" data-act="toLobby">Новая партия</button>' : ''}
         <button class="btn ghost" data-act="leave">${S.game.phase === 'playing' ? 'Выйти (за вас доиграет автопилот)' : 'Выйти из комнаты'}</button>
         <button class="btn ghost" data-act="closeOverlay">Вернуться к игре</button></div>`);
+    }
+    case 'profile': return openProfile();
+    case 'collection': {
+      e.preventDefault();
+      showOverlay('<div class="modal guide-modal" id="guideModal"></div>');
+      const { renderGuide } = await import('/guide.js');
+      renderGuide($('#guideModal'), { onClose: closeOverlay, collection: true });
+      return;
     }
     case 'sideToggle': S.ui.sideOpen = !S.ui.sideOpen; $('#sidepanel').classList.toggle('open', S.ui.sideOpen); return;
     case 'addBot': { const r = await call('room:addBot'); if (!r.ok) toast(r.error); return; }

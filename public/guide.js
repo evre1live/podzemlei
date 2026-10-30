@@ -4,6 +4,7 @@ import { CARD_DEFS, RACE_NAMES, CLASS_NAMES, SLOT_NAMES, TAG_NAMES, ruleText, BO
   TAME_MARGIN, tameBonus, TRAP_ROLL, TRAP_SKILL, TRAP_FAIL_LEVELS } from '/shared/cards.js';
 import { esc, cardHTML } from '/art.js';
 import { ico } from '/icons.js';
+import { isSeen, isGolden, slainOf, GOLD_AT, goldenCount, profile } from '/profile.js';
 
 // категории в порядке показа; у каждой — проверка карты и пояснение
 export const GUIDE_CATS = [
@@ -132,11 +133,18 @@ function fullText(d) {
   return p.map(x => `<p>${x}</p>`).join('');
 }
 
-function entryHTML(d) {
-  return `<article class="g-entry" data-cat="${catOf(d)}">
-    <button class="g-card" data-guide-card="${esc(d.id)}" aria-label="Показать карту «${esc(d.name)}» крупно">${cardHTML(d.id + '#0', { size: 'md', tab: false, full: true })}</button>
+// коллекция: невстреченная карта — тёмный силуэт под замком; побеждённый монстр — счёт до золотой, золотой — в золоте
+function entryHTML(d, coll = false) {
+  if (coll && !isSeen(d.id)) return `<article class="g-entry g-locked" data-cat="${catOf(d)}">
+    <div class="g-card locked" aria-hidden="true">${cardHTML(d.id + '#0', { size: 'md', tab: false, full: true })}<i class="g-lock">${ico('padlock')}</i></div>
+    <div class="g-info"><h3>Не встречалась</h3><div class="g-text muted">Карта откроется, когда попадётся вам в партии: в руке, на столе или в бою.</div></div>
+  </article>`;
+  const mon = d.type === 'monster', n = mon ? slainOf(d.id) : 0, gold = coll && mon && isGolden(d.id);
+  return `<article class="g-entry${gold ? ' g-gold' : ''}" data-cat="${catOf(d)}">
+    <button class="g-card" data-guide-card="${esc(d.id)}" aria-label="Показать карту «${esc(d.name)}» крупно">${cardHTML(d.id + '#0', { size: 'md', tab: false, full: true, cls: gold ? 'golden' : '' })}</button>
     <div class="g-info">
       <h3>${esc(d.name)}</h3>
+      ${coll && mon ? `<p class="g-slain${gold ? ' gold' : ''}">${gold ? `Золотая карта — побеждён ${n} ${plural(n, 'раз', 'раза', 'раз')}` : n ? `Побеждён ${n} из ${GOLD_AT} — до золотой ещё ${GOLD_AT - n}` : `Ещё не побеждён — победите ${GOLD_AT} раз, и карта станет золотой`}</p>` : ''}
       <div class="g-text">${fullText(d)}</div>
       <dl class="g-facts">${facts(d).map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>
     </div>
@@ -144,8 +152,8 @@ function entryHTML(d) {
 }
 
 // state: { cat, sort, q }
-export function renderGuide(root, { onClose = null, standalone = false } = {}) {
-  const st = { cat: 'all', sort: 'cat', q: '' };
+export function renderGuide(root, { onClose = null, standalone = false, collection = false } = {}) {
+  const st = { cat: collection ? 'monster' : 'all', sort: 'cat', q: '', coll: collection };
   const counts = Object.fromEntries(GUIDE_CATS.map(c => [c.id, CARD_DEFS.filter(c.test).length]));
   const doors = CARD_DEFS.filter(d => d.deck === 'door').reduce((a, d) => a + (d.copies || 1), 0);
   const treas = CARD_DEFS.filter(d => d.deck === 'treasure').reduce((a, d) => a + (d.copies || 1), 0);
@@ -157,17 +165,25 @@ export function renderGuide(root, { onClose = null, standalone = false } = {}) {
     <div class="g-tools">
       <input type="search" class="g-search" placeholder="Поиск по названию и тексту" aria-label="Поиск карт">
       <label class="g-sort">Порядок <select aria-label="Порядок карт">${SORTS.map(s => `<option value="${s.id}">${s.label}</option>`).join('')}</select></label>
+      <label class="g-coll"><input type="checkbox" ${collection ? 'checked' : ''}> Моя коллекция</label>
     </div>
+    <div class="g-progress"${collection ? '' : ' hidden'}></div>
     <div class="g-cats" role="tablist" aria-label="Категории">
-      <button role="tab" data-gcat="all" aria-selected="true">Все <small>${CARD_DEFS.length}</small></button>
-      ${GUIDE_CATS.map(c => `<button role="tab" data-gcat="${c.id}" aria-selected="false">${c.label} <small>${counts[c.id]}</small></button>`).join('')}
+      <button role="tab" data-gcat="all" aria-selected="${!collection}">Все <small>${CARD_DEFS.length}</small></button>
+      ${GUIDE_CATS.map(c => `<button role="tab" data-gcat="${c.id}" aria-selected="${collection && c.id === 'monster'}">${c.label} <small>${counts[c.id]}</small></button>`).join('')}
       <button role="tab" data-gcat="contracts" aria-selected="false">Контракты <small>${CONTRACTS.length}</small></button>
     </div>
     <div class="g-list"></div>
   </div>`;
   const list = root.querySelector('.g-list');
+  const prog = root.querySelector('.g-progress');
   const draw = () => {
     const q = st.q.trim().toLowerCase();
+    if (st.coll) {
+      const seenN = profile().seen.length;
+      prog.innerHTML = `<b>Бестиарий: встречено ${seenN} из ${CARD_DEFS.length}</b><i class="pf-bar" style="--k:${(seenN / CARD_DEFS.length).toFixed(3)}"></i><small>Золотых карт: ${goldenCount()} · монстр становится золотым после ${GOLD_AT} побед</small>`;
+    }
+    prog.hidden = !st.coll;
     if (st.cat === 'contracts') {
       const ks = CONTRACTS.filter(k => !q || `${k.name} ${k.text} ${rewardText(k.reward)}`.toLowerCase().includes(q));
       list.innerHTML = `<h3 class="g-sec">Контракты</h3><p class="g-note">Тайные цели: у каждого игрока по одной. Выполнил — награда и новый контракт; самому отстающему ещё карта клада. Уровень по контракту не бывает последним — тогда вместо него клад.</p>`
@@ -175,7 +191,7 @@ export function renderGuide(root, { onClose = null, standalone = false } = {}) {
       return;
     }
     let defs = CARD_DEFS.filter(d => (st.cat === 'all' || catOf(d) === st.cat)
-      && (!q || searchText(d).includes(q)));
+      && (!q || ((!st.coll || isSeen(d.id)) && searchText(d).includes(q))));
     const order = Object.fromEntries(GUIDE_CATS.map((c, i) => [c.id, i]));
     const byName = (a, b) => a.name.localeCompare(b.name, 'ru');
     if (st.sort === 'name') defs.sort(byName);
@@ -191,12 +207,13 @@ export function renderGuide(root, { onClose = null, standalone = false } = {}) {
         html += `<h3 class="g-sec">${esc(cat?.label || 'Прочее')}</h3>${cat?.note ? `<p class="g-note">${esc(cat.note)}</p>` : ''}`;
         last = c;
       }
-      html += entryHTML(d);
+      html += entryHTML(d, st.coll);
     }
     list.innerHTML = html || '<p class="muted">Ничего не нашлось.</p>';
   };
   root.querySelector('.g-search').addEventListener('input', e => { st.q = e.target.value; draw(); });
   root.querySelector('.g-sort select').addEventListener('change', e => { st.sort = e.target.value; draw(); });
+  root.querySelector('.g-coll input').addEventListener('change', e => { st.coll = e.target.checked; draw(); });
   root.querySelector('.g-cats').addEventListener('click', e => {
     const b = e.target.closest('[data-gcat]');
     if (!b) return;
