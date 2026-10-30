@@ -231,8 +231,9 @@ export const fx = {
     const c = center(el);
     emit(o.n || 14, c, () => ({ x: c.x + rnd(-c.w / 2, c.w / 2), y: c.y + rnd(-c.h / 2, c.h / 2), vx: rnd(-20, 20), vy: rnd(-60, -10), size: rnd(3, 6), vr: rnd(-3, 3), color: pick(o.colors || PAL.gold), shape: 'star', add: true, life: rnd(0.6, 1.2), fadeIn: true, delay: rnd(0, 0.3) }));
   },
-  rise(el, o = {}) { // уровень вверх: искры поднимаются столбом
+  rise(el, o = {}) { // уровень вверх: искры поднимаются столбом и вспыхивает золотой круг
     const c = center(el);
+    this.flip(c, 'magic-gold', { k: 1.7 });
     emit(o.n || 34, c, () => ({ x: c.x + rnd(-c.w * 0.45, c.w * 0.45), y: c.y + c.h * 0.4, vx: rnd(-14, 14), vy: rnd(-180, -70), size: rnd(2.5, 5.5), vr: rnd(-4, 4), color: pick(o.colors || PAL.gold), shape: pick(['star', 'dot', 'star']), add: true, life: rnd(0.8, 1.5), fadeIn: true, delay: rnd(0, 0.35), drag: 0.985 }));
     emit(1, c, () => ({ shape: 'glow', size: c.w * 0.9, color: 'rgba(255,224,138,.55)', life: 0.6, grow: 60 }));
   },
@@ -242,7 +243,10 @@ export const fx = {
   },
   smoke(el, o = {}) {
     const c = center(el);
-    emit(o.n || 18, c, () => ({ x: c.x + rnd(-c.w * 0.3, c.w * 0.3), y: c.y + rnd(-c.h * 0.2, c.h * 0.3), vx: rnd(-26, 26), vy: rnd(-70, -20), size: rnd(8, 16), grow: rnd(14, 30), color: pick(o.colors || PAL.purple), shape: 'smoke', life: rnd(0.9, 1.6), fadeIn: true, wob: rnd(1, 3) }));
+    // клуб дыма — покадровый; для проклятий (лиловые частицы) ещё и магический круг
+    this.flip(c, 'smoke', { k: 1.6 });
+    if (!o.colors || o.colors === PAL.purple) this.flip(c, 'magic-violet', { k: 1.4 });
+    emit(Math.round((o.n || 18) * 0.5), c, () => ({ x: c.x + rnd(-c.w * 0.3, c.w * 0.3), y: c.y + rnd(-c.h * 0.2, c.h * 0.3), vx: rnd(-26, 26), vy: rnd(-70, -20), size: rnd(8, 16), grow: rnd(14, 30), color: pick(o.colors || PAL.purple), shape: 'smoke', life: rnd(0.9, 1.6), fadeIn: true, wob: rnd(1, 3) }));
     if (o.sparks !== false) fx.burst(c, { n: 10, colors: ['#d9b3ff', '#b88ae6', '#fff'], speed: 160, g: 0 });
   },
   dust(el, o = {}) {
@@ -322,12 +326,28 @@ export const fx = {
   // косой росчерк удара поперёк элемента
   slash(el, o = {}) {
     if (reduced()) return;
+    this.flip(el, /255,\s*9|255,\s*6/.test(o.color || '') ? 'hit-blood' : 'hit-gold', { k: 1.1 });
     const c = center(el);
     const d = document.createElement('div');
     d.className = 'fx-slash ' + (o.cls || '');
     d.style.cssText = `left:${c.x}px;top:${c.y}px;width:${Math.max(c.w, 120) * 1.5}px;--sc:${o.color || '255,240,210'};--ang:${o.angle ?? -28}deg`;
     document.body.append(d);
     setTimeout(() => d.remove(), 520);
+  },
+
+  // ───────────── покадровые эффекты (art/flipbooks.py) ─────────────
+  // kind: fire (петля), smoke, hit-gold, hit-blood, magic-violet, magic-green, magic-gold; size — px; o.loop — сколько мс держать петлю
+  flip(el, kind, o = {}) {
+    if (reduced() || !FLIP[kind]) return null;
+    const c = center(el), [n, ms, blend] = FLIP[kind];
+    const size = o.size || Math.max(110, Math.min(320, Math.max(c.w, c.h) * (o.k ?? 1.25)));
+    const d = document.createElement('i');
+    d.className = 'fx-flip';
+    d.style.cssText = `left:${c.x + (o.dx || 0)}px;top:${c.y + (o.dy || 0)}px;width:${size}px;height:${size}px;--n:${n};--fd:${ms}ms;`
+      + `background-image:url(/vfx/flip/${kind}.webp?v=${FLIP_V});mix-blend-mode:${blend};${o.rot ? `rotate:${o.rot}deg;` : ''}${o.loop ? `animation-iteration-count:infinite;` : ''}`;
+    document.body.append(d);
+    setTimeout(() => d.remove(), o.loop || ms + 40);
+    return d;
   },
 
   // ───────────── DOM-эффекты ─────────────
@@ -421,6 +441,11 @@ export const fx = {
     }, reduced() ? 0 : 900);
   },
 };
+
+// листы кадров: [кадров, длительность, режим наложения]
+const FLIP_V = 1;
+const FLIP = { fire: [16, 900, 'screen'], smoke: [16, 900, 'normal'], 'hit-gold': [12, 520, 'screen'], 'hit-blood': [12, 520, 'screen'],
+  'magic-violet': [16, 900, 'screen'], 'magic-green': [16, 900, 'screen'], 'magic-gold': [16, 900, 'screen'] };
 
 // библиотека кубика (three.js + cannon-es) подгружается заранее, когда браузер свободен
 let dice3d = null, diceLoading = false;

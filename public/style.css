@@ -2778,3 +2778,9 @@ body[data-grade="home"] .g-tone { opacity: .22; }
 @media (prefers-reduced-motion: reduce) { .g-grain { animation: none; } }
 html.no-depth .g-grain { animation: none; }
 body:has(#world.still) .g-grain { display: none; }
+
+/* ═════════ покадровые эффекты (fx.flip) ═════════ */
+.fx-flip { position: fixed; z-index: 57; pointer-events: none; translate: -50% -50%; background-repeat: no-repeat; background-size: calc(var(--n) * 100%) 100%;
+  animation: fxFlip var(--fd) steps(var(--n)) both; image-rendering: auto; }
+/* лист из n кадров: позиция кадра i — i / (n − 1) × 100 %; steps(n) от 0 до n / (n − 1) × 100 % попадает ровно в кадры */
+@keyframes fxFlip { from { background-position: 0 0; } to { background-position: calc(var(--n) / (var(--n) - 1) * 100%) 0; } }

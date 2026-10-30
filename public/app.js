@@ -1182,9 +1182,9 @@ function turnSweep(pid) {
 
 // живой бой: вокруг монстров всё время что-то происходит — по их природе: огонь, нежить, вода, грибы, механизмы
 const AMBIENT = {
-  boss: el => { fx.spray(el, { n: 7, spreadX: 1, spreadY: 0.2, dy: 0.45, speed: [40, 120], angle: [-2.3, -0.85], size: [2, 3.6], colors: ['#ff8a3d', '#ff4a1a', '#ffd27a', '#d96bff'], shape: 'spark', life: [0.6, 1.2], g: -70 });
+  boss: el => { if (Math.random() < 0.45) heatFlame(el); fx.spray(el, { n: 7, spreadX: 1, spreadY: 0.2, dy: 0.45, speed: [40, 120], angle: [-2.3, -0.85], size: [2, 3.6], colors: ['#ff8a3d', '#ff4a1a', '#ffd27a', '#d96bff'], shape: 'spark', life: [0.6, 1.2], g: -70 });
     if (Math.random() < 0.3) fx.ring(el, { size: 34, grow: 240, width: 3, color: 'rgba(220,80,255,.75)', life: 0.8 }); },
-  fire: el => fx.spray(el, { n: 6, spreadX: 0.9, spreadY: 0.1, dy: 0.45, speed: [30, 90], angle: [-2.1, -1.05], size: [1.8, 3.2], colors: ['#ffd27a', '#ff8a3d', '#ff5a1a'], shape: 'spark', life: [0.7, 1.3], g: -90 }),
+  fire: el => { if (Math.random() < 0.4) heatFlame(el); return fx.spray(el, { n: 6, spreadX: 0.9, spreadY: 0.1, dy: 0.45, speed: [30, 90], angle: [-2.1, -1.05], size: [1.8, 3.2], colors: ['#ffd27a', '#ff8a3d', '#ff5a1a'], shape: 'spark', life: [0.7, 1.3], g: -90 }); },
   undead: el => fx.spray(el, { n: 3, spreadX: 0.8, spreadY: 0.3, dy: 0.3, speed: [10, 30], angle: [-2, -1.1], size: [10, 18], grow: [14, 24], colors: ['rgba(120,255,180,.28)', 'rgba(170,140,255,.22)'], shape: 'smoke', add: false, life: [1.4, 2.2], fadeIn: true, wob: [1, 2] }),
   water: el => fx.spray(el, { n: 4, spreadX: 0.9, spreadY: 0.1, dy: -0.35, speed: [10, 40], angle: [1.2, 1.9], size: [2, 3], colors: ['#cfefff', '#9fd8e8'], shape: 'drop', add: false, life: [0.6, 0.9], g: 520 }),
   fungus: el => fx.spray(el, { n: 5, spreadX: 0.9, spreadY: 0.4, speed: [8, 26], angle: [-2.4, -0.7], size: [1.6, 3], colors: ['#c4ef86', '#8ff0d2', '#fff3b0'], shape: 'dot', life: [1.4, 2.4], fadeIn: true, wob: [2, 4], g: -12 }),
@@ -1192,6 +1192,11 @@ const AMBIENT = {
   insect: el => fx.spray(el, { n: 4, spreadX: 0.8, spreadY: 0.6, speed: [40, 90], size: [1.2, 1.8], colors: ['rgba(30,24,20,.85)', 'rgba(70,60,40,.8)'], shape: 'dot', add: false, life: [0.8, 1.4], wob: [6, 10] }),
   dust: el => fx.spray(el, { n: 3, spreadX: 1, spreadY: 0.05, dy: 0.5, speed: [10, 40], angle: [-2.6, -0.5], size: [6, 10], grow: [8, 14], colors: ['rgba(214,190,160,.3)', 'rgba(170,140,110,.28)'], shape: 'smoke', add: false, life: [0.9, 1.5] }),
 };
+// у огненных монстров и боссов из-под карты лижут языки пламени (покадровый огонь)
+function heatFlame(el) {
+  const r = el.getBoundingClientRect();
+  fx.flip({ x: r.left + r.width * (0.25 + Math.random() * 0.5), y: r.bottom - r.width * 0.32, w: 0, h: 0 }, 'fire', { size: r.width * (0.55 + Math.random() * 0.3) });
+}
 function combatAmbient() {
   const g = S.game;
   if (!g?.combat || g.phase !== 'playing' || document.hidden || matchMedia('(prefers-reduced-motion: reduce)').matches || (cine.on && !cine.idle)) return;

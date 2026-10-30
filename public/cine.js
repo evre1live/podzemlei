@@ -358,6 +358,7 @@ function throwThing(k, html, fromEl, toEl, o = {}) {
   return dur;
 }
 function impact(k, el, text, good, colors) {
+  fx.flip(el, good ? 'hit-gold' : 'hit-blood', { k: 1.2 });
   if (!el) return;
   const c = cen(box(el));
   fx.float(el, text, good ? 'good' : 'bad');
@@ -406,6 +407,9 @@ const tierOf = d => {
 // стена адского огня снизу экрана и пепел, летящий вверх
 function hellfire(k, dur = 1600) {
   const W = vw(), H = vh();
+  // языки пламени вдоль низа экрана — покадровые, петлёй
+  const n = Math.max(4, Math.round(W / 220));
+  for (let i = 0; i < n; i++) k.at(i * 60, () => fx.flip({ x: (i + 0.5) * W / n + rnd(-30, 30), y: H - 70, w: 0, h: 0 }, 'fire', { size: rnd(170, 240), loop: dur + 300 }));
   fx.spray({ x: W / 2, y: H + 6, w: W, h: 0 }, { n: 90, spreadX: 1, speed: [220, 520], angle: [-1.85, -1.3], g: -40, size: [2.4, 5.5], colors: ['#ff4a1a', '#ff8a3d', '#ffd27a', '#ff2a10'], shape: 'dot', life: [0.7, 1.4], delay: [0, dur / 1000] });
   fx.spray({ x: W / 2, y: H + 6, w: W, h: 0 }, { n: 50, spreadX: 1, speed: [60, 160], angle: [-1.8, -1.35], g: -30, size: [1.2, 2.4], colors: ['#ffe6a0', '#ffb347'], shape: 'spark', life: [1.4, 2.4], delay: [0, dur / 1000] });
   const wall = k.el('cn-hellwall', '');
