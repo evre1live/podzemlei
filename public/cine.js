@@ -1663,7 +1663,8 @@ export const cine = {
       minor: true,
       run(k) {
         const y = Math.max(90, vh() * 0.3);
-        const rb = k.el('cn-turn', '<b>Ваш ход</b>', { top: y + 'px' });
+        const meAv = api.avaOf(api.meId())?.querySelector('svg')?.outerHTML || '';
+        const rb = k.el('cn-turn', `<b>${meAv ? `<span class="rb-ava">${meAv}</span>` : ''}Ваш ход</b>`, { top: y + 'px' });
         k.a(rb, [{ transform: 'translateX(-110vw) skewX(-12deg)' }, { transform: 'translateX(0) skewX(-12deg)', offset: 0.28 }, { transform: 'translateX(2vw) skewX(-12deg)', offset: 0.72 }, { transform: 'translateX(110vw) skewX(-12deg)' }], { dur: 1250, ease: EASE.io });
         k.rm(rb, 1270);
         const me = api.avaOf(api.meId());

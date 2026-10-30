@@ -3768,3 +3768,144 @@ body:has(#world.still) .g-grain { display: none; }
 .feed .seal { flex: none; width: 18px; height: 18px; border-radius: 47% 53% 50% 46% / 52% 46% 54% 48%;
   background: radial-gradient(circle at 38% 32%, color-mix(in oklab, var(--seat) 55%, #fff), var(--seat) 45%, color-mix(in oklab, var(--seat) 50%, #000));
   box-shadow: 0 1px 2px rgb(60 20 0 / .5), inset 0 0 0 2px rgb(0 0 0 / .18); }
+
+/* ═════════ кованый крестик «закрыть» — на правом верхнем углу рамы любого окна (место считает placeX в app.js) ═════════ */
+.x-close { position: fixed; z-index: 45; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 50%; background: none; cursor: pointer;
+  filter: drop-shadow(0 4px 5px rgb(0 0 0 / .7)); transition: transform .18s cubic-bezier(.3, 1.5, .5, 1), filter .2s; animation: xIn .35s .12s cubic-bezier(.3, 1.5, .5, 1) both; }
+@keyframes xIn { from { opacity: 0; transform: scale(.4) rotate(-90deg); } }
+.x-close svg { display: block; width: 100%; height: 100%; }
+.x-close:hover { transform: rotate(90deg) scale(1.08); filter: drop-shadow(0 4px 5px rgb(0 0 0 / .7)) drop-shadow(0 0 8px rgb(255 190 110 / .55)); }
+.x-close:active { transform: rotate(90deg) scale(.94); }
+.x-close:focus-visible { outline: 2px solid #f2cf86; outline-offset: 3px; }
+/* на компьютере широкая «Закрыть» больше не нужна — её заменяет крестик */
+@media (min-width: 701px) { .btn.x-dup { display: none; } }
+@media (max-width: 700px) { .x-close { width: 36px; height: 36px; } }
+@media (prefers-reduced-motion: reduce) { .x-close { animation: none; } }
+
+/* ═════════ таверна живёт: свечи горят и освещают стол, по залу гуляет свет очага, стул отодвигается, кружка подъезжает ═════════ */
+.tavern .tv-candles .tb-flame { --k: 1.35 !important; }
+.tavern .tv-candles .tb-flame:nth-of-type(1) { --k: 1.5 !important; }
+/* пятно тёплого света от свечей на столешнице — дышит вместе с пламенем */
+.tavern .tv-props::before { content: ''; position: absolute; left: -24px; top: -14px; width: 460px; height: 330px; translate: -50% -50%; border-radius: 50%; pointer-events: none;
+  background: radial-gradient(closest-side, rgb(255 196 110 / .42), rgb(255 160 70 / .16) 50%, transparent); mix-blend-mode: screen; animation: tvCandle 2.3s steps(1, end) infinite, tvCandleSoft 3.1s ease-in-out infinite alternate; }
+@keyframes tvCandle { 0% { opacity: .92; } 11% { opacity: .78; } 19% { opacity: 1; } 37% { opacity: .86; } 52% { opacity: .97; } 64% { opacity: .8; } 79% { opacity: 1; } 91% { opacity: .88; } }
+@keyframes tvCandleSoft { from { scale: .97; } to { scale: 1.04; } }
+/* очаг за краем зала: тёплое зарево слева внизу медленно наплывает и отступает */
+.lobby .lobby-body { position: relative; isolation: isolate; }
+.lobby .lobby-body::before { content: ''; position: absolute; inset: -40px -10px 0; z-index: -1; pointer-events: none;
+  background: radial-gradient(ellipse 46% 60% at 4% 92%, rgb(255 140 50 / .34), rgb(255 110 40 / .1) 50%, transparent 72%),
+    radial-gradient(ellipse 30% 40% at 96% 12%, rgb(255 170 80 / .16), transparent 70%);
+  mix-blend-mode: screen; animation: hearth 5.2s ease-in-out infinite alternate; }
+@keyframes hearth { 0% { opacity: .65; transform: translateX(0); } 35% { opacity: 1; } 60% { opacity: .8; transform: translateX(12px); } 100% { opacity: .95; transform: translateX(-6px); } }
+/* искры от очага поднимаются по краю зала */
+.lobby .lobby-body::after { content: ''; position: absolute; left: 0; bottom: 0; width: 34%; height: 70%; z-index: -1; pointer-events: none; opacity: .8;
+  background-image: radial-gradient(2px 2px at 20% 80%, rgb(255 190 110 / .9), transparent 60%), radial-gradient(1.6px 1.6px at 60% 60%, rgb(255 214 140 / .8), transparent 60%),
+    radial-gradient(2.2px 2.2px at 40% 30%, rgb(255 160 80 / .8), transparent 60%);
+  background-size: 180px 260px, 220px 300px, 260px 340px; animation: menuEmbers 16s linear infinite; }
+/* стул отодвигается, когда за него садятся; кружка подъезжает по столу */
+.tavern .tv-seat:not(.emptyseat) .tv-chair { animation: chairOut .6s cubic-bezier(.2, .9, .3, 1.2) both; }
+@keyframes chairOut { from { translate: calc(-50% - cos(var(--a)) * 22px) calc(-50% - sin(var(--a)) * 22px); } }
+@keyframes tvMug { from { opacity: 0; translate: calc(-50% - cos(var(--a)) * 46px) calc(-60% - sin(var(--a)) * 46px); rotate: -40deg; } 70% { opacity: 1; } }
+.tv-mug { animation-duration: .7s; animation-delay: .25s; }
+@media (prefers-reduced-motion: reduce) { .tavern .tv-props::before, .lobby .lobby-body::before, .lobby .lobby-body::after, .tavern .tv-seat .tv-chair { animation: none; } }
+@media (max-width: 700px) { .tavern .tv-props::before { left: -6px; top: -26px; width: 300px; height: 300px; } }
+/* анимации посадки — только у только что севшего */
+.tavern .tv-seat .ava, .tv-mug, .tavern .tv-seat:not(.emptyseat) .tv-chair { animation: none; }
+.tavern .tv-seat.sit-in .ava { animation: tvSit .45s cubic-bezier(.2, .9, .3, 1.2) both; }
+.tavern .tv-seat.sit-in .tv-mug { animation: tvMug .7s .25s cubic-bezier(.2, .9, .3, 1.3) both; }
+.tavern .tv-seat.sit-in .tv-chair { animation: chairOut .6s cubic-bezier(.2, .9, .3, 1.2) both; }
+@media (prefers-reduced-motion: reduce) { .tavern .tv-seat.sit-in :is(.ava, .tv-mug, .tv-chair) { animation: none; } }
+
+/* ═════════ чат — пузыри с портретом на пергаменте: свои — справа, чужие — слева ═════════ */
+.feed .msg.cb { display: flex; align-items: flex-end; gap: 7px; margin: 6px 0 0; padding: 0; }
+.feed .msg.cb.cont { margin-top: 2px; }
+.feed .msg.cb.mine { flex-direction: row-reverse; }
+.cb-ava { flex: none; width: 28px; height: 28px; border-radius: 50%; overflow: hidden; display: grid; place-items: center; background: #2a1d12;
+  box-shadow: 0 0 0 2px var(--pc, #8a6a44), 0 2px 4px rgb(60 30 0 / .45); }
+.cb-ava.empty { background: none; box-shadow: none; }
+.cb-ava svg { display: block; width: 100%; height: 100%; }
+.cb-ava .gi { width: 60%; height: 60%; color: #e8d8b4; }
+.cb-bubble { position: relative; max-width: calc(100% - 44px); padding: 6px 10px 7px; border-radius: 10px 10px 10px 3px; line-height: 1.35;
+  background: rgb(255 248 230 / .62); box-shadow: inset 0 0 0 1px rgb(96 62 28 / .28), 0 1px 3px rgb(80 50 20 / .25); overflow-wrap: anywhere; }
+.msg.cb.mine .cb-bubble { border-radius: 10px 10px 3px 10px; background: rgb(240 214 160 / .62); box-shadow: inset 0 0 0 1px rgb(150 100 30 / .35), 0 1px 3px rgb(80 50 20 / .25); }
+.msg.cb.spec .cb-bubble { background: rgb(220 228 240 / .5); }
+.cb-name { display: block; font: 700 12px/1.2 var(--display); margin-bottom: 1px; }
+:is(.game .sidepanel, .lobby .side) .feed .msg.cb .cb-name { color: color-mix(in oklab, var(--pc, #6b4a2a) 52%, #23140a) !important; }
+.msg.cb.mine .cb-name { display: none; }
+.cb-name small { font-weight: 600; font-size: 10px; letter-spacing: .05em; text-transform: uppercase; opacity: .7; }
+.cb-text { color: #34230f; font-size: 14px; }
+.feed .msg.cb.cb-new { animation: cbIn .3s cubic-bezier(.2, .9, .3, 1.3) both; }
+@keyframes cbIn { from { opacity: 0; transform: translateY(8px) scale(.96); } }
+@media (prefers-reduced-motion: reduce) { .feed .msg.cb.cb-new { animation: none; } }
+
+/* медальон того, кто ходит, — на левом конце ленты */
+.game #stage .stage-msg h2.has-ava { position: relative; padding-left: 50px; }
+.rb-ava { position: absolute; left: -18px; top: 50%; translate: 0 -58%; width: 64px; height: 64px; border-radius: 50%; overflow: hidden; z-index: 2;
+  box-shadow: 0 0 0 3px #1a1008, 0 0 0 6px #d9a441, 0 0 0 7px #5a3a0e, 0 6px 12px rgb(0 0 0 / .6); background: #2a1d12; }
+.rb-ava svg { display: block; width: 100%; height: 100%; }
+.game #stage .stage-msg h2.rb-in .rb-ava { animation: rbAva .55s .2s cubic-bezier(.2, .9, .3, 1.4) both; }
+@keyframes rbAva { from { opacity: 0; scale: .4; rotate: -30deg; } }
+.cn-turn b { position: relative; }
+.cn-turn b .rb-ava { left: -30px; width: 84px; height: 84px; }
+.cn-turn b:has(.rb-ava) { padding-left: 70px; }
+@media (max-width: 700px) {
+  .game #stage .stage-msg h2.has-ava { padding-left: 34px; }
+  .rb-ava { width: 46px; height: 46px; left: -14px; }
+  .cn-turn b .rb-ava { width: 60px; height: 60px; left: -20px; }
+  .cn-turn b:has(.rb-ava) { padding-left: 46px; }
+}
+
+/* ═════════ правила: закладки разделов и примеры из настоящих частей игры ═════════ */
+.rl-nav { position: sticky; top: 16px; z-index: 3; display: flex; gap: 5px; margin: -16px -30px 4px; padding: 6px 18px 8px; overflow-x: auto; scrollbar-width: none;
+  background: linear-gradient(180deg, rgb(226 202 156), rgb(226 202 156 / .96) 80%, rgb(226 202 156 / 0)); }
+.rl-nav::-webkit-scrollbar { display: none; }
+.rl-nav button { flex: none; display: inline-flex; align-items: center; gap: 5px; min-height: 28px; padding: 3px 10px; border: 1px solid transparent; background: none; cursor: pointer;
+  border-image: url(/ui/obj/v2/plate-iron.webp) 46 fill / 8px stretch; color: #e9dcc4; font: 600 12.5px/1 var(--ui); filter: drop-shadow(0 2px 2px rgb(60 30 0 / .35)); }
+.rl-nav button .gi { width: 14px; height: 14px; padding: 0; background: none; box-shadow: none; color: currentColor; }
+.rl-nav button.on { border-image-source: url(/ui/obj/v2/plate-brass.webp); color: #2a1604; }
+.rl-nav button:hover { filter: brightness(1.12) drop-shadow(0 2px 2px rgb(60 30 0 / .35)); }
+@media (max-width: 700px) { .rl-nav { top: 14px; margin: -14px -18px 4px; padding: 6px 12px 8px; } }
+/* пример — тиснёная вставка на пергаменте */
+.sc-paper .rx { margin: 4px 0 6px; padding: 14px 12px 10px; border-radius: 3px; display: grid; gap: 8px; justify-items: center;
+  background: radial-gradient(ellipse at 50% 40%, rgb(60 36 14 / .82), rgb(30 18 8 / .92)); box-shadow: inset 0 0 0 1px rgb(255 220 160 / .18), inset 0 0 22px rgb(0 0 0 / .6), 0 6px 12px -6px rgb(60 30 0 / .6); }
+.sc-paper .rx-body { display: flex; align-items: center; justify-content: center; gap: 14px; flex-wrap: wrap; }
+.sc-paper .rx figcaption { position: relative; text-align: center; color: #e8d8b4 !important; font-size: 13.5px; line-height: 1.45; max-width: 46ch; }
+.rx-arrow { width: 34px; height: 22px; flex: none; filter: drop-shadow(0 1px 0 #000); }
+.rx-deck { display: block; width: 60px; height: 84px; border-radius: 6px; overflow: hidden; box-shadow: 2px 2px 0 #2c2117, 4px 4px 0 #100b07, 6px 10px 14px rgb(0 0 0 / .6); }
+.rx-deck svg { display: block; width: 100%; height: 100%; }
+.rx .card.sm { box-shadow: 0 0 0 1px #000, 6px 10px 14px rgb(0 0 0 / .6); }
+.rx .shield { position: relative; width: 74px; height: 86px; display: grid; place-items: center; }
+.rx .shield svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.rx .shield b { position: relative; font: 800 30px/1 var(--display); color: #fff; text-shadow: 0 2px 0 #000; }
+.rx-mid { display: grid; justify-items: center; gap: 6px; }
+.rx-mid > .gi { width: 40px; height: 40px; color: #cfcac2; }
+.rx .verdict * { text-shadow: none; }
+.rx-diebox { display: inline-block; vertical-align: middle; margin-left: 8px; }
+.rx-die { width: 30px; height: 30px; rotate: -12deg; filter: drop-shadow(0 3px 3px rgb(0 0 0 / .6)); }
+.rx-doll { width: min(260px, 100%); grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.rx-wheel .wheel-svg { width: 120px; height: 120px; filter: drop-shadow(0 6px 8px rgb(0 0 0 / .65)); animation: wlIdle 14s linear infinite; }
+
+/* главное меню: по кованому названию раз в несколько секунд пробегает блик — строго по буквам (маска — сама картинка) */
+.title.has-img { position: relative; width: fit-content; max-width: 100%; }
+.title.has-img::after { content: ''; position: absolute; inset: 0; pointer-events: none;
+  -webkit-mask: var(--tmask) left top / 100% 100% no-repeat; mask: var(--tmask) left top / 100% 100% no-repeat;
+  background: linear-gradient(105deg, transparent 38%, rgb(255 246 214 / .0) 42%, rgb(255 246 214 / .85) 49%, rgb(255 255 255 / .95) 50%, rgb(255 236 180 / .7) 52%, transparent 60%) -160% 0 / 260% 100% no-repeat;
+  mix-blend-mode: screen; animation: titleSheen 9s ease-in-out 2.2s infinite; }
+@keyframes titleSheen { 0% { background-position: -160% 0; } 22%, 100% { background-position: 260% 0; } }
+@media (prefers-reduced-motion: reduce) { .title.has-img::after { animation: none; opacity: 0; } }
+/* знак-люк — в латунном медальоне */
+.home-top .hatch { width: 52px; height: 52px; padding: 10px; border-radius: 50%; color: #f2cf86; flex: none;
+  background: radial-gradient(circle at 38% 30%, #4a4038, #1a1512 70%); box-shadow: inset 0 2px 5px rgb(0 0 0 / .8), 0 0 0 2px #2a1f10, 0 0 0 4px #c9963c, 0 0 0 5px #5a3a0e, 0 6px 10px rgb(0 0 0 / .6);
+  filter: none; }
+@media (max-width: 700px) { .home-top .hatch { width: 42px; height: 42px; padding: 8px; } }
+.game #stage .stage-msg { max-width: min(46em, 100%); }
+@media (min-width: 701px) { .game #stage .stage-msg h2 { white-space: nowrap; } }
+/* закладки сами листаются вбок — у такого элемента сетка свитка не учитывает высоту, задаём её явно */
+.rl-nav { min-height: 44px; }
+.sc-paper .rx { min-height: max-content; }
+/* свиток — обычный поток, а не сетка: сетка при прокрутке сжимала примеры и закладки */
+.sc-paper { display: block; }
+.sc-paper > * + * { margin-top: 10px; }
+.sc-paper > h3 { margin-top: 16px; }
+.sc-paper > .rl-nav + * { margin-top: 0; }
+.rl-nav { background: url(/ui/obj/v2/parchment.webp) 0 0 / 300px, #dcc394; box-shadow: 0 7px 8px -6px rgb(80 50 20 / .55); }

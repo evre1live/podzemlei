@@ -312,7 +312,7 @@ mount.home = () => {
       <div class="home-top"><div class="logo-row">${HATCH}<span class="spacer"></span><a class="btn ghost small" href="/guide">Справочник</a><button class="btn ghost small news-btn" data-act="news" title="Новые механики и карты по датам">Что нового${newsUnseen() ? '<i class="news-dot" aria-label="есть новое"></i>' : ''}</button><button class="btn ghost small" data-act="rules">Как играть</button></div></div>
     </header>
     <section class="band b-clay pebbles title-wrap">
-      <h1 class="title has-img"><img class="title-img" src="${MENU.title}" srcset="${MENU.title} 1000w, ${MENU.title2x} 2000w" sizes="(max-width: 1100px) 92vw, 1000px" width="1000" height="155" alt="Под Землёй"></h1>
+<h1 class="title has-img" style="--tmask:url('${MENU.title}')"><img class="title-img" src="${MENU.title}" srcset="${MENU.title} 1000w, ${MENU.title2x} 2000w" sizes="(max-width: 1100px) 92vw, 1000px" width="1000" height="155" alt="Под Землёй"></h1>
       <p class="subtitle">Карточная игра для компании от двух до шести человек. Выбивайте двери, побеждайте монстров из подвалов и тоннелей, собирайте клад и не стесняйтесь подставлять друзей. Кто первым дойдёт до 10-го уровня, тот и победил. Хозяин комнаты может выбрать быструю партию до 5-го или долгую — до 15 или 20.</p>
     </section>
     <section class="band b-rock home-main">
@@ -553,8 +553,12 @@ update.lobby = () => {
   // таверна: стулья по кругу у стола, моё место — внизу, остальные — по часовой стрелке в порядке прихода
   const n = Math.max(r.maxPlayers, r.members.length), mi = Math.max(0, r.members.findIndex(m => m.id === r.me));
   const ang = i => `--a:${(90 + (i - mi) * 360 / n).toFixed(1)}deg`;
+  // садится за стол (стул отодвигается, кружка подъезжает) только тот, кто сел сейчас, а не все при каждом обновлении
+  if (S.ui.seatedRoom !== r.id) { S.ui.seatedRoom = r.id; S.ui.seated = new Set(); }
+  const fresh = new Set(r.members.filter(m => !S.ui.seated.has(m.id)).map(m => m.id));
+  r.members.forEach(m => S.ui.seated.add(m.id));
   const seats = r.members.map((m, i) => `
-    <div class="seat tv-seat${m.id === r.me ? ' me' : ''}" style="--seat:${m.color};${ang(i)}" data-vmember="${m.id}">
+    <div class="seat tv-seat${m.id === r.me ? ' me' : ''}${fresh.has(m.id) ? ' sit-in' : ''}" style="--seat:${m.color};${ang(i)}" data-vmember="${m.id}">
       <i class="tv-chair" aria-hidden="true"></i><img class="tv-mug" src="/ui/obj/v2/mug-top.webp" alt="" decoding="async">
       ${m.id === r.me ? `<button class="ava ava-edit" data-act="avatar" aria-label="Настроить облик" title="Настроить облик">${avatarSVG(m.avatar, m.color)}<i>${ico('quill-ink')}</i></button>` : `<div class="ava">${avatarSVG(m.avatar, m.color)}</div>`}
       ${isHost && m.id !== r.me ? `<button class="btn ghost small kick" data-kick="${m.id}" title="Убрать из-за стола" aria-label="Убрать ${esc(m.name)}">${ico('cross-mark')}</button>` : ''}
@@ -621,9 +625,20 @@ function renderChat() {
   const el = $('#chatfeed');
   if (!el) return;
   const near = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
-  el.innerHTML = S.room.chat.map(m => m.sys
-    ? `<div class="sys">${esc(m.text)}</div>`
-    : `<div class="msg${m.spectator ? ' spec' : ''}"><b style="--pc:${esc(m.color)};color:${esc(m.color)}">${esc(m.name)}</b>${m.spectator && m.name !== 'Зритель' ? ' <small>зритель</small>' : ''}<b style="--pc:${esc(m.color)};color:${esc(m.color)}">:</b> ${esc(m.text)}</div>`).join('') || '<div class="sys">Здесь пока тихо.</div>';
+  // реплики — пузыри с портретом: свои справа, чужие слева; подряд от одного человека — без повтора портрета и имени
+  let last = null;
+  const newId = S.room.chat.at(-1)?.id !== S.ui.chatShown ? S.room.chat.at(-1)?.id : null;
+  S.ui.chatShown = S.room.chat.at(-1)?.id;
+  el.innerHTML = S.room.chat.map(m => {
+    if (m.sys) { last = null; return `<div class="sys">${esc(m.text)}</div>`; }
+    const mine = m.from && m.from === S.room.me, cont = last === (m.from || m.name);
+    last = m.from || m.name;
+    const mem = m.from && S.room.members.find(x => x.id === m.from), gp = m.from && S.game?.players?.find(x => x.id === m.from);
+    const av = gp ? gAva(gp) : mem?.avatar;
+    const face = cont ? '<span class="cb-ava empty"></span>' : `<span class="cb-ava" style="--pc:${esc(m.color)}">${av ? avatarSVG({ ...av, frame: 0 }, m.color) : ico(m.spectator ? 'all-seeing-eye' : 'person')}</span>`;
+    const who = cont ? '' : `<b class="cb-name" style="--pc:${esc(m.color)}">${esc(m.name)}${m.spectator && m.name !== 'Зритель' ? ' <small>зритель</small>' : ''}</b>`;
+    return `<div class="msg cb${mine ? ' mine' : ''}${m.spectator ? ' spec' : ''}${cont ? ' cont' : ''}${m.id === newId ? ' cb-new' : ''}">${face}<div class="cb-bubble">${who}<span class="cb-text">${esc(m.text)}</span></div></div>`;
+  }).join('') || '<div class="sys">Здесь пока тихо.</div>';
   if (near) el.scrollTop = el.scrollHeight;
 }
 
@@ -914,7 +929,9 @@ function renderStage() {
   }
   // лента с заголовком разворачивается, только когда заголовок сменился, а не при каждом обновлении стола
   const freshTitle = title !== S.ui.stageTitle; S.ui.stageTitle = title;
-  el.innerHTML = decks + `<div class="stage-inner${reveal ? ' with-reveal' : ''}"><div class="stage-msg"><h2${freshTitle ? ' class="rb-in"' : ''}>${title}</h2><p class="muted" style="margin:0">${text}</p></div>${reveal}<div class="act-bar">${actionButtons()}</div></div>`;
+  // на ленте — медальон того, кто ходит
+  const rbAva = tp && g.phase === 'playing' ? `<span class="rb-ava" style="--seat:${tp.color}">${avatarSVG({ ...gAva(tp), frame: 0 }, tp.color)}</span>` : '';
+  el.innerHTML = decks + `<div class="stage-inner${reveal ? ' with-reveal' : ''}"><div class="stage-msg"><h2 class="${freshTitle ? 'rb-in' : ''}${rbAva ? ' has-ava' : ''}">${rbAva}${title}</h2><p class="muted" style="margin:0">${text}</p></div>${reveal}<div class="act-bar">${actionButtons()}</div></div>`;
   if (reveal.includes('reveal-in')) requestAnimationFrame(() => { const r = $('#stage .reveal-in'); if (r) { fx.dust(r, { n: 18 }); fx.burst(r, { n: 16, speed: 200, g: 200 }); } });
   afterStage();
 }
@@ -1578,9 +1595,38 @@ function renderLog() {
 
 // ───────────────────────── поповеры ─────────────────────────
 let popOpts = [];
+// кованый крестик в углу каждого окна; окна, на которые нужно ответить (просьба о помощи, обмен), — без него.
+// Широкая кнопка «Закрыть» внизу остаётся на телефоне (до неё удобнее дотянуться), на компьютере её заменяет крестик
+const X_CLOSE = `<button class="x-close" data-act="closeOverlay" aria-label="Закрыть" title="Закрыть (Esc)"><svg viewBox="0 0 40 40" aria-hidden="true"><defs>
+  <radialGradient id="xcI" cx=".38" cy=".3" r=".75"><stop offset="0" stop-color="#8d847a"/><stop offset=".55" stop-color="#3a352f"/><stop offset="1" stop-color="#14110f"/></radialGradient>
+  <linearGradient id="xcB" x1="0" x2="1" y1="0" y2="1"><stop offset="0" stop-color="#fff1c0"/><stop offset=".5" stop-color="#d9a441"/><stop offset="1" stop-color="#7a4e14"/></linearGradient></defs>
+  <circle cx="20" cy="20" r="18.5" fill="url(#xcI)" stroke="#0b0908" stroke-width="1.5"/><circle cx="20" cy="20" r="15" fill="none" stroke="#c9963c" stroke-width="1.2" opacity=".75"/>
+  ${[0, 90, 180, 270].map(a => `<circle cx="${(20 + 16.6 * Math.cos((a + 45) * Math.PI / 180)).toFixed(1)}" cy="${(20 + 16.6 * Math.sin((a + 45) * Math.PI / 180)).toFixed(1)}" r="1.3" fill="#c9c1b5"/>`).join('')}
+  <path d="M13.5 13.5l13 13M26.5 13.5l-13 13" stroke="#1a1208" stroke-width="5.4" stroke-linecap="round"/><path d="M13.5 13.5l13 13M26.5 13.5l-13 13" stroke="url(#xcB)" stroke-width="3.4" stroke-linecap="round"/></svg></button>`;
 function showOverlay(html) {
   layer.innerHTML = `<div class="pop-back" data-backdrop>${html}</div>`;
   S.ui.overlay = true;
+  const box = layer.querySelector('.pop-back > :is(.modal, .pop, .g-zoom-in)');
+  if (box && !box.matches('#helpPrompt, #tradePrompt, #seatVoteModal')) {
+    placeX(box);
+    box.querySelectorAll('.btn[data-act="closeOverlay"]').forEach(b => { if (b.textContent.trim() === 'Закрыть') b.classList.add('x-dup'); });
+  }
+}
+// крестик живёт в подложке, а не в окне (у окон своя прокрутка — она обрезала бы его на углу рамы);
+// садится на правый верхний угол окна и едет за ним, если окно меняет размер
+let xObs = null;
+function placeX(box) {
+  const back = box.parentElement;
+  back.insertAdjacentHTML('beforeend', X_CLOSE);
+  const x = back.lastElementChild;
+  const put = () => {
+    if (!box.isConnected) { xObs?.disconnect(); return; }
+    const r = box.getBoundingClientRect(), k = box.matches('.scroll') ? 18 : box.matches('.shop') ? -4 : box.matches('.endscreen') ? 30 : 12, w = x.offsetWidth;
+    x.style.left = Math.min(innerWidth - w - 4, r.right - w + k) + 'px';
+    x.style.top = Math.max(4, r.top - k - (box.matches('.shop') ? 40 : 0)) + 'px';
+  };
+  put();
+  xObs?.disconnect(); xObs = new ResizeObserver(put); xObs.observe(box);
 }
 function closeOverlay() { layer.innerHTML = ''; S.ui.overlay = null; popOpts = []; }
 
@@ -2374,16 +2420,20 @@ function openNews() {
   </div>`);
 }
 
-const RULES = `<div class="modal rules scroll" role="dialog" aria-label="Как играть">
+const RULES = () => `<div class="modal rules scroll" role="dialog" aria-label="Как играть">
   <h2>${ico('rule-book')}Как играть</h2>
   <div class="sc-wrap"><div class="sc-paper">
+  <nav class="rl-nav" aria-label="Разделы правил"></nav>
   <p>Каждый начинает человеком первого уровня с 4 картами проходов и 4 картами клада. Побеждает тот, кто первым дойдёт до <b>10-го уровня</b>; хозяин в лобби может выбрать быструю партию до 5-го (на старте по 6 карт каждой колоды) или долгую — до 15 или 20. Последний уровень берётся только победой над монстром.</p>
   <h3>${ico('door')}Ход</h3>
   <p>1. Разложите расу, класс и вещи. 2. <b>Выбейте дверь</b>: монстр — бой, проклятие — сработает на вас, ловушка — обезвредить или принять расплату, остальное уходит в руку. 3. Если монстра не было — позовите на бой монстра с руки, а если монстров на руке нет — ищите неприятности (выйдет случайный монстр по глубине подземелья, разбуженный: +${TROUBLE_BONUS} к силе). Или просто обшарьте комнату. 4. Лишние карты сверх пяти отдаются самому слабому.</p>
+  ${rulesFig('turn')}
   <h3>${ico('crossed-swords')}Бой</h3>
   <p>Ваша сила — уровень плюс надетые вещи. Если она больше силы монстров, жмите «Добить!». У остальных есть несколько секунд, чтобы помешать: усилить монстра, подбросить ещё одного, ударить в спину. За победу — уровень и клад. Не хватает сил — зовите на помощь, пообещав часть клада, или бегите: побег удаётся на 5–6 кубика. Карта «Ты мой раб» заставляет любого игрока вступить в ваш бой: отказаться он не может, а клада ему не положено. Не убежали — получите расплату с карты монстра.</p>
+  ${rulesFig('fight')}
   <h3>${ico('breastplate')}Вещи и уровни</h3>
   <p>Один головняк, один броник, одна обувка, две руки и одна большая вещь (гномам — сколько угодно, механикам — три руки). Можно завести одного питомца: он даёт бонус и один раз спасает от расплаты. Вещи можно продать — голды идут в кошелёк и тратятся на рынке. Собрали все вещи комплекта — получаете бонус сверху: Легендарный (Шлем Ареса, Доспехи Бога, Сапоги эпохи и Меч Экскалибур) даёт ещё +7. Его части носит только человек — герой без расы, а со «Смешанной кровью» — герой любой расы.</p>
+  ${rulesFig('gear')}
   <h3>${ico('paw-print')}Спутники и приручение</h3>
   <p>Спутник — карта клада, он один: Носильщик даёт +2 к пределу руки и ещё одну большую вещь, Проводник — +2 к побегу, Наёмник — +3 к силе, но в начале каждого вашего хода берёт плату: 200 голдов из кошелька, а если их нет — карту ценой от 200 голдов из руки или запаса, иначе уходит. Спутник носит за вас вещи: когда он приходит, ему выпадают места — оружие и броник, а повезёт — ещё и головняк. Откройте свою вещь и выберите «Отдать спутнику»: её бонус пойдёт вам в силу. Вещи с ограничением по расе или классу носит только сам герой. Уйдёт спутник — его вещи вернутся вам. Победили зверя с перевесом ${TAME_MARGIN} и больше (чернокнижник — ${WARLOCK_TAME}) — до конца хода его можно приручить: он займёт место питомца и даст силу по своему уровню. Плут может сманить чужого спутника или зверя: сбросить карту и выбросить 4+.</p>
   <h3>${ico('duel')}Поединок</h3>
@@ -2393,6 +2443,7 @@ const RULES = `<div class="modal rules scroll" role="dialog" aria-label="Как 
   <p>У каждого есть кошелёк: голды в него приходят за проданные вещи и выполненные контракты. Сколько голдов у вас, видите только вы — чужие кошельки скрыты. Рынок открыт всегда — кнопка в шапке стола. В свой ход вне боя на голды можно купить разовые карты для боя, зелья, проклятия, чтобы наслать на соперников, и «Получи уровень» (не больше одного за ход, последний уровень так не взять). Продаётся только то, что ещё лежит в колоде, поэтому товар кончается. У каждой локации своя ценовая политика: в таверне еда за полцены, в Звёздной библиотеке дешевле уровни и свитки, на кладбище — проклятия, а в Небесной цитадели уровни в полтора раза дороже. Цены локации написаны на её карте. Карты «Сокровища Атлантиды» и «Сундук мертвеца» (по одной в колоде) сразу кладут в кошелёк по 3000 голдов.</p>
   <h3>${ico('double-face-mask')}Колесо Подлеца</h3>
   <p>Во время чужого боя на столе стоит Колесо Подлеца. Любой игрок, кроме бойца и помощника, может крутить его за ${WHEEL_COST} голдов — раз за бой. На колесе 16 равных секторов, и шанс исхода — ровно столько секторов, сколько ему отведено: +7 монстрам (4 из 16), +10 (3), +20 (1), ещё один монстр не ниже 10-го уровня (2), босс входит в комнату (1); осечка — +5 герою (2), сглаз — тот, кто крутил, теряет уровень (1), куш — он же берёт карту клада (1), пшик — ничего (1). Крутили колесо — отсчёт «помешать» начинается заново. Нажмите на колесо в бою, чтобы увидеть сектора.</p>
+  ${rulesFig('wheel')}
   <h3>${ico('wolf-trap')}Ловушки</h3>
   <p>Ловушка за дверью срабатывает на того, кто её открыл. Можно рискнуть и обезвредить — на кубике 4+ (плуту и механику 2+): тогда ловушка ваша и её можно подложить сопернику. Сорвалась — расплата и ещё −1 уровень. Можно не рисковать и просто принять расплату. Подложенную ловушку соперник обезвреживает тем же броском, но без лишнего штрафа. Противогаз и каска с канарейкой спасают от газа.</p>
   <h3>${ico('dwarf-face')}Расы и классы</h3>
@@ -2418,6 +2469,35 @@ const RULES = `<div class="modal rules scroll" role="dialog" aria-label="Как 
   </div></div>
   <div class="row sc-acts"><button class="btn primary" data-act="closeOverlay">Понятно</button><button class="btn ghost" data-act="guide">Справочник карт</button></div>
 </div>`;
+
+// примеры в правилах — из настоящих частей игры: колоды и карты, щиты силы с чашей весов, гнёзда куклы, кубик, колесо
+const DIE5 = `<svg class="rx-die" viewBox="0 0 60 60" aria-hidden="true"><defs><linearGradient id="rxD" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fbf3df"/><stop offset="1" stop-color="#cbb98f"/></linearGradient></defs>
+  <rect x="4" y="4" width="52" height="52" rx="10" fill="url(#rxD)" stroke="#5a4228" stroke-width="2"/>${[[17, 17], [43, 17], [30, 30], [17, 43], [43, 43]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="5" fill="#2a1a0c"/>`).join('')}</svg>`;
+function rulesFig(k) {
+  const arrow = `<svg class="rx-arrow" viewBox="0 0 40 24" aria-hidden="true"><path d="M2 12h28M22 4l10 8-10 8" fill="none" stroke="#d9a441" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  const fig = (body, cap) => `<figure class="rx rx-${k}"><div class="rx-body">${body}</div><figcaption>${cap}</figcaption></figure>`;
+  try {
+    if (k === 'turn') return fig(`<span class="rx-deck">${cardBackSVG('door')}</span>${arrow}${cardHTML('m_mole#0', { size: 'sm', tab: false })}${arrow}<span class="rx-deck">${cardBackSVG('treasure')}</span>`,
+      'Выбили дверь — за ней монстр. Победили — уровень и карты клада.');
+    if (k === 'fight') return fig(`<span class="shield hero lead">${SHIELD('hero')}<b>9</b></span><span class="rx-mid">${SWORDS}<span class="verdict win">${scalesSVG(-10)}<span>Герои сильнее</span></span></span><span class="shield mon">${SHIELD('mon')}<b>7</b></span>`,
+      'Ваша сила 9 больше 7 — жмите «Добить!». Слабее — зовите на помощь или бегите: нужно 5 или 6 на кубике.' + `<span class="rx-diebox">${DIE5}</span>`);
+    if (k === 'gear') return fig(`<div class="doll rx-doll">${gearTileBase('i_helmet#0', { tip: 'Головняк' })}${emptyTile('armor', 'Броник')}${emptyTile('feet', 'Обувка')}${gearTileBase('i_pick#0', { cls: 'wide', tip: 'В руках' })}</div>`,
+      'Вещь ложится в своё гнездо и добавляет силы. Пустое гнездо видно сразу, вещь на две руки занимает два.');
+    if (k === 'wheel') return fig(`<span class="rx-wheel">${wheelSVG({ big: false })}</span>`, 'В чужом бою за 1000 голдов — один раз за бой. Что выпадет, то и будет.');
+  } catch (e) { console.warn('rulesFig', k, e); }
+  return '';
+}
+// закладки разделов правил: нажатие листает свиток к разделу; закладка текущего раздела подсвечена
+function bindRulesNav() {
+  const paper = layer.querySelector('.modal.rules:not(.news) .sc-paper'), nav = paper?.querySelector('.rl-nav');
+  if (!paper || !nav) return;
+  const hs = [...paper.querySelectorAll('h3')];
+  nav.innerHTML = hs.map((h, i) => `<button type="button" data-rl="${i}">${h.querySelector('.gi')?.outerHTML || ''}<span>${esc(h.textContent.trim())}</span></button>`).join('');
+  nav.addEventListener('click', e => { const b = e.target.closest('[data-rl]'); if (b) paper.scrollTo({ top: hs[b.dataset.rl].offsetTop - nav.offsetHeight - 12, behavior: 'smooth' }); });
+  const mark = () => { const y = paper.scrollTop + nav.offsetHeight + 30; let cur = 0; hs.forEach((h, i) => { if (h.offsetTop <= y) cur = i; });
+    nav.querySelectorAll('[data-rl]').forEach((b, i) => b.classList.toggle('on', i === cur)); const on = nav.querySelector('.on'); if (on && (on.offsetLeft < nav.scrollLeft || on.offsetLeft + on.offsetWidth > nav.scrollLeft + nav.clientWidth)) nav.scrollLeft = on.offsetLeft - 12; };
+  paper.addEventListener('scroll', mark, { passive: true }); mark();
+}
 
 // ───────────────────────── эффекты ─────────────────────────
 // Сервер присылает короткий журнал событий (fx). Новые события проигрываются после перерисовки стола.
@@ -2694,7 +2774,7 @@ document.addEventListener('click', async e => {
     case 'avatarRandom': return avRandom();
     case 'avatarSave': return saveAvatar();
     case 'soundTest': return sfx.play('victory', { gap: 0 });
-    case 'rules': return showOverlay(RULES);
+    case 'rules': showOverlay(RULES()); return bindRulesNav();
     case 'news': return openNews();
     case 'voicePanel': return openVoicePanel();
     case 'voiceJoin': await vc.join(); return drawVoicePanel();
