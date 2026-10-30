@@ -1961,7 +1961,8 @@ function fitStage() {
   const game = document.querySelector('.game'), st = $('#stage'), inner = st?.querySelector('.stage-inner');
   if (!game || !inner) return;
   inner.style.zoom = '';
-  if (FAN.matches) { game.style.removeProperty('--stage-min'); return; }
+  if (FAN.matches) { game.style.removeProperty('--stage-min'); fitStageFan(game, st, inner); return; }
+  game.style.removeProperty('--stage-need');
   const cs = getComputedStyle(st);
   const pad = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
   const need = inner.scrollHeight + pad;
@@ -1969,6 +1970,24 @@ function fitStage() {
   const avail = Math.max(240, game.clientHeight - top - HAND_STRIP - 18);
   game.style.setProperty('--stage-min', Math.round(Math.min(need, avail)) + 'px');
   if (need > avail) inner.style.zoom = Math.max(0.55, (avail - pad) / (need - pad)).toFixed(3);
+}
+// Телефон: стол всегда одного размера — от него до веера руки внизу экрана (100svh в CSS, без прыжков от панели
+// браузера). Раньше высота шла по содержимому и стол на каждом событии менялся: 380, 650, 750, 500 пикселей.
+// Что не помещается — чуть уменьшается (до 0,74); бой ещё выше — тогда стол вытягивается под него
+const docTop = el => { let y = 0; for (let e = el; e; e = e.offsetParent) y += e.offsetTop; return y; };
+function fitStageFan(game, st, inner) {
+  const top = docTop(st);
+  // на пару пикселей верх стола гуляет (округление, тряска) — стол из-за этого не пересчитываем
+  if (Math.abs((Number(game.dataset.stTop) || 0) - top) > 3) { game.dataset.stTop = top; game.style.setProperty('--st-top', top + 'px'); }
+  game.style.removeProperty('--stage-need');
+  const cs = getComputedStyle(st);
+  const pad = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
+  const have = st.clientHeight - pad, need = inner.scrollHeight;
+  if (need <= have + 1) return;
+  const z = have / need;
+  if (z >= 0.74) { inner.style.zoom = z.toFixed(3); return; }
+  inner.style.zoom = '0.74';
+  game.style.setProperty('--stage-need', Math.ceil(need * 0.74 + pad) + 'px');
 }
 // бой на невысоком экране: колоды в углу сцены налезают на нижние ряды боя (перевес, награда, подсказки и кнопки) —
 // тогда бой отодвигается от колод вправо и чуть уменьшается. Решение держится до конца боя или до смены размера окна

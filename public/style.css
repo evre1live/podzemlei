@@ -845,7 +845,7 @@ body.my-turn .hand.has-play .card:not(.playable):not(.selected) { filter: satura
   .versus { flex-direction: row; }
   .mine { grid-template-columns: minmax(0, 1fr); max-height: none; }
   .home-main, .lobby-body { grid-template-columns: minmax(0, 1fr); }
-  body { overflow-x: hidden; }
+  body { overflow-x: clip; }
   .me-card { overflow: visible; }
   .opp { min-width: 172px; }
   .pop { flex-direction: column; align-items: center; }
@@ -868,6 +868,10 @@ body.my-turn .hand.has-play .card:not(.playable):not(.selected) { filter: satura
 /* ───────── живой фон (world.js) ───────── */
 #world { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
 #app { position: relative; z-index: 1; }
+/* ничего не вылезает за правый край: на iPhone даже несколько пикселей (тряска стола, крайняя карта веера,
+   выезжающая лента) заставляли Safari уменьшать всю страницу — стол прыгал в размере */
+html { overflow-x: hidden; }
+body, #app { overflow-x: clip; }
 .world { position: absolute; inset: 0; overflow: hidden; opacity: 0; transition: opacity 1.3s ease; background: #120e22; }
 .world.on { opacity: 1; }
 #world { container-type: size; }
@@ -1771,9 +1775,10 @@ label { color: var(--text-2); font-size: 14px; }
 }
 
 /* ───────────── живой фон: дыхание камеры и лёгкий параллакс за мышью ───────────── */
-#world { scale: 1.05; translate: var(--wx, 0px) var(--wy, 0px); transition: translate 1.4s cubic-bezier(.2,.7,.3,1); animation: worldBreath 34s ease-in-out infinite alternate; }
+/* «дыхание» и параллакс — у слоёв внутри: сам #world ровно по экрану, иначе он выступал за край и iPhone уменьшал страницу */
+#world > .world { scale: 1.05; translate: var(--wx, 0px) var(--wy, 0px); transition: translate 1.4s cubic-bezier(.2,.7,.3,1), opacity 1.3s ease; animation: worldBreath 34s ease-in-out infinite alternate; }
 @keyframes worldBreath { from { scale: 1.05; rotate: -.2deg; } to { scale: 1.085; rotate: .2deg; } }
-#world.still { animation: none; scale: 1.02; translate: none; }
+#world.still > .world { animation: none; scale: 1.02; translate: none; }
 #world.mood-combat .w-vignette { box-shadow: inset 0 0 200px rgba(190,40,24,.42); transition: box-shadow 1s; }
 
 /* смена хода: полоса света по фишке игрока */
@@ -1792,7 +1797,7 @@ label { color: var(--text-2); font-size: 14px; }
 .tug { box-shadow: 0 0 14px rgba(255,214,140,.15); }
 
 @media (prefers-reduced-motion: reduce) {
-  #world { animation: none; translate: none; }
+  #world > .world { animation: none; translate: none; }
   .fight::before, .turn-sweep::before { animation: none; }
 }
 
@@ -2614,7 +2619,9 @@ svg.av-hover .av-bg, svg.av-hover .av-hero { transition: transform .18s ease-out
 @media (max-width: 900px) {
   .table-bg { --fw: 26px; }
   .tb-mat { background-image: radial-gradient(ellipse 75% 70% at 50% 46%, rgb(var(--tb-tint, 255 200 140) / .07), transparent 70%), url(/ui/table/v2/mat-default-1024.webp); }
-  .game #stage.cave-stage { --fw: 26px; padding: 32px 26px 112px; }
+  .game #stage.cave-stage { --fw: 26px; padding: 30px 26px 98px; }
+  /* стол одного размера: от своего верха до веера руки (fitStageFan); выше — только если бой правда не помещается */
+  .game #stage.cave-stage { height: max(var(--stage-need, 0px), 440px, calc(100svh - var(--st-top, 210px) - 118px)); min-height: 0; }
   .game #stage .decks { transform: scale(.78); transform-origin: left bottom; }
   .game #stage.cave-stage::before { inset: 26px; }
   .tp-tl { width: 70px; left: -8px; top: -10px; }
@@ -2769,6 +2776,8 @@ body.is-dragging .pop, body.is-dragging .tip { display: none; }
 .die3d.fail .die3-scene { box-shadow: 0 0 0 3px rgb(224 96 74 / .8), 0 0 40px 10px rgb(224 96 74 / .45); }
 @keyframes d3ring { 0% { transform: scale(.5); opacity: 1; } 100% { transform: scale(1.6); opacity: 0; } }
 .die3d .dlabel { position: fixed; left: var(--dx, 50%); top: calc(var(--dy, 50%) + 58px); translate: -50% 0; white-space: nowrap; }
+/* на телефоне подпись кубика — по центру экрана и с переносом: у края она вылезала за экран */
+@media (max-width: 600px) { .die3d .dlabel { left: 50%; white-space: normal; width: max-content; max-width: calc(100vw - 24px); } }
 .die3d-cv { z-index: 1; filter: drop-shadow(0 0 0 transparent); }
 
 /* ═════════ кинематографический слой ═════════
