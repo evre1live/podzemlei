@@ -282,22 +282,22 @@ mount.home = () => {
       <p class="subtitle">Карточная игра для компании от двух до шести человек. Выбивайте двери, побеждайте монстров из подвалов и тоннелей, собирайте клад и не стесняйтесь подставлять друзей. Кто первым дойдёт до 10-го уровня, тот и победил. Хозяин комнаты может выбрать быструю партию до 5-го или долгую — до 15 или 20.</p>
     </section>
     <section class="band b-rock home-main">
-      <div class="panel">
-        <h2>Новая комната</h2>
+      <div class="panel p-create">
+        <div class="p-head"><h2>Новая комната</h2></div>
         <form class="form" id="createForm" autocomplete="off">
           <div class="hero-row"><button type="button" class="hero-ava" id="homeAva" data-act="avatar" aria-label="Настроить облик героя">${avatarSVG(S.avatar, '#3a3a42')}</button>
-            <div><div class="muted" style="font-size:14px;margin-bottom:6px">Ваш герой</div><button type="button" class="btn small" data-act="avatar">Настроить облик</button></div></div>
+            <div><div class="muted f-cap">Ваш герой</div><button type="button" class="btn small" data-act="avatar">Настроить облик</button></div></div>
           <label>Ваше имя<input type="text" id="nameInput" maxlength="20" placeholder="Например, Джамшид" required></label>
           <label>Название комнаты<input type="text" name="rname" maxlength="20" placeholder="Пятничный подвал"></label>
           <label>Пароль, чтобы зашли только свои<input type="password" name="password" maxlength="64" placeholder="Можно оставить пустым"></label>
-          <div><div class="muted" style="font-size:14px;margin-bottom:6px">Мест за столом</div>
-            <div class="seg" role="group" aria-label="Мест за столом">${[3, 4, 5, 6].map(n => `<button type="button" data-seats="${n}" aria-pressed="${n === 6}">${n}</button>`).join('')}</div></div>
-          <label class="check"><input type="checkbox" name="hidden"> Не показывать в общем списке — только по ссылке</label>
+          <div class="seats-f"><div class="muted f-cap">Мест за столом</div>
+            <div class="seg" role="group" aria-label="Мест за столом">${[3, 4, 5, 6].map(n => `<button type="button" data-seats="${n}" aria-pressed="${n === 6}" aria-label="${n} мест">${n}<span class="sp" aria-hidden="true">${'<i></i>'.repeat(n)}</span></button>`).join('')}</div></div>
+          <label class="check"><input type="checkbox" name="hidden"><i class="tick" aria-hidden="true"></i><span>Не показывать в общем списке — только по ссылке</span></label>
           <button class="btn primary big" type="submit">Создать комнату</button>
         </form>
       </div>
-      <div class="panel">
-        <h2>Войти в комнату</h2>
+      <div class="panel p-join">
+        <div class="p-head"><h2>Войти в комнату</h2></div>
         <form class="joincode" id="codeForm" autocomplete="off">
           <input type="text" id="codeInput" maxlength="6" placeholder="Код" aria-label="Код комнаты">
           <button class="btn" type="submit">Войти по коду</button>
@@ -314,6 +314,7 @@ mount.home = () => {
   app.querySelectorAll('[data-seats]').forEach(b => b.addEventListener('click', () => {
     seats = Number(b.dataset.seats);
     app.querySelectorAll('[data-seats]').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+    b.parentElement.style.setProperty('--i', [...b.parentElement.children].indexOf(b));   // латунная табличка едет к выбранному
   }));
   $('#createForm').addEventListener('submit', async e => {
     e.preventDefault();
@@ -368,12 +369,12 @@ function renderRooms() {
     const mine = !!S.tokens[r.id];
     const live = r.status !== 'lobby' && !mine;
     return `
-    <div class="room-row${live ? ' live' : ''}${mine ? ' mine' : ''}">
+    <div class="room-row${live ? ' live' : ''}${mine ? ' own' : ''}">
       <button class="room-main" ${live ? `data-watch="${esc(r.id)}"` : `data-join="${esc(r.id)}"`} data-locked="${r.locked}" aria-label="${mine ? 'Вернуться за стол' : live ? 'Смотреть' : 'Войти'}: ${esc(r.name)}">
         <span class="lock">${iconSVG(r.locked ? 'amulet' : 'chest')}</span>
         <span><span class="rname">${esc(r.name)}</span><br><span class="rmeta">${r.locked ? 'с паролем' : 'без пароля'}, хозяин ${esc(r.host)}${r.watchers ? ` · ${EYE}${r.watchers}` : ''}</span></span>
-        <span class="rmeta">${r.players} из ${r.max}</span>
-        <span class="status ${r.status}">${mine && r.status !== 'lobby' ? 'ваше место' : st[r.status]}</span>
+        <span class="rmeta r-count"><b>${r.players}</b> из ${r.max}<span class="pips" aria-hidden="true">${Array.from({ length: r.max }, (_, i) => `<i${i < r.players ? ' class="on"' : ''}></i>`).join('')}</span></span>
+        <span class="status st-${r.status}${mine && r.status !== 'lobby' ? ' st-seat' : ''}">${mine && r.status !== 'lobby' ? 'ваше место' : st[r.status]}</span>
       </button>
       <button class="btn small ${live ? 'primary' : 'ghost'} watch-btn" data-watch="${esc(r.id)}" data-locked="${r.locked}" title="Смотреть, не садясь за стол">${EYE}Смотреть</button>
     </div>`;
