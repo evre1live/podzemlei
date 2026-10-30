@@ -560,7 +560,7 @@ function renderChat() {
   const near = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
   el.innerHTML = S.room.chat.map(m => m.sys
     ? `<div class="sys">${esc(m.text)}</div>`
-    : `<div class="msg${m.spectator ? ' spec' : ''}"><b style="color:${esc(m.color)}">${esc(m.name)}</b>${m.spectator && m.name !== 'Зритель' ? ' <small>зритель</small>' : ''}<b style="color:${esc(m.color)}">:</b> ${esc(m.text)}</div>`).join('') || '<div class="sys">Здесь пока тихо.</div>';
+    : `<div class="msg${m.spectator ? ' spec' : ''}"><b style="--pc:${esc(m.color)};color:${esc(m.color)}">${esc(m.name)}</b>${m.spectator && m.name !== 'Зритель' ? ' <small>зритель</small>' : ''}<b style="--pc:${esc(m.color)};color:${esc(m.color)}">:</b> ${esc(m.text)}</div>`).join('') || '<div class="sys">Здесь пока тихо.</div>';
   if (near) el.scrollTop = el.scrollHeight;
 }
 

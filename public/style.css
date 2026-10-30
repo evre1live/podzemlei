@@ -2710,7 +2710,7 @@ body.is-dragging .pop, body.is-dragging .tip { display: none; }
 
 /* ═════════ лицо карты: меньше текста, металл, фольга ═════════ */
 /* в руке и на столе — коротко: значки меток и одна фраза; полный текст — при наведении и в окне карты */
-.card:not(.lg) .c-text { display: grid; align-content: center; padding-top: 12px; }
+.card:not(.lg):not(.sm) .c-text { display: grid; align-content: center; padding-top: 12px; }
 .card:not(.lg) .c-text::after { display: none; }
 .c-brief { display: block; font-size: 10.2px; line-height: 1.25; font-weight: 600; }
 .card .c-tags { position: absolute; top: 4px; right: 4px; z-index: 3; display: flex; flex-direction: column; gap: 3px; }
@@ -2784,3 +2784,142 @@ body:has(#world.still) .g-grain { display: none; }
   animation: fxFlip var(--fd) steps(var(--n)) both; image-rendering: auto; }
 /* лист из n кадров: позиция кадра i — i / (n − 1) × 100 %; steps(n) от 0 до n / (n − 1) × 100 % попадает ровно в кадры */
 @keyframes fxFlip { from { background-position: 0 0; } to { background-position: calc(var(--n) / (var(--n) - 1) * 100%) 0; } }
+
+/* ═════════ интерфейс из предметов (art/ui/build.py → /ui/obj/v1) ═════════
+   кнопки — кованые таблички с заклёпками, шапка — дубовая балка с хомутами, летопись — свиток на валиках,
+   рынок — лавка: навес, рама стола, задняя стенка из досок, карты на полках, ценники на нитке */
+/* кнопки: рисунок таблички по 9 частям поверх обычной рамки в 1 px — размеры кнопок не меняются */
+.btn, .btn:hover:not(:disabled), .btn:active:not(:disabled), .btn.ghost, .btn.ghost:hover:not(:disabled), .btn.primary, .btn.primary:hover:not(:disabled),
+.btn.danger, .btn.danger:hover:not(:disabled), .btn.hero, .btn.hero:hover:not(:disabled), .btn.spook, .btn.spook:hover:not(:disabled) {
+  background: none; border-color: transparent; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none;
+}
+.btn { border: 1px solid transparent; border-image: url(/ui/obj/v1/plate-iron.webp) 36 fill / 11px / 0 stretch; color: #efe4cf;
+  filter: drop-shadow(0 2px 2px rgb(0 0 0 / .5)); transition: filter .15s, transform .1s; }
+.btn:not(.primary) { text-shadow: 0 -1px 0 rgb(0 0 0 / .8), 0 1px 0 rgb(255 255 255 / .06); }
+.btn.ghost { border-image-source: url(/ui/obj/v1/plate-ghost.webp); color: #e2d6c0; }
+.btn.primary { border-image-source: url(/ui/obj/v1/plate-brass.webp); color: #2a1604; text-shadow: 0 1px 0 rgb(255 232 170 / .55), 0 -1px 0 rgb(70 36 0 / .3); }
+.btn.primary .gi { color: #3c2306; }
+.btn.danger { border-image-source: url(/ui/obj/v1/plate-danger.webp); color: #ffeee6; }
+.btn.hero { border-image-source: url(/ui/obj/v1/plate-hero.webp); color: #effff8; }
+.btn.spook { border-image-source: url(/ui/obj/v1/plate-hero.webp); color: #eef1ff; filter: hue-rotate(95deg) drop-shadow(0 2px 2px rgb(0 0 0 / .5)); }
+.btn.big { border-image-width: 14px; }
+.btn:hover:not(:disabled), .btn.primary:hover:not(:disabled) { filter: brightness(1.14) drop-shadow(0 2px 2px rgb(0 0 0 / .5)) drop-shadow(0 0 7px rgb(255 196 120 / .32)); }
+.btn:active:not(:disabled) { transform: translateY(1px); filter: brightness(.9) drop-shadow(0 1px 1px rgb(0 0 0 / .6)); }
+.btn:disabled { filter: grayscale(.7) brightness(.78); opacity: .6; }
+.btn:focus-visible { outline: 2px solid rgb(255 214 140 / .9); outline-offset: 2px; }
+
+/* шапка стола: дубовая балка, плашки на ней — кованые таблички, «Ваш ход» и рынок — латунные */
+.has-world .game .g-head, .game .g-head {
+  background: none; -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: none; border-radius: 0 !important;
+  border-style: solid; border-color: transparent; border-width: 0 46px;
+  border-image: url(/ui/obj/v1/beam.webp) 0 180 fill / 0 58px / 0 6px stretch;
+  padding: 9px 0; filter: drop-shadow(0 8px 10px rgb(0 0 0 / .55));
+}
+.game .g-head :is(.turninfo, .goal-pill, .depth-pill, .daily-pill, .market-pill, .contract-pill, .watch-pill, .loc-banner, .seat-pill) {
+  background: none; border: 1px solid transparent; box-shadow: none; border-image: url(/ui/obj/v1/plate-iron.webp) 36 fill / 9px / 0 stretch;
+  color: #eee2cb; text-shadow: 0 -1px 0 rgb(0 0 0 / .8); filter: drop-shadow(0 2px 2px rgb(0 0 0 / .55));
+}
+.game .g-head :is(.market-pill, .contract-pill, .loc-banner, .seat-pill):hover { border-color: transparent; filter: brightness(1.15) drop-shadow(0 2px 2px rgb(0 0 0 / .55)) drop-shadow(0 0 7px rgb(255 196 120 / .3)); }
+.game .g-head :is(.turninfo.mine, .market-pill) { background: none; border-image-source: url(/ui/obj/v1/plate-brass.webp); color: #2a1604; text-shadow: 0 1px 0 rgb(255 232 170 / .5);
+  filter: brightness(1.12) saturate(1.25) drop-shadow(0 2px 2px rgb(0 0 0 / .55)); }
+.game .g-head .market-pill .gi { color: #4a2a06; }
+.game .g-head .market-pill.trick { border-image-source: url(/ui/obj/v1/plate-hero.webp); filter: hue-rotate(110deg) drop-shadow(0 2px 2px rgb(0 0 0 / .55)); color: #f6efff; text-shadow: 0 -1px 0 rgb(0 0 0 / .7); }
+.game .g-head .market-pill.trick .gi { color: #f1e2ff; }
+.game .g-head .turninfo.mine::before { box-shadow: 0 0 0 2px rgb(60 30 0 / .45), 0 0 8px #ffc860; background: #fff0b8; }
+.game .g-head .contract-pill.ready { border-image-source: url(/ui/obj/v1/plate-hero.webp); color: #effff8; }
+.game .g-head .contract-pill.ready .gi { color: #d6fff0; }
+.game .g-head .depth-pill.deep, .game .g-head .watch-pill.on { background: none; border-image-source: url(/ui/obj/v1/plate-hero.webp); filter: hue-rotate(115deg) drop-shadow(0 2px 2px rgb(0 0 0 / .55)); }
+.game .g-head .watch-pill.on { filter: hue-rotate(60deg) drop-shadow(0 2px 2px rgb(0 0 0 / .55)); }
+.game .g-head .seat-pill { color: #effff8; border-image-source: url(/ui/obj/v1/plate-hero.webp); }
+@media (max-width: 700px) {
+  .has-world .game .g-head, .game .g-head { border-width: 0 30px; border-image-width: 0 46px; border-image-outset: 0 4px; padding: 7px 0; }
+}
+
+/* летопись и чат — свиток: пергамент между двумя валиками, текст чернилами */
+.game .sidepanel { --ink: #34230f; --ink-2: #6b5134; --ink-line: rgb(96 62 28 / .32);
+  position: relative; overflow: visible; border: 0; border-radius: 0 !important; -webkit-backdrop-filter: none; backdrop-filter: none;
+  margin: 20px 12px 20px; padding: 18px 0 16px;
+  background: linear-gradient(180deg, rgb(70 40 14 / .55), rgb(70 40 14 / 0) 22px), linear-gradient(0deg, rgb(70 40 14 / .5), rgb(70 40 14 / 0) 20px),
+    url(/ui/obj/v1/parchment.webp) 0 0 / 256px;
+  box-shadow: inset 0 0 34px rgb(120 72 28 / .5), inset 12px 0 16px -12px rgb(80 48 18 / .6), inset -12px 0 16px -12px rgb(80 48 18 / .6), 0 22px 36px -14px rgb(0 0 0 / .75);
+}
+.game .sidepanel::before, .game .sidepanel::after { content: ''; position: absolute; left: -15px; right: -15px; height: 38px; z-index: 4; pointer-events: none;
+  border-style: solid; border-color: transparent; border-width: 0 41px; border-image: url(/ui/obj/v1/roller.webp) 0 120 fill / 0 41px stretch;
+  filter: drop-shadow(0 4px 4px rgb(0 0 0 / .5)); }
+.game .sidepanel::before { top: -20px; }
+.game .sidepanel::after { bottom: -20px; transform: scaleY(-1); filter: drop-shadow(0 -4px 4px rgb(0 0 0 / .45)); }
+.game .sidepanel, .game .sidepanel .feed { text-shadow: none; }
+.game .sidepanel .tabs { border-bottom: 1px solid var(--ink-line); margin: 0 14px; }
+.game .sidepanel .tabs button { color: var(--ink-2); text-shadow: none; font-size: 16px; }
+.game .sidepanel .tabs button:hover { color: var(--ink); }
+.game .sidepanel .tabs button[aria-selected=true] { color: var(--ink); border-bottom-color: #8e2a1a; }
+.game .sidepanel .tabs .dot { background: radial-gradient(circle at 40% 35%, #e0553e, #8a1a0e); box-shadow: 0 1px 1px rgb(60 10 0 / .5); }
+.game .sidepanel .feed { color: var(--ink); scrollbar-color: rgb(110 72 36 / .5) transparent; padding-inline: 16px; }
+.game .sidepanel .feed .li { color: var(--ink-2); }
+.game .sidepanel .feed .l-turn { color: var(--ink); border-top-color: var(--ink-line); }
+.game .sidepanel .feed .l-good, .game .sidepanel .feed .l-good .li { color: #1f6232; }
+.game .sidepanel .feed .l-bad, .game .sidepanel .feed .l-bad .li { color: #8e2414; }
+.game .sidepanel .feed .l-curse, .game .sidepanel .feed .l-curse .li { color: #5a2a86; }
+.game .sidepanel .feed .l-win { color: #7a4a06; }
+.game .sidepanel .feed .l-event { color: #4a2c12; }
+.game .sidepanel .feed .l-combat { color: var(--ink); }
+.game .sidepanel .feed :is(.sys, .l-sys, .l-info) { color: var(--ink-2); }
+.game .sidepanel .feed .msg { color: var(--ink); }
+.game .sidepanel .feed .msg b { color: color-mix(in oklab, var(--pc, #6b4a2a) 52%, #23140a) !important; }
+.game .sidepanel .feed .msg small { color: var(--ink-2); }
+.game .sidepanel .chatform { border-top: 1px solid var(--ink-line); margin: 0 10px; padding: 10px 4px 2px; }
+.game .sidepanel .chatform input { background: rgb(255 246 226 / .35); border: 1px solid rgb(96 62 28 / .4); color: var(--ink); box-shadow: inset 0 1px 3px rgb(80 50 20 / .3); text-shadow: none; }
+.game .sidepanel .chatform input::placeholder { color: #8a7052; }
+.game .sidepanel .chatform input:focus { border-color: #8e2a1a; box-shadow: inset 0 1px 3px rgb(80 50 20 / .3), 0 0 0 2px rgb(142 42 26 / .2); }
+@media (max-width: 900px) {
+  .cave .sidepanel.open { inset: auto 14px 22px 14px; height: calc(60dvh - 14px); margin: 0; background: linear-gradient(180deg, rgb(70 40 14 / .55), rgb(70 40 14 / 0) 22px), linear-gradient(0deg, rgb(70 40 14 / .5), rgb(70 40 14 / 0) 20px), url(/ui/obj/v1/parchment.webp) 0 0 / 256px; }
+}
+
+/* рынок — лавка: полосатый навес на жерди, рама стола, задняя стенка из досок */
+.modal.shop { position: relative; overflow: visible; border-radius: 0 !important;
+  border: 20px solid transparent; border-image: url(/ui/table/v1/frame.webp) 118 / 20px stretch;
+  background: radial-gradient(ellipse 80% 55% at 50% 28%, rgb(255 184 100 / .12), transparent 72%), linear-gradient(180deg, rgb(0 0 0 / .6), rgb(0 0 0 / 0) 84px),
+    url(/ui/obj/v1/boards.webp) 0 0 / 256px;
+  background-clip: padding-box; -webkit-backdrop-filter: none; backdrop-filter: none;
+  box-shadow: 0 30px 60px -12px rgb(0 0 0 / .85); padding: 44px 16px 14px; margin-top: 28px; }
+.modal.shop::before { content: ''; position: absolute; left: -30px; right: -30px; top: -42px; height: 72px; z-index: 2; pointer-events: none;
+  background: url(/ui/obj/v1/awning.webp) 0 0 / auto 100% repeat-x; filter: drop-shadow(0 8px 6px rgb(0 0 0 / .5)); }
+.modal.shop::after { content: ''; position: absolute; left: -38px; right: -38px; top: -50px; height: 18px; z-index: 3; pointer-events: none;
+  border-style: solid; border-color: transparent; border-width: 0 20px; border-image: url(/ui/obj/v1/beam.webp) 0 180 fill / 0 20px stretch;
+  filter: drop-shadow(0 3px 3px rgb(0 0 0 / .6)); }
+.modal.shop .shop-head h2 { color: #f4d79a; text-shadow: 0 2px 0 rgb(0 0 0 / .6), 0 0 18px rgb(255 190 100 / .25); }
+.modal.shop .shop-head .wallet { background: none; border: 1px solid transparent; box-shadow: none; border-image: url(/ui/obj/v1/plate-brass.webp) 36 fill / 10px stretch; color: #2a1604; text-shadow: 0 1px 0 rgb(255 232 170 / .5); }
+.modal.shop .shop-head .wallet .gi { color: #4a2a06; }
+.modal.shop .shop-head .wallet.trick { border-image-source: url(/ui/obj/v1/plate-hero.webp); filter: hue-rotate(110deg); color: #f6efff; text-shadow: 0 -1px 0 rgb(0 0 0 / .6); }
+/* разделы — таблички: выбранный — латунный */
+.modal.shop .seg { display: flex; flex-wrap: wrap; gap: 6px; border: 0; background: none; box-shadow: none; overflow: visible; }
+.modal.shop .seg button { min-height: 34px; padding: 4px 12px; background: none; border: 1px solid transparent; box-shadow: none !important; border-image: url(/ui/obj/v1/plate-iron.webp) 36 fill / 9px stretch;
+  color: #e9dcc4; text-shadow: 0 -1px 0 rgb(0 0 0 / .8); filter: drop-shadow(0 2px 2px rgb(0 0 0 / .5)); }
+.modal.shop .seg button:hover { filter: brightness(1.15) drop-shadow(0 2px 2px rgb(0 0 0 / .5)); }
+.modal.shop .seg button[aria-pressed=true] { border-image-source: url(/ui/obj/v1/plate-brass.webp); color: #2a1604; text-shadow: 0 1px 0 rgb(255 232 170 / .5); }
+.modal.shop .seg button small { opacity: .75; }
+/* полки: под каждой картой — кусок доски, соседние стыкуются в одну полку; в доске — ценник на нитке */
+.modal.shop .shop-lots { gap: 10px 12px; padding: 6px 10px 10px; overflow-x: hidden; }
+.modal.shop .shop-lots .lot { position: relative; }
+.modal.shop .shop-lots .lot::before { content: ''; position: absolute; left: -7px; right: -7px; top: 140px; height: 30px; z-index: 0; pointer-events: none;
+  background: url(/ui/obj/v1/plank.webp) 0 0 / 256px 100% repeat-x; }
+.modal.shop .shop-lots .lot:nth-child(3n+2)::before { background-position-x: -91px; }
+.modal.shop .shop-lots .lot:nth-child(3n)::before { background-position-x: -173px; }
+.modal.shop .shop-lots .lot > * { position: relative; z-index: 1; }
+.modal.shop .shop-lots .lot > .card { margin-bottom: 14px; }
+.modal.shop .shop-lots .lot.out { opacity: 1; }
+.modal.shop .shop-lots .lot.out > * { opacity: .45; }
+.modal.shop .lot-price { order: -1; margin: 0 0 4px; padding: 3px 10px 3px 18px; color: #3a220c; text-shadow: none; rotate: -2.5deg;
+  background: radial-gradient(circle at 8px 50%, #2a180a 2.4px, rgb(60 36 14 / .4) 3.4px, transparent 4px), url(/ui/obj/v1/parchment.webp) 0 0 / 180px;
+  border-radius: 3px; box-shadow: inset 0 0 6px rgb(110 70 28 / .5), 0 2px 4px rgb(0 0 0 / .45); }
+.modal.shop .lot:nth-child(even) .lot-price { rotate: 2deg; }
+.modal.shop .lot-price::before { content: ''; position: absolute; left: 7px; bottom: 50%; width: 1.5px; height: 22px; background: linear-gradient(#5a3a1a, #a07a4a); transform-origin: bottom; rotate: 12deg; z-index: -1; }
+.modal.shop .lot > .card { order: -2; }
+.modal.shop .lot-price s { color: #6b5134; }
+.modal.shop .lot-price.cheap b { color: #1f6232; }
+.modal.shop .lot-price.dear b { color: #8e2414; }
+@media (max-width: 700px) {
+  .modal.shop { border-width: 14px; border-image-width: 14px; padding: 38px 10px 10px; margin-top: 44px; max-height: calc(100dvh - 64px); }
+  .modal.shop::before { left: -18px; right: -18px; top: -36px; height: 60px; }
+  .modal.shop::after { left: -24px; right: -24px; top: -42px; height: 16px; }
+}
