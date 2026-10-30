@@ -94,7 +94,42 @@ const stat = (s, pid, k, n = 1) => {
   const st = ((s.stats ||= {})[pid] ||= {});
   st[k] = (st[k] || 0) + n;
 };
+// ───────────────────────── лучшие моменты партии ─────────────────────────
+// Для итогов: самый страшный побеждённый монстр, босс, спасение в паре, самое подлое проклятие (на того, кто был
+// выше всех), самая дорогая расплата, первая легендарка, дуэль, громкая гибель. По одному на вид — самый яркий.
+function moment(s, key, m, score) {
+  const ms = (s.moments ||= {});
+  if (ms[key] && (ms[key].score ?? 0) >= score) return;
+  ms[key] = { ...m, score, turn: s.turn?.n || 0 };
+}
+const baseLvl = u => def(u)?.level || 0;
+function remember(s, o) {
+  switch (o.kind) {
+    case 'victory': {
+      const cards = o.cards || [];
+      const top = cards.reduce((b, u) => (baseLvl(u) > baseLvl(b) ? u : b), cards[0]);
+      if (!top) break;
+      const boss = cards.find(u => def(u).boss);
+      if (boss) moment(s, 'boss', { pid: o.pid, helper: o.helper, card: boss }, baseLvl(boss) + 100);
+      moment(s, 'beast', { pid: o.pid, helper: o.helper, card: top, n: cards.length }, baseLvl(top) + cards.length);
+      if (o.helper) moment(s, 'rescue', { pid: o.pid, helper: o.helper, card: top }, baseLvl(top));
+      break;
+    }
+    case 'curse': {
+      if (!o.by || o.by === o.pid) break;
+      const v = s.players.find(p => p.id === o.pid);
+      const lead = v && s.players.every(p => p.level <= v.level);
+      moment(s, 'curse', { pid: o.pid, by: o.by, card: o.card, level: v?.level || 0, lead }, (v?.level || 0) + (lead ? 20 : 0));
+      break;
+    }
+    case 'caught': moment(s, 'caught', { pid: o.pid, card: o.card }, baseLvl(o.card)); break;
+    case 'legendary': if (!s.moments?.legend) moment(s, 'legend', { pid: o.pid, card: o.card }, 1); break;
+    case 'duelEnd': if (o.pid) moment(s, 'duel', { pid: o.pid, loser: o.loser, card: o.card || null }, (o.levels || 0) + 1); break;
+    case 'death': { const v = s.players.find(p => p.id === o.pid); moment(s, 'death', { pid: o.pid }, v?.level || 0); break; }
+  }
+}
 function tally(s, o) {
+  remember(s, o);
   switch (o.kind) {
     case 'victory': stat(s, o.pid, 'kills', (o.cards || []).length); stat(s, o.helper, 'helps'); stat(s, o.pid, 'treasures', o.treasures || 0); break;
     case 'death': stat(s, o.pid, 'deaths'); break;
@@ -2366,6 +2401,7 @@ export function view(s, pid) {
   return {
     phase: s.phase, version: s.version, turn: { ...s.turn, boughtLevel: undefined }, winners: [...s.winners],
     stats: s.phase === 'ended' ? JSON.parse(JSON.stringify(s.stats || {})) : null,
+    moments: s.phase === 'ended' ? JSON.parse(JSON.stringify(s.moments || {})) : null,
     reveal: s.reveal, opts: { winDelayMs: s.opts.winDelayMs, winLevel: winLevel(s), daily: s.opts.daily || null, dailyId: s.opts.dailyId || null }, location: s.location,
     trap: s.trap ? { ...s.trap } : null, tame: s.tame ? { ...s.tame } : null,
     shop: { items: shopList(s, me), note: locationOf(s)?.priceNote || null, fair: s.opts?.dailyId === 'fair' },

@@ -191,6 +191,8 @@ socket.on('room:state', ({ room, game, serverTime }) => {
   if (S.trick && (S.trick.room !== room.id || !room.spectator || game?.phase !== 'playing')) S.trick = null;
   // копия панели боя до перерисовки: на ней доиграет развязка, если бой сейчас закончится
   const snap = !first && S.game?.combat && cine.on ? cine.snapStage() : null;
+  // партия только что началась у меня на глазах (из лобби): перед раздачей — заставка с героями
+  const started = !first && game?.phase === 'playing' && S.game?.phase !== 'playing' && game.turn?.n === 1;
   if (serverTime) S.skew = serverTime - Date.now();
   S.room = room; S.game = game;
   if (!room.spectator) S.watch = null;
@@ -206,6 +208,7 @@ socket.on('room:state', ({ room, game, serverTime }) => {
   S.ui.lastMsg = lastMsg?.id;
   vc.sync(room.voice?.peers);
   const fresh = handleFx(first);
+  if (started) gameIntro(game);
   render();
   if ($('#shopModal')) openMarketModal();
   if ($('#contractModal')) openContractModal();
@@ -1593,7 +1596,7 @@ function renderMine() {
     // новая карта прилетает из своей колоды на столе; если колоды не видно (бой на телефоне, прокрутка) — снизу
     return cardHTML(u, { playable, selected: picked.has(u), dim, cls: isNew ? (deckOn ? 'deal-fly' : 'deal-in') : '', attrs: `data-zone="hand"${isNew ? ` data-deal="${k}" style="animation-delay:${(k++) * 90}ms"` : ''}` });
   }).join('') : `<p class="muted">Рука пуста.</p>`;
-  if (deckOn) requestAnimationFrame(() => dealFromDecks(handEl));
+  if (deckOn) { const wait = (S.ui.introUntil || 0) - performance.now(); if (wait > 0) setTimeout(() => dealFromDecks(handEl), wait); else requestAnimationFrame(() => dealFromDecks(handEl)); }
   if (S.ui.legReady) legNew.forEach(legendArrive);
   S.ui.legReady = true;
   S.ui.prevHand = new Set(p.hand);
@@ -2578,13 +2581,15 @@ const ACH = {
 };
 const achDone = () => LS.get('ach', {});
 const frameLocked = i => !!FRAME_ACH[i] && !achDone()[FRAME_ACH[i]];
-function unlock(key) {
-  if (spectating()) return;
+// quiet — без таблички: в итогах о новой рамке объявляет сундук. Возвращает название открытой рамки (или '')
+function unlock(key, quiet = false) {
+  if (spectating()) return '';
   const a = achDone();
-  if (a[key]) return;
+  if (a[key]) return '';
   a[key] = true; LS.set('ach', a);
   const i = Object.keys(FRAME_ACH).find(k => FRAME_ACH[k] === key);
-  if (i) { setTimeout(() => { fx.banner('Новая рамка!', `«${AV_LABELS.frame[i]}» — ${ACH[key][1]}. Наденьте её в облике героя.`, 'legend'); sfx.play('legendary', { always: true }); }, 1800); }
+  if (i && !quiet) { setTimeout(() => { fx.banner('Новая рамка!', `«${AV_LABELS.frame[i]}» — ${ACH[key][1]}. Наденьте её в облике героя.`, 'legend'); sfx.play('legendary', { always: true }); }, 1800); }
+  return i ? AV_LABELS.frame[i] : '';
 }
 function achFx(fresh) {
   const me = S.room?.me;
@@ -2604,7 +2609,8 @@ function maybeEndScreen() {
   const w = g.winners.map(pl).filter(Boolean);
   const isHost = S.room.hostId === S.room.me;
   const iWon = w.some(p => p.id === S.room.me);
-  if (iWon) unlock('win');
+  const newFrame = iWon ? unlock('win', true) : '';
+  setTimeout(() => endChest(iWon, newFrame), 450);
   // испытание дня: запоминаем свой лучший результат за этот день
   let daily = '';
   if (g.opts?.daily && !spectating()) {
@@ -2630,10 +2636,115 @@ function maybeEndScreen() {
     ${daily}
     ${endNominations(g)}
     ${podiumHTML(g, places)}
+    ${momentsHTML(g)}
     <ol class="es-places" start="4">${places.slice(3).map((p, i) => `<li class="${g.winners.includes(p.id) ? 'win' : ''}${p.id === S.room.me ? ' me' : ''}"><span class="es-n">${i + 4}</span><span class="es-mini" style="--seat:${p.color}">${avatarSVG({ ...gAva(p), frame: 0 }, p.color)}</span><b>${esc(p.name)}</b><span class="es-lv">${p.level} ур.</span></li>`).join('')}</ol>
     <div class="row" style="justify-content:center">${isHost ? '<button class="btn primary" data-act="toLobby">Новая партия</button>' : '<span class="muted">Новую партию запускает хозяин.</span>'}<button class="btn ghost" data-act="closeOverlay">Посмотреть стол</button></div>
   </div>`);
 }
+// ───────────── «Перед боем» ─────────────
+// Партия началась: стол темнеет, герои въезжают медальонами с именами с двух сторон, гудит гонг, вспыхивает
+// «Партия начинается» и кто ходит первым; потом заставка тает и карты раздаются из колод. Нажатие — пропустить.
+function gameIntro(g) {
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches || document.hidden) return;
+  document.querySelector('.intro')?.remove();
+  const first = pl(g.turn.pid), loc = g.location ? def(g.location) : null;
+  const d = document.createElement('div');
+  d.className = 'intro';
+  d.setAttribute('role', 'presentation');
+  const n = g.players.length;
+  d.innerHTML = `<div class="in-bg" style="--bg:url('${loc?.art ? locImg(loc.art, false) : '/loc/v2/default-card.webp'}')"></div>
+    <div class="in-title"><small>Под Землёй</small><b>Партия начинается</b><i class="in-rule"></i></div>
+    <div class="in-heroes">${g.players.map((p, i) => `<div class="in-hero${p.id === g.turn.pid ? ' first' : ''}" style="--seat:${p.color};--i:${i};--from:${i < n / 2 ? -1 : 1}">
+      <span class="in-ava">${avatarSVG(gAva(p), p.color)}</span><b>${esc(p.name)}</b><small>${p.id === S.room.me ? 'это вы' : p.isBot ? 'бот' : 'игрок'}</small></div>`).join('')}</div>
+    <div class="in-first">${first ? `Первым ходит <b>${esc(first.name)}</b>` : ''}<span>${esc(loc?.name || 'Подземелье')} · до ${winLvl()}-го уровня</span></div>`;
+  document.body.append(d);
+  S.ui.introUntil = performance.now() + 3000;
+  const gong = [setTimeout(() => { sfx.play('boom', { always: true }); sfx.play('bell', { always: true }); fx.ring({ x: innerWidth / 2, y: innerHeight * 0.3 }, { n: 2, color: 'rgba(255,214,140,.8)', grow: 600 }); }, 950)];
+  const end = () => { if (!d.isConnected) return; gong.forEach(clearTimeout); S.ui.introUntil = Math.min(S.ui.introUntil, performance.now() + 380); d.classList.add('out'); setTimeout(() => d.remove(), 420); };
+  gong.push(setTimeout(end, 2620));
+  d.addEventListener('pointerdown', end, { once: true });
+  for (let i = 0; i < n; i++) gong.push(setTimeout(() => sfx.play('whoosh', { gap: 0, always: true }), 160 + i * 120));
+}
+
+// ───────────── сундук наград ─────────────
+// В итогах победителю (и всем, кто взял номинацию) падает сундук: подпрыгивает, крышка распахивается,
+// бьёт луч, а медали номинаций вылетают из него и садятся на свои строки. Новая рамка — луч легендарного цвета.
+function endChest(iWon, newFrame) {
+  const m = $('#endScreen');
+  if (!m || spectating() || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const mine = [...m.querySelectorAll('.es-nom')].filter(n => (n.dataset.pids || '').split(',').includes(S.room.me));
+  if (!iWon && !mine.length) return;
+  const hero = m.querySelector('.es-hero');
+  if (!hero) return;
+  const ch = document.createElement('div');
+  ch.className = 'es-chest' + (iWon ? ' big' : '') + (newFrame ? ' legend' : '');
+  ch.setAttribute('aria-hidden', 'true');
+  ch.innerHTML = '<i class="beam"></i><img class="cl" src="/ui/v3/chest-closed.webp" alt=""><img class="op" src="/ui/v3/chest-open.webp" alt="">';
+  hero.append(ch);
+  setTimeout(() => { sfx.play('slam', { always: true }); fx.dust(ch, { n: 10 }); }, 380);
+  setTimeout(() => sfx.play('clang', { always: true }), 700);
+  setTimeout(() => {
+    if (!ch.isConnected) return;
+    ch.classList.add('open');
+    sfx.play('door', { always: true }); sfx.play('coins', { n: 6, always: true });
+    if (newFrame) sfx.play('legendary', { always: true });
+    const r = ch.getBoundingClientRect(), mouth = { x: r.left + r.width / 2, y: r.top + r.height * 0.3 };
+    fx.spray({ ...mouth, w: r.width * 0.5, h: 6 }, { n: newFrame ? 60 : 36, spreadX: 1, speed: [160, 420], angle: [-2.1, -1.05], g: 520, size: [2, 4.5], colors: newFrame ? ['#fff0b0', '#ff9a1a', '#ffffff'] : ['#fff3b0', '#ffd36b', '#ffffff'], shape: 'star', life: [0.6, 1.2] });
+    fx.coins({ ...mouth, w: 40, h: 6 }, null, { n: 8 });
+    // новая рамка вылетает из сундука лентой и остаётся рядом с ним
+    if (newFrame) {
+      const nf = document.createElement('div');
+      nf.className = 'es-newframe';
+      nf.innerHTML = `<small>Новая рамка</small><b>«${esc(newFrame)}»</b><span>Наденьте её в облике героя</span>`;
+      ch.append(nf);
+    }
+    // медали летят из сундука к своим номинациям
+    mine.forEach((nom, i) => setTimeout(() => {
+      const md = nom.querySelector('.es-medal');
+      if (!md?.isConnected) return;
+      const to = md.getBoundingClientRect();
+      const f = document.createElement('i');
+      f.className = 'es-medal-fly';
+      f.style.backgroundImage = md.style.backgroundImage;
+      f.style.left = mouth.x - 22 + 'px'; f.style.top = mouth.y - 22 + 'px';
+      document.body.append(f);
+      const dx = to.left + to.width / 2 - mouth.x, dy = to.top + to.height / 2 - mouth.y;
+      f.animate([{ transform: 'scale(.4) rotate(0deg)', opacity: 0 }, { transform: `translate(${dx * 0.4}px, ${dy * 0.4 - 120}px) scale(1.25) rotate(200deg)`, opacity: 1, offset: 0.5 },
+        { transform: `translate(${dx}px, ${dy}px) scale(${to.width / 44}) rotate(360deg)`, opacity: 1 }], { duration: 820, easing: 'cubic-bezier(.3,.6,.3,1)' })
+        .onfinish = () => { f.remove(); md.animate([{ transform: 'scale(1.5)', filter: 'brightness(1.8)' }, { transform: 'none', filter: 'none' }], { duration: 420, easing: 'cubic-bezier(.2,1.4,.4,1)' }); fx.sparkle(md, { n: 8 }); sfx.play('coins', { n: 1, gap: 0, always: true }); };
+    }, 260 + i * 220));
+  }, 1150);
+  setTimeout(() => ch.classList.add('done'), 3400);
+}
+
+// ───────────── лучшие моменты ─────────────
+// Под пьедесталом — лента ярких моментов партии из счёта сервера (engine: remember): карта и пара строк о том, что было.
+const MOMENTS = [
+  // имена игроков — только в именительном падеже: склонять произвольные имена нельзя
+  ['boss', m => ['Босс повержен', `«${esc(def(m.card).name)}» пал. Бился ${esc(pname(m.pid))}${m.helper ? `, помогал ${esc(pname(m.helper))}` : ''}`]],
+  ['beast', m => ['Самый страшный монстр', `«${esc(def(m.card).name)}», ур. ${def(m.card).level || '?'}${m.n > 1 ? `, и ещё ${m.n - 1} в той же драке` : ''}. Победил ${esc(pname(m.pid))}${m.helper ? `, помогал ${esc(pname(m.helper))}` : ''}`]],
+  ['rescue', m => ['Спасение в паре', `Бился ${esc(pname(m.pid))}, на помощь пришёл ${esc(pname(m.helper))} — «${esc(def(m.card).name)}» не устоял`]],
+  ['curse', m => ['Самое подлое проклятие', `«${esc(def(m.card).name)}»: наслал ${esc(pname(m.by))}, досталось — ${esc(pname(m.pid))}${m.lead ? ', лидер партии' : ''}`]],
+  ['caught', m => ['Самая дорогая расплата', `${esc(pname(m.pid))} не ушёл от монстра «${esc(def(m.card).name)}»`]],
+  ['legend', m => ['Первая легендарка', `${esc(pname(m.pid))} получает «${esc(def(m.card).name)}»`]],
+  ['duel', m => ['Дуэль', `Выиграл ${esc(pname(m.pid))}, проиграл ${esc(pname(m.loser))}${m.card ? `. Трофей — «${esc(def(m.card).name)}»` : ''}`]],
+  ['death', m => ['Громкая гибель', `${esc(pname(m.pid))} пал на ${m.score}-м уровне`]],
+];
+function momentsHTML(g) {
+  const ms = g.moments;
+  if (!ms) return '';
+  const used = new Set();
+  const tiles = MOMENTS.filter(([k]) => ms[k]).map(([k, txt]) => {
+    const m = ms[k];
+    if (m.card && used.has(m.card) && k === 'beast') return '';
+    if (m.card) used.add(m.card);
+    const [t, line] = txt(m);
+    const pic = m.card && def(m.card) ? cardHTML(m.card, { size: 'sm', tab: false }) : `<span class="hl-ava">${avatarSVG({ ...gAva(pl(m.pid) || {}), frame: 0 }, pl(m.pid)?.color)}</span>`;
+    return `<div class="hl" style="--i:${used.size}"><div class="hl-pic">${pic}</div><div class="hl-t"><small>${t}</small><span>${line}</span><em>ход ${m.turn}</em></div></div>`;
+  }).filter(Boolean).slice(0, 5);
+  return tiles.length ? `<section class="es-moments" aria-label="Лучшие моменты"><h3>Лучшие моменты</h3><div class="hl-row">${tiles.join('')}</div></section>` : '';
+}
+
 // Пьедестал: первые три места на каменных тумбах (/ui/obj/v3/podium): первый — на высокой посередине,
 // второй — слева, третий — справа; остальные — списком ниже
 function podiumHTML(g, places) {
@@ -2666,7 +2777,7 @@ function endNominations(g) {
     const who = g.players.filter(p => (st[p.id]?.[k] || 0) === best);
     const names = who.length > 2 ? `${esc(who[0].name)}, ${esc(who[1].name)} и ещё ${who.length - 2}` : who.map(p => esc(p.name)).join(' и ');
     const m = metal(n++);
-    return `<div class="es-nom m-${m}" style="--seat:${who[0].color}"><span class="es-medal" style="background-image:url(/ui/obj/v3/medal-${m}.webp)">${ico(icon)}</span><span class="es-pic"><span class="es-mini">${avatarSVG({ ...gAva(who[0]), frame: 0 }, who[0].color)}</span></span>
+    return `<div class="es-nom m-${m}" data-pids="${who.map(p => p.id).join(',')}" style="--seat:${who[0].color}"><span class="es-medal" style="background-image:url(/ui/obj/v3/medal-${m}.webp)">${ico(icon)}</span><span class="es-pic"><span class="es-mini">${avatarSVG({ ...gAva(who[0]), frame: 0 }, who[0].color)}</span></span>
       <div class="es-nt"><small>${esc(title)}</small><b>${names}</b><em>${esc(text(best))}</em></div></div>`;
   }).filter(Boolean).slice(0, 6);
   return cards.length ? `<section class="es-noms" aria-label="Номинации партии">${cards.join('')}</section>` : '';
