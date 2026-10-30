@@ -3547,9 +3547,12 @@ body:has(#world.still) .g-grain { display: none; }
 @media (prefers-reduced-motion: reduce) { .chip.gt.r-legendary::after { animation: none; } }
 
 /* ═════════ дверь подземелья — три нарисованных кадра (cine.js door) ═════════ */
-.cn-door2 { width: 250px; height: 355px; }
-.cn-door2 > * { position: absolute; }
-.cn-door2-f { inset: 0; width: 100%; height: 100%; object-fit: contain; opacity: 0; filter: drop-shadow(0 18px 22px rgb(0 0 0 / .7)); user-select: none; }
+.cn-door2 { width: 250px; height: 355px; will-change: opacity; }
+.cn-door2 > *, .cn-door2 .d-shake > * { position: absolute; }
+.cn-door2 .d-cam, .cn-door2 .d-shake { position: absolute; inset: 0; will-change: transform; transform-origin: 50% 60%; }
+.cn-door2-f { inset: 0; width: 100%; height: 100%; object-fit: contain; opacity: 0; user-select: none; }
+/* тень под дверью — мягкое пятно вместо фильтра на каждом кадре */
+.cn-door2-shadow { left: 6%; right: 6%; bottom: -5%; height: 14%; border-radius: 50%; background: radial-gradient(closest-side, rgb(0 0 0 / .7), rgb(0 0 0 / .3) 60%, transparent); filter: blur(5px); }
 .cn-door2-f.f0 { opacity: 1; }
 /* свет комнаты за дверью: сперва узкая щель, после удара — весь проём */
 .cn-door2-glow { left: 22%; right: 22%; top: 14%; bottom: 6%; opacity: 0; border-radius: 50% 50% 0 0 / 30% 30% 0 0; mix-blend-mode: screen;
@@ -3928,16 +3931,6 @@ body:has(#world.still) .g-grain { display: none; }
 .sc-paper > h3 { margin-top: 16px; }
 .sc-paper > .rl-nav + * { margin-top: 0; }
 .rl-nav { background: url(/ui/obj/v2/parchment.webp) 0 0 / 300px, #dcc394; box-shadow: 0 7px 8px -6px rgb(80 50 20 / .55); }
-
-/* ═════════ удар героя: число силы впечатывается в карту монстра ═════════ */
-.cn-dmg { width: 136px; height: 136px; display: grid; place-items: center; pointer-events: none; z-index: 9; }
-.cn-dmg > * { grid-area: 1 / 1; }
-.cn-dmg i { width: 100%; height: 100%; display: block;
-  clip-path: polygon(50% 0, 61% 30%, 93% 14%, 72% 42%, 100% 55%, 70% 63%, 84% 95%, 55% 74%, 38% 100%, 33% 70%, 4% 82%, 24% 56%, 0 36%, 30% 34%, 18% 6%, 42% 26%);
-  background: radial-gradient(circle at 50% 50%, #fff4c4 0 14%, #ffc04a 30%, #e0602a 58%, #8a1d10 82%);
-  filter: drop-shadow(0 4px 8px rgb(0 0 0 / .6)); }
-.cn-dmg b { position: relative; z-index: 1; font: 700 60px/1 var(--display); color: #fff; letter-spacing: -1px;
-  -webkit-text-stroke: 3px #3a0c06; paint-order: stroke fill; text-shadow: 0 3px 0 #3a0c06, 0 0 18px rgb(255 200 90 / .8); }
 
 /* ═════════ стрелка прицела: карта с целью стоит над рукой, к указателю тянутся бегущие шевроны ═════════ */
 .aim { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 89; pointer-events: none; overflow: visible; opacity: 0; transition: opacity .12s ease;

@@ -466,40 +466,54 @@ function doorSvg(k, c, fit) {
   return 640;
 }
 
+// Дверь — одним непрерывным движением: камера всё время плавно подъезжает, два удара — затухающая дрожь на своём
+// слое (не спорит с подъездом), кадры двери перетекают друг в друга, свет в щели нарастает; после пролома камера
+// проходит сквозь проём и дверь тает — из света вылетает карта. Тень — отдельным пятном, без тяжёлых фильтров на кадрах.
+const DOOR_BREAK = 900;
 function door(k, c, fit) {
   if (!doorReady()) { warmDoor(); return doorSvg(k, c, fit); }
-  const dr = k.pt('cn-door2', DOOR2, c.x, c.y);
-  const [f0, f1, f2] = dr.querySelectorAll('.cn-door2-f'), glow = dr.querySelector('.cn-door2-glow');
-  const sc = fit * 1.04;
-  k.a(dr, [{ transform: `scale(${sc * 0.82}) translateY(18px)`, opacity: 0 }, { transform: `scale(${sc})`, opacity: 1 }], { dur: 240, ease: EASE.out });
-  // два удара: дверь вздрагивает, с притолоки сыплется пыль
-  const hit = (t, power) => k.at(t, () => {
-    k.a(dr, [{ transform: `scale(${sc})` }, { transform: `scale(${sc * 1.012}) translateX(${-5 * power}px) rotate(${-0.8 * power}deg)` }, { transform: `scale(${sc}) translateX(${3 * power}px) rotate(${0.5 * power}deg)` }, { transform: `scale(${sc})` }], { dur: 180, ease: EASE.out, fill: 'none' });
-    fx.dust({ x: c.x, y: c.y - 150 * fit, w: 170 * fit, h: 4 }, { n: 6 + 4 * power });
-    k.snd(power > 1 ? 'slam' : 'door');
+  const dr = k.pt('cn-door2', `<div class="d-cam"><div class="d-shake"><i class="cn-door2-shadow"></i>${DOOR2}</div></div>`, c.x, c.y);
+  const cam = dr.firstElementChild, shake = cam.firstElementChild;
+  const [f0, f1, f2] = shake.querySelectorAll('.cn-door2-f'), glow = shake.querySelector('.cn-door2-glow');
+  const sc = fit * 1.04, B = DOOR_BREAK, ALL = B + 520;
+  k.a(dr, [{ opacity: 0 }, { opacity: 1, offset: 0.16 }, { opacity: 1, offset: 0.8 }, { opacity: 0 }], { dur: ALL, ease: EASE.lin });
+  k.a(cam, [
+    { transform: `scale(${sc * 0.86}) translateY(16px)`, easing: 'cubic-bezier(.22,.61,.36,1)' },
+    { transform: `scale(${sc})`, offset: 0.22, easing: 'cubic-bezier(.45,.05,.55,.95)' },
+    { transform: `scale(${sc * 1.05})`, offset: B / ALL, easing: 'cubic-bezier(.55,0,.8,.2)' },
+    { transform: `scale(${sc * 1.5})` }], { dur: ALL, ease: EASE.lin });
+  const knock = (t, p) => k.at(t, () => {
+    k.a(shake, [
+      { transform: 'none' },
+      { transform: `translate(${-6 * p}px, ${1.5 * p}px) rotate(${-0.9 * p}deg) scale(${1 + 0.012 * p})`, offset: 0.12 },
+      { transform: `translate(${4.5 * p}px, ${-p}px) rotate(${0.6 * p}deg)`, offset: 0.3 },
+      { transform: `translate(${-2.5 * p}px, 0) rotate(${-0.3 * p}deg)`, offset: 0.5 },
+      { transform: `translate(${1.2 * p}px, 0) rotate(${0.12 * p}deg)`, offset: 0.72 },
+      { transform: 'none' }], { dur: 380 + 80 * p, ease: 'cubic-bezier(.2,.7,.3,1)', fill: 'none' });
+    fx.dust({ x: c.x, y: c.y - 150 * fit, w: 170 * fit, h: 4 }, { n: 5 + 4 * p });
+    k.snd(p > 1 ? 'slam' : 'door');
   });
-  hit(260, 1); hit(470, 1.6);
-  // приоткрыта: щель светится
-  k.at(560, () => {
-    f1.style.opacity = 1; f0.style.opacity = 0;
-    k.a(glow, [{ opacity: 0, transform: 'scaleX(.3)' }, { opacity: 0.9, transform: 'scaleX(1)' }], { dur: 160 });
-    fx.spray({ x: c.x, y: c.y + 20 * fit, w: 16 * fit, h: 240 * fit }, { n: 12, spreadX: 0.3, spreadY: 1, speed: [40, 140], size: [2, 3.5], colors: ['#fff3b0', '#ffd27a', '#ffb347'], shape: 'spark', life: [0.4, 0.8] });
-  });
-  // выбита: щепки, пыль, свет комнаты
-  k.at(700, () => {
-    f2.style.opacity = 1; f1.style.opacity = 0;
-    k.a(dr, [{ transform: `scale(${sc * 1.03})` }, { transform: `scale(${sc})` }], { dur: 260, ease: EASE.out, fill: 'none' });
-    k.a(glow, [{ opacity: 0.9, transform: 'scale(1)' }, { opacity: 1, transform: 'scale(1.25)', offset: 0.3 }, { opacity: 0.55, transform: 'scale(1.1)' }], { dur: 700 });
-    fx.spray({ x: c.x, y: c.y + 30 * fit, w: 150 * fit, h: 200 * fit }, { n: 22, spreadX: 0.9, spreadY: 0.8, speed: [180, 480], size: [2.5, 5], colors: ['#6b4a2a', '#8a6236', '#3e2a16', '#a87a46'], shape: 'rock', g: 900, life: [0.6, 1.1] });
-    fx.dust({ x: c.x, y: c.y + 150 * fit, w: 240 * fit, h: 10 }, { n: 14 });
-    quake(0.5);
+  knock(300, 1); knock(620, 1.5);
+  // приоткрыта: кадр перетекает, в щели разгорается свет
+  k.a(f1, [{ opacity: 0 }, { opacity: 1 }], { dur: 170, delay: 640, fill: 'forwards' });
+  k.a(f0, [{ opacity: 1 }, { opacity: 0 }], { dur: 200, delay: 700, fill: 'forwards' });
+  k.a(glow, [{ opacity: 0, transform: 'scaleX(.25)' }, { opacity: 0.85, transform: 'scaleX(.9)' }], { dur: 300, delay: 650, ease: EASE.out, fill: 'forwards' });
+  k.at(680, () => fx.spray({ x: c.x, y: c.y + 20 * fit, w: 16 * fit, h: 240 * fit }, { n: 10, spreadX: 0.3, spreadY: 1, speed: [40, 120], size: [2, 3.5], colors: ['#fff3b0', '#ffd27a', '#ffb347'], shape: 'spark', life: [0.4, 0.8] }));
+  // выбита: щепки и пыль, свет заливает проём
+  k.a(f2, [{ opacity: 0 }, { opacity: 1 }], { dur: 120, delay: B - 50, fill: 'forwards' });
+  k.a(f1, [{ opacity: 1 }, { opacity: 0 }], { dur: 160, delay: B - 10, fill: 'forwards', comp: 'replace' });
+  k.a(glow, [{ opacity: 0.85, transform: 'scaleX(.9)' }, { opacity: 1, transform: 'scale(1.3)', offset: 0.35 }, { opacity: 0.9, transform: 'scale(1.7)' }], { dur: 560, delay: B - 40, ease: EASE.out, fill: 'forwards' });
+  k.at(B - 30, () => {
+    fx.spray({ x: c.x, y: c.y + 30 * fit, w: 150 * fit, h: 200 * fit }, { n: 20, spreadX: 0.9, spreadY: 0.8, speed: [180, 460], size: [2.5, 5], colors: ['#6b4a2a', '#8a6236', '#3e2a16', '#a87a46'], shape: 'rock', g: 900, life: [0.6, 1.1] });
+    fx.dust({ x: c.x, y: c.y + 150 * fit, w: 240 * fit, h: 10 }, { n: 12 });
+    quake(0.35);
   });
   const light = k.pt('cn-doorglow', '', c.x, c.y);
-  k.a(light, [{ opacity: 0, transform: `scale(${fit * 0.35})` }, { opacity: 1, transform: `scale(${fit * 1.2})`, offset: 0.3 }, { opacity: 0, transform: `scale(${fit * 1.9})` }], { dur: 1000, delay: 700 });
-  k.rm(light, 1750);
-  k.snd('doorOpen', {}, 640);
-  k.fade(dr, 1150, 320);
-  return 760;
+  k.a(light, [{ opacity: 0, transform: `scale(${fit * 0.35})` }, { opacity: 1, transform: `scale(${fit * 1.2})`, offset: 0.3 }, { opacity: 0, transform: `scale(${fit * 1.9})` }], { dur: 1000, delay: B - 40, ease: EASE.out });
+  k.rm(light, B + 1000);
+  k.snd('doorOpen', {}, B - 80);
+  k.rm(dr, ALL + 30);
+  return B;
 }
 function sigil(k, c, fit, cls) {
   const w = k.pt('cn-sigil ' + cls, `<div class="cn-sigil-tilt"><div class="cn-sigil-in">${SIGIL}</div></div>`, c.x, c.y + 150 * fit);
@@ -955,7 +969,7 @@ S.helper = f => ({
 
 // ───────────── удар героя ─────────────
 // Медальон героя отходит назад, срывается к монстру и бьёт о край карты, потом возвращается на место.
-// На ударе над монстром выбивается число — сила героев, а карта погибает по своей природе (deathFx).
+// На ударе карта погибает по своей природе (deathFx).
 const pillOf = pid => panel?.node.querySelector(`.hero-pill[data-pid="${CSS.escape(pid)}"]`) || document.querySelector(`#stage .hero-pill[data-pid="${CSS.escape(pid)}"]`);
 function lunge(k, pid, uid) {
   const pill = pillOf(pid), ce = monEl(uid);
@@ -980,17 +994,6 @@ function lunge(k, pid, uid) {
   for (let i = 0; i < 4; i++) k.at(D * (0.38 + i * 0.05), () => { const t = ((i + 1) / 5) * stop; fx.spray({ x: ca.x + dx * t, y: ca.y + dy * t }, { n: 6, speed: [20, 90], size: [1.6, 3], colors: ['#fff3b0', '#ffd36b', '#ffffff'], shape: 'spark', life: [0.25, 0.45] }); });
   k.at(D + 30, () => { pill.style.zIndex = ''; });
   return D * HIT;
-}
-// число удара: крупно, с «кляксой» за ним, впечатывается в карту и уплывает вверх
-function dmgNum(k, c, n) {
-  if (!Number.isFinite(n) || n <= 0) return;
-  const el = k.pt('cn-dmg', `<i></i><b>${n}</b>`, c.x, c.y);
-  const an = k.a(el, [{ opacity: 0, transform: 'scale(2.4) rotate(-12deg)', easing: 'cubic-bezier(.2,.9,.3,1)' }, { opacity: 1, transform: 'scale(.9) rotate(4deg)', offset: 0.1 },
-    { transform: 'scale(1.07) rotate(-2deg)', offset: 0.18 }, { transform: 'scale(1)', offset: 0.26 },
-    { opacity: 1, transform: 'translateY(-6px) scale(1)', offset: 0.74, easing: 'cubic-bezier(.5,0,.8,.5)' }, { opacity: 0, transform: 'translateY(-46px) scale(.86)' }], { dur: 1400, ease: EASE.lin });
-  // убираем по окончании анимации, а не по таймеру: если кадры запаздывают, число всё равно успеет показаться
-  if (an) an.finished.then(() => el.remove(), () => el.remove()); else k.rm(el, 1420);
-  k.rm(el, 5000);
 }
 // природа монстра — по меткам карты: нежить рассыпается прахом, механизм — шестерёнками, грибы — спорами…
 const natureOf = d => { const t = d?.tags || []; if (d?.boss) return 'boss'; return ['undead', 'machine', 'fungus', 'fire', 'water', 'rock', 'insect', 'rat'].find(x => t.includes(x)) || 'beast'; };
@@ -1050,7 +1053,7 @@ S.victory = (f, loot = []) => ({
     const pos = uids.map(u => box(monEl(u))).filter(Boolean);
     const center = pos.length ? cen(pos[0]) : focus();
     const t0 = uids.length ? lunge(k, f.pid, uids[0]) : 0;
-    if (t0 && pos[0]) k.at(t0, () => { dmgNum(k, cen(pos[0]), f.power); fx.haptic([18, 30, 40]); });
+    if (t0) k.at(t0, () => fx.haptic([18, 30, 40]));
     uids.forEach((u, i) => k.at(t0 + i * 170, () => slashCard(k, u)));
     const base = t0 + (uids.length - 1) * 170;
     k.at(base + 330, () => {
