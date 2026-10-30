@@ -2305,7 +2305,7 @@ button.pandora:not(.ready) .pb-cap { color: var(--text-2); }
   }
   .game #mecard { align-content: start; gap: 7px; padding: 11px 9px 11px 11px; overflow-y: auto; scrollbar-width: thin; }
   .game .handzone { padding: 8px 12px 0; gap: 4px; min-height: 0; }
-  .game .hand { padding: 8px 4px 10px; min-height: 0; }
+  .game .hand { padding: 14px 18px 10px; min-height: 0; }
   .game .me-top { gap: 10px; }
   .game .me-ava { width: 56px; height: 56px; border-width: 3px; }
   .game .me-name { font-size: 20px; }
@@ -2550,3 +2550,160 @@ svg.av-hover .av-bg, svg.av-hover .av-hero { transition: transform .18s ease-out
   background: linear-gradient(0deg, rgba(var(--bc),.95), rgba(var(--bc),.45) 35%, rgba(var(--bc),0) 80%); clip-path: polygon(34% 100%, 66% 100%, 100% 0, 0 0); }
 .cn-chestbeam::after { content: ''; position: absolute; left: 40%; right: 40%; top: 0; bottom: 0; background: linear-gradient(0deg, rgba(255,255,255,.95), rgba(255,255,255,0) 70%); filter: blur(4px); }
 .cn-tback { filter: drop-shadow(0 0 10px rgba(var(--bc, 255,226,150), .9)); }
+
+/* ═════════ стол-диорама (art/table.py) ═════════
+   под сценой — слой стола: кожаное поле с тиснением, свет свечей, дубовая рама с коваными уголками и предметы.
+   Сама сцена (#stage) становится прозрачной и лежит сверху — карты и кнопки всегда над предметами. */
+.cave > .table-bg { grid-area: 1 / 1; }
+@media (min-width: 901px) { .game .cave > .table-bg { grid-area: stage; } }
+.table-bg { --fw: 34px; position: relative; z-index: 0; pointer-events: none; min-height: 0; border-radius: 6px;
+  box-shadow: 0 2px 0 rgb(0 0 0 / .5), 0 24px 50px -8px rgb(0 0 0 / .75), 0 6px 14px rgb(0 0 0 / .5); }
+.table-bg > * { position: absolute; }
+.tb-mat { inset: calc(var(--fw) * .55); border-radius: 4px;
+  background: radial-gradient(ellipse 75% 70% at 50% 46%, rgb(var(--tb-tint, 255 200 140) / .07), transparent 70%),
+    var(--tb-mat, url(/ui/table/v1/mat.webp)) center / cover, #1a110b;
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / .8), inset 0 0 calc(var(--fw) * 1.6) rgb(0 0 0 / .85), inset 0 calc(var(--fw) * .5) calc(var(--fw) * .9) rgb(0 0 0 / .55); }
+.tb-frame { inset: 0; border: var(--fw) solid transparent; border-image: url(/ui/table/v1/frame.webp) 118 / var(--fw) stretch; }
+/* свет: тёплое пятно у свечей и общее мерцание пламени по полю */
+.tb-glow { inset: calc(var(--fw) * .55); border-radius: 4px; mix-blend-mode: screen; opacity: .9;
+  background: radial-gradient(ellipse 34% 48% at 6% 6%, rgb(var(--tb-light, 255 160 70) / .32), transparent 70%),
+    radial-gradient(ellipse 30% 42% at 96% 8%, rgb(var(--tb-light2, 255 160 70) / var(--tb-l2, .0)), transparent 70%);
+  animation: tbFlicker 2.6s steps(1) infinite; }
+@keyframes tbFlicker { 0% { opacity: .9; } 13% { opacity: .78; } 21% { opacity: .95; } 37% { opacity: .84; } 52% { opacity: 1; } 64% { opacity: .8; } 79% { opacity: .93; } 88% { opacity: .86; } }
+/* предметы: спрайты с собственной тенью; лежат на раме и краях поля */
+.tb-props { inset: 0; }
+.tb-prop { position: absolute; display: block; }
+.tb-prop img { display: block; width: 100%; height: auto; filter: drop-shadow(0 6px 6px rgb(0 0 0 / .35)); }
+.tp-tl { left: -10px; top: -8px; width: 92px; }
+.tp-tr { right: -8px; top: -6px; width: 78px; }
+.tp-br { right: -6px; bottom: -8px; width: 92px; }
+.tp-r  { right: -12px; top: 42%; width: 58px; }
+.tp-b  { left: 60%; bottom: -10px; width: 112px; }
+.p-coals.tp-tl { width: 92px; left: -8px; top: -4px; }
+.p-lamp.tp-tl { width: 100px; top: -4px; }
+.p-hammer.tp-tr, .p-keys.tp-tr, .p-keys.tp-b, .p-keys.tp-br { width: 92px; }
+.p-mug.tp-tr, .p-crystals.tp-tr, .p-egg.tp-tr, .p-mushrooms.tp-tr { width: 72px; }
+.p-book.tp-tr { width: 84px; } .p-book.tp-r { width: 76px; } .p-dice.tp-r { width: 66px; } .p-scroll.tp-b { width: 104px; }
+/* пламя свечей */
+.tb-flame { position: absolute; width: calc(11px * var(--k, 1)); height: calc(26px * var(--k, 1)); translate: -50% -88%; border-radius: 50% 50% 45% 45% / 62% 62% 38% 38%;
+  background: radial-gradient(ellipse 45% 40% at 50% 70%, #fff 0 22%, #ffe6a0 34%, rgba(255,170,60,.85) 58%, rgba(255,110,30,0) 78%);
+  filter: blur(.4px); mix-blend-mode: screen; transform-origin: 50% 100%; animation: tbFlame 1.6s ease-in-out infinite alternate; }
+.tb-flame::after { content: ''; position: absolute; left: 50%; top: 60%; width: 520%; height: 260%; translate: -50% -50%; border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(255,190,90,.38), rgba(255,140,50,.1) 55%, transparent); }
+.tb-flame:nth-of-type(2) { animation-duration: 1.25s; animation-delay: -.4s; } .tb-flame:nth-of-type(3) { animation-duration: 1.9s; animation-delay: -.8s; }
+@keyframes tbFlame { 0% { transform: scale(1, 1) skewX(0deg); } 30% { transform: scale(.92, 1.08) skewX(3deg); } 55% { transform: scale(1.05, .94) skewX(-2deg); } 80% { transform: scale(.96, 1.04) skewX(2deg); } 100% { transform: scale(1, .97) skewX(-1deg); } }
+/* свет у разных локаций */
+.cave[data-loc="loc_forge"] .table-bg { --tb-light: 255 110 40; --tb-tint: 255 140 70; }
+.cave[data-loc="loc_ice"] .table-bg, .cave[data-loc="loc_sky"] .table-bg { --tb-light2: 140 200 255; --tb-l2: .3; --tb-tint: 170 210 255; }
+.cave[data-loc="loc_graveyard"] .table-bg { --tb-light2: 255 160 70; --tb-l2: .3; --tb-tint: 150 200 170; }
+.cave[data-loc="loc_glade"] .table-bg, .cave[data-loc="loc_grove"] .table-bg { --tb-light2: 150 255 160; --tb-l2: .18; --tb-tint: 170 230 160; }
+.cave[data-loc="loc_koschei"] .table-bg { --tb-light2: 120 255 150; --tb-l2: .2; --tb-tint: 160 240 170; }
+.cave[data-loc="loc_library"] .table-bg { --tb-light2: 190 140 255; --tb-l2: .18; }
+.cave[data-loc="loc_cove"] .table-bg, .cave[data-loc="loc_flooded"] .table-bg { --tb-light2: 120 220 230; --tb-l2: .18; --tb-tint: 150 210 220; }
+/* сцена поверх стола — прозрачная, отступы под раму */
+.game #stage.cave-stage { position: relative; z-index: 1; background: none !important; -webkit-backdrop-filter: none; backdrop-filter: none; border: 0; box-shadow: none;
+  padding: calc(var(--fw, 34px) + 10px) calc(var(--fw, 34px) + 14px); --fw: 34px; overflow: visible; }
+.game #stage.cave-stage::before { inset: 34px; border-radius: 4px; }
+.game .cave > .motes { z-index: 2; inset: 0; }
+.game #stage .decks { left: calc(var(--fw) + 12px); bottom: calc(var(--fw) + 10px); }
+/* колода — стопка карт: толщина по числу карт (deckStack) */
+.game #stage .deck { border-radius: 6px; transition: box-shadow .4s ease; }
+/* карты на поле отбрасывают тень от света сверху слева */
+.game #stage .stage-inner .card { box-shadow: 0 0 0 1px rgb(0 0 0 / .7), 7px 14px 20px rgb(0 0 0 / .55), 2px 4px 6px rgb(0 0 0 / .45); }
+@media (max-width: 900px) {
+  .table-bg { --fw: 20px; --tb-mat: url(/ui/table/v1/mat-1200.webp); }
+  .game #stage.cave-stage { --fw: 20px; padding: 28px 22px 96px; }
+  .game #stage.cave-stage::before { inset: 20px; }
+  .tp-tl { width: 70px; left: -8px; top: -10px; }
+  .tp-tr { width: 60px; right: -6px; top: -8px; }
+  .tp-br { width: 72px; right: -6px; bottom: -8px; }
+  .p-coals.tp-tl, .p-lamp.tp-tl { width: 74px; }
+  .p-hammer.tp-tr, .p-keys.tp-tr, .p-mug.tp-tr, .p-crystals.tp-tr, .p-egg.tp-tr, .p-mushrooms.tp-tr, .p-book.tp-tr { width: 64px; }
+  .tp-r, .tp-b { display: none; }
+  .tb-flame { width: calc(7px * var(--k, 1)); height: calc(16px * var(--k, 1)); }
+}
+#world.still ~ * .tb-flame, .no-motion .tb-flame { animation: none; }
+@media (prefers-reduced-motion: reduce) { .tb-flame, .tb-glow { animation: none; } }
+
+/* ═════════ герои за столом ═════════
+   соперники сидят за дальним краем стола: медальон (кольцо с уровнем и силой, имя на табличке) стоит на раме стола,
+   рядом — раса, класс, карты в руке и метки. Без стеклянных плашек — только портреты и надписи с тенью. */
+.game .opp { display: flex; align-items: center; gap: 12px; padding: 0 6px; background: none !important; border: 0 !important; box-shadow: none !important;
+  -webkit-backdrop-filter: none !important; backdrop-filter: none !important; text-align: left; position: relative; overflow: visible; }
+.game .opp .hero-pill.medal.om { --rs: 66px; flex: none; }
+.game .opp .hero-pill.medal.om.framed { margin: calc(var(--rs) * var(--fext, 0) * .8) calc(var(--rs) * var(--fext, 0) * .6) 0; }
+.game .opp .om .ring { box-shadow: 0 0 0 2px #0a0806, 0 10px 22px rgb(0 0 0 / .7); }
+.game .opp .om .hp-plate { margin-top: -10px; min-width: 96px; max-width: 150px; padding: 4px 16px 3px; }
+.game .opp .om .hp-plate b { font-size: 14.5px; }
+.game .opp .om .hm-lvl { left: -12px; min-width: 26px; height: 30px; font-size: 15px; }
+.game .opp .om .hm-str { right: -14px; width: 32px; height: 32px; }
+.game .opp .om .hm-str span { font-size: 14px; }
+.game .opp .om .ava { width: 100%; height: 100%; grid-column: auto; grid-row: auto; }
+.game .opp .om-info { display: grid; gap: 4px; min-width: 0; max-width: 170px; text-shadow: 0 1px 2px #000, 0 0 10px rgb(0 0 0 / .9); }
+.game .opp .ometa { display: block; font-size: 12px; color: #e8dfd0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.game .opp .ometa span + span::before { content: ' · '; }
+.game .opp .ostats { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; margin: 0; font-size: 12.5px; }
+.game .opp .ostats .handcount { color: #efe7da; }
+/* чей ход — золотое сияние вокруг кольца и полоса света под табличкой */
+.game .opp.turn .om .ring { box-shadow: 0 0 0 2px #0a0806, 0 0 0 4px rgb(var(--torch, 255 200 120) / .9), 0 0 28px 6px rgb(255 190 90 / .55), 0 10px 22px rgb(0 0 0 / .7); }
+.game .opp.turn .ava { animation: none; }
+.game .opp.dead .om .ava { filter: grayscale(.85) brightness(.6); }
+.game .opp:hover .om .ring, .game .opp:focus-visible .om .ring { transform: translateY(-2px); transition: transform .15s ease; }
+/* реакции: удар — трещины и красная вспышка, проклятие — лиловая дымка на портрете */
+.react-hit .ava, .react-hit.me-ava { position: relative; }
+.react-hit .ava::after, .me-ava.react-hit::after { content: ''; position: absolute; inset: 0; z-index: 4; border-radius: 50%; pointer-events: none;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' fill='none' stroke='%23fff' stroke-width='1.6' stroke-linecap='round'%3E%3Cpath d='M50 50 L22 18 L14 6 M50 50 L80 30 L94 24 M50 50 L64 84 L60 98 M50 50 L18 66 L4 70 M22 18 L30 10 M80 30 L84 40 M64 84 L74 90 M18 66 L20 80'/%3E%3C/svg%3E") center / 100% no-repeat,
+    radial-gradient(circle, rgb(255 60 40 / .45), rgb(120 0 0 / .15) 60%, transparent 72%);
+  mix-blend-mode: screen; animation: reactHit 1.4s ease-out forwards; animation-delay: var(--rd, 0s); }
+@keyframes reactHit { 0% { opacity: 1; transform: scale(1.06); } 60% { opacity: .85; transform: scale(1); } 100% { opacity: 0; } }
+.react-curse .ava, .me-ava.react-curse { animation: reactCurse 2.8s ease-in-out both; animation-delay: var(--rd, 0s); }
+@keyframes reactCurse { 0%, 100% { filter: none; } 18%, 70% { filter: saturate(.45) hue-rotate(-30deg) brightness(.75) drop-shadow(0 0 10px rgb(190 120 255 / .95)); } }
+.react-up .ava, .me-ava.react-up { animation: reactUp 1.6s ease-out both; animation-delay: var(--rd, 0s); }
+@keyframes reactUp { 0% { filter: brightness(1); } 25% { filter: brightness(1.7) drop-shadow(0 0 16px rgb(255 214 120)); } 100% { filter: none; } }
+/* свой герой: портрет крупнее, в золотом кольце */
+.game #mecard .me-ava { width: 76px; height: 76px; box-shadow: 0 0 0 3px #0a0806, 0 0 0 5px #b8893a, 0 0 0 6.5px #0a0806, 0 10px 22px rgb(0 0 0 / .6); border: 0; }
+body.my-turn .game #mecard .me-ava { box-shadow: 0 0 0 3px #0a0806, 0 0 0 5px #f2c26a, 0 0 0 6.5px #0a0806, 0 0 26px 6px rgb(255 190 90 / .5), 0 10px 22px rgb(0 0 0 / .6); }
+@media (min-width: 901px) {
+  .game > .b-clay { position: relative; z-index: 3; margin-bottom: -26px; }
+  .game .opps { justify-content: space-evenly; align-items: flex-end; overflow: visible; padding: 8px 40px 0; gap: 14px; min-height: 96px; }
+  .game .opp { flex: 1 1 0; min-width: 0; max-width: 360px; justify-content: center; }
+  .game .opp .om-info { flex: 0 1 auto; }
+}
+@media (max-width: 900px) {
+  .game .opps { gap: 6px; padding: 10px 8px 8px; align-items: flex-start; justify-content: space-around; overflow: visible; }
+  .game .opp { flex: 1 1 0; min-width: 0; max-width: 150px; gap: 3px; flex-direction: column; align-items: center; padding: 0; }
+  .game .opp .om-info { justify-items: center; max-width: 100%; }
+  .game .opp .ometa { display: none; }
+  .game .opp .ostats { justify-content: center; gap: 4px; font-size: 11.5px; }
+  .game .opp .ostats .badge { font-size: 10.5px; padding: 1px 6px; }
+  .game .opp .ostats .badge.bot { display: none; }
+  .game .opp .hero-pill.medal.om { --rs: 54px; }
+  .game .opp .om .hp-plate { min-width: 80px; max-width: 120px; padding-inline: 12px; }
+  .game .opp .om .hp-plate b { font-size: 13px; }
+  .game .opp .om .hm-lvl { left: -10px; min-width: 22px; height: 26px; font-size: 13px; }
+  .game .opp .om .hm-str { right: -11px; width: 27px; height: 27px; }
+  .game .opp .om .hm-str span { font-size: 12px; }
+  .game .opp .ometa { font-size: 11px; max-width: 120px; }
+  .game #mecard .me-ava { width: 68px; height: 68px; }
+}
+@media (prefers-reduced-motion: reduce) { .react-hit .ava::after, .me-ava.react-hit::after, .react-curse .ava, .me-ava.react-curse, .react-up .ava, .me-ava.react-up { animation: none; } }
+
+/* ═════════ карта с весом ═════════
+   рука на компьютере — пологая дуга; наведённая карта выпрямляется и поднимается; карту можно бросить на цель */
+@media (min-width: 901px) {
+  .game .hand:not(.fan) .card { rotate: var(--fr, 0deg); translate: 0 var(--fy, 0px); transform-origin: 50% 130%;
+    transition: transform .22s cubic-bezier(.2,.8,.3,1.15), rotate .22s cubic-bezier(.2,.8,.3,1.15), translate .22s cubic-bezier(.2,.8,.3,1.15), box-shadow .2s, filter .2s, opacity .2s; }
+  .game .hand:not(.fan) .card:hover, .game .hand:not(.fan) .card:focus-visible { rotate: 0deg; translate: 0 0; --lift: -26px; --sc: 1.07; z-index: 5;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.25), 0 0 0 1px #000, 10px 26px 30px rgba(0,0,0,.6), 0 6px 10px rgba(0,0,0,.45); }
+}
+.hand .card { touch-action: none; }
+.hand .card.dragging { opacity: .22; filter: saturate(.3); }
+.drag-ghost { position: fixed; z-index: 90; pointer-events: none; transform-origin: 50% 40%; will-change: transform; }
+.drag-ghost > .card { margin: 0 !important; transform: none !important; rotate: 0deg !important; translate: 0 !important; position: relative !important; left: auto !important; bottom: auto !important; animation: none !important;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.3), 0 0 0 1px #000, 18px 34px 40px rgba(0,0,0,.6), 0 0 24px rgba(255,214,140,.35) !important; }
+/* цели броска: мягкая подсветка, а под картой — ярче */
+.drop-ok { position: relative; outline: 2px dashed rgb(255 214 140 / .55); outline-offset: 4px; border-radius: 14px; transition: outline-color .15s, box-shadow .15s; }
+.drop-hover { outline: 2px solid rgb(255 220 150 / .95) !important; box-shadow: 0 0 0 6px rgb(255 200 110 / .18), 0 0 34px rgb(255 190 90 / .45) !important; }
+.game #stage.drop-ok { outline-offset: -26px; }
+body.is-dragging { cursor: grabbing; user-select: none; }
+body.is-dragging .pop, body.is-dragging .tip { display: none; }

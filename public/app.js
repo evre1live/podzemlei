@@ -588,6 +588,7 @@ mount.game = () => {
     </div>
     <div class="band b-clay pebbles"><div class="opps" id="opps"></div></div>
     <div class="band b-rock cave" id="cave">
+      <div class="table-bg" id="tableBg" aria-hidden="true"><div class="tb-mat"></div><div class="tb-glow"></div><div class="tb-frame"></div><div class="tb-props" id="tableProps"></div></div>
       <div class="cave-stage" id="stage"></div>
       <div class="motes" aria-hidden="true">${'<i></i>'.repeat(12)}</div>
       <div class="sidepanel side" id="sidepanel">
@@ -692,11 +693,14 @@ function statusTags(p) {
 function oppHTML(p) {
   const g = S.game;
   const botTip = p.isBot ? ` title="${esc(`${p.name} — бот.${p.persona ? ' ' + personaTip(p.persona) : ''}`)}"` : '';
-  return `<button class="opp ${g.turn.pid === p.id ? 'turn' : ''} ${p.dead ? 'dead' : ''} ${p.ghost && !p.dead ? 'ghost' : ''}" data-opp="${p.id}" data-vmember="${p.id}" style="--seat:${p.color}" aria-label="${esc(p.name)}, уровень ${p.level}"${botTip}>
-    <div class="ava">${avatarSVG(gAva(p), p.color)}</div>
-    <div class="oname">${esc(p.name)}</div>
-    <div class="ometa"><span>${esc(raceText(p))}</span><span>${esc(classText(p))}</span></div>
-    <div class="ostats"><span class="lvl" title="Уровень">${p.level}</span><span class="pow" title="Сила: уровень и надетые вещи">${ico('crossed-swords')}${p.power}</span>${p.gold != null ? `<span class="gold" title="Кошелёк: голды за проданные вещи и контракты, тратятся на рынке">${ico('two-coins')}${p.gold}</span>` : ''}<span class="handcount" title="Карт в руке"><i></i>${p.handCount}</span>${statusTags(p)}</div>
+  // соперник сидит за дальним краем стола: медальон с уровнем и силой на кольце, имя на табличке, рядом — раса, класс и карты в руке
+  const a = gAva(p), rc = reactOf(p.id);
+  return `<button class="opp ${g.turn.pid === p.id ? 'turn' : ''} ${p.dead ? 'dead' : ''} ${p.ghost && !p.dead ? 'ghost' : ''}${rc.cls}" data-opp="${p.id}" data-vmember="${p.id}" style="--seat:${p.color};--fext:${frameExt(a)};${rc.st}" aria-label="${esc(p.name)}, уровень ${p.level}"${botTip}>
+    <span class="hero-pill medal om${a.frame ? ' framed' : ''}"><span class="ring"><span class="ava">${avatarSVG(a, p.color)}</span>
+      <b class="hm-lvl" title="Уровень">${p.level}</b><b class="hm-str" title="Сила: уровень и надетые вещи">${ico('crossed-swords')}<span>${p.power}</span></b></span>
+      <span class="hp-plate"><b class="oname">${esc(p.name)}</b></span></span>
+    <span class="om-info"><span class="ometa"><span>${esc(raceText(p))}</span><span>${esc(classText(p))}</span></span>
+      <span class="ostats">${p.gold != null ? `<span class="gold" title="Кошелёк: голды за проданные вещи и контракты, тратятся на рынке">${ico('two-coins')}${p.gold}</span>` : ''}<span class="handcount" title="Карт в руке"><i></i>${p.handCount}</span>${statusTags(p)}</span></span>
   </button>`;
 }
 
@@ -725,13 +729,54 @@ const SHIELD = side => {
   </svg>`;
 };
 
+// ───────────────────────── стол-диорама ─────────────────────────
+// Стол отрендерен в Blender (art/table.py): кожаное поле с тиснением, дубовая рама с коваными уголками и предметы.
+// Набор предметов и цвет света — свои у каждой локации. Слой стола лежит под сценой и не перерисовывается с ней.
+const TABLE_V = 'v1';
+const TP = (n, slot, flip = false) => ({ n, slot, flip });
+const TABLE_PROPS = {
+  default: [TP('candles', 'tl'), TP('dice', 'tr'), TP('coins', 'br'), TP('goblet', 'r'), TP('dagger', 'b')],
+  loc_tavern: [TP('candles', 'tl'), TP('mug', 'tr'), TP('coins', 'br'), TP('dice', 'r'), TP('scroll', 'b')],
+  loc_dungeon: [TP('candles', 'tl'), TP('keys', 'tr'), TP('coins', 'br'), TP('goblet', 'r'), TP('dagger', 'b')],
+  loc_glade: [TP('candles', 'tl'), TP('mushrooms', 'tr'), TP('coins', 'br'), TP('potion', 'r'), TP('scroll', 'b')],
+  loc_forge: [TP('coals', 'tl'), TP('hammer', 'tr'), TP('coins', 'br'), TP('goblet', 'r'), TP('dagger', 'b')],
+  loc_ice: [TP('candles', 'tl'), TP('crystals', 'tr'), TP('coins', 'br'), TP('potion', 'r'), TP('dagger', 'b')],
+  loc_graveyard: [TP('candles', 'tl'), TP('candles', 'tr', true), TP('keys', 'br'), TP('book', 'r'), TP('dagger', 'b')],
+  loc_sky: [TP('candles', 'tl'), TP('crystals', 'tr'), TP('coins', 'br'), TP('goblet', 'r'), TP('scroll', 'b')],
+  loc_cove: [TP('candles', 'tl'), TP('mug', 'tr'), TP('coins', 'br'), TP('dice', 'r'), TP('dagger', 'b')],
+  loc_library: [TP('candles', 'tl'), TP('book', 'tr'), TP('coins', 'br'), TP('potion', 'r'), TP('scroll', 'b')],
+  loc_oasis: [TP('lamp', 'tl'), TP('goblet', 'tr'), TP('coins', 'br'), TP('dice', 'r'), TP('dagger', 'b')],
+  loc_flooded: [TP('candles', 'tl'), TP('keys', 'tr'), TP('coins', 'br'), TP('potion', 'r'), TP('scroll', 'b')],
+  loc_grove: [TP('candles', 'tl'), TP('mushrooms', 'tr'), TP('coins', 'br'), TP('potion', 'r'), TP('dagger', 'b')],
+  loc_koschei: [TP('candles', 'tl'), TP('egg', 'tr'), TP('coins', 'br'), TP('goblet', 'r'), TP('keys', 'b')],
+};
+// у свечей и лампы — живое пламя; координаты фитилей — в долях спрайта (art/table.py печатает их)
+const TABLE_FLAMES = { candles: [[0.284, 0.077, 1], [0.581, 0.156, 0.85], [0.448, 0.496, 0.75]], lamp: [[0.95, 0.145, 0.9]] };
+function syncTable(art) {
+  const box = $('#tableProps');
+  if (!box || box.dataset.loc === art) return;
+  box.dataset.loc = art;
+  box.innerHTML = (TABLE_PROPS[art] || TABLE_PROPS.default).map(({ n, slot, flip }) => {
+    const fl = (TABLE_FLAMES[n] || []).map(([x, y, k]) => `<i class="tb-flame" style="left:${((flip ? 1 - x : x) * 100).toFixed(1)}%;top:${(y * 100).toFixed(1)}%;--k:${k}"></i>`).join('');
+    return `<span class="tb-prop tp-${slot} p-${n}${fl ? ' lit' : ''}"><img src="/ui/table/${TABLE_V}/${n}.webp" alt="" decoding="async"${flip ? ' style="transform:scaleX(-1)"' : ''}>${fl}</span>`;
+  }).join('');
+}
+// толщина колоды по числу карт: слой — около дюжины карт
+const deckStack = n => {
+  const k = Math.max(1, Math.min(9, Math.round(n / 12)));
+  let sh = '';
+  for (let i = 1; i <= k; i++) sh += `${(i * 0.45).toFixed(2)}px ${(i * 1.1).toFixed(2)}px 0 ${i % 2 ? '#2c2117' : '#100b07'}, `;
+  return `box-shadow:${sh}${(k * 0.45 + 3).toFixed(1)}px ${(k * 1.1 + 8).toFixed(1)}px 14px rgba(0,0,0,.6)`;
+};
+
 function renderStage() {
   const g = S.game;
   const el = $('#stage');
   const h = hints();
   const loc = g.location ? def(g.location) : null;
   $('#cave').dataset.loc = loc ? loc.art : '';
-  const decks = `<div class="decks"><div class="deck door" id="deckDoor" title="Колода проходов" aria-label="Колода проходов: ${g.decks.door}">${cardBackSVG('door')}<span>${g.decks.door}</span></div><div class="deck treasure" id="deckTreasure" title="Колода клада" aria-label="Колода клада: ${g.decks.treasure}">${cardBackSVG('treasure')}<span>${g.decks.treasure}</span></div></div>`;
+  syncTable(loc ? loc.art : 'default');
+  const decks = `<div class="decks"><div class="deck door" id="deckDoor" style="${deckStack(g.decks.door)}" title="Колода проходов" aria-label="Колода проходов: ${g.decks.door}">${cardBackSVG('door')}<span>${g.decks.door}</span></div><div class="deck treasure" id="deckTreasure" style="${deckStack(g.decks.treasure)}" title="Колода клада" aria-label="Колода клада: ${g.decks.treasure}">${cardBackSVG('treasure')}<span>${g.decks.treasure}</span></div></div>`;
   const lp = $('#locpill');
   const key = loc ? g.location : '';
   if (lp.dataset.key !== key) {
@@ -1083,7 +1128,7 @@ function renderMine() {
   const run = 5 - p.runBonus;
   el.innerHTML = `
     <div class="me-top" style="--seat:${p.color}" data-vmember="${p.id}">
-      <div class="me-ava" id="meava" data-act="avatar" role="button" tabindex="0" title="Сменить портрет" aria-label="Сменить портрет">${avatarSVG(gAva(p), p.color)}</div>
+      <div class="me-ava${reactOf(p.id).cls}" id="meava" style="${reactOf(p.id).st}" data-act="avatar" role="button" tabindex="0" title="Сменить портрет" aria-label="Сменить портрет">${avatarSVG(gAva(p), p.color)}</div>
       <div><div class="me-name">${esc(p.name)}</div>
         <div class="me-stats"><span class="lvl" title="Уровень">${p.level}</span><span class="pow" title="Сила: уровень и надетые вещи">${ico('crossed-swords')}${p.power}</span><span class="gold" data-act="market" role="button" title="Кошелёк: голды за проданные вещи и контракты, тратятся на рынке">${ico('two-coins')}${p.gold || 0}</span>
         <span class="badge" title="Сколько нужно выбросить на кубике, чтобы убежать">${p.classes.some(u => def(u).cls === 'warlock') ? 'побег всегда' : `побег ${run <= 1 ? 'всегда' : run > 6 ? 'никогда' : run + '+'}`}</span>
@@ -1258,6 +1303,9 @@ function fitHand() {
     });
     return;
   }
+  // на компьютере рука — пологая дуга: крайние карты чуть ниже и повёрнуты, при наведении карта выпрямляется и поднимается
+  { const n = cards.length, mid = (n - 1) / 2, step = n > 1 ? Math.min(1.6, 9 / (n - 1)) : 0;
+    cards.forEach((c, i) => { const t = i - mid; c.style.setProperty('--fr', (t * step).toFixed(2) + 'deg'); c.style.setProperty('--fy', (mid ? Math.pow(Math.abs(t) / mid, 2) * 8 : 0).toFixed(1) + 'px'); }); }
   if (cards.length < 2) return el.style.setProperty('--ov', '0px');
   const w = cards[0].offsetWidth;
   const avail = el.clientWidth - 12;
@@ -1897,9 +1945,27 @@ function moodFx(fresh) {
   }
 }
 
+// портрет откликается на события: удар — трещины и красная вспышка, проклятие — лиловая дымка, уровень — золотой свет
+const REACT = { levelUp: 'react-up', levelDown: 'react-hit', caught: 'react-hit', death: 'react-hit', curse: 'react-curse' };
+// стол перерисовывается часто — отклик помнится 3 с и при перерисовке продолжается с того же места (--rd)
+const reacts = new Map();
+const reactOf = pid => { const r = reacts.get(pid); if (!r) return { cls: '', st: '' }; const t = performance.now() - r.t0; if (t > 3000) { reacts.delete(pid); return { cls: '', st: '' }; } return { cls: ' ' + r.cls, st: `--rd:-${Math.round(t)}ms;` }; };
+function portraitReact(fresh) {
+  for (const f of fresh) {
+    const cls = REACT[f.kind];
+    if (!cls || !f.pid) continue;
+    setTimeout(() => {
+      reacts.set(f.pid, { cls, t0: performance.now() });
+      const el = f.pid === S.room?.me ? $('#meava') : document.querySelector(`[data-opp="${CSS.escape(f.pid)}"]`);
+      if (!el) return;
+      el.classList.remove(...Object.values(REACT)); el.style.removeProperty('--rd'); void el.offsetWidth; el.classList.add(cls);
+    }, cine.on ? 900 : 60);
+  }
+}
 function extraFx(fresh) {
   achFx(fresh);
   moodFx(fresh);
+  portraitReact(fresh);
   for (const f of fresh) {
     const ava = avaOf(f.pid);
     switch (f.kind) {
@@ -2179,7 +2245,7 @@ cine.init({
   pname,
   avaOf,
   heroAva: pid => document.querySelector(`#stage .hero-pill[data-pid="${CSS.escape(pid)}"] .ava`),
-  lvlEl: pid => (pid === S.room?.me ? $('#mecard .lvl') : document.querySelector(`[data-opp="${pid}"] .lvl`)),
+  lvlEl: pid => (pid === S.room?.me ? $('#mecard .lvl') : document.querySelector(`[data-opp="${pid}"] .hm-lvl`)),
   color: pid => pl(pid)?.color || '#f5b83d',
   avatar: pid => (pl(pid) ? gAva(pl(pid)) : null),
   winLevel: winLvl,
@@ -2798,6 +2864,111 @@ function openSoundModal() {
 }
 
 // ───────────────────────── полёт сыгранной карты ─────────────────────────
+// ───────────────────────── карту можно бросить на стол ─────────────────────────
+// Карту из руки тянут пальцем или мышью: она следует за указателем и кренится по ходу движения, подходящие цели
+// подсвечиваются (соперник, свой герой, сторона в бою, стол). Отпустили над целью с одним действием — карта
+// шлёпается туда; если вариантов несколько — открывается окно карты. Просто нажатие открывает окно, как раньше.
+const dropZone = a => {
+  const d = def(a.uid);
+  if (a.target) return a.target === S.room?.me ? 'me' : 'opp:' + a.target;
+  if (a.side === 'player') return 'hero';
+  if (a.side === 'monster' || Number.isInteger(a.monster)) return 'mon';
+  if (['race', 'class', 'halfbreed', 'supermunch', 'item', 'buff', 'levelup', 'ally'].includes(d.type) || a.type === 'equip') return 'me';
+  return 'table';
+};
+const zoneEls = z => z === 'me' ? [$('#mecard')] : z === 'hero' ? [document.querySelector('#stage .side-col.hero')] : z === 'mon' ? [document.querySelector('#stage .side-col.mon')]
+  : z === 'table' ? [$('#stage')] : [document.querySelector(`[data-opp="${CSS.escape(z.slice(4))}"]`)];
+let drag = null, dragEnd = 0;
+function dragStart(st, e) {
+  const p = me(), h = hints();
+  if (!p || S.ui.mode) return false;
+  const opts = (h.cards?.[st.uid] || []).map(a => ({ ...a, uid: a.uid || st.uid }));
+  const zones = new Map();
+  for (const a of opts) { const z = dropZone(a); if (!zones.has(z)) zones.set(z, []); zones.get(z).push(a); }
+  const r = st.c.getBoundingClientRect();
+  const g = document.createElement('div');
+  g.className = 'drag-ghost';
+  const cl = st.c.cloneNode(true);
+  cl.classList.remove('selected', 'deal-in', 'tilting', 'dim'); cl.removeAttribute('style'); cl.removeAttribute('id');
+  g.append(cl);
+  g.style.width = r.width + 'px'; g.style.left = r.left + 'px'; g.style.top = r.top + 'px';
+  document.body.append(g);
+  st.c.classList.add('dragging');
+  for (const z of zones.keys()) zoneEls(z).forEach(el => el?.classList.add('drop-ok'));
+  document.body.classList.add('is-dragging');
+  Object.assign(st, { on: true, g, zones, ox: e.clientX - r.left, oy: e.clientY - r.top, w: r.width, h: r.height, vx: 0, vy: 0, lx: e.clientX, ly: e.clientY, lt: performance.now(), rot: 0, hover: null });
+  sfx.play('flip', { gap: 0 });
+  return true;
+}
+function dragMove(st, e) {
+  const t = performance.now(), dt = Math.max(8, t - st.lt);
+  st.vx = st.vx * 0.6 + ((e.clientX - st.lx) / dt) * 0.4; st.vy = st.vy * 0.6 + ((e.clientY - st.ly) / dt) * 0.4;
+  st.lx = e.clientX; st.ly = e.clientY; st.lt = t;
+  // карта «плывёт» за указателем и кренится по ходу движения, как настоящая
+  const rz = Math.max(-18, Math.min(18, st.vx * 9)), rx = Math.max(-16, Math.min(16, -st.vy * 7));
+  st.g.style.transform = `translate(${e.clientX - st.ox - parseFloat(st.g.style.left)}px, ${e.clientY - st.oy - parseFloat(st.g.style.top)}px) perspective(900px) rotateZ(${rz.toFixed(1)}deg) rotateX(${rx.toFixed(1)}deg) scale(1.08)`;
+  // над какой целью
+  let hov = null;
+  for (const z of st.zones.keys()) {
+    for (const el of zoneEls(z)) {
+      if (!el) continue;
+      const b = el.getBoundingClientRect();
+      if (e.clientX >= b.left && e.clientX <= b.right && e.clientY >= b.top && e.clientY <= b.bottom) { if (!hov || z !== 'table') hov = { z, el }; }
+    }
+  }
+  if (st.hover?.el !== hov?.el) { st.hover?.el.classList.remove('drop-hover'); hov?.el.classList.add('drop-hover'); }
+  st.hover = hov;
+}
+async function dragDrop(st) {
+  const cleanup = () => {
+    document.querySelectorAll('.drop-ok, .drop-hover').forEach(el => el.classList.remove('drop-ok', 'drop-hover'));
+    document.body.classList.remove('is-dragging');
+    st.c.classList.remove('dragging');
+  };
+  const back = () => {
+    // мимо цели — карта возвращается в руку
+    const r = st.c.getBoundingClientRect();
+    st.g.style.transition = 'transform .28s cubic-bezier(.3,1.3,.5,1), opacity .28s';
+    st.g.style.transform = `translate(${r.left - parseFloat(st.g.style.left)}px, ${r.top - parseFloat(st.g.style.top)}px)`;
+    setTimeout(() => { st.g.remove(); st.c.classList.remove('dragging'); }, 290);
+  };
+  dragEnd = performance.now();
+  const hov = st.hover;
+  cleanup();
+  if (!hov) { back(); return; }
+  const acts = st.zones.get(hov.z) || [];
+  if (acts.length !== 1) { back(); openCardPop(st.uid, 'hand'); return; }
+  // шлепок: карта падает на цель, поднимает пыль
+  st.g.style.transition = 'transform .16s cubic-bezier(.5,0,.9,.5), opacity .2s ease .12s';
+  const cur = st.g.style.transform.replace(/scale\([^)]*\)/, '').replace(/rotate[XZ]\([^)]*\)/g, '').replace(/perspective\([^)]*\)/, '');
+  st.g.style.transform = `${cur} scale(.92) rotateZ(${(Math.random() * 6 - 3).toFixed(1)}deg)`;
+  st.g.style.opacity = '0';
+  setTimeout(() => st.g.remove(), 360);
+  sfx.play('place'); fx.dust({ x: st.lx, y: st.ly + st.h * 0.3, w: st.w, h: 8 }, { n: 10 });
+  const r = await act(acts[0]);
+  if (r.ok) fx.burst({ x: st.lx, y: st.ly }, { n: 10, speed: 160, g: 200 });
+}
+document.addEventListener('pointerdown', e => {
+  if (e.button || drag) return;
+  const c = e.target.closest('#hand .card[data-uid]');
+  if (!c) return;
+  drag = { c, uid: c.dataset.uid, x0: e.clientX, y0: e.clientY, on: false, id: e.pointerId };
+});
+document.addEventListener('pointermove', e => {
+  if (!drag || e.pointerId !== drag.id) return;
+  if (!drag.on) {
+    if (Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0) < 12) return;
+    if (!dragStart(drag, e)) { drag = null; return; }
+  }
+  e.preventDefault();
+  dragMove(drag, e);
+}, { passive: false });
+const dragUp = e => { if (!drag || e.pointerId !== drag.id) return; const st = drag; drag = null; if (st.on) dragDrop(st); };
+document.addEventListener('pointerup', dragUp);
+document.addEventListener('pointercancel', e => { if (!drag || e.pointerId !== drag.id) return; const st = drag; drag = null; if (st.on) { st.hover = null; dragDrop(st); } });
+// после броска не открываем окно карты от того же нажатия
+document.addEventListener('click', e => { if (performance.now() - dragEnd < 350 && e.target.closest('#hand, #stage, #opps, #mecard')) { e.stopPropagation(); e.preventDefault(); } }, true);
+
 function flySource(a) {
   const uid = a?.uid;
   if (!uid) return null;
