@@ -1,4 +1,4 @@
-# рамка стола для 9-slice: дубовые брусья, кованые уголки с заклёпками, латунная кромка
+# рамка стола для 9-slice: брусья, кованые уголки с заклёпками, кромка у поля; материал — под локацию (--kind)
 import bpy, bmesh, math, sys, os
 from mathutils import Vector
 OUT = sys.argv[sys.argv.index('--o') + 1]
@@ -16,9 +16,11 @@ L = 10.0; B = 1.15  # → 118 px
 H = 0.35            # высота бруса
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from mats import mat, oak, iron, brass
-
-M_OAK, M_IRON, M_BRASS = mat('oak', oak), mat('iron', iron), mat('brass', brass)
+from mats import mat, FRAMES
+# --kind: материал рамы под локацию (FRAMES в mats.py), по умолчанию дуб с железом и латунью
+KIND = sys.argv[sys.argv.index('--kind') + 1] if '--kind' in sys.argv else 'oak'
+_b, _c, _e, EDGE = FRAMES[KIND]
+M_OAK, M_IRON, M_BRASS = mat('beam', _b), mat('corner', _c), mat('edge', _e)
 
 def add(ob, m):
     sc.collection.objects.link(ob); ob.data.materials.append(m); return ob
@@ -61,7 +63,7 @@ inner = L / 2 - B + 0.13
 for k in range(4):
     bpy.ops.mesh.primitive_cube_add(size=1)
     ob = bpy.context.active_object; sc.collection.objects.unlink(ob) if False else None
-    ob.scale = (L - 2 * B + 0.3, 0.09, 0.06)
+    ob.scale = (L - 2 * B + 0.3, EDGE, 0.06 + (EDGE - 0.09) * 0.6)
     ob.location = (0, -inner, H * 0.6)
     ob.rotation_euler = (0, 0, 0)
     # поворот вокруг центра

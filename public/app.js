@@ -688,7 +688,8 @@ function renderOpps() {
   const mine = me();
   const start = mine ? mine.seat : 0;
   const order = [...g.players].sort((a, b) => ((a.seat - start + 99) % g.players.length) - ((b.seat - start + 99) % g.players.length)).filter(p => p.id !== S.room.me);
-  $('#opps').innerHTML = order.map(oppHTML).join('');
+  const box = $('#opps'); box.dataset.n = order.length;
+  box.innerHTML = order.map(oppHTML).join('');
 }
 function statusTags(p) {
   const g = S.game, c = g.combat;

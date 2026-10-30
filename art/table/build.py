@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 """Стол-диорама «Под Землёй»: всё, что рендерит Blender, и сборка файлов для сайта.
 
-  python3 art/table/build.py [frame] [mat] [props [имя,имя]]   — по умолчанию всё
+  python3 art/table/build.py [frame] [frames [вид,вид]] [mat] [props [имя,имя]]   — по умолчанию всё
+  (поля под локации рисует art/table/locmats.py)
 
 Рендер — Blender как модуль Python (pip install bpy pillow numpy; bpy 5.x, Python 3.13), запускается отдельными процессами:
   frame.py — дубовая рама с коваными уголками и латунной кромкой для border-image (9 частей, срез 118 px из 1024);
+             с --kind — рама под локацию: эбен с золотом, берёза, сталь, лёд, гранит, мрамор, корабельный брус с канатом,
+             красное дерево, песчаник с бирюзой, ржавая сталь, кора со мхом, чёрное железо со светящейся кромкой;
   mat.py   — кожаное поле с тиснённым компасом (маска тиснения рисуется здесь же, emboss.png);
   props.py — предметы на стол: свечи, монеты, кости, зелье, книга, кинжал, кубок, свиток, кружка, молот, угли,
              кристаллы, грибы, ключи, лампа, золотое яйцо. Каждый — со своей тенью; фитили печатаются как MARKS.
@@ -63,11 +66,19 @@ def trim(png, pad=4):
     return im.crop(box), box, (W, H)
 
 
+KINDS = ['ebony', 'birch', 'steel', 'ice', 'stone', 'marble', 'ship', 'mahogany', 'sand', 'rust', 'bark', 'black']
+
+
 def main():
-    what = sys.argv[1:] or ['frame', 'mat', 'props']
+    what = sys.argv[1:] or ['frame', 'frames', 'mat', 'props']
     if 'frame' in what:
         png = os.path.join(TMP, 'frame.png'); blender('frame.py', '--o', png, '--s', '48')
         Image.open(png).save(os.path.join(OUT, 'frame.webp'), 'WEBP', quality=88, method=6, alpha_quality=95); print('frame.webp')
+    if 'frames' in what:                      # рамы под локации: frame-<вид>.webp (виды — FRAMES в mats.py)
+        i = what.index('frames'); kinds = what[i + 1].split(',') if len(what) > i + 1 and what[i + 1] not in ('frame', 'mat', 'props') else KINDS
+        for k in kinds:
+            png = os.path.join(TMP, f'frame-{k}.png'); blender('frame.py', '--o', png, '--s', '40', '--kind', k)
+            Image.open(png).save(os.path.join(OUT, f'frame-{k}.webp'), 'WEBP', quality=88, method=6, alpha_quality=95); print(f'frame-{k}.webp', flush=True)
     if 'mat' in what:
         emboss(); png = os.path.join(TMP, 'mat.png'); blender('mat.py', '--o', png, '--s', '32', '--w', '2400')
         im = Image.open(png).convert('RGB')

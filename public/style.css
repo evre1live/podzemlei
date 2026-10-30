@@ -2993,3 +2993,68 @@ body:has(#world.still) .g-grain { display: none; }
 .lobby .settings .seg button .gi { color: inherit; }
 .lobby .startbar .muted { text-shadow: 0 1px 2px rgb(0 0 0 / .9); }
 @media (max-width: 700px) { .lobby .settings { padding: 16px 14px 18px; rotate: 0deg; } }
+
+/* ═════════ стол под локацию: своё поле (art/table/locmats.py) и своя рама (art/table/build.py frames) ═════════
+   таверна — доски и дуб, сокровищница — бархат и эбен, поляна — мох и берёза, кузня — сталь, лёд — лёд, кладбище — камень,
+   небесная — тёмный мрамор и белый мрамор с золотом, бухта — морская карта и корабельный брус, библиотека — звёздный атлас
+   и красное дерево, оазис — ковёр и песчаник, станция — рифлёная ржавая сталь, роща — грибница и кора, Кощей — чёрный камень */
+.cave[data-loc="loc_tavern"] .table-bg { --tb-mat: url(/ui/table/v1/mat-tavern.webp); }
+.cave[data-loc="loc_dungeon"] .table-bg { --tb-mat: url(/ui/table/v1/mat-dungeon.webp); }
+.cave[data-loc="loc_dungeon"] .tb-frame { border-image-source: url(/ui/table/v1/frame-ebony.webp); }
+.cave[data-loc="loc_glade"] .table-bg { --tb-mat: url(/ui/table/v1/mat-glade.webp); }
+.cave[data-loc="loc_glade"] .tb-frame { border-image-source: url(/ui/table/v1/frame-birch.webp); }
+.cave[data-loc="loc_forge"] .table-bg { --tb-mat: url(/ui/table/v1/mat-forge.webp); }
+.cave[data-loc="loc_forge"] .tb-frame { border-image-source: url(/ui/table/v1/frame-steel.webp); }
+.cave[data-loc="loc_ice"] .table-bg { --tb-mat: url(/ui/table/v1/mat-ice.webp); }
+.cave[data-loc="loc_ice"] .tb-frame { border-image-source: url(/ui/table/v1/frame-ice.webp); }
+.cave[data-loc="loc_graveyard"] .table-bg { --tb-mat: url(/ui/table/v1/mat-graveyard.webp); }
+.cave[data-loc="loc_graveyard"] .tb-frame { border-image-source: url(/ui/table/v1/frame-stone.webp); }
+.cave[data-loc="loc_sky"] .table-bg { --tb-mat: url(/ui/table/v1/mat-sky.webp); }
+.cave[data-loc="loc_sky"] .tb-frame { border-image-source: url(/ui/table/v1/frame-marble.webp); }
+.cave[data-loc="loc_cove"] .table-bg { --tb-mat: url(/ui/table/v1/mat-cove.webp); }
+.cave[data-loc="loc_cove"] .tb-frame { border-image-source: url(/ui/table/v1/frame-ship.webp); }
+.cave[data-loc="loc_library"] .table-bg { --tb-mat: url(/ui/table/v1/mat-library.webp); }
+.cave[data-loc="loc_library"] .tb-frame { border-image-source: url(/ui/table/v1/frame-mahogany.webp); }
+.cave[data-loc="loc_oasis"] .table-bg { --tb-mat: url(/ui/table/v1/mat-oasis.webp); }
+.cave[data-loc="loc_oasis"] .tb-frame { border-image-source: url(/ui/table/v1/frame-sand.webp); }
+.cave[data-loc="loc_flooded"] .table-bg { --tb-mat: url(/ui/table/v1/mat-flooded.webp); }
+.cave[data-loc="loc_flooded"] .tb-frame { border-image-source: url(/ui/table/v1/frame-rust.webp); }
+.cave[data-loc="loc_grove"] .table-bg { --tb-mat: url(/ui/table/v1/mat-grove.webp); }
+.cave[data-loc="loc_grove"] .tb-frame { border-image-source: url(/ui/table/v1/frame-bark.webp); }
+.cave[data-loc="loc_koschei"] .table-bg { --tb-mat: url(/ui/table/v1/mat-koschei.webp); }
+.cave[data-loc="loc_koschei"] .tb-frame { border-image-source: url(/ui/table/v1/frame-black.webp); }
+@media (max-width: 900px) {
+  .cave[data-loc="loc_tavern"] .table-bg { --tb-mat: url(/ui/table/v1/mat-tavern-1200.webp); }
+  .cave[data-loc="loc_dungeon"] .table-bg { --tb-mat: url(/ui/table/v1/mat-dungeon-1200.webp); }
+  .cave[data-loc="loc_glade"] .table-bg { --tb-mat: url(/ui/table/v1/mat-glade-1200.webp); }
+  .cave[data-loc="loc_forge"] .table-bg { --tb-mat: url(/ui/table/v1/mat-forge-1200.webp); }
+  .cave[data-loc="loc_ice"] .table-bg { --tb-mat: url(/ui/table/v1/mat-ice-1200.webp); }
+  .cave[data-loc="loc_graveyard"] .table-bg { --tb-mat: url(/ui/table/v1/mat-graveyard-1200.webp); }
+  .cave[data-loc="loc_sky"] .table-bg { --tb-mat: url(/ui/table/v1/mat-sky-1200.webp); }
+  .cave[data-loc="loc_cove"] .table-bg { --tb-mat: url(/ui/table/v1/mat-cove-1200.webp); }
+  .cave[data-loc="loc_library"] .table-bg { --tb-mat: url(/ui/table/v1/mat-library-1200.webp); }
+  .cave[data-loc="loc_oasis"] .table-bg { --tb-mat: url(/ui/table/v1/mat-oasis-1200.webp); }
+  .cave[data-loc="loc_flooded"] .table-bg { --tb-mat: url(/ui/table/v1/mat-flooded-1200.webp); }
+  .cave[data-loc="loc_grove"] .table-bg { --tb-mat: url(/ui/table/v1/mat-grove-1200.webp); }
+  .cave[data-loc="loc_koschei"] .table-bg { --tb-mat: url(/ui/table/v1/mat-koschei-1200.webp); }
+}
+.tb-mat { transition: background-image .5s ease; }
+
+/* соперники на телефоне: ровный ряд — медальоны по одной линии (рамки разной высоты их не сдвигают), табличка не шире своей колонки;
+   при 4–5 соперниках медальоны мельче */
+@media (max-width: 900px) {
+  .game .opps { align-items: flex-end; padding-top: 16px; }
+  .game .opp .hero-pill.medal.om, .game .opp .hero-pill.medal.om.framed { margin: 0; padding-top: 0; max-width: 100%; }
+  .game .opp .om .hp-plate { min-width: 0; max-width: 100%; padding-inline: 11px; }
+  .game .opps[data-n="4"] .opp .hero-pill.medal.om, .game .opps[data-n="5"] .opp .hero-pill.medal.om { --rs: 46px; }
+  .game .opps[data-n="4"] .opp .om .hp-plate b, .game .opps[data-n="5"] .opp .om .hp-plate b { font-size: 11.5px; }
+  .game .opps[data-n="5"] .opp .om .hp-plate { padding-inline: 8px; }
+  .game .opps[data-n="4"] .opp .om .hm-lvl, .game .opps[data-n="5"] .opp .om .hm-lvl { left: -8px; min-width: 19px; height: 22px; font-size: 11.5px; }
+  .game .opps[data-n="4"] .opp .om .hm-str, .game .opps[data-n="5"] .opp .om .hm-str { right: -9px; width: 23px; height: 23px; }
+  .game .opps[data-n="4"] .opp .om .hm-str span, .game .opps[data-n="5"] .opp .om .hm-str span { font-size: 10.5px; }
+  .game .opps[data-n="5"] { gap: 3px; padding-inline: 4px; }
+}
+/* текст сцены на узорном поле (снежинка, роза ветров, ковёр): мягкая тень-подложка под строками */
+.game #stage .stage-msg { position: relative; }
+.game #stage .stage-msg::before { content: ''; position: absolute; inset: -18px -40px; z-index: -1; pointer-events: none;
+  background: radial-gradient(closest-side, rgb(8 6 4 / .5), rgb(8 6 4 / .28) 60%, transparent); }
