@@ -544,7 +544,9 @@ label { display: grid; gap: 6px; font-size: 14px; color: var(--muted); }
 /* состояния */
 .card.playable { box-shadow: inset 0 0 0 1px rgba(255,255,255,.32), inset 0 0 0 2px rgba(0,0,0,.6), 0 0 0 2px #74d4a8, 0 0 16px rgba(116,212,168,.55), 0 8px 18px rgba(0,0,0,.5); }
 .card.playable .c-name { color: #fff; }
-.hand.has-play .card:not(.playable):not(.selected) { filter: saturate(.6) brightness(.72); }
+/* в свой ход то, что можно сыграть, выделяется, остальное притухает; в чужой ход рука не гаснет — светятся только карты,
+   которые можно подбросить в чужой бой */
+body.my-turn .hand.has-play .card:not(.playable):not(.selected) { filter: saturate(.6) brightness(.72); }
 .hand .card { margin-left: var(--ov, 0px); }
 .hand .card:first-child { margin-left: 0; }
 .hand .card:hover, .hand .card:focus-visible { z-index: 2; --lift: -12px; }
@@ -2174,6 +2176,16 @@ input[type=text], input[type=password], select, .g-search, .g-sort select,
   .game .g-head > .hud-chips { flex: 1 1 auto; gap: 5px; -webkit-mask: linear-gradient(90deg, #000 calc(100% - 18px), transparent); mask: linear-gradient(90deg, #000 calc(100% - 18px), transparent); padding-right: 14px; }
   .game .g-head > .spacer { display: none; }
 }
+/* на компьютере полоса тоже не переносится: «Меню» и «Правила» всегда в строке, а не падают вторым рядом и не
+   отъедают высоту стола. Если плашки не помещаются (длинная локация, глубина, рынок, контракт), у них пропадают
+   подписи — остаются значки и числа (класс tight ставит fitHead), а если и так тесно — лента пролистывается */
+@media (min-width: 701px) {
+  .game .g-head { flex-wrap: nowrap; }
+  .game .g-head > :not(.hud-chips) { flex: none; }
+  .game .g-head > .spacer { flex: 1 0 4px; }
+}
+.game .g-head .hud-chips.tight .lbl { display: none; }
+.game .g-head .hud-chips.tight .loc-banner b { max-width: 15ch; }
 @media (max-width: 700px) {
   /* на узком экране сначала то, на что нажимают: локация и открытый рынок; испытание дня — в конце ленты */
   .game .g-head .hud-chips .loc-banner { order: -3; }
@@ -2659,6 +2671,21 @@ body.my-turn .game #mecard .me-ava { box-shadow: 0 0 0 3px #0a0806, 0 0 0 5px #f
   .game .opps { justify-content: space-evenly; align-items: flex-end; overflow: visible; padding: 8px 40px 0; gap: 14px; min-height: 96px; }
   .game .opp { flex: 1 1 0; min-width: 0; max-width: 360px; justify-content: center; }
   .game .opp .om-info { flex: 0 1 auto; }
+}
+/* колонка рядом с медальоном (карты в руке, «ходит», «в бою») не сжимается уже самой широкой плашки — иначе плашки
+   обрезались; на неширoком экране медальоны соперников чуть меньше, чтобы колонка помещалась */
+@media (min-width: 901px) {
+  .game .opp .om-info { min-width: 58px; grid-template-columns: minmax(0, 1fr); }
+  /* остатки прежней раскладки плашки соперника (раса во второй колонке) сжимали цифры в узкую первую колонку */
+  .game .opp .om-info > .ometa, .game .opp .om-info > .ostats { grid-column: 1; grid-row: auto; }
+  .game .opp .om-info > .ostats { flex-wrap: wrap; overflow: visible; margin-top: 0; }
+}
+@media (min-width: 901px) and (max-width: 1280px) {
+  .game .opps { padding-inline: 12px; gap: 6px; }
+  .game .opp { gap: 6px; }
+  .game .opp .hero-pill.medal.om { --rs: 56px; }
+  .game .opp .om .hp-plate { min-width: 80px; padding-inline: 12px; }
+  .game .opp .om .hp-plate b { font-size: 13px; }
 }
 @media (max-width: 900px) {
   .game .opps { gap: 6px; padding: 10px 8px 8px; align-items: flex-start; justify-content: space-around; overflow: visible; }
@@ -3705,6 +3732,8 @@ body:has(#world.still) .g-grain { display: none; }
   /* рука не сжимается: если пластина ниже карт, карты уходят вниз за край, а не наползают на стол */
   .game .handzone > .hand { flex: none; }
 }
+/* бой отодвинут от колод (fitDecks): колоды в углу больше не закрывают перевес сил и подсказки */
+@media (min-width: 901px) { .game #stage.cave-stage.deck-gap { padding-left: calc(var(--fw, 34px) + 12px + var(--deck-w, 150px)); } }
 @media (min-width: 901px) and (max-height: 860px) {
   .game .table-bg, .game #stage.cave-stage { --fw: 28px; }
   .game #stage.cave-stage { padding: calc(var(--fw) + 4px) calc(var(--fw) + 12px); }
@@ -4030,22 +4059,21 @@ body.prop-hover .game, body.prop-hover .game #stage { cursor: pointer; }
 .cave[data-loc="loc_graveyard"] .wx-wisp { background: radial-gradient(closest-side, rgb(210 220 240 / .34), rgb(160 170 200 / .14) 55%, transparent); }
 @keyframes wxWisp { from { transform: translateY(10px) scale(.4); opacity: 0; } 25% { opacity: 1; } to { transform: translateY(-50px) scale(1.4); opacity: 0; } }
 /* лёд: на краях карт на столе — иней */
-.cave[data-loc="loc_ice"] #stage .card::after { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; z-index: 6;
+.cave[data-loc="loc_ice"] #stage .card:not(.golden)::after { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; z-index: 6;
   background: radial-gradient(ellipse 46% 30% at 0 0, rgb(240 250 255 / .78), rgb(200 230 255 / .25) 45%, transparent 72%), radial-gradient(ellipse 40% 26% at 100% 100%, rgb(240 250 255 / .7), rgb(200 230 255 / .2) 45%, transparent 72%),
     radial-gradient(ellipse 34% 20% at 100% 0, rgb(240 250 255 / .5), transparent 70%), radial-gradient(ellipse 30% 18% at 0 100%, rgb(240 250 255 / .4), transparent 70%);
-  box-shadow: inset 0 0 0 1.5px rgb(225 244 255 / .55), inset 0 0 20px rgb(210 236 255 / .6); mix-blend-mode: screen; animation: frostIn 2.4s ease both; }
-@keyframes frostIn { from { opacity: 0; } }
+  box-shadow: inset 0 0 0 1.5px rgb(225 244 255 / .55), inset 0 0 20px rgb(210 236 255 / .6); mix-blend-mode: screen; }
 @media (prefers-reduced-motion: reduce) { .tb-wx { display: none; } }
 
 /* ═════════ рамка медальона растёт с уровнем: железо → бронза → серебро → золото ═════════ */
 .hero-pill.medal.tier-0:not(.framed) .ring { background: conic-gradient(from 210deg, #34373c, #9aa0a8, #4b5056, #c9ced6, #3e4248, #868c94, #34373c); }
 .hero-pill.medal.tier-1:not(.framed) .ring { background: conic-gradient(from 210deg, #4e2c12, #d99a62, #844e22, #f2c492, #5e3416, #c07e48, #4e2c12); }
 .hero-pill.medal.tier-2:not(.framed) .ring { background: conic-gradient(from 210deg, #5f646c, #eef2f6, #949ca6, #ffffff, #737a84, #d2d8e0, #5f646c); }
-.hero-pill.medal.tier-3 .ring { animation: tierGlow 2.2s ease-in-out infinite; }
+.hero-pill.medal.tier-3 .ring { animation: tierGlow 2.2s ease-in-out infinite; animation-delay: var(--tph, 0s); }
 @keyframes tierGlow { 50% { box-shadow: 0 0 0 2px #0a0806, 0 10px 24px rgb(0 0 0 / .55), 0 0 22px 4px rgb(255 200 90 / .55), 0 0 44px rgb(255 170 60 / .35); } }
 /* мой портрет слева: тонкое кольцо ступени снаружи, цвет места не трогаем */
 .me-ava[class*="tier-"] { --tier: #7d838b; box-shadow: 0 0 0 2px var(--ink, #0a0806), 0 0 0 4px var(--tier), 0 6px 14px rgb(0 0 0 / .4); }
-.me-ava.tier-1 { --tier: #b87440; } .me-ava.tier-2 { --tier: #dfe5ec; } .me-ava.tier-3 { --tier: #f0c860; animation: tierGlowAva 2.2s ease-in-out infinite; }
+.me-ava.tier-1 { --tier: #b87440; } .me-ava.tier-2 { --tier: #dfe5ec; } .me-ava.tier-3 { --tier: #f0c860; animation: tierGlowAva 2.2s ease-in-out infinite; animation-delay: var(--tph, 0s); }
 @keyframes tierGlowAva { 50% { box-shadow: 0 0 0 2px var(--ink, #0a0806), 0 0 0 4px var(--tier), 0 0 22px 4px rgb(255 200 90 / .55); } }
 /* новая ступень — вспышка по кольцу */
 .hero-pill.medal.tier-up .ring, .me-ava.tier-up { animation: tierUp 1.2s ease-out; }
@@ -4055,7 +4083,7 @@ body.prop-hover .game, body.prop-hover .game #stage { cursor: pointer; }
 .hero-pill.medal.tier-0 .hm-lvl { background: linear-gradient(180deg, #d4d8de, #7d838b 70%, #5a5f66); color: #14161a; }
 .hero-pill.medal.tier-1 .hm-lvl { background: linear-gradient(180deg, #f0c08a, #b8743e 70%, #8a4e22); color: #1e0f05; }
 .hero-pill.medal.tier-2 .hm-lvl { background: linear-gradient(180deg, #ffffff, #c4ccd6 65%, #8e97a2); color: #141820; }
-.hero-pill.medal.tier-3 .hm-lvl { background: linear-gradient(180deg, #fff1b8, #f0b840 60%, #c47c14); color: #1b1004; box-shadow: none; animation: tierFlag 2.2s ease-in-out infinite; }
+.hero-pill.medal.tier-3 .hm-lvl { background: linear-gradient(180deg, #fff1b8, #f0b840 60%, #c47c14); color: #1b1004; box-shadow: none; animation: tierFlag 2.2s ease-in-out infinite; animation-delay: var(--tph, 0s); }
 @keyframes tierFlag { 50% { filter: drop-shadow(0 0 1px #000) drop-shadow(0 0 8px rgb(255 200 90 / .9)); } }
 .hero-pill.medal.framed.tier-3 .ring { border-radius: 50%; }
 @media (prefers-reduced-motion: reduce) { .hero-pill.medal.tier-3 .hm-lvl { animation: none; } }
@@ -4169,10 +4197,10 @@ body.prop-hover .game, body.prop-hover .game #stage { cursor: pointer; }
 .card.golden::after { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; z-index: 7; mix-blend-mode: overlay;
   background: linear-gradient(115deg, transparent 20%, rgb(255 240 190 / .55) 34%, rgb(255 210 110 / .2) 42%, transparent 52%) 0 0 / 260% 100%,
     linear-gradient(180deg, rgb(255 210 120 / .22), rgb(180 120 30 / .18));
-  animation: goldFoil 3.6s linear infinite; }
+  animation: goldFoil 3.6s linear infinite; animation-delay: var(--gph, 0s); }
 .card.golden .c-name, .card.golden .c-title { color: #ffe9a8 !important; text-shadow: 0 0 6px rgb(255 190 80 / .7), 0 1px 2px #000; }
 .card.golden::before { content: '★'; position: absolute; inset: 6px 6px auto auto; z-index: 8; width: 20px; height: 20px; display: grid; place-items: center; border-radius: 50%;
-  font: 700 12px/1 var(--ui); color: #3a2106; background: radial-gradient(circle at 40% 30%, #fff3c0, #f0b840 60%, #a8700e); box-shadow: 0 0 0 1px #3a2106, 0 0 10px rgb(255 200 90 / .8); animation: none !important; opacity: 1 !important; }
+  font: 700 12px/1 var(--ui); color: #3a2106; background: radial-gradient(circle at 40% 30%, #fff3c0, #f0b840 60%, #a8700e); box-shadow: 0 0 0 1px #3a2106, 0 0 10px rgb(255 200 90 / .8); animation: none !important; opacity: 1 !important; transform: none !important; }
 @keyframes goldFoil { from { background-position: 130% 0, 0 0; } to { background-position: -130% 0, 0 0; } }
 @media (prefers-reduced-motion: reduce) { .card.golden::after { animation: none; } }
 

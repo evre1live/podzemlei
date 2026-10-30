@@ -87,6 +87,20 @@ t('отказавшего второй раз не просят', () => {
   assert.match(A(s, 'p0', { type: 'askHelp', to: 'p1', offer: 3 }).error, /отказал/);
 });
 
+t('молчание на просьбу о помощи — отказ: бот не зовёт того же по кругу', () => {
+  const s = fresh();
+  s.decks.door.push(take(s, 'm_zhek#0'));
+  A(s, 'p0', { type: 'kick' });
+  A(s, 'p0', { type: 'askHelp', to: 'p1', offer: 1 });
+  // своя просьба отменяется без последствий — можно позвать снова
+  assert.equal(A(s, 'p0', { type: 'cancelHelp' }).ok, true);
+  assert.equal(A(s, 'p0', { type: 'askHelp', to: 'p1', offer: 2 }).ok, true);
+  // ответа нет — отмена «без ответа» считается отказом
+  assert.equal(A(s, 'p0', { type: 'cancelHelp', noAnswer: true }).ok, true);
+  assert.ok(s.combat.declined.includes('p1'));
+  assert.match(A(s, 'p0', { type: 'askHelp', to: 'p1', offer: 3 }).error, /отказал/);
+});
+
 t('куриный бог отводит проклятие', () => {
   const s = fresh(); const v = P(s, 'p1'); v.level = 4;
   P(s, 'p0').hand.push(take(s, 'k_tax#0'));

@@ -164,6 +164,8 @@ function lobbyInfo(r, meId) {
 
 function broadcastRoom(r) {
   dirty = true;
+  // часы хода заводятся до рассылки: иначе при смене хода фитиль нового хода не доходил до игрока, пока стол молчит
+  fuseTick(r, now());
   for (const m of r.members) {
     if (m.isBot || !m.socketId) continue;
     const sock = io.sockets.sockets.get(m.socketId);
@@ -357,6 +359,8 @@ function load() {
     for (const r of data) {
       r.members.forEach(m => { m.socketId = null; m.connected = false; m.lastSeen = now(); });
       r.seatVote = null;
+      // часы хода после перезапуска идут заново: иначе за время выкладки фитиль «догорал» у того, чей был ход
+      r.idle = null;
       if (r.game?.combat) r.game.combat.winAt = null;
       // старые партии: Ящика Пандоры больше нет — открытый ящик в бою просто исчезает
       if (r.game?.combat?.pandora) { delete r.game.combat.pandora; delete r.game.combat.pandoraHit; r.game.combat.mods = r.game.combat.mods.filter(m => m.label !== 'Ящик Пандоры'); }
@@ -444,8 +448,12 @@ function runRoom(r) {
       if (!m) continue;
       if (r.turnSeen?.n !== g.turn.n) r.turnSeen = { n: g.turn.n, at: t };
       const sleepy = gp.id === g.turn.pid && t - Math.max(m.lastSeen || 0, r.turnSeen.at) > IDLE_TURN_MS;
-      const afk = !m.isBot && (((!m.connected || m.left) && t - (m.lastSeen || 0) > AFK_MS) || sleepy || fuseOut(r, gp.id, t) || (m.autopilot && r.idle?.burnt === g.turn.n && gp.id === g.turn.pid));
+      // фитиль проверяется до того, как включится автопилот: с автопилотом фитиля уже нет (fuseInfo → null)
+      const burnt = !m.isBot && fuseOut(r, gp.id, t);
+      const afk = !m.isBot && (((!m.connected || m.left) && t - (m.lastSeen || 0) > AFK_MS) || sleepy || burnt || (m.autopilot && r.idle?.burnt === g.turn.n && gp.id === g.turn.pid));
       if (!m.isBot && !afk) {
+        // автопилот остался с хода, на котором догорел фитиль: игрок за столом — на новом ходу у него снова свои часы
+        if (m.autopilot && m.connected && !m.left) { m.autopilot = false; changed = true; }
         // живому игроку, который 30 с молчит на предложение обмена, отвечаем «нет»
         const late = (g.trades || []).find(o => o.to === gp.id && t - (o.at || 0) > TRADE_TIMEOUT_MS);
         if (late) { act(g, gp.id, { type: 'answerTrade', id: late.id, accept: false }, { rng, now: t }); changed = true; break; }
@@ -459,7 +467,7 @@ function runRoom(r) {
       if (afk !== !!m.autopilot && !m.isBot) {
         m.autopilot = afk;
         // фитиль догорел: до конца этого хода играет автопилот, даже если «нет действий» сбросит часы
-        if (afk && fuseOut(r, gp.id, t)) { r.idle.burnt = g.turn.n; sysChat(r, `Фитиль догорел — за ${m.name} ходит автопилот.`); }
+        if (afk && burnt) { r.idle.burnt = g.turn.n; sysChat(r, `Фитиль догорел — за ${m.name} ходит автопилот.`); }
       }
       // за отошедшего человека автопилот сделок не заключает
       const offer = !m.isBot && (g.trades || []).find(o => o.to === gp.id);

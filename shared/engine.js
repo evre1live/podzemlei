@@ -1897,7 +1897,13 @@ H.answerHelp = {
 };
 H.cancelHelp = {
   check(s, p) { return s.combat?.helpReq && s.combat.fighter === p.id ? null : 'Нечего отменять'; },
-  run(s) { s.combat.helpReq = null; },
+  // noAnswer — звали, а ответа так и нет: молчание считается отказом, второй раз того же не зовут (иначе бот
+  // звал молчащего игрока по кругу и бой стоял)
+  run(s, p, a = {}) {
+    const c = s.combat;
+    if (a.noAnswer && !c.declined.includes(c.helpReq.to)) { c.declined.push(c.helpReq.to); log(s, `Ответа от ${P(s, c.helpReq.to).name} нет — бой идёт без помощника.`, 'combat'); }
+    c.helpReq = null;
+  },
 };
 
 H.fight = {

@@ -18,6 +18,38 @@ import { initDepth, depthOn, applyDepth } from '/depth.js';
 import { NEWS, NEWS_LATEST } from '/news.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
+// разметка пишется, только когда правда поменялась: иначе каждое событие стола пересоздаёт блок целиком —
+// мигают картинки, сбрасываются наведение и переходы. Если блок переписал кто-то другой, сверка по первому узлу
+const htmlOf = new WeakMap();
+function setHTML(el, html) {
+  if (!el) return false;
+  const was = htmlOf.get(el);
+  if (was && was[0] === html && was[1] === el.firstChild) return false;
+  el.innerHTML = html;
+  htmlOf.set(el, [html, el.firstChild]);
+  return true;
+}
+// список блоков с ключами (соперники за столом): переписываются только те, у кого разметка поменялась,
+// остальные остаются как есть — с их анимациями, наведением и всплывающими облачками
+const nodeHTML = new WeakMap();
+function patchList(box, items, keyAttr, onNew) {
+  const kids = [...box.children];
+  const same = kids.length === items.length && kids.every((k, i) => k.getAttribute(keyAttr) === items[i].key);
+  if (!same) box.textContent = '';
+  items.forEach((x, i) => {
+    const old = same ? kids[i] : null;
+    if (old && nodeHTML.get(old) === x.html) return;
+    const t = document.createElement('template');
+    t.innerHTML = x.html.trim();
+    const n = t.content.firstElementChild;
+    nodeHTML.set(n, x.html);
+    onNew?.(n);
+    if (old) old.replaceWith(n); else box.append(n);
+  });
+  htmlOf.delete(box);
+}
+// бесконечные переливы (золотая рамка медальона) идут по общим часам: пересозданный блок продолжает с той же фазы
+const syncLoop = el => el?.style.setProperty('--tph', -(performance.now() % 2200).toFixed(0) + 'ms');
 const app = $('#app');
 const layer = $('#layer');
 const socket = io({ transports: ['websocket', 'polling'] });
@@ -729,23 +761,24 @@ update.game = () => {
     ti.style.setProperty('--who', tp?.color || '#d6a85a');
     ti.classList.toggle('mine', g.phase === 'playing' && tp?.id === r.me);
     ti.classList.toggle('over', g.phase === 'ended'); }
-  $('#goalpill').innerHTML = `${ico('flag-objective')}<span><span class="lbl">Цель: </span>${winLvl()}<span class="lbl"> ур.</span></span>`;
-  $('#depthpill').innerHTML = depthPill(g.depth);
+  setHTML($('#goalpill'), `${ico('flag-objective')}<span><span class="lbl">Цель: </span>${winLvl()}<span class="lbl"> ур.</span></span>`);
+  setHTML($('#depthpill'), depthPill(g.depth));
   const dl = g.opts?.daily ? dailyOf(g.opts.daily) : null;
-  $('#dailypill').innerHTML = dl ? `<span class="daily-pill" title="${esc(`Испытание дня ${g.opts.daily}: ${dl.text} Колода сегодня у всех одна.`)}">${ico('calendar')}<span class="lbl">${esc(dl.name)}</span></span>` : '';
+  setHTML($('#dailypill'), dl ? `<span class="daily-pill" title="${esc(`Испытание дня ${g.opts.daily}: ${dl.text} Колода сегодня у всех одна.`)}">${ico('calendar')}<span class="lbl">${esc(dl.name)}</span></span>` : '');
   { const mp = me(), tr = trickOn();
-    $('#marketpill').innerHTML = !g.shop || g.phase !== 'playing' ? ''
+    setHTML($('#marketpill'), !g.shop || g.phase !== 'playing' ? ''
       : tr ? `<button class="market-pill trick" data-act="market" title="Рынок пакостника: купленные карты лягут в ваш рукав">${ico('double-face-mask')}<span><span class="lbl">Рынок · </span>${tr.gold} г</span></button>`
-      : `<button class="market-pill${mp?.regular ? ' regular' : ''}" data-act="market" title="${mp?.regular ? `Подземный рынок: вы Шопоголик — цены на ${Math.round(REGULAR_DISCOUNT * 100)}% ниже, покупать можно в любой момент` : 'Подземный рынок: разовые, зелья, проклятия и уровни из колоды за голды из кошелька'}">${ico(mp?.regular ? 'laurels' : 'shop')}<span><span class="lbl">Рынок${mp ? ' · ' : ''}</span>${mp ? `${mp.gold} г` : ''}</span></button>`; }
+      : `<button class="market-pill${mp?.regular ? ' regular' : ''}" data-act="market" title="${mp?.regular ? `Подземный рынок: вы Шопоголик — цены на ${Math.round(REGULAR_DISCOUNT * 100)}% ниже, покупать можно в любой момент` : 'Подземный рынок: разовые, зелья, проклятия и уровни из колоды за голды из кошелька'}">${ico(mp?.regular ? 'laurels' : 'shop')}<span><span class="lbl">Рынок${mp ? ' · ' : ''}</span>${mp ? `${mp.gold} г` : ''}</span></button>`); }
   // контракт — значком в шапке, по нажатию открывается окошко
   { const k = me()?.contract;
-    $('#contractpill').innerHTML = k && g.phase === 'playing' ? `<button class="contract-pill${k.progress >= k.need ? ' ready' : ''}" data-act="contract" title="${esc(`Контракт «${k.name}»: ${k.progress} из ${k.need}. Нажмите, чтобы посмотреть условие и награду`)}" aria-label="Контракт ${esc(k.name)}, ${k.progress} из ${k.need}">${ico('scroll-quill')}<span>${k.progress}/${k.need}</span></button>` : ''; }
+    setHTML($('#contractpill'), k && g.phase === 'playing' ? `<button class="contract-pill${k.progress >= k.need ? ' ready' : ''}" data-act="contract" title="${esc(`Контракт «${k.name}»: ${k.progress} из ${k.need}. Нажмите, чтобы посмотреть условие и награду`)}" aria-label="Контракт ${esc(k.name)}, ${k.progress} из ${k.need}">${ico('scroll-quill')}<span>${k.progress}/${k.need}</span></button>` : ''); }
   const wn = r.watchers || 0;
   const sv = r.seats?.vote;
   const votePill = sv?.canVote && !sv.mine ? `<button class="seat-pill" data-act="seatVote" title="Зритель просится за стол — выберите, за кого из ботов он сядет">${ico('shaking-hands')}<span>${esc(sv.name)} просится за стол</span></button>` : '';
-  $('#watchpill').innerHTML = votePill + (r.spectator && trickOn() ? `<span class="watch-pill on trick" title="Это видите только вы: карты из рукава сыграют игроки, и в летописи будут их имена">${ico('double-face-mask')}Вы пакостник</span>`
+  setHTML($('#watchpill'), votePill + (r.spectator && trickOn() ? `<span class="watch-pill on trick" title="Это видите только вы: карты из рукава сыграют игроки, и в летописи будут их имена">${ico('double-face-mask')}Вы пакостник</span>`
     : r.spectator ? `<span class="watch-pill on" title="Вы видите стол, бои и летопись, но не чужие карты на руках">${EYE}Вы зритель${wn > 1 ? ` · ещё ${wn - 1}` : ''}</span>`
-    : wn ? `<span class="watch-pill" title="Столько людей смотрят партию со стороны">${EYE}${wn}</span>` : '');
+    : wn ? `<span class="watch-pill" title="Столько людей смотрят партию со стороны">${EYE}${wn}</span>` : ''));
+  fitHead();
   renderOpps();
   renderStage();
   renderMine();
@@ -760,13 +793,25 @@ update.game = () => {
   maybeEndScreen();
 };
 
+// плашки шапки не помещаются в строку — убрать у них подписи (значки и числа остаются). Меряется, только когда
+// поменялся текст плашек или ширина окна
+let headKey = '', headEl = null;
+function fitHead() {
+  const hc = document.querySelector('.game .g-head .hud-chips');
+  if (!hc) return;
+  const key = hc.textContent + '|' + innerWidth;
+  if (key === headKey && hc === headEl) return;
+  headKey = key; headEl = hc;
+  hc.classList.remove('tight');
+  if (innerWidth > 700 && hc.scrollWidth > hc.clientWidth + 1) hc.classList.add('tight');
+}
 function renderOpps() {
   const g = S.game;
   const mine = me();
   const start = mine ? mine.seat : 0;
   const order = [...g.players].sort((a, b) => ((a.seat - start + 99) % g.players.length) - ((b.seat - start + 99) % g.players.length)).filter(p => p.id !== S.room.me);
   const box = $('#opps'); box.dataset.n = order.length;
-  box.innerHTML = order.map(oppHTML).join('');
+  patchList(box, order.map(p => ({ key: p.id, html: oppHTML(p) })), 'data-opp', syncLoop);
 }
 function statusTags(p) {
   const g = S.game, c = g.combat;
@@ -1032,6 +1077,8 @@ const WEATHER = { loc_flooded: 'ripple', loc_cove: 'ripple', loc_forge: 'ember',
 function weatherAt(kind, x, y) {
   const tb = $('#tableBg');
   if (!tb || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  // устройство не тянет сцены (облегчённый режим) — фоновых частиц вдвое меньше
+  if (x === undefined && (fx.quality ?? 1) < 1 && Math.random() < 0.5) return;
   const r = tb.getBoundingClientRect();
   const i = document.createElement('i');
   i.className = 'tb-wx wx-' + kind;
@@ -1116,8 +1163,8 @@ function renderStage() {
       : `<span class="loc-banner is-default" title="Подземелье: особых правил нет. Карта локации перенесёт весь стол в новое место."><img src="/loc/v2/default-card.webp" alt="" decoding="async"><span><small>Локация</small><b>Подземелье</b></span></span>`;
   }
   // на телефоне Колесо Подлеца стоит в углу сцены рядом с колодами — вне общего потока боя
-  if (g.combat) { el.innerHTML = decks + wheelHTML(g.combat, h, 'wl-corner') + `<div class="stage-inner">${fightHTML()}</div>`; afterStage(); return; }
-  if (g.duel && g.phase === 'playing') { el.innerHTML = decks + `<div class="stage-inner">${duelHTML()}</div>`; afterStage(); return; }
+  if (g.combat) { stageSet(el, decks + wheelHTML(g.combat, h, 'wl-corner') + `<div class="stage-inner">${fightHTML()}</div>`); return; }
+  if (g.duel && g.phase === 'playing') { stageSet(el, decks + `<div class="stage-inner">${duelHTML()}</div>`); return; }
   const tp = pl(g.turn.pid);
   const mine = tp?.id === S.room.me;
   let title = '', text = '';
@@ -1160,17 +1207,26 @@ function renderStage() {
   const freshTitle = title !== S.ui.stageTitle; S.ui.stageTitle = title;
   // на ленте — медальон того, кто ходит
   const rbAva = tp && g.phase === 'playing' ? `<span class="rb-ava" style="--seat:${tp.color}">${avatarSVG({ ...gAva(tp), frame: 0 }, tp.color)}</span>` : '';
-  el.innerHTML = decks + `<div class="stage-inner${reveal ? ' with-reveal' : ''}"><div class="stage-msg"><h2 class="${freshTitle ? 'rb-in' : ''}${rbAva ? ' has-ava' : ''}">${rbAva}${title}</h2><p class="muted" style="margin:0">${text}</p></div>${reveal}<div class="act-bar">${actionButtons()}</div></div>`;
-  if (reveal.includes('reveal-in')) requestAnimationFrame(() => { const r = $('#stage .reveal-in'); if (r) { fx.dust(r, { n: 18 }); fx.burst(r, { n: 16, speed: 200, g: 200 }); } });
-  afterStage();
+  const fresh = stageSet(el, decks + `<div class="stage-inner${reveal ? ' with-reveal' : ''}"><div class="stage-msg"><h2 class="${freshTitle ? 'rb-in' : ''}${rbAva ? ' has-ava' : ''}">${rbAva}${title}</h2><p class="muted" style="margin:0">${text}</p></div>${reveal}<div class="act-bar">${actionButtons()}</div></div>`);
+  if (fresh && reveal.includes('reveal-in')) requestAnimationFrame(() => { const r = $('#stage .reveal-in'); if (r) { fx.dust(r, { n: 18 }); fx.burst(r, { n: 16, speed: 200, g: 200 }); } });
 }
 // ───────────── свет за курсором ─────────────
 // На компьютере над полем стола — мягкое пятно тёплого света, как от фонаря в руке: идёт за курсором с лёгким
 // запаздыванием, на краю поля гаснет. Позиция — в переменных --tx/--ty на слое стола, без перерисовки.
-{ let tx = 0, ty = 0, cx = 0, cy = 0, on = 0, want = 0, raf = 0, tb = null;
+{ let tx = 0, ty = 0, cx = 0, cy = 0, on = 0, want = 0, raf = 0, tb = null, px = 0, py = 0, moved = false;
   const fine = matchMedia('(hover: hover) and (pointer: fine)');
   const step = () => {
     raf = 0;
+    // рамка поля меряется раз за кадр, а не на каждое движение мыши (иначе — лишний пересчёт раскладки)
+    if (moved) {
+      moved = false;
+      tb = document.getElementById('tableBg');
+      const r = tb?.getBoundingClientRect();
+      if (!r?.width) return;
+      const inside = px > r.left && px < r.right && py > r.top && py < r.bottom;
+      want = inside ? 1 : 0;
+      if (inside) { tx = px - r.left; ty = py - r.top; if (on < 0.02) { cx = tx; cy = ty; } }
+    }
     if (!tb?.isConnected) return;
     cx += (tx - cx) * 0.2; cy += (ty - cy) * 0.2; on += (want - on) * 0.12;
     tb.style.setProperty('--tx', cx.toFixed(1) + 'px'); tb.style.setProperty('--ty', cy.toFixed(1) + 'px'); tb.style.setProperty('--to', on.toFixed(3));
@@ -1178,12 +1234,7 @@ function renderStage() {
   };
   document.addEventListener('pointermove', e => {
     if (e.pointerType !== 'mouse' || !fine.matches) return;
-    tb = document.getElementById('tableBg');
-    if (!tb || !tb.offsetParent) return;
-    const r = tb.getBoundingClientRect();
-    const inside = e.clientX > r.left && e.clientX < r.right && e.clientY > r.top && e.clientY < r.bottom;
-    want = inside ? 1 : 0;
-    if (inside) { tx = e.clientX - r.left; ty = e.clientY - r.top; if (on < 0.02) { cx = tx; cy = ty; } }
+    px = e.clientX; py = e.clientY; moved = true;
     if (!raf) raf = requestAnimationFrame(step);
   }, { passive: true });
 }
@@ -1291,10 +1342,13 @@ setInterval(() => {
 }, 1000);
 
 // эффекты, которые нужно запустить после перерисовки сцены
-function afterStage() {
+// сцена пересобирается, только если разметка поменялась: иначе на каждое событие стола монстры, колоды и кнопки
+// создавались заново — мигали картинки, сбивались «дыхание» монстров и наведение. Фитиль ставится всегда
+function stageSet(el, html) { const fresh = setHTML(el, html); afterStage(fresh); return fresh; }
+function afterStage(fresh = true) {
   { const st = $('#stage'); if (st) placeFuse(st); }
-  liveFight();
-  if (cine.on) { S.ui.slam = null; cine.decorate(); return; }
+  if (fresh) liveFight();
+  if (cine.on) { S.ui.slam = null; if (fresh) cine.decorate(); return; }
   const slam = S.ui.slam;
   if (!slam) return;
   S.ui.slam = null;
@@ -1411,7 +1465,7 @@ function fightHTML() {
   const mods = side => pm.filter(x => x.side === side).map(x => `<span class="mod ${side === 'player' ? 'p' : 'm'}">${x.t}</span>`).join('');
   const monsters = c.monsters.map((m, i) => `
     <div class="mon-wrap">
-      <div class="mon-body ${def(m.uid).boss ? 'boss hell' : tierClass(m.strength)}">${cardHTML(m.uid, { size: c.monsters.length <= 2 ? 'md' : 'sm', cls: !spectating() && isGolden(m.uid) ? 'golden' : '', attrs: `data-zone="view"` })}</div>
+      <div class="mon-body ${def(m.uid).boss ? 'boss hell' : tierClass(m.strength)}">${cardHTML(m.uid, { size: c.monsters.length <= 2 ? 'md' : 'sm', cls: !spectating() && isGolden(m.uid) ? 'golden' : '', attrs: `data-zone="view"${!spectating() && isGolden(m.uid) ? ` style="--gph:${-(performance.now() % 3600).toFixed(0)}ms"` : ''}` })}</div>
       <span class="mon-str">сила ${m.strength}${def(m.uid).mirror != null ? ` <small>(лидер ${m.level - def(m.uid).mirror} + ${def(m.uid).mirror})</small>` : ''}${def(m.uid).boss ? ` <small>(вдвое больше силы ${esc(pname(c.fighter))}, но не меньше ${BOSS_FLOOR})</small>` : ''}${!def(m.uid).boss && S.game.depth?.bonus ? ` <small title="Подземелье уходит глубже — монстры злее">(глубина +${S.game.depth.bonus})</small>` : ''}</span>
       ${monFlags(m, c)}
       ${m.enh.length ? `<div class="enh-list">${m.enh.map(u => `<span class="mod m" data-uid="${u}" data-zone="view">${esc(def(u).name)} ${def(u).double ? '×2' : (def(u).bonus > 0 ? '+' : '') + def(u).bonus}</span>`).join('')}</div>` : ''}
@@ -1659,7 +1713,7 @@ function renderMine() {
     return `<button class="btn small ${on ? 'hero' : 'ghost'}" data-ability="${k}" ${on ? '' : 'disabled'} title="${esc(a.tip)}">${a.label}</button>`;
   }).join('');
   const run = 5 - p.runBonus;
-  el.innerHTML = `
+  if (setHTML(el, `
     <div class="me-top" style="--seat:${p.color}" data-vmember="${p.id}">
       <span class="me-ava-wrap"><div class="me-ava${reactOf(p.id).cls}${tierCls(p)}" id="meava" style="${reactOf(p.id).st}" data-act="avatar" role="button" tabindex="0" title="Сменить портрет" aria-label="Сменить портрет">${avatarSVG(gAva(p), p.color)}</div>${S.game?.phase === 'playing' ? `<button type="button" class="emote-btn" title="Сказать что-нибудь столу" aria-label="Эмоции" aria-haspopup="menu">${ico('talk')}</button>` : ''}</span>
       <div><div class="me-name">${esc(p.name)}</div>
@@ -1673,34 +1727,88 @@ function renderMine() {
     ${p.ghost ? `<div class="ghost-note">${ico('ghost')} Вы призрак до своего хода: раз за ход можно подкинуть +${GHOST_BONUS} героям или монстрам в чужом бою.</div>` : ''}
     ${dollHTML(p, picked)}
     ${setsHTML(p)}
-    ${tradeWaitHTML()}`;
+    ${tradeWaitHTML()}`)) syncLoop(el.querySelector('#meava'));
 
   const over = p.hand.length - p.handLimit;
-  $('#handhead').innerHTML = `<span>В руке ${cardsNom(p.hand.length)}${over > 0 ? `. К концу хода можно оставить ${p.handLimit}, лишние уйдут` : ''}</span>${h.manage ? `<button class="btn ghost small" data-act="sellMode">Продать вещи</button>` : ''}`;
-  $('#modebar').innerHTML = mode ? modeBarHTML() : '';
+  setHTML($('#handhead'), `<span>В руке ${cardsNom(p.hand.length)}${over > 0 ? `. К концу хода можно оставить ${p.handLimit}, лишние уйдут` : ''}</span>${h.manage ? `<button class="btn ghost small" data-act="sellMode">Продать вещи</button>` : ''}`);
+  setHTML($('#modebar'), mode ? modeBarHTML() : '');
   const handEl = $('#hand');
   handEl.classList.toggle('has-play', !mode && p.hand.some(u => (h.cards?.[u] || []).length));
   const prev = S.ui.prevHand;
   const legNew = [];
   const deckOn = !matchMedia('(prefers-reduced-motion: reduce)').matches && !!document.getElementById('deckDoor');
   let k = 0;
-  handEl.innerHTML = p.hand.length ? p.hand.map(u => {
+  patchHand(handEl, p.hand.map(u => {
     let playable = (h.cards?.[u] || []).length > 0;
     let dim = false;
     if (mode) { playable = false; dim = !modeAccepts(u, 'hand'); }
     const isNew = prev && !prev.has(u);
     // легендарка приходит не раздачей, а своей сценой
-    if (isNew && def(u).rarity === 'legendary') { legNew.push(u); return cardHTML(u, { playable, selected: picked.has(u), dim, attrs: 'data-zone="hand"' }); }
+    if (isNew && def(u).rarity === 'legendary') { legNew.push(u); return { u, playable, selected: picked.has(u), dim }; }
     // новая карта прилетает из своей колоды на столе; если колоды не видно (бой на телефоне, прокрутка) — снизу
-    return cardHTML(u, { playable, selected: picked.has(u), dim, cls: isNew ? (deckOn ? 'deal-fly' : 'deal-in') : '', attrs: `data-zone="hand"${isNew ? ` data-deal="${k}" style="animation-delay:${(k++) * 90}ms"` : ''}` });
-  }).join('') : `<p class="muted">Рука пуста.</p>`;
-  if (deckOn) { const wait = (S.ui.introUntil || 0) - performance.now(); if (wait > 0) setTimeout(() => dealFromDecks(handEl), wait); else requestAnimationFrame(() => dealFromDecks(handEl)); }
+    return { u, playable, selected: picked.has(u), dim, deal: isNew ? k++ : -1, cls: isNew ? (deckOn ? 'deal-fly' : 'deal-in') : '' };
+  }), 'hand', 'Рука пуста.');
+  if (deckOn && k) { const wait = (S.ui.introUntil || 0) - performance.now(); if (wait > 0) setTimeout(() => dealFromDecks(handEl), wait); else requestAnimationFrame(() => dealFromDecks(handEl)); }
   if (S.ui.legReady) legNew.forEach(legendArrive);
   S.ui.legReady = true;
   S.ui.prevHand = new Set(p.hand);
   if (!deckOn) for (let i = 0; i < Math.min(k, 6); i++) sfx.play('deal', { delay: i * 0.09, gap: 0 });
   fitHand();
 }
+// рука обновляется на месте: карты, что остались в руке, не пересоздаются — иначе на каждое событие стола (ход бота,
+// бой у соседа) вся рука мигала, теряла наведение и заново запускала переходы. Новые карты вставляются, ушедшие
+// убираются, у оставшихся меняются только состояния (можно сыграть, выбрана, приглушена)
+// у зрителя в руке героя — рубашки: при каждом взятии или розыгрыше добавляется или убирается одна, а не вся рука
+function patchBacks(handEl, n) {
+  if (!n) { setHTML(handEl, '<p class="muted">Рука пуста.</p>'); return; }
+  const back = getBack();
+  if (![...handEl.children].every(c => c.classList.contains('hand-back')) || handEl.dataset.back !== back) { handEl.textContent = ''; handEl.dataset.back = back; }
+  htmlOf.delete(handEl);
+  const html = `<div class="card hand-back" aria-hidden="true">${cardBackSVG('door')}</div>`;
+  for (let i = handEl.children.length; i < n; i++) handEl.insertAdjacentHTML('beforeend', html);
+  while (handEl.children.length > n) handEl.lastElementChild.remove();
+}
+const dealtAt = new WeakMap();
+function patchHand(handEl, items, zone, empty) {
+  if (!items.length) { setHTML(handEl, `<p class="muted">${empty}</p>`); return; }
+  htmlOf.delete(handEl);
+  const want = new Set(items.map(x => x.u));
+  const have = new Map();
+  for (const c of [...handEl.children]) {
+    const u = c.dataset?.uid;
+    if (u && c.dataset.zone === zone && want.has(u) && !have.has(u)) have.set(u, c); else c.remove();
+  }
+  const dragging = document.body.classList.contains('is-dragging');
+  items.forEach((x, i) => {
+    let c = have.get(x.u);
+    if (c) {
+      c.classList.toggle('playable', !!x.playable);
+      c.classList.toggle('selected', !!x.selected);
+      c.classList.toggle('dim', !!x.dim);
+      if (!dragging) c.classList.remove('dragging');
+      // карта ждала полёта из колоды, а полёт так и не случился (колоду убрали со стола) — просто показать
+      if (c.classList.contains('deal-fly') && performance.now() - (dealtAt.get(c) || 0) > 1500 && performance.now() > (S.ui.introUntil || 0) + 500) c.classList.remove('deal-fly');
+      // спрятана сценой, а сцену прервали — вернуть
+      if (c.style.visibility === 'hidden' && cine.idle) c.style.visibility = '';
+    } else {
+      const deal = x.deal >= 0;
+      const t = document.createElement('template');
+      t.innerHTML = cardHTML(x.u, { playable: x.playable, selected: x.selected, dim: x.dim, cls: x.cls || '', attrs: `data-zone="${zone}"${deal ? ` data-deal="${x.deal}" style="animation-delay:${x.deal * 90}ms"` : ''}` });
+      c = t.content.firstElementChild;
+      dealtAt.set(c, performance.now());
+    }
+    const at = handEl.children[i];
+    if (at !== c) handEl.insertBefore(c, at || null);
+  });
+}
+// раздача и выход легендарки — разовые: когда анимация отыграла, класс снимается, чтобы при перестановке карт
+// в руке она не запускалась снова
+document.addEventListener('animationend', e => {
+  const c = e.target;
+  if (!c.classList?.contains('card') || !c.closest('#hand')) return;
+  if (e.animationName === 'dealIn' || e.animationName === 'fanDeal') { c.classList.remove('deal-in'); c.style.animationDelay = ''; }
+  if (e.animationName === 'legendArrive') setTimeout(() => c.classList.remove('legend-arrive'), 4000);
+});
 // карты летят в руку из колоды: из той, к которой относятся (проходы или клад), по дуге, разворачиваясь в полёте
 function dealFromDecks(hand) {
   hand.querySelectorAll('.card.deal-fly').forEach(c => {
@@ -1806,7 +1914,7 @@ function renderWatcher() {
     ...p.classes.map(trait), ...(p.classes.length ? [] : ['<span class="trait none">Без класса</span>']), ...[p.halfbreed, p.supermunch].filter(Boolean).map(trait)];
   const run = 5 - p.runBonus;
   const now = g.turn.pid === p.id && g.phase === 'playing';
-  el.innerHTML = `
+  setHTML(el, `
     <div class="me-top" style="--seat:${p.color}">
       <div class="me-ava">${avatarSVG(gAva(p), p.color)}</div>
       <div><div class="me-name">${esc(p.name)}${now ? ' <span class="badge lamp">ходит</span>' : ''}</div>
@@ -1816,20 +1924,20 @@ function renderWatcher() {
     </div>
     <div class="traits">${traits.join('')}</div>
     ${dollHTML(p, new Set(), true)}
-    ${setsHTML(p)}`;
+    ${setsHTML(p)}`);
   const follow = `<span class="follow-row"><span>Следить за</span>${g.players.map(x => `<button class="follow${x.id === p.id ? ' on' : ''}" data-follow="${x.id}" style="--seat:${x.color}" title="${esc(x.name)}" aria-pressed="${x.id === p.id}"><span class="ava">${avatarSVG(gAva(x), x.color)}</span></button>`).join('')}</span>`;
-  $('#modebar').innerHTML = '';
+  setHTML($('#modebar'), '');
   const tr = trickOn();
   if (tr) {
     // рукав пакостника: карты, купленные на рынке; играются от имени игроков
-    $('#handhead').innerHTML = `${follow}${seatBtnHTML()}<span class="trick-head">${ico('double-face-mask')}Рукав пакостника: ${cardsNom(tr.hand.length)}</span><button class="btn ghost small trick-wallet" data-act="market" title="Кошелёк пакостника — купить карты на рынке">${ico('two-coins')}${tr.gold} г</button>`;
+    setHTML($('#handhead'), `${follow}${seatBtnHTML()}<span class="trick-head">${ico('double-face-mask')}Рукав пакостника: ${cardsNom(tr.hand.length)}</span><button class="btn ghost small trick-wallet" data-act="market" title="Кошелёк пакостника — купить карты на рынке">${ico('two-coins')}${tr.gold} г</button>`);
     const prev = S.ui.prevTrick;
-    $('#hand').innerHTML = tr.hand.length ? tr.hand.map(u => cardHTML(u, { playable: true, cls: prev && !prev.has(u) ? 'deal-in' : '', attrs: 'data-zone="trick"' })).join('')
-      : '<p class="muted">Рукав пуст. Купите карты на рынке — и подбрасывайте их от имени игроков: в летописи будут их имена.</p>';
+    patchHand($('#hand'), tr.hand.map(u => ({ u, playable: true, cls: prev && !prev.has(u) ? 'deal-in' : '' })), 'trick',
+      'Рукав пуст. Купите карты на рынке — и подбрасывайте их от имени игроков: в летописи будут их имена.');
     S.ui.prevTrick = new Set(tr.hand);
   } else {
-    $('#handhead').innerHTML = `${follow}${seatBtnHTML()}<span>У ${esc(p.name)} в руке ${cardsNom(p.handCount)} — их видит только сам игрок.</span>`;
-    $('#hand').innerHTML = p.handCount ? Array.from({ length: p.handCount }, () => `<div class="card hand-back" aria-hidden="true">${cardBackSVG('door')}</div>`).join('') : '<p class="muted">Рука пуста.</p>';
+    setHTML($('#handhead'), `${follow}${seatBtnHTML()}<span>У ${esc(p.name)} в руке ${cardsNom(p.handCount)} — их видит только сам игрок.</span>`);
+    patchBacks($('#hand'), p.handCount);
     S.ui.prevTrick = null;
   }
   S.ui.prevHand = null;
@@ -1862,9 +1970,26 @@ function fitStage() {
   game.style.setProperty('--stage-min', Math.round(Math.min(need, avail)) + 'px');
   if (need > avail) inner.style.zoom = Math.max(0.55, (avail - pad) / (need - pad)).toFixed(3);
 }
+// бой на невысоком экране: колоды в углу сцены налезают на нижние ряды боя (перевес, награда, подсказки и кнопки) —
+// тогда бой отодвигается от колод вправо и чуть уменьшается. Решение держится до конца боя или до смены размера окна
+function fitDecks() {
+  const st = $('#stage'), f = st?.querySelector('.fight'), d = st?.querySelector(':scope > .decks'), inner = st?.querySelector(':scope > .stage-inner');
+  const had = !!st?.classList.contains('deck-gap');
+  if (!f || !d || !inner || FAN.matches) { if (had) st.classList.remove('deck-gap'); return; }
+  if (had) return;
+  const dr = d.getBoundingClientRect();
+  if (!dr.width) return;
+  const box = e => { if (e.tagName === 'BUTTON' || e.classList.contains('tug')) return e.getBoundingClientRect(); const g = document.createRange(); g.selectNodeContents(e); return g.getBoundingClientRect(); };
+  const hit = [...inner.querySelectorAll(':scope > .tug, :scope > .reward, :scope > .act-bar > *')].some(e => { const r = box(e); return r.width && r.left < dr.right && dr.left < r.right && r.top < dr.bottom && dr.top < r.bottom; });
+  if (!hit) return;
+  st.style.setProperty('--deck-w', Math.ceil(dr.right - inner.getBoundingClientRect().left + 10) + 'px');
+  st.classList.add('deck-gap');
+  fitFight(); fitStage();
+}
 function fitHand() {
   fitFight();
   fitStage();
+  fitDecks();
   const el = $('#hand');
   if (!el) return;
   const cards = [...el.querySelectorAll('.card')];
@@ -1902,7 +2027,7 @@ function fitHand() {
   if (window.innerWidth >= 760 && cards.length * (w + gap) > avail) ov = Math.max(-(w - 34), (avail - w) / (cards.length - 1) - w);
   el.style.setProperty('--ov', ov + 'px');
 }
-window.addEventListener('resize', () => fitHand());
+window.addEventListener('resize', () => { $('#stage')?.classList.remove('deck-gap'); fitHand(); if (S.screen === 'game') fitHead(); });
 // Подъём карты в руке на компьютере. Раньше карта поднималась на постоянную высоту: если курсор был у её нижнего
 // края (или рука ушла за край экрана), карта уезжала из-под курсора, опускалась, снова ловила его — и прыгала
 // вверх-вниз. Теперь подъём — сколько нужно, чтобы карта показалась целиком, но не выше курсора: он всегда на карте.
@@ -1992,14 +2117,18 @@ async function modeOk() {
 const LOG_MARK = { combat: 'crossed-swords', bad: 'skull-crossed-bones', good: 'laurels', curse: 'cursed-star', event: 'scroll-unfurled', win: 'trophy' };
 function renderLog() {
   const el = $('#logfeed');
-  const near = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
   // у каждой строки летописи — свой значок на полях: меч — бой, череп — расплата, звезда — удача, свиток — проклятие;
   // заголовок хода — с сургучной печатью цвета того, кто ходит
-  el.innerHTML = S.game.log.map(l => {
+  const html = S.game.log.map(l => {
     if (l.kind === 'turn') { const who = S.game.players.find(p => l.text.includes(p.name)); return `<div class="l-turn"><i class="seal" style="--seat:${who?.color || '#8e2a1a'}"></i>${logText(l.text)}</div>`; }
     const ic = LOG_MARK[l.kind];
     return `<div class="l-${l.kind}${ic && !/^[💀⛏📜👹⚔🏆🤝👻🛒📅]/u.test(l.text) ? ' lm' : ''}">${ic && !/^[💀⛏📜👹⚔🏆🤝👻🛒📅]/u.test(l.text) ? ico(ic, 'lmi') : ''}${logText(l.text)}</div>`;
   }).join('');
+  // летопись не поменялась — не трогаем (и не меряем прокрутку: это лишний пересчёт раскладки на каждое событие)
+  const was = htmlOf.get(el);
+  if (was && was[0] === html && was[1] === el.firstChild) return;
+  const near = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+  setHTML(el, html);
   if (near || !el.dataset.init) { el.scrollTop = el.scrollHeight; el.dataset.init = '1'; }
 }
 
@@ -3111,10 +3240,12 @@ function bindRulesNav() {
 // Сервер присылает короткий журнал событий (fx). Новые события проигрываются после перерисовки стола.
 function handleFx(first) {
   const g = S.game;
-  if (!g) return [];
+  // между партиями счёт событий обнуляется: в новой партии движок нумерует их снова с единицы
+  if (!g) { S.ui.lastFx = null; return []; }
   const list = g.fx || [];
   // по самому большому номеру, а не по последней записи: так одна кривая запись не заставит переиграть весь журнал
   const maxId = list.reduce((m, f) => Math.max(m, f.id || 0), 0);
+  if (S.ui.lastFx !== null && maxId < S.ui.lastFx) S.ui.lastFx = null;
   if (S.ui.lastFx === null || first) { S.ui.lastFx = maxId; S.ui.lastLoc = g.location; return []; }
   const fresh = list.filter(f => f.id > S.ui.lastFx);
   S.ui.lastFx = Math.max(S.ui.lastFx, maxId);

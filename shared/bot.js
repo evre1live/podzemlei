@@ -141,7 +141,7 @@ function fighterMove(s, p, rng, now) {
   }
   const gap = n.monsters - n.heroes + (n.warrior ? 0 : 1);
 
-  if (c.helpReq) return now - (c.helpReq.at || 0) > 15000 ? { type: 'cancelHelp' } : null;
+  if (c.helpReq) return now - (c.helpReq.at || 0) > 15000 ? { type: 'cancelHelp', noAnswer: true } : null;
 
   const boost = boostSelf(s, p, gap);
   if (boost) return boost;
