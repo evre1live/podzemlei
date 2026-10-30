@@ -1480,7 +1480,18 @@ function renderWatcher() {
   fitHand();
 }
 const FAN = matchMedia('(max-width: 900px)');
+// Бой на компьютере с узкой средней колонной: герои, помощник и монстры не помещаются в раму — весь бой
+// чуть уменьшается (zoom, а не transform: место под ним тоже сжимается), чтобы ничего не заезжало на летопись
+function fitFight() {
+  const f = document.querySelector('#stage .fight');
+  if (!f) return;
+  f.style.zoom = '';
+  if (FAN.matches) return;
+  const need = f.scrollWidth, have = f.clientWidth;
+  if (need > have + 2) f.style.zoom = Math.max(0.62, have / need).toFixed(3);
+}
 function fitHand() {
+  fitFight();
   const el = $('#hand');
   if (!el) return;
   const cards = [...el.querySelectorAll('.card')];
@@ -1506,6 +1517,9 @@ function fitHand() {
   // на компьютере рука — пологая дуга: крайние карты чуть ниже и повёрнуты, при наведении карта выпрямляется и поднимается
   { const n = cards.length, mid = (n - 1) / 2, step = n > 1 ? Math.min(1.6, 9 / (n - 1)) : 0;
     cards.forEach((c, i) => { const t = i - mid; c.style.setProperty('--fr', (t * step).toFixed(2) + 'deg'); c.style.setProperty('--fy', (mid ? Math.pow(Math.abs(t) / mid, 2) * 8 : 0).toFixed(1) + 'px'); }); }
+  // на невысоком экране рука уходит за нижний край — насколько, чтобы наведённая карта поднималась целиком
+  { const pad = parseFloat(getComputedStyle(el).paddingBottom) || 0;
+    el.style.setProperty('--hand-cut', Math.max(0, Math.round(el.getBoundingClientRect().bottom - pad - innerHeight + 10)) + 'px'); }
   if (cards.length < 2) return el.style.setProperty('--ov', '0px');
   const w = cards[0].offsetWidth;
   const avail = el.clientWidth - 12;

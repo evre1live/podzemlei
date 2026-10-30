@@ -3681,12 +3681,30 @@ body:has(#world.still) .g-grain { display: none; }
   .game .handzone { overflow: visible; position: relative; z-index: 6; }
   .game .hand:not(.fan) { overflow: visible; padding: 16px 18px 20px; justify-content: center; }
   .game .hand:not(.fan) .card { transform-origin: 50% 120%; }
-  .game .hand:not(.fan) .card:hover, .game .hand:not(.fan) .card:focus-visible { --lift: -58px; --sc: 1.14; z-index: 20; }
+  .game .hand:not(.fan) .card:hover, .game .hand:not(.fan) .card:focus-visible { --lift: calc(-58px - var(--hand-cut, 0px)); --sc: 1.14; z-index: 20; }
   /* что можно сыграть — светится снизу золотом, как в руке на телефоне */
   .game .hand:not(.fan) .card.playable { box-shadow: inset 0 0 0 1px rgb(255 255 255 / .3), 0 0 0 2px #e0b25a, 0 0 18px rgb(255 190 90 / .45), 6px 12px 18px rgb(0 0 0 / .5); }
 }
 @media (min-width: 901px) and (max-height: 760px) {
-  .game .hand:not(.fan) .card:hover, .game .hand:not(.fan) .card:focus-visible { --lift: -72px; --sc: 1.12; }
+  .game .hand:not(.fan) .card:hover, .game .hand:not(.fan) .card:focus-visible { --lift: calc(-50px - var(--hand-cut, 0px)); --sc: 1.12; }
+}
+/* Сцена никогда не бывает ниже своего содержимого: кнопки боя («Добить!», «Бежать», «Позвать на помощь») всегда
+   внутри рамы и нажимаются. Раньше на невысоком экране сцену сплющивало, кнопки съезжали под раму, а пластина руки
+   (она лежит выше сцены, чтобы поднятая карта была над столом) закрывала их. Теперь места не хватает — рука уходит
+   за нижний край экрана, как в карточных играх на компьютере; наведённая карта по-прежнему поднимается целиком. */
+@media (min-width: 901px) {
+  .game { grid-template-rows: auto auto minmax(min-content, 1fr) auto; }
+  /* боковые колонны (мой герой, летопись) тянутся во всю высоту и прокручиваются внутри — своей длиной ряды не раздувают */
+  .game #mecard, .game #sidepanel { contain: size; }
+  /* рука не сжимается: если пластина ниже карт, карты уходят вниз за край, а не наползают на стол */
+  .game .handzone > .hand { flex: none; }
+  /* поднятая карта уходит из-под курсора у нижнего края — под ней остаётся невидимая «ножка», чтобы она не дрожала */
+  .game .hand:not(.fan) .card:hover::after { content: ''; position: absolute; left: 6%; right: 6%; top: 100%; height: calc(var(--hand-cut, 0px) + 70px); }
+}
+@media (min-width: 901px) and (max-height: 860px) {
+  .game .table-bg, .game #stage.cave-stage { --fw: 28px; }
+  .game #stage.cave-stage { padding: calc(var(--fw) + 4px) calc(var(--fw) + 12px); }
+  .game .stage-inner { gap: 6px; }
 }
 
 /* ═════════ бой: монстр крупно, вместо «против» — только мечи, перевес — чаша весов ═════════ */
