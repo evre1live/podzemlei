@@ -5,6 +5,7 @@ import { monsterSVG, monsterDefs, INK } from '/art-monsters.js';
 import { avatarSVG, avatarDefs } from '/art-avatar.js';
 import { ico } from '/icons.js';
 import { CARD_IMG } from '/card-art.js';
+import { getBack } from '/profile.js';
 
 export { monsterSVG };
 export const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -324,9 +325,11 @@ export function kindIcon(d) {
 
 // ───────────── рубашки колод ─────────────
 // тёмный металл с золотой каймой и гравированным знаком колоды; если есть живописная рубашка — она под рамкой
-export function cardBackSVG(deck) {
+export function cardBackSVG(deck, style = getBack()) {
   const tr = deck === 'treasure';
-  const id = tr ? 'back_treasure' : 'back_door';
+  // выбранная в профиле рубашка: свой рисунок, если он уже нарисован (back_door_ember …), иначе — обычный с отделкой в CSS
+  const base = tr ? 'back_treasure' : 'back_door';
+  const id = style !== 'classic' && CARD_IMG.has(`${base}_${style}`) ? `${base}_${style}` : base;
   const art = CARD_IMG.has(id) ? `<image href="${cardImgUrl(id)}" x="0" y="0" width="60" height="84" preserveAspectRatio="xMidYMid slice"/>` : '';
   const c1 = tr ? '#4a3a24' : '#2a2c32', c2 = tr ? '#16110a' : '#0b0c0f', gem = tr ? '#d9a83a' : '#5b8fd0';
   const path = ICON_PATH(tr ? 'open-treasure-chest' : 'dungeon-gate');

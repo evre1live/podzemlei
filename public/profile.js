@@ -102,7 +102,9 @@ export function setBack(id) {
   applyBack();
   return true;
 }
-export function applyBack() {
+// hasArt(id) — есть ли у рубашки свой рисунок: тогда CSS-отделка (фильтры) не нужна
+export function applyBack(hasArt = () => false) {
   const id = getBack();
   for (const b of BACKS) document.body.classList.toggle('back-' + b.id, b.id === id && id !== 'classic');
+  document.body.classList.toggle('back-art', id !== 'classic' && hasArt(id));
 }

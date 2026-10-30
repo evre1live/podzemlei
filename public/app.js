@@ -676,7 +676,7 @@ mount.game = () => {
     </div>
     <div class="band b-clay pebbles"><div class="opps" id="opps"></div></div>
     <div class="band b-rock cave" id="cave">
-      <div class="table-bg" id="tableBg" aria-hidden="true"><div class="tb-mat"></div><div class="tb-glow"></div><div class="tb-torch"></div><div class="tb-frame"><i class="f-t"></i><i class="f-b"></i><i class="f-l"></i><i class="f-r"></i><i class="f-tl"></i><i class="f-tr"></i><i class="f-bl"></i><i class="f-br"></i></div><div class="tb-props" id="tableProps"></div></div>
+      <div class="table-bg" id="tableBg" aria-hidden="true"><div class="tb-mat"></div><div class="tb-glow"></div><div class="tb-torch"></div><div class="tb-boss"><i class="bd-a"></i><i class="bd-b"></i></div><div class="tb-frame"><i class="f-t"></i><i class="f-b"></i><i class="f-l"></i><i class="f-r"></i><i class="f-tl"></i><i class="f-tr"></i><i class="f-bl"></i><i class="f-br"></i></div><div class="tb-props" id="tableProps"></div></div>
       <div class="cave-stage" id="stage"></div>
       <div class="motes" aria-hidden="true">${'<i></i>'.repeat(12)}</div>
       <div class="sidepanel side" id="sidepanel">
@@ -1034,9 +1034,11 @@ function weatherAt(kind, x, y) {
   i.className = 'tb-wx wx-' + kind;
   i.style.left = (x ?? r.width * (0.12 + Math.random() * 0.76)) + 'px';
   i.style.top = (y ?? r.height * (0.15 + Math.random() * 0.7)) + 'px';
-  if (kind === 'ember') i.style.setProperty('--dx', (Math.random() * 160 - 80).toFixed(0) + 'px');
+  if (kind === 'ember' || kind === 'snow' || kind === 'soul') i.style.setProperty('--dx', (Math.random() * 160 - 80).toFixed(0) + 'px');
+  if (kind === 'snow') i.style.top = (r.height * Math.random() * 0.2) + 'px';
+  if (kind === 'sand') { i.style.top = '0px'; i.style.setProperty('--h', (r.height * (0.5 + Math.random() * 0.45)).toFixed(0) + 'px'); }
   tb.append(i);
-  setTimeout(() => i.remove(), kind === 'wisp' ? 4200 : 2600);
+  setTimeout(() => i.remove(), kind === 'wisp' || kind === 'soul' ? 4200 : kind === 'snow' || kind === 'sand' ? 3800 : 2600);
 }
 // круги на воде под упавшей картой (координаты экрана)
 function rippleAt(cx, cy) {
@@ -1046,8 +1048,29 @@ function rippleAt(cx, cy) {
   weatherAt('ripple', cx - r.left, cy - r.top);
   setTimeout(() => weatherAt('ripple', cx - r.left, cy - r.top), 220);
 }
+// коврики владений, которые уже нарисованы (art/gen/import3.py): для них поле стола меняется на картину босса
+const BOSS_MATS = new Set([]);
+// владения босса: свои частицы — угли из трещин, снег, души, струи песка, молнии во тьме
+const BOSS_WX = { lucifer: 'ember', morena: 'snow', hades: 'soul', anubis: 'sand', chernobog: 'bolt' };
 { let next = 0;
   setInterval(() => {
+    const key = $('#cave')?.dataset.boss, kind = BOSS_WX[key];
+    if (!kind || document.hidden || !document.querySelector('.game') || performance.now() < next) return;
+    if (kind === 'bolt') {
+      const tb = $('#tableBg');
+      tb?.classList.remove('bd-flash'); void tb?.offsetWidth; tb?.classList.add('bd-flash');
+      if (Math.random() < 0.5) sfx.play('thunder', { gap: 0 });
+      next = performance.now() + 3500 + Math.random() * 4500;
+      return;
+    }
+    weatherAt(kind);
+    if (kind === 'ember' || kind === 'snow') weatherAt(kind);
+    next = performance.now() + (kind === 'sand' ? 380 + Math.random() * 400 : kind === 'soul' ? 700 + Math.random() * 600 : 120 + Math.random() * 160);
+  }, 120);
+}
+{ let next = 0;
+  setInterval(() => {
+    if ($('#cave')?.dataset.boss) return;
     const art = $('#cave')?.dataset.loc, kind = WEATHER[art];
     if (!kind || document.hidden || !document.querySelector('.game') || performance.now() < next) return;
     weatherAt(kind);
@@ -1077,6 +1100,9 @@ function renderStage() {
   const h = hints();
   const loc = g.location ? def(g.location) : null;
   $('#cave').dataset.loc = loc ? loc.art : '';
+  // владения босса: пока он в бою, стол — его: трещины с лавой, лёд, души, песок, тьма с молниями
+  { const bm = g.combat?.monsters?.find(m => def(m.uid).boss); const key = bm ? String(bm.uid).split('#')[0].replace(/^m_/, '') : '';
+    const cave = $('#cave'); if ((cave.dataset.boss || '') !== key) { cave.dataset.boss = key; cave.classList.toggle('bm-art', BOSS_MATS.has(key)); document.body.classList.toggle('boss-domain', !!key); } }
   syncTable(loc ? loc.art : 'default');
   const decks = `<div class="decks"><div class="deck door" id="deckDoor" style="${deckStack(g.decks.door)}" title="Колода проходов" aria-label="Колода проходов: ${g.decks.door}">${cardBackSVG('door')}<span>${g.decks.door}</span></div><div class="deck treasure" id="deckTreasure" style="${deckStack(g.decks.treasure)}" title="Колода клада" aria-label="Колода клада: ${g.decks.treasure}">${cardBackSVG('treasure')}<span>${g.decks.treasure}</span></div>${discardHTML(g)}</div>`;
   const lp = $('#locpill');
@@ -1221,9 +1247,9 @@ document.addEventListener('click', e => {
   const b = e.target.closest('[data-back]');
   if (!b) return;
   if (b.getAttribute('aria-disabled') === 'true') { toast('Эта рубашка ещё закрыта: ' + (BACKS.find(x => x.id === b.dataset.back)?.text || '')); return; }
-  if (setBack(b.dataset.back)) { sfx.play('flip', { gap: 0 }); document.querySelectorAll('.pf-backtile').forEach(t => { const on = t.dataset.back === b.dataset.back; t.classList.toggle('on', on); t.querySelector('small').textContent = on ? 'выбрана' : t.classList.contains('locked') ? t.querySelector('small').textContent : 'выбрать'; }); }
+  if (setBack(b.dataset.back)) { applyBack(id => CARD_IMG.has('back_door_' + id)); sfx.play('flip', { gap: 0 }); document.querySelectorAll('.pf-backtile').forEach(t => { const on = t.dataset.back === b.dataset.back; t.classList.toggle('on', on); t.querySelector('small').textContent = on ? 'выбрана' : t.classList.contains('locked') ? t.querySelector('small').textContent : 'выбрать'; }); }
 });
-applyBack();
+applyBack(id => CARD_IMG.has('back_door_' + id));
 
 // ───────────── фитиль хода ─────────────
 // Когда игрок долго не делает ни одного действия, вдоль верхнего бруса рамы загорается фитиль и прогорает справа
@@ -2762,7 +2788,8 @@ function recordGame(g, iWon) {
 // Окно со счётом на этом устройстве: звание, партии и победы, монстры и боссы, медали, любимые раса и класс,
 // коллекция (бестиарий, золотые карты, рамки) и выбор рубашки колод; ниже — достижения, за которые открываются рамки.
 function backPreview(id) {
-  return `<span class="pf-back back-${id}"><span class="deck-face">${cardBackSVG('door')}</span><span class="deck-face">${cardBackSVG('treasure')}</span></span>`;
+  const art = CARD_IMG.has('back_door_' + id);
+  return `<span class="pf-back back-${id}${art ? ' has-art' : ''}"><span class="deck-face">${cardBackSVG('door', art ? id : 'classic')}</span><span class="deck-face">${cardBackSVG('treasure', art ? id : 'classic')}</span></span>`;
 }
 function openProfile() {
   const pr = profile(), a = achDone();
