@@ -3091,3 +3091,22 @@ body:has(#world.still) .g-grain { display: none; }
 .p-dagger img { transform: rotate(-44deg); }
 .p-dagger.tp-b img[style*="scaleX(-1)"] { transform: scaleX(-1) rotate(-44deg); }
 @media (max-width: 900px) { .p-dagger.tp-b { width: 76px; bottom: -20px; } }
+
+/* ═════════ бой с тремя и больше монстрами: карты мельче и в ряд, кнопки всегда на виду ═════════ */
+.fight.m3 .monsters-row .mon-wrap { zoom: .74; }
+.fight.m4 .monsters-row .mon-wrap { zoom: .62; }
+@media (min-width: 901px) {
+  .game .fight:is(.m3, .m4) .side-col.mon { min-width: 0; }
+  .game .fight:is(.m3, .m4) .monsters-row { display: grid; grid-template-columns: repeat(2, auto); gap: 6px 8px; justify-content: center; }
+  .game .fight.m3 .monsters-row > .mon-wrap:nth-child(3) { grid-column: 1 / -1; justify-self: center; }
+}
+@media (max-width: 900px) {
+  /* монстры — одной строкой, а не столбиком */
+  .game .fight:is(.m3, .m4) .monsters-row { flex-wrap: nowrap; gap: 4px; }
+  .game .fight.m4 .monsters-row { flex-wrap: wrap; }
+  /* пещера обрезает края без собственной прокрутки — иначе «липкий» ряд кнопок ниже не работал бы */
+  .game .cave { overflow: clip; }
+  /* кнопки боя прилипают к низу экрана над веером руки, если панель боя не помещается */
+  .game.has-fan #stage .act-bar:not(:empty) { position: sticky; bottom: 128px; z-index: 6; margin-inline: -6px; padding: 6px; border-radius: 10px;
+    background: linear-gradient(180deg, rgb(14 10 8 / .78), rgb(14 10 8 / .9)); box-shadow: 0 6px 18px rgb(0 0 0 / .55); }
+}

@@ -1006,7 +1006,7 @@ function fightHTML() {
   }
   if (c.winAt && c.passed?.length) b.push(`<span class="hint passed">Не мешают: ${c.passed.map(id => esc(pname(id))).join(', ')}</span>`);
   return `
-    <div class="fight" style="--ha:${n.winning ? 0.34 : 0.12};--ma:${n.winning ? 0.12 : 0.36}">
+    <div class="fight${c.monsters.length >= 4 ? ' m4' : c.monsters.length === 3 ? ' m3' : ''}" style="--ha:${n.winning ? 0.34 : 0.12};--ma:${n.winning ? 0.12 : 0.36}">
       <div class="side-col hero"><div class="side-main"><div class="shield hero${n.winning ? ' lead' : ''}" id="shieldHero" title="Сила героев">${SHIELD('hero')}<b data-roll="${n.heroes}">${prev ? prev.heroes : n.heroes}</b></div><div class="heroes-row${c.helper ? ' duo' : ''}">${heroes}</div></div><div class="mods">${mods('player')}</div></div>
       <div class="versus">${pandoraHTML(c, h)}${center}${verdict}</div>
       <div class="side-col mon"><div class="side-main"><div class="shield mon${n.winning ? '' : ' lead'}" id="shieldMon" title="Сила монстров">${SHIELD('mon')}<b data-roll="${n.monsters}">${prev ? prev.monsters : n.monsters}</b></div><div class="monsters-row">${monsters}</div></div><div class="mods">${mods('monster')}</div></div>
