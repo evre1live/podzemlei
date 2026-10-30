@@ -124,7 +124,8 @@ function sceneOf(key) {
 
 export function worldHTML(key) {
   const S = sceneOf(key || 'default');
-  return `<div class="w-box"><div class="w-img" style="background-image:url('${S.img}')"></div><div class="w-fx">${S.fx}</div></div><div class="w-vignette"></div>`;
+  // w-bloom — та же картина, размытая и «пережатая» по контрасту: светятся только огни (свечение ярких мест)
+  return `<div class="w-box"><div class="w-img" style="background-image:url('${S.img}')"></div><div class="w-bloom" style="background-image:url('${S.img}')"></div><div class="w-fx">${S.fx}</div></div><div class="w-vignette"></div>`;
 }
 
 // Живые эффекты подгружаются, только когда нужны: библиотека весит ~230 КБ

@@ -2752,3 +2752,29 @@ body.is-dragging .pop, body.is-dragging .tip { display: none; }
 @keyframes d3ring { 0% { transform: scale(.5); opacity: 1; } 100% { transform: scale(1.6); opacity: 0; } }
 .die3d .dlabel { position: fixed; left: var(--dx, 50%); top: calc(var(--dy, 50%) + 58px); translate: -50% 0; white-space: nowrap; }
 .die3d-cv { z-index: 1; filter: drop-shadow(0 0 0 transparent); }
+
+/* ═════════ кинематографический слой ═════════
+   поверх всей игры: тон кадра под локацию (мягкий свет), виньетка по краям и лёгкое плёночное зерно;
+   у картины фона — свечение ярких мест (та же картина, размытая и пережатая по контрасту, ложится «экраном») */
+.w-bloom { position: absolute; inset: -2%; background-size: cover; background-position: center; pointer-events: none;
+  filter: blur(16px) brightness(.42) contrast(3.4) saturate(1.6); mix-blend-mode: screen; opacity: .38; }
+#world.still .w-bloom { opacity: .28; }
+.grade { position: fixed; inset: 0; z-index: 70; pointer-events: none; }
+.grade > i { position: absolute; inset: 0; }
+.g-tone { mix-blend-mode: soft-light; opacity: .2; transition: background 1.6s ease;
+  background: linear-gradient(180deg, var(--gt1, #ffb060) 0%, transparent 38%, transparent 62%, var(--gt2, #1d2a5a) 100%); }
+.g-vig { background: radial-gradient(ellipse 85% 80% at 50% 50%, transparent 58%, rgb(0 0 0 / .32) 100%); }
+.g-grain { background: url(/ui/v1/film-grain.webp) 0 0 / 256px; mix-blend-mode: overlay; opacity: .07; animation: filmGrain .9s steps(6) infinite; }
+@keyframes filmGrain { 0% { background-position: 0 0; } 17% { background-position: -71px 43px; } 33% { background-position: 37px -89px; } 50% { background-position: -113px -21px; } 67% { background-position: 91px 67px; } 83% { background-position: -29px 117px; } 100% { background-position: 0 0; } }
+body[data-grade="loc_forge"] .g-tone { --gt1: #ff7a2a; --gt2: #3a0e06; }
+body[data-grade="loc_ice"] .g-tone, body[data-grade="loc_sky"] .g-tone { --gt1: #bfe4ff; --gt2: #0e1e44; }
+body[data-grade="loc_graveyard"] .g-tone, body[data-grade="loc_koschei"] .g-tone { --gt1: #a8ffcf; --gt2: #0a2216; }
+body[data-grade="loc_grove"] .g-tone, body[data-grade="loc_glade"] .g-tone { --gt1: #d6ff9a; --gt2: #102414; }
+body[data-grade="loc_library"] .g-tone { --gt1: #e0b8ff; --gt2: #1a0e36; }
+body[data-grade="loc_cove"] .g-tone, body[data-grade="loc_flooded"] .g-tone { --gt1: #9ff0f5; --gt2: #062228; }
+body[data-grade="loc_oasis"] .g-tone, body[data-grade="loc_tavern"] .g-tone, body[data-grade="loc_dungeon"] .g-tone { --gt1: #ffd27a; --gt2: #2a1606; }
+body[data-grade="home"] .g-tone { opacity: .22; }
+/* слабые устройства и «уменьшить движение»: зерно неподвижно; без «Живого фона» — без зерна */
+@media (prefers-reduced-motion: reduce) { .g-grain { animation: none; } }
+html.no-depth .g-grain { animation: none; }
+body:has(#world.still) .g-grain { display: none; }

@@ -215,6 +215,8 @@ function render() {
   // сцена «Локация партии»: за портретами — текущая локация стола
   const locArt = scr === 'game' && S.game.location ? def(S.game.location).art : null;
   setAvatarLocation(locArt);
+  // цветокоррекция кадра — под локацию стола
+  document.body.dataset.grade = scr === 'game' ? locArt || 'default' : scr;
   // музыка локации: играет, пока идёт партия
   sfx.music(scr === 'game' && S.game.phase === 'playing' ? locArt || 'default' : null);
   if (scr !== S.screen) { S.screen = scr; mount[scr](); soundIcons(); }
