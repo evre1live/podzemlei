@@ -2561,10 +2561,10 @@ svg.av-hover .av-bg, svg.av-hover .av-hero { transition: transform .18s ease-out
 .table-bg > * { position: absolute; }
 .tb-mat { inset: calc(var(--fw) * .55); border-radius: 4px;
   background: radial-gradient(ellipse 75% 70% at 50% 46%, rgb(var(--tb-tint, 255 200 140) / .07), transparent 70%),
-    url(/ui/table/v1/mat.webp) center / cover, #1a110b;
+    url(/ui/table/v2/mat-default.webp) center / cover, #1a110b;
   box-shadow: inset 0 0 0 1px rgb(0 0 0 / .8), inset 0 0 calc(var(--fw) * 1.6) rgb(0 0 0 / .85), inset 0 calc(var(--fw) * .5) calc(var(--fw) * .9) rgb(0 0 0 / .55); }
 /* толщина рамы — прямо в пикселях, без var(): Safari не рисует border-image с переменной внутри (на телефоне рама пропадала) */
-.tb-frame { inset: 0; border: 34px solid transparent; border-image: url(/ui/table/v1/frame.webp) 118 / 34px stretch; }
+.tb-frame { inset: 0; border: 34px solid transparent; border-image: url(/ui/table/v2/frame-oak.webp) 118 / 34px stretch; }
 /* свет: тёплое пятно у свечей и общее мерцание пламени по полю */
 .tb-glow { inset: calc(var(--fw) * .55); border-radius: 4px; mix-blend-mode: screen; opacity: .9;
   background: radial-gradient(ellipse 34% 48% at 6% 6%, rgb(var(--tb-light, 255 160 70) / .32), transparent 70%),
@@ -2613,7 +2613,7 @@ svg.av-hover .av-bg, svg.av-hover .av-hero { transition: transform .18s ease-out
 .game #stage .stage-inner .card { box-shadow: 0 0 0 1px rgb(0 0 0 / .7), 7px 14px 20px rgb(0 0 0 / .55), 2px 4px 6px rgb(0 0 0 / .45); }
 @media (max-width: 900px) {
   .table-bg { --fw: 26px; }
-  .tb-mat { background-image: radial-gradient(ellipse 75% 70% at 50% 46%, rgb(var(--tb-tint, 255 200 140) / .07), transparent 70%), url(/ui/table/v1/mat-1200.webp); }
+  .tb-mat { background-image: radial-gradient(ellipse 75% 70% at 50% 46%, rgb(var(--tb-tint, 255 200 140) / .07), transparent 70%), url(/ui/table/v2/mat-default-1024.webp); }
   .tb-frame { border-width: 26px; border-image-width: 26px; }
   .game #stage.cave-stage { --fw: 26px; padding: 32px 26px 112px; }
   .game #stage .decks { transform: scale(.78); transform-origin: left bottom; }
@@ -2797,15 +2797,15 @@ body:has(#world.still) .g-grain { display: none; }
 .btn.danger, .btn.danger:hover:not(:disabled), .btn.hero, .btn.hero:hover:not(:disabled), .btn.spook, .btn.spook:hover:not(:disabled) {
   background: none; border-color: transparent; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none;
 }
-.btn { border: 1px solid transparent; border-image: url(/ui/obj/v1/plate-iron.webp?v=2) 36 fill / 11px / 0 stretch; color: #f6eedf;
+.btn { border: 1px solid transparent; border-image: url(/ui/obj/v2/plate-iron.webp) 46 fill / 11px / 0 stretch; color: #f6eedf;
   filter: drop-shadow(0 2px 2px rgb(0 0 0 / .5)); transition: filter .15s, transform .1s; }
 .btn:not(.primary) { text-shadow: 0 1px 2px rgb(0 0 0 / .85); }
-.btn.ghost { border-image-source: url(/ui/obj/v1/plate-ghost.webp?v=2); color: #f0e7d8; }
-.btn.primary { border-image-source: url(/ui/obj/v1/plate-brass.webp?v=2); color: #1c0e02; text-shadow: 0 1px 0 rgb(255 242 210 / .6); }
+.btn.ghost { border-image-source: url(/ui/obj/v2/plate-ghost.webp); color: #f0e7d8; }
+.btn.primary { border-image-source: url(/ui/obj/v2/plate-brass.webp); color: #1c0e02; text-shadow: 0 1px 0 rgb(255 242 210 / .6); }
 .btn.primary .gi { color: #2a1604; }
-.btn.danger { border-image-source: url(/ui/obj/v1/plate-danger.webp?v=2); color: #ffeee6; }
-.btn.hero { border-image-source: url(/ui/obj/v1/plate-hero.webp?v=2); color: #effff8; }
-.btn.spook { border-image-source: url(/ui/obj/v1/plate-hero.webp?v=2); color: #eef1ff; filter: hue-rotate(95deg) drop-shadow(0 2px 2px rgb(0 0 0 / .5)); }
+.btn.danger { border-image-source: url(/ui/obj/v2/plate-danger.webp); color: #ffeee6; }
+.btn.hero { border-image-source: url(/ui/obj/v2/plate-hero.webp); color: #effff8; }
+.btn.spook { border-image-source: url(/ui/obj/v2/plate-hero.webp); color: #eef1ff; filter: hue-rotate(95deg) drop-shadow(0 2px 2px rgb(0 0 0 / .5)); }
 .btn.big { border-image-width: 14px; }
 .btn:hover:not(:disabled), .btn.primary:hover:not(:disabled) { filter: brightness(1.14) drop-shadow(0 2px 2px rgb(0 0 0 / .5)) drop-shadow(0 0 7px rgb(255 196 120 / .32)); }
 .btn:active:not(:disabled) { transform: translateY(1px); filter: brightness(.9) drop-shadow(0 1px 1px rgb(0 0 0 / .6)); }
@@ -2816,27 +2816,27 @@ body:has(#world.still) .g-grain { display: none; }
 .has-world .game .g-head, .game .g-head {
   background: none; -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: none; border-radius: 0 !important;
   border-style: solid; border-color: transparent; border-width: 0 46px;
-  border-image: url(/ui/obj/v1/beam.webp) 0 180 fill / 0 58px / 0 6px stretch;
+  border-image: url(/ui/obj/v2/beam.webp) 0 150 fill / 0 44px / 0 6px stretch;
   padding: 9px 0; filter: drop-shadow(0 8px 10px rgb(0 0 0 / .55));
 }
 .game .g-head :is(.turninfo, .goal-pill, .depth-pill, .daily-pill, .market-pill, .contract-pill, .watch-pill, .loc-banner, .seat-pill) {
-  background: none; border: 1px solid transparent; box-shadow: none; border-image: url(/ui/obj/v1/plate-iron.webp?v=2) 36 fill / 9px / 0 stretch;
+  background: none; border: 1px solid transparent; box-shadow: none; border-image: url(/ui/obj/v2/plate-iron.webp) 46 fill / 9px / 0 stretch;
   color: #eee2cb; text-shadow: 0 -1px 0 rgb(0 0 0 / .8); filter: drop-shadow(0 2px 2px rgb(0 0 0 / .55));
 }
 .game .g-head :is(.market-pill, .contract-pill, .loc-banner, .seat-pill):hover { border-color: transparent; filter: brightness(1.15) drop-shadow(0 2px 2px rgb(0 0 0 / .55)) drop-shadow(0 0 7px rgb(255 196 120 / .3)); }
-.game .g-head :is(.turninfo.mine, .market-pill) { background: none; border-image-source: url(/ui/obj/v1/plate-brass.webp?v=2); color: #1c0e02; text-shadow: 0 1px 0 rgb(255 242 210 / .55);
+.game .g-head :is(.turninfo.mine, .market-pill) { background: none; border-image-source: url(/ui/obj/v2/plate-brass.webp); color: #1c0e02; text-shadow: 0 1px 0 rgb(255 242 210 / .55);
   filter: drop-shadow(0 2px 2px rgb(0 0 0 / .55)); }
 .game .g-head .market-pill .gi { color: #4a2a06; }
-.game .g-head .market-pill.trick { border-image-source: url(/ui/obj/v1/plate-hero.webp?v=2); filter: hue-rotate(110deg) drop-shadow(0 2px 2px rgb(0 0 0 / .55)); color: #f6efff; text-shadow: 0 -1px 0 rgb(0 0 0 / .7); }
+.game .g-head .market-pill.trick { border-image-source: url(/ui/obj/v2/plate-hero.webp); filter: hue-rotate(110deg) drop-shadow(0 2px 2px rgb(0 0 0 / .55)); color: #f6efff; text-shadow: 0 -1px 0 rgb(0 0 0 / .7); }
 .game .g-head .market-pill.trick .gi { color: #f1e2ff; }
 .game .g-head .turninfo.mine::before { box-shadow: 0 0 0 2px rgb(60 30 0 / .45), 0 0 8px #ffc860; background: #fff0b8; }
-.game .g-head .contract-pill.ready { border-image-source: url(/ui/obj/v1/plate-hero.webp?v=2); color: #effff8; }
+.game .g-head .contract-pill.ready { border-image-source: url(/ui/obj/v2/plate-hero.webp); color: #effff8; }
 .game .g-head .contract-pill.ready .gi { color: #d6fff0; }
-.game .g-head .depth-pill.deep, .game .g-head .watch-pill.on { background: none; border-image-source: url(/ui/obj/v1/plate-hero.webp?v=2); filter: hue-rotate(115deg) drop-shadow(0 2px 2px rgb(0 0 0 / .55)); }
+.game .g-head .depth-pill.deep, .game .g-head .watch-pill.on { background: none; border-image-source: url(/ui/obj/v2/plate-hero.webp); filter: hue-rotate(115deg) drop-shadow(0 2px 2px rgb(0 0 0 / .55)); }
 .game .g-head .watch-pill.on { filter: hue-rotate(60deg) drop-shadow(0 2px 2px rgb(0 0 0 / .55)); }
-.game .g-head .seat-pill { color: #effff8; border-image-source: url(/ui/obj/v1/plate-hero.webp?v=2); }
+.game .g-head .seat-pill { color: #effff8; border-image-source: url(/ui/obj/v2/plate-hero.webp); }
 @media (max-width: 700px) {
-  .has-world .game .g-head, .game .g-head { border-width: 0 30px; border-image-width: 0 46px; border-image-outset: 0 4px; padding: 7px 0; }
+  .has-world .game .g-head, .game .g-head { border-width: 0 30px; border-image-width: 0 36px; border-image-outset: 0 4px; padding: 7px 0; }
 }
 
 /* летопись и чат — свиток: пергамент между двумя валиками, текст чернилами */
@@ -2844,11 +2844,11 @@ body:has(#world.still) .g-grain { display: none; }
   position: relative; overflow: visible; border: 0; border-radius: 0 !important; -webkit-backdrop-filter: none; backdrop-filter: none;
   margin: 20px 12px 20px; padding: 18px 0 16px;
   background: linear-gradient(180deg, rgb(70 40 14 / .55), rgb(70 40 14 / 0) 22px), linear-gradient(0deg, rgb(70 40 14 / .5), rgb(70 40 14 / 0) 20px),
-    url(/ui/obj/v1/parchment.webp) 0 0 / 256px;
+    url(/ui/obj/v2/parchment.webp) 0 0 / 256px;
   box-shadow: inset 0 0 34px rgb(120 72 28 / .5), inset 12px 0 16px -12px rgb(80 48 18 / .6), inset -12px 0 16px -12px rgb(80 48 18 / .6), 0 22px 36px -14px rgb(0 0 0 / .75);
 }
 :is(.game .sidepanel, .lobby .side)::before, :is(.game .sidepanel, .lobby .side)::after { content: ''; position: absolute; left: -15px; right: -15px; height: 38px; z-index: 4; pointer-events: none;
-  border-style: solid; border-color: transparent; border-width: 0 41px; border-image: url(/ui/obj/v1/roller.webp) 0 120 fill / 0 41px stretch;
+  border-style: solid; border-color: transparent; border-width: 0 41px; border-image: url(/ui/obj/v2/roller.webp) 0 175 fill / 0 41px stretch;
   filter: drop-shadow(0 4px 4px rgb(0 0 0 / .5)); }
 :is(.game .sidepanel, .lobby .side)::before { top: -20px; }
 :is(.game .sidepanel, .lobby .side)::after { bottom: -20px; transform: scaleY(-1); filter: drop-shadow(0 -4px 4px rgb(0 0 0 / .45)); }
@@ -2876,37 +2876,37 @@ body:has(#world.still) .g-grain { display: none; }
 :is(.game .sidepanel, .lobby .side) .chatform input::placeholder { color: #8a7052; }
 :is(.game .sidepanel, .lobby .side) .chatform input:focus { border-color: #8e2a1a; box-shadow: inset 0 1px 3px rgb(80 50 20 / .3), 0 0 0 2px rgb(142 42 26 / .2); }
 @media (max-width: 900px) {
-  .cave .sidepanel.open { inset: auto 14px 22px 14px; height: calc(60dvh - 14px); margin: 0; background: linear-gradient(180deg, rgb(70 40 14 / .55), rgb(70 40 14 / 0) 22px), linear-gradient(0deg, rgb(70 40 14 / .5), rgb(70 40 14 / 0) 20px), url(/ui/obj/v1/parchment.webp) 0 0 / 256px; }
+  .cave .sidepanel.open { inset: auto 14px 22px 14px; height: calc(60dvh - 14px); margin: 0; background: linear-gradient(180deg, rgb(70 40 14 / .55), rgb(70 40 14 / 0) 22px), linear-gradient(0deg, rgb(70 40 14 / .5), rgb(70 40 14 / 0) 20px), url(/ui/obj/v2/parchment.webp) 0 0 / 256px; }
 }
 
 /* рынок — лавка: полосатый навес на жерди, рама стола, задняя стенка из досок */
 .modal.shop { position: relative; overflow: visible; border-radius: 0 !important;
-  border: 20px solid transparent; border-image: url(/ui/table/v1/frame.webp) 118 / 20px stretch;
+  border: 20px solid transparent; border-image: url(/ui/table/v2/frame-oak.webp) 118 / 20px stretch;
   background: radial-gradient(ellipse 80% 55% at 50% 28%, rgb(255 184 100 / .12), transparent 72%), linear-gradient(180deg, rgb(0 0 0 / .6), rgb(0 0 0 / 0) 84px),
-    url(/ui/obj/v1/boards.webp) 0 0 / 256px;
+    url(/ui/obj/v2/boards.webp) 0 0 / 256px;
   background-clip: padding-box; -webkit-backdrop-filter: none; backdrop-filter: none;
   box-shadow: 0 30px 60px -12px rgb(0 0 0 / .85); padding: 44px 16px 14px; margin-top: 28px; }
 .modal.shop::before { content: ''; position: absolute; left: -30px; right: -30px; top: -42px; height: 72px; z-index: 2; pointer-events: none;
-  background: url(/ui/obj/v1/awning.webp) 0 0 / auto 100% repeat-x; filter: drop-shadow(0 8px 6px rgb(0 0 0 / .5)); }
+  background: url(/ui/obj/v2/awning.webp) 0 0 / auto 100% repeat-x; filter: drop-shadow(0 8px 6px rgb(0 0 0 / .5)); }
 .modal.shop::after { content: ''; position: absolute; left: -38px; right: -38px; top: -50px; height: 18px; z-index: 3; pointer-events: none;
-  border-style: solid; border-color: transparent; border-width: 0 20px; border-image: url(/ui/obj/v1/beam.webp) 0 180 fill / 0 20px stretch;
+  border-style: solid; border-color: transparent; border-width: 0 15px; border-image: url(/ui/obj/v2/beam.webp) 0 150 fill / 0 15px stretch;
   filter: drop-shadow(0 3px 3px rgb(0 0 0 / .6)); }
 .modal.shop .shop-head h2 { color: #f4d79a; text-shadow: 0 2px 0 rgb(0 0 0 / .6), 0 0 18px rgb(255 190 100 / .25); }
-.modal.shop .shop-head .wallet { background: none; border: 1px solid transparent; box-shadow: none; border-image: url(/ui/obj/v1/plate-brass.webp?v=2) 36 fill / 10px stretch; color: #2a1604; text-shadow: 0 1px 0 rgb(255 232 170 / .5); }
+.modal.shop .shop-head .wallet { background: none; border: 1px solid transparent; box-shadow: none; border-image: url(/ui/obj/v2/plate-brass.webp) 46 fill / 10px stretch; color: #2a1604; text-shadow: 0 1px 0 rgb(255 232 170 / .5); }
 .modal.shop .shop-head .wallet .gi { color: #4a2a06; }
-.modal.shop .shop-head .wallet.trick { border-image-source: url(/ui/obj/v1/plate-hero.webp?v=2); filter: hue-rotate(110deg); color: #f6efff; text-shadow: 0 -1px 0 rgb(0 0 0 / .6); }
+.modal.shop .shop-head .wallet.trick { border-image-source: url(/ui/obj/v2/plate-hero.webp); filter: hue-rotate(110deg); color: #f6efff; text-shadow: 0 -1px 0 rgb(0 0 0 / .6); }
 /* разделы — таблички: выбранный — латунный */
 .modal.shop .seg { display: flex; flex-wrap: wrap; gap: 6px; border: 0; background: none; box-shadow: none; overflow: visible; }
-.modal.shop .seg button { min-height: 34px; padding: 4px 12px; background: none; border: 1px solid transparent; box-shadow: none !important; border-image: url(/ui/obj/v1/plate-iron.webp?v=2) 36 fill / 9px stretch;
+.modal.shop .seg button { min-height: 34px; padding: 4px 12px; background: none; border: 1px solid transparent; box-shadow: none !important; border-image: url(/ui/obj/v2/plate-iron.webp) 46 fill / 9px stretch;
   color: #e9dcc4; text-shadow: 0 -1px 0 rgb(0 0 0 / .8); filter: drop-shadow(0 2px 2px rgb(0 0 0 / .5)); }
 .modal.shop .seg button:hover { filter: brightness(1.15) drop-shadow(0 2px 2px rgb(0 0 0 / .5)); }
-.modal.shop .seg button[aria-pressed=true] { border-image-source: url(/ui/obj/v1/plate-brass.webp?v=2); color: #2a1604; text-shadow: 0 1px 0 rgb(255 232 170 / .5); }
+.modal.shop .seg button[aria-pressed=true] { border-image-source: url(/ui/obj/v2/plate-brass.webp); color: #2a1604; text-shadow: 0 1px 0 rgb(255 232 170 / .5); }
 .modal.shop .seg button small { opacity: .75; }
 /* полки: под каждой картой — кусок доски, соседние стыкуются в одну полку; в доске — ценник на нитке */
 .modal.shop .shop-lots { gap: 10px 12px; padding: 6px 10px 10px; overflow-x: hidden; }
 .modal.shop .shop-lots .lot { position: relative; }
 .modal.shop .shop-lots .lot::before { content: ''; position: absolute; left: -7px; right: -7px; top: 140px; height: 30px; z-index: 0; pointer-events: none;
-  background: url(/ui/obj/v1/plank.webp) 0 0 / 256px 100% repeat-x; }
+  background: url(/ui/obj/v2/plank.webp) 0 0 / auto 100% repeat-x; }
 .modal.shop .shop-lots .lot:nth-child(3n+2)::before { background-position-x: -91px; }
 .modal.shop .shop-lots .lot:nth-child(3n)::before { background-position-x: -173px; }
 .modal.shop .shop-lots .lot > * { position: relative; z-index: 1; }
@@ -2914,7 +2914,7 @@ body:has(#world.still) .g-grain { display: none; }
 .modal.shop .shop-lots .lot.out { opacity: 1; }
 .modal.shop .shop-lots .lot.out > * { opacity: .45; }
 .modal.shop .lot-price { order: -1; margin: 0 0 4px; padding: 3px 10px 3px 18px; color: #3a220c; text-shadow: none; rotate: -2.5deg;
-  background: radial-gradient(circle at 8px 50%, #2a180a 2.4px, rgb(60 36 14 / .4) 3.4px, transparent 4px), url(/ui/obj/v1/parchment.webp) 0 0 / 180px;
+  background: radial-gradient(circle at 8px 50%, #2a180a 2.4px, rgb(60 36 14 / .4) 3.4px, transparent 4px), url(/ui/obj/v2/parchment.webp) 0 0 / 180px;
   border-radius: 3px; box-shadow: inset 0 0 6px rgb(110 70 28 / .5), 0 2px 4px rgb(0 0 0 / .45); }
 .modal.shop .lot:nth-child(even) .lot-price { rotate: 2deg; }
 .modal.shop .lot-price::before { content: ''; position: absolute; left: 7px; bottom: 50%; width: 1.5px; height: 22px; background: linear-gradient(#5a3a1a, #a07a4a); transform-origin: bottom; rotate: 12deg; z-index: -1; }
@@ -2932,8 +2932,8 @@ body:has(#world.still) .g-grain { display: none; }
    место на круге задаёт угол --a (90° — низ, моё место); стул повёрнут спинкой от стола, перед героем — кружка,
    табличка с именем — на спинке стула, со стороны от стола */
 .tavern { position: relative; width: 100%; aspect-ratio: 16 / 9; max-height: 64vh; min-height: 420px; margin: 4px auto 46px;
-  --rx: 35%; --ry: 36%; --ava: 96px; --chair: 214px; --mug: 50px; --mx: 98px; --my: 78px; --px: 108px; --py: 70px; --co: 20px; }
-.tv-table { position: absolute; left: 50%; top: 50%; width: min(66%, calc(64vh * 16 / 9 * .66)); translate: -50% -50%; pointer-events: none; user-select: none;
+  --rx: 35%; --ry: 36%; --ava: 96px; --chair: 172px; --mug: 58px; --mx: 98px; --my: 78px; --px: 108px; --py: 70px; --co: 20px; }
+.tv-table { position: absolute; left: 50%; top: 50%; width: min(56%, calc(64vh * 16 / 9 * .56)); translate: -50% -50%; pointer-events: none; user-select: none;
   filter: drop-shadow(0 18px 26px rgb(0 0 0 / .45)); }
 .tv-props { position: absolute; left: 50%; top: 50%; width: 0; height: 0; pointer-events: none; }
 .tavern .tv-prop { position: absolute; translate: -50% -50%; }
@@ -2948,7 +2948,7 @@ body:has(#world.still) .g-grain { display: none; }
   left: calc(50% + var(--rx) * cos(var(--a))); top: calc(50% + var(--ry) * sin(var(--a))); }
 /* стул чуть отодвинут от стола: герой сидит на передней части сиденья, спинка видна за портретом */
 .tv-chair { position: absolute; left: calc(cos(var(--a)) * var(--co)); top: calc(sin(var(--a)) * var(--co)); width: var(--chair); aspect-ratio: 1; translate: -50% -50%; rotate: calc(var(--a) - 90deg);
-  background: url(/ui/obj/v1/chair.webp) center / contain no-repeat; pointer-events: none; filter: brightness(1.3) saturate(1.1); }
+  background: url(/ui/obj/v2/chair.webp) center / contain no-repeat; pointer-events: none; }
 .tv-mug { position: absolute; left: calc(-1 * cos(var(--a)) * var(--mx)); top: calc(-1 * sin(var(--a)) * var(--my)); width: var(--mug); translate: -50% -60%;
   filter: drop-shadow(0 5px 5px rgb(0 0 0 / .4)); pointer-events: none; animation: tvMug .5s cubic-bezier(.2, .9, .3, 1.3) both; }
 @keyframes tvMug { from { scale: .2; opacity: 0; } }
@@ -2957,8 +2957,8 @@ body:has(#world.still) .g-grain { display: none; }
 @keyframes tvSit { from { scale: .6; opacity: 0; } }
 .tavern .tv-seat.me .ava { box-shadow: 0 0 0 3px rgb(var(--torch) / .7), 0 0 26px rgb(var(--torch) / .55), 0 12px 22px rgb(0 0 0 / .55); }
 .tv-plate { position: absolute; left: calc(cos(var(--a)) * var(--px)); top: calc(sin(var(--a)) * var(--py)); translate: -50% -50%; width: max-content; z-index: 3; display: grid; justify-items: center; gap: 0; white-space: nowrap;
-  padding: 3px 12px 4px; border: 1px solid transparent; border-image: url(/ui/obj/v1/plate-iron.webp?v=2) 36 fill / 9px stretch; filter: drop-shadow(0 3px 3px rgb(0 0 0 / .55)); }
-.tavern .tv-seat.me .tv-plate { border-image-source: url(/ui/obj/v1/plate-brass.webp?v=2); }
+  padding: 3px 12px 4px; border: 1px solid transparent; border-image: url(/ui/obj/v2/plate-iron.webp) 46 fill / 9px stretch; filter: drop-shadow(0 3px 3px rgb(0 0 0 / .55)); }
+.tavern .tv-seat.me .tv-plate { border-image-source: url(/ui/obj/v2/plate-brass.webp); }
 .tavern .tv-seat .sname { font-family: var(--display); font-weight: 700; font-size: 16px; line-height: 1.15; color: #f2e6cf; text-shadow: 0 -1px 0 rgb(0 0 0 / .8); max-width: 15ch; overflow: hidden; text-overflow: ellipsis; }
 .tavern .tv-seat .stag { font-size: 11.5px; line-height: 1.1; color: #c9b998; text-shadow: 0 -1px 0 rgb(0 0 0 / .7); }
 .tavern .tv-seat.me .sname { color: #2a1604; text-shadow: 0 1px 0 rgb(255 232 170 / .5); }
@@ -2968,11 +2968,11 @@ body:has(#world.still) .g-grain { display: none; }
 .tavern .emptyseat .btn, .tavern .emptyseat .tv-free { position: absolute; left: 0; top: 0; translate: -50% -50%; z-index: 2; white-space: nowrap; }
 .tv-free { font: 600 12.5px/1 var(--ui); color: #e6d6b6; padding: 5px 10px; border-radius: 3px; background: rgb(20 12 6 / .62); box-shadow: 0 0 0 1px rgb(214 168 90 / .3); }
 .tavern .tv-seat.speaking .ava { box-shadow: 0 0 0 3px #8ff0d2, 0 0 22px rgb(143 240 210 / .9); }
-@media (max-width: 1200px) { .tavern { --ava: 84px; --chair: 186px; --mx: 88px; --my: 70px; --px: 98px; --py: 64px; --co: 16px; } }
+@media (max-width: 1200px) { .tavern { --ava: 84px; --chair: 150px; --mx: 88px; --my: 70px; --px: 98px; --py: 64px; --co: 16px; } }
 /* телефон: стол стоит вдоль экрана, места — по вытянутому овалу */
 @media (max-width: 700px) {
-  .tavern { aspect-ratio: 3 / 4; max-height: none; min-height: 0; margin: 30px auto 34px; --rx: 33%; --ry: 37%; --ava: 62px; --chair: 132px; --mug: 32px; --mx: 58px; --my: 66px; --px: 64px; --py: 50px; --co: 12px; }
-  .tv-table { width: 104%; rotate: 90deg; }
+  .tavern { aspect-ratio: 3 / 4; max-height: none; min-height: 0; margin: 30px auto 34px; --rx: 33%; --ry: 37%; --ava: 62px; --chair: 112px; --mug: 38px; --mx: 58px; --my: 66px; --px: 64px; --py: 50px; --co: 12px; }
+  .tv-table { width: 92%; rotate: 90deg; }
   .tv-candles { width: 70px; left: -6px; top: -26px; } .tv-dice { width: 44px; left: 30px; top: 56px; } .tv-coins { width: 46px; left: -40px; top: 60px; } .tv-scroll { width: 64px; left: 10px; top: -96px; rotate: 72deg; }
   .tavern .tv-seat .sname { font-size: 13.5px; max-width: 11ch; } .tavern .tv-seat .stag { font-size: 10.5px; }
   .tv-plate { padding: 2px 8px 3px; border-image-width: 7px; left: 0; top: calc(var(--ava) / 2 + 14px); } /* узко: табличка всегда под портретом */
@@ -2983,15 +2983,15 @@ body:has(#world.still) .g-grain { display: none; }
 
 /* настройки комнаты — лист пергамента на столе хозяина; разделы — кованые таблички */
 .lobby .settings { position: relative; max-width: 560px; padding: 18px 22px 20px; color: #34230f; text-shadow: none;
-  background: linear-gradient(180deg, rgb(70 40 14 / .25), rgb(70 40 14 / 0) 26px), url(/ui/obj/v1/parchment.webp) 0 0 / 256px;
+  background: linear-gradient(180deg, rgb(70 40 14 / .25), rgb(70 40 14 / 0) 26px), url(/ui/obj/v2/parchment.webp) 0 0 / 256px;
   box-shadow: inset 0 0 34px rgb(120 72 28 / .5), 0 18px 30px -12px rgb(0 0 0 / .7); rotate: -.4deg; }
 .lobby .settings h3 { color: #34230f; text-shadow: none; }
 .lobby .settings .muted { color: #6b5134 !important; text-shadow: none; }
 .lobby .settings .seg { display: flex; flex-wrap: wrap; gap: 6px; border: 0; background: none; box-shadow: none; overflow: visible; }
-.lobby .settings .seg button { min-height: 34px; padding: 4px 12px; background: none; border: 1px solid transparent; box-shadow: none !important; border-image: url(/ui/obj/v1/plate-iron.webp?v=2) 36 fill / 9px stretch;
+.lobby .settings .seg button { min-height: 34px; padding: 4px 12px; background: none; border: 1px solid transparent; box-shadow: none !important; border-image: url(/ui/obj/v2/plate-iron.webp) 46 fill / 9px stretch;
   color: #e9dcc4; text-shadow: 0 -1px 0 rgb(0 0 0 / .8); filter: drop-shadow(0 2px 2px rgb(0 0 0 / .4)); }
 .lobby .settings .seg button:hover { filter: brightness(1.15) drop-shadow(0 2px 2px rgb(0 0 0 / .4)); }
-.lobby .settings .seg button[aria-pressed=true] { border-image-source: url(/ui/obj/v1/plate-brass.webp?v=2); color: #2a1604; text-shadow: 0 1px 0 rgb(255 232 170 / .5); }
+.lobby .settings .seg button[aria-pressed=true] { border-image-source: url(/ui/obj/v2/plate-brass.webp); color: #2a1604; text-shadow: 0 1px 0 rgb(255 232 170 / .5); }
 .lobby .settings .seg button .gi { color: inherit; }
 .lobby .startbar .muted { text-shadow: 0 1px 2px rgb(0 0 0 / .9); }
 @media (max-width: 700px) { .lobby .settings { padding: 16px 14px 18px; rotate: 0deg; } }
@@ -3000,45 +3000,45 @@ body:has(#world.still) .g-grain { display: none; }
    таверна — доски и дуб, сокровищница — бархат и эбен, поляна — мох и берёза, кузня — сталь, лёд — лёд, кладбище — камень,
    небесная — тёмный мрамор и белый мрамор с золотом, бухта — морская карта и корабельный брус, библиотека — звёздный атлас
    и красное дерево, оазис — ковёр и песчаник, станция — рифлёная ржавая сталь, роща — грибница и кора, Кощей — чёрный камень */
-.cave[data-loc="loc_tavern"] .tb-mat { background-image: radial-gradient(ellipse 75% 70% at 50% 46%, rgb(var(--tb-tint, 255 200 140) / .07), transparent 70%), url(/ui/table/v1/mat-tavern.webp); }
-.cave[data-loc="loc_dungeon"] .tb-mat { background-image: radial-gradient(ellipse 75% 70% at 50% 46%, rgb(var(--tb-tint, 255 200 140) / .07), transparent 70%), url(/ui/table/v1/mat-dungeon.webp); }
-.cave[data-loc="loc_dungeon"] .tb-frame { border-image-source: url(/ui/table/v1/frame-ebony.webp); }
-.cave[data-loc="loc_glade"] .tb-mat { background-image: radial-gradient(ellipse 75% 70% at 50% 46%, rgb(var(--tb-tint, 255 200 140) / .07), transparent 70%), url(/ui/table/v1/mat-glade.webp); }
-.cave[data-loc="loc_glade"] .tb-frame { border-image-source: url(/ui/table/v1/frame-birch.webp); }
-.cave[data-loc="loc_forge"] .tb-mat { background-image: radial-gradient(ellipse 75% 70% at 50% 46%, rgb(var(--tb-tint, 255 200 140) / .07), transparent 70%), url(/ui/table/v1/mat-forge.webp); }
-.cave[data-loc="loc_forge"] .tb-frame { border-image-source: url(/ui/table/v1/frame-steel.webp); }
-.cave[data-loc="loc_ice"] .tb-mat { background-image: radial-gradient(ellipse 75% 70% at 50% 46%, rgb(var(--tb-tint, 255 200 140) / .07), transparent 70%), url(/ui/table/v1/mat-ice.webp); }
-.cave[data-loc="loc_ice"] .tb-frame { border-image-source: url(/ui/table/v1/frame-ice.webp); }
-.cave[data-loc="loc_graveyard"] .tb-mat { background-image: radial-gradient(ellipse 75% 70% at 50% 46%, rgb(var(--tb-tint, 255 200 140) / .07), transparent 70%), url(/ui/table/v1/mat-graveyard.webp); }
-.cave[data-loc="loc_graveyard"] .tb-frame { border-image-source: url(/ui/table/v1/frame-stone.webp); }
-.cave[data-loc="loc_sky"] .tb-mat { background-image: radial-gradient(ellipse 75% 70% at 50% 46%, rgb(var(--tb-tint, 255 200 140) / .07), transparent 70%), url(/ui/table/v1/mat-sky.webp); }
-.cave[data-loc="loc_sky"] .tb-frame { border-image-source: url(/ui/table/v1/frame-marble.webp); }
-.cave[data-loc="loc_cove"] .tb-mat { background-image: radial-gradient(ellipse 75% 70% at 50% 46%, rgb(var(--tb-tint, 255 200 140) / .07), transparent 70%), url(/ui/table/v1/mat-cove.webp); }
-.cave[data-loc="loc_cove"] .tb-frame { border-image-source: url(/ui/table/v1/frame-ship.webp); }
-.cave[data-loc="loc_library"] .tb-mat { background-image: radial-gradient(ellipse 75% 70% at 50% 46%, rgb(var(--tb-tint, 255 200 140) / .07), transparent 70%), url(/ui/table/v1/mat-library.webp); }
-.cave[data-loc="loc_library"] .tb-frame { border-image-source: url(/ui/table/v1/frame-mahogany.webp); }
-.cave[data-loc="loc_oasis"] .tb-mat { background-image: radial-gradient(ellipse 75% 70% at 50% 46%, rgb(var(--tb-tint, 255 200 140) / .07), transparent 70%), url(/ui/table/v1/mat-oasis.webp); }
-.cave[data-loc="loc_oasis"] .tb-frame { border-image-source: url(/ui/table/v1/frame-sand.webp); }
-.cave[data-loc="loc_flooded"] .tb-mat { background-image: radial-gradient(ellipse 75% 70% at 50% 46%, rgb(var(--tb-tint, 255 200 140) / .07), transparent 70%), url(/ui/table/v1/mat-flooded.webp); }
-.cave[data-loc="loc_flooded"] .tb-frame { border-image-source: url(/ui/table/v1/frame-rust.webp); }
-.cave[data-loc="loc_grove"] .tb-mat { background-image: radial-gradient(ellipse 75% 70% at 50% 46%, rgb(var(--tb-tint, 255 200 140) / .07), transparent 70%), url(/ui/table/v1/mat-grove.webp); }
-.cave[data-loc="loc_grove"] .tb-frame { border-image-source: url(/ui/table/v1/frame-bark.webp); }
-.cave[data-loc="loc_koschei"] .tb-mat { background-image: radial-gradient(ellipse 75% 70% at 50% 46%, rgb(var(--tb-tint, 255 200 140) / .07), transparent 70%), url(/ui/table/v1/mat-koschei.webp); }
-.cave[data-loc="loc_koschei"] .tb-frame { border-image-source: url(/ui/table/v1/frame-black.webp); }
+.cave[data-loc="loc_tavern"] .tb-mat { background-image: radial-gradient(ellipse 75% 70% at 50% 46%, rgb(var(--tb-tint, 255 200 140) / .07), transparent 70%), url(/ui/table/v2/mat-tavern.webp); }
+.cave[data-loc="loc_dungeon"] .tb-mat { background-image: radial-gradient(ellipse 75% 70% at 50% 46%, rgb(var(--tb-tint, 255 200 140) / .07), transparent 70%), url(/ui/table/v2/mat-dungeon.webp); }
+.cave[data-loc="loc_dungeon"] .tb-frame { border-image-source: url(/ui/table/v2/frame-ebony.webp); }
+.cave[data-loc="loc_glade"] .tb-mat { background-image: radial-gradient(ellipse 75% 70% at 50% 46%, rgb(var(--tb-tint, 255 200 140) / .07), transparent 70%), url(/ui/table/v2/mat-glade.webp); }
+.cave[data-loc="loc_glade"] .tb-frame { border-image-source: url(/ui/table/v2/frame-birch.webp); }
+.cave[data-loc="loc_forge"] .tb-mat { background-image: radial-gradient(ellipse 75% 70% at 50% 46%, rgb(var(--tb-tint, 255 200 140) / .07), transparent 70%), url(/ui/table/v2/mat-forge.webp); }
+.cave[data-loc="loc_forge"] .tb-frame { border-image-source: url(/ui/table/v2/frame-steel.webp); }
+.cave[data-loc="loc_ice"] .tb-mat { background-image: radial-gradient(ellipse 75% 70% at 50% 46%, rgb(var(--tb-tint, 255 200 140) / .07), transparent 70%), url(/ui/table/v2/mat-ice.webp); }
+.cave[data-loc="loc_ice"] .tb-frame { border-image-source: url(/ui/table/v2/frame-ice.webp); }
+.cave[data-loc="loc_graveyard"] .tb-mat { background-image: radial-gradient(ellipse 75% 70% at 50% 46%, rgb(var(--tb-tint, 255 200 140) / .07), transparent 70%), url(/ui/table/v2/mat-graveyard.webp); }
+.cave[data-loc="loc_graveyard"] .tb-frame { border-image-source: url(/ui/table/v2/frame-stone.webp); }
+.cave[data-loc="loc_sky"] .tb-mat { background-image: radial-gradient(ellipse 75% 70% at 50% 46%, rgb(var(--tb-tint, 255 200 140) / .07), transparent 70%), url(/ui/table/v2/mat-sky.webp); }
+.cave[data-loc="loc_sky"] .tb-frame { border-image-source: url(/ui/table/v2/frame-marble.webp); }
+.cave[data-loc="loc_cove"] .tb-mat { background-image: radial-gradient(ellipse 75% 70% at 50% 46%, rgb(var(--tb-tint, 255 200 140) / .07), transparent 70%), url(/ui/table/v2/mat-cove.webp); }
+.cave[data-loc="loc_cove"] .tb-frame { border-image-source: url(/ui/table/v2/frame-ship.webp); }
+.cave[data-loc="loc_library"] .tb-mat { background-image: radial-gradient(ellipse 75% 70% at 50% 46%, rgb(var(--tb-tint, 255 200 140) / .07), transparent 70%), url(/ui/table/v2/mat-library.webp); }
+.cave[data-loc="loc_library"] .tb-frame { border-image-source: url(/ui/table/v2/frame-mahogany.webp); }
+.cave[data-loc="loc_oasis"] .tb-mat { background-image: radial-gradient(ellipse 75% 70% at 50% 46%, rgb(var(--tb-tint, 255 200 140) / .07), transparent 70%), url(/ui/table/v2/mat-oasis.webp); }
+.cave[data-loc="loc_oasis"] .tb-frame { border-image-source: url(/ui/table/v2/frame-sand.webp); }
+.cave[data-loc="loc_flooded"] .tb-mat { background-image: radial-gradient(ellipse 75% 70% at 50% 46%, rgb(var(--tb-tint, 255 200 140) / .07), transparent 70%), url(/ui/table/v2/mat-flooded.webp); }
+.cave[data-loc="loc_flooded"] .tb-frame { border-image-source: url(/ui/table/v2/frame-rust.webp); }
+.cave[data-loc="loc_grove"] .tb-mat { background-image: radial-gradient(ellipse 75% 70% at 50% 46%, rgb(var(--tb-tint, 255 200 140) / .07), transparent 70%), url(/ui/table/v2/mat-grove.webp); }
+.cave[data-loc="loc_grove"] .tb-frame { border-image-source: url(/ui/table/v2/frame-bark.webp); }
+.cave[data-loc="loc_koschei"] .tb-mat { background-image: radial-gradient(ellipse 75% 70% at 50% 46%, rgb(var(--tb-tint, 255 200 140) / .07), transparent 70%), url(/ui/table/v2/mat-koschei.webp); }
+.cave[data-loc="loc_koschei"] .tb-frame { border-image-source: url(/ui/table/v2/frame-black.webp); }
 @media (max-width: 900px) {
-  .cave[data-loc="loc_tavern"] .tb-mat { background-image: radial-gradient(ellipse 75% 70% at 50% 46%, rgb(var(--tb-tint, 255 200 140) / .07), transparent 70%), url(/ui/table/v1/mat-tavern-1200.webp); }
-  .cave[data-loc="loc_dungeon"] .tb-mat { background-image: radial-gradient(ellipse 75% 70% at 50% 46%, rgb(var(--tb-tint, 255 200 140) / .07), transparent 70%), url(/ui/table/v1/mat-dungeon-1200.webp); }
-  .cave[data-loc="loc_glade"] .tb-mat { background-image: radial-gradient(ellipse 75% 70% at 50% 46%, rgb(var(--tb-tint, 255 200 140) / .07), transparent 70%), url(/ui/table/v1/mat-glade-1200.webp); }
-  .cave[data-loc="loc_forge"] .tb-mat { background-image: radial-gradient(ellipse 75% 70% at 50% 46%, rgb(var(--tb-tint, 255 200 140) / .07), transparent 70%), url(/ui/table/v1/mat-forge-1200.webp); }
-  .cave[data-loc="loc_ice"] .tb-mat { background-image: radial-gradient(ellipse 75% 70% at 50% 46%, rgb(var(--tb-tint, 255 200 140) / .07), transparent 70%), url(/ui/table/v1/mat-ice-1200.webp); }
-  .cave[data-loc="loc_graveyard"] .tb-mat { background-image: radial-gradient(ellipse 75% 70% at 50% 46%, rgb(var(--tb-tint, 255 200 140) / .07), transparent 70%), url(/ui/table/v1/mat-graveyard-1200.webp); }
-  .cave[data-loc="loc_sky"] .tb-mat { background-image: radial-gradient(ellipse 75% 70% at 50% 46%, rgb(var(--tb-tint, 255 200 140) / .07), transparent 70%), url(/ui/table/v1/mat-sky-1200.webp); }
-  .cave[data-loc="loc_cove"] .tb-mat { background-image: radial-gradient(ellipse 75% 70% at 50% 46%, rgb(var(--tb-tint, 255 200 140) / .07), transparent 70%), url(/ui/table/v1/mat-cove-1200.webp); }
-  .cave[data-loc="loc_library"] .tb-mat { background-image: radial-gradient(ellipse 75% 70% at 50% 46%, rgb(var(--tb-tint, 255 200 140) / .07), transparent 70%), url(/ui/table/v1/mat-library-1200.webp); }
-  .cave[data-loc="loc_oasis"] .tb-mat { background-image: radial-gradient(ellipse 75% 70% at 50% 46%, rgb(var(--tb-tint, 255 200 140) / .07), transparent 70%), url(/ui/table/v1/mat-oasis-1200.webp); }
-  .cave[data-loc="loc_flooded"] .tb-mat { background-image: radial-gradient(ellipse 75% 70% at 50% 46%, rgb(var(--tb-tint, 255 200 140) / .07), transparent 70%), url(/ui/table/v1/mat-flooded-1200.webp); }
-  .cave[data-loc="loc_grove"] .tb-mat { background-image: radial-gradient(ellipse 75% 70% at 50% 46%, rgb(var(--tb-tint, 255 200 140) / .07), transparent 70%), url(/ui/table/v1/mat-grove-1200.webp); }
-  .cave[data-loc="loc_koschei"] .tb-mat { background-image: radial-gradient(ellipse 75% 70% at 50% 46%, rgb(var(--tb-tint, 255 200 140) / .07), transparent 70%), url(/ui/table/v1/mat-koschei-1200.webp); }
+  .cave[data-loc="loc_tavern"] .tb-mat { background-image: radial-gradient(ellipse 75% 70% at 50% 46%, rgb(var(--tb-tint, 255 200 140) / .07), transparent 70%), url(/ui/table/v2/mat-tavern-1024.webp); }
+  .cave[data-loc="loc_dungeon"] .tb-mat { background-image: radial-gradient(ellipse 75% 70% at 50% 46%, rgb(var(--tb-tint, 255 200 140) / .07), transparent 70%), url(/ui/table/v2/mat-dungeon-1024.webp); }
+  .cave[data-loc="loc_glade"] .tb-mat { background-image: radial-gradient(ellipse 75% 70% at 50% 46%, rgb(var(--tb-tint, 255 200 140) / .07), transparent 70%), url(/ui/table/v2/mat-glade-1024.webp); }
+  .cave[data-loc="loc_forge"] .tb-mat { background-image: radial-gradient(ellipse 75% 70% at 50% 46%, rgb(var(--tb-tint, 255 200 140) / .07), transparent 70%), url(/ui/table/v2/mat-forge-1024.webp); }
+  .cave[data-loc="loc_ice"] .tb-mat { background-image: radial-gradient(ellipse 75% 70% at 50% 46%, rgb(var(--tb-tint, 255 200 140) / .07), transparent 70%), url(/ui/table/v2/mat-ice-1024.webp); }
+  .cave[data-loc="loc_graveyard"] .tb-mat { background-image: radial-gradient(ellipse 75% 70% at 50% 46%, rgb(var(--tb-tint, 255 200 140) / .07), transparent 70%), url(/ui/table/v2/mat-graveyard-1024.webp); }
+  .cave[data-loc="loc_sky"] .tb-mat { background-image: radial-gradient(ellipse 75% 70% at 50% 46%, rgb(var(--tb-tint, 255 200 140) / .07), transparent 70%), url(/ui/table/v2/mat-sky-1024.webp); }
+  .cave[data-loc="loc_cove"] .tb-mat { background-image: radial-gradient(ellipse 75% 70% at 50% 46%, rgb(var(--tb-tint, 255 200 140) / .07), transparent 70%), url(/ui/table/v2/mat-cove-1024.webp); }
+  .cave[data-loc="loc_library"] .tb-mat { background-image: radial-gradient(ellipse 75% 70% at 50% 46%, rgb(var(--tb-tint, 255 200 140) / .07), transparent 70%), url(/ui/table/v2/mat-library-1024.webp); }
+  .cave[data-loc="loc_oasis"] .tb-mat { background-image: radial-gradient(ellipse 75% 70% at 50% 46%, rgb(var(--tb-tint, 255 200 140) / .07), transparent 70%), url(/ui/table/v2/mat-oasis-1024.webp); }
+  .cave[data-loc="loc_flooded"] .tb-mat { background-image: radial-gradient(ellipse 75% 70% at 50% 46%, rgb(var(--tb-tint, 255 200 140) / .07), transparent 70%), url(/ui/table/v2/mat-flooded-1024.webp); }
+  .cave[data-loc="loc_grove"] .tb-mat { background-image: radial-gradient(ellipse 75% 70% at 50% 46%, rgb(var(--tb-tint, 255 200 140) / .07), transparent 70%), url(/ui/table/v2/mat-grove-1024.webp); }
+  .cave[data-loc="loc_koschei"] .tb-mat { background-image: radial-gradient(ellipse 75% 70% at 50% 46%, rgb(var(--tb-tint, 255 200 140) / .07), transparent 70%), url(/ui/table/v2/mat-koschei-1024.webp); }
 }
 .tb-mat { transition: background-image .5s ease; }
 
@@ -3072,3 +3072,9 @@ body:has(#world.still) .g-grain { display: none; }
   .game #stage .versus .vs-emblem { display: none; }
   .game #stage .versus { min-height: 0; gap: 6px; justify-content: center; justify-self: center; align-self: center; width: 100%; }
 }
+
+/* предметы v2 (art/gen/import.py): кинжал нарисован по диагонали — кладём его вдоль нижнего бруса рамы */
+.p-dagger.tp-b { width: 96px; bottom: -26px; }
+.p-dagger img { transform: rotate(-44deg); }
+.p-dagger.tp-b img[style*="scaleX(-1)"] { transform: scaleX(-1) rotate(-44deg); }
+@media (max-width: 900px) { .p-dagger.tp-b { width: 76px; bottom: -20px; } }

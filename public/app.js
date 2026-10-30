@@ -511,7 +511,7 @@ update.lobby = () => {
   const ang = i => `--a:${(90 + (i - mi) * 360 / n).toFixed(1)}deg`;
   const seats = r.members.map((m, i) => `
     <div class="seat tv-seat${m.id === r.me ? ' me' : ''}" style="--seat:${m.color};${ang(i)}" data-vmember="${m.id}">
-      <i class="tv-chair" aria-hidden="true"></i><img class="tv-mug" src="/ui/table/${TABLE_V}/mug.webp" alt="" decoding="async">
+      <i class="tv-chair" aria-hidden="true"></i><img class="tv-mug" src="/ui/obj/v2/mug-top.webp" alt="" decoding="async">
       ${m.id === r.me ? `<button class="ava ava-edit" data-act="avatar" aria-label="Настроить облик" title="Настроить облик">${avatarSVG(m.avatar, m.color)}<i>${ico('quill-ink')}</i></button>` : `<div class="ava">${avatarSVG(m.avatar, m.color)}</div>`}
       ${isHost && m.id !== r.me ? `<button class="btn ghost small kick" data-kick="${m.id}" title="Убрать из-за стола" aria-label="Убрать ${esc(m.name)}">${ico('cross-mark')}</button>` : ''}
       <div class="tv-plate"><div class="sname">${esc(m.name)}</div>
@@ -553,7 +553,7 @@ update.lobby = () => {
 function tavernTable() {
   const fl = TABLE_FLAMES.candles.map(([x, y, k]) => `<i class="tb-flame" style="left:${(x * 100).toFixed(1)}%;top:${(y * 100).toFixed(1)}%;--k:${k}"></i>`).join('');
   const prop = (n, cls, extra = '') => `<span class="tb-prop tv-prop ${cls}"><img src="/ui/table/${TABLE_V}/${n}.webp" alt="" decoding="async">${extra}</span>`;
-  return `<img class="tv-table" src="/ui/obj/v1/tavern-table.webp" alt="" decoding="async" aria-hidden="true">
+  return `<img class="tv-table" src="/ui/obj/v2/tavern-table.webp" alt="" decoding="async" aria-hidden="true">
     <div class="tv-props" aria-hidden="true">${prop('candles', 'tv-candles lit', fl)}${prop('dice', 'tv-dice')}${prop('coins', 'tv-coins')}${prop('scroll', 'tv-scroll')}</div>`;
 }
 
@@ -755,7 +755,7 @@ const SHIELD = side => {
 // ───────────────────────── стол-диорама ─────────────────────────
 // Стол отрендерен в Blender (art/table.py): кожаное поле с тиснением, дубовая рама с коваными уголками и предметы.
 // Набор предметов и цвет света — свои у каждой локации. Слой стола лежит под сценой и не перерисовывается с ней.
-const TABLE_V = 'v1';
+const TABLE_V = 'v2';   // v2 — предметы, нарисованные ChatGPT (art/gen/import.py)
 const TP = (n, slot, flip = false) => ({ n, slot, flip });
 const TABLE_PROPS = {
   default: [TP('candles', 'tl'), TP('dice', 'tr'), TP('coins', 'br'), TP('goblet', 'r'), TP('dagger', 'b')],
@@ -773,8 +773,8 @@ const TABLE_PROPS = {
   loc_grove: [TP('candles', 'tl'), TP('mushrooms', 'tr'), TP('coins', 'br'), TP('potion', 'r'), TP('dagger', 'b')],
   loc_koschei: [TP('candles', 'tl'), TP('egg', 'tr'), TP('coins', 'br'), TP('goblet', 'r'), TP('keys', 'b')],
 };
-// у свечей и лампы — живое пламя; координаты фитилей — в долях спрайта (art/table.py печатает их)
-const TABLE_FLAMES = { candles: [[0.284, 0.077, 1], [0.581, 0.156, 0.85], [0.448, 0.496, 0.75]], lamp: [[0.95, 0.145, 0.9]] };
+// у свечей и лампы — живое пламя; координаты фитилей — в долях спрайта (сняты по картинкам art/gen/import.py)
+const TABLE_FLAMES = { candles: [[0.367, 0.093, 1], [0.729, 0.308, 0.9], [0.496, 0.568, 0.85]], lamp: [[0.978, 0.62, 0.9]] };
 function syncTable(art) {
   const box = $('#tableProps');
   if (!box || box.dataset.loc === art) return;
