@@ -1157,6 +1157,64 @@ function renderStage() {
   }, { passive: true });
 }
 
+// ───────────── эмоции героев ─────────────
+// Кнопка-облачко у моего портрета открывает короткие фразы; выбранная всплывает пузырём у портрета у всех за столом,
+// портрет кивает. Чужие эмоции можно выключить. Порядок фраз совпадает с сервером (EMOTES_N).
+const EMOTES = ['Ну ты и жук!', 'Спасибо!', 'Ой…', 'Сейчас будет больно', 'Хорошая игра!', 'Ха-ха!', 'Подумаю…', 'Удачи!'];
+const emoteBubbles = new Map();
+function emoteAnchor(pid) {
+  if (pid === S.room?.me) return $('#meava');
+  const opp = document.querySelector(`[data-opp="${CSS.escape(pid)}"]`);
+  return opp?.querySelector('.ring') || opp || document.querySelector(`#stage .hero-pill[data-pid="${CSS.escape(pid)}"] .ring`);
+}
+function showEmote(pid, i) {
+  const text = EMOTES[i];
+  if (!text || document.hidden) return;
+  if (pid !== S.room?.me && LS.get('emotesOff', false)) return;
+  const el = emoteAnchor(pid);
+  const r = el?.getBoundingClientRect();
+  if (!r?.width) return;
+  emoteBubbles.get(pid)?.remove();
+  const b = document.createElement('div');
+  const below = r.top < 150;
+  b.className = 'emote-bubble' + (below ? ' below' : '');
+  b.textContent = text;
+  b.style.setProperty('--seat', pl(pid)?.color || '#e6c27a');
+  document.body.append(b);
+  const w = b.offsetWidth, x = Math.max(8 + w / 2, Math.min(innerWidth - 8 - w / 2, r.left + r.width / 2));
+  b.style.left = x + 'px';
+  b.style.top = (below ? r.bottom + 10 : r.top - 10) + 'px';
+  b.style.setProperty('--tail', (r.left + r.width / 2 - (x - w / 2)) + 'px');
+  emoteBubbles.set(pid, b);
+  el.animate([{ transform: 'none' }, { transform: 'rotate(-6deg) scale(1.06)', offset: 0.25 }, { transform: 'rotate(5deg) scale(1.04)', offset: 0.55 }, { transform: 'none' }], { duration: 560, easing: 'ease-in-out' });
+  sfx.play('pop', { gap: 0 });
+  setTimeout(() => { b.classList.add('gone'); setTimeout(() => { b.remove(); if (emoteBubbles.get(pid) === b) emoteBubbles.delete(pid); }, 300); }, 2600);
+}
+socket.on('emote', ({ pid, i } = {}) => { if (S.screen === 'game') showEmote(pid, i); });
+function closeEmotes() { document.querySelector('.emote-menu')?.remove(); }
+function openEmotes(btn) {
+  if (document.querySelector('.emote-menu')) return closeEmotes();
+  const m = document.createElement('div');
+  m.className = 'emote-menu';
+  m.setAttribute('role', 'menu');
+  m.innerHTML = EMOTES.map((t, i) => `<button type="button" role="menuitem" data-emote="${i}">${esc(t)}</button>`).join('')
+    + `<label class="emote-off"><input type="checkbox" ${LS.get('emotesOff', false) ? 'checked' : ''}> Не показывать чужие</label>`;
+  document.body.append(m);
+  const r = btn.getBoundingClientRect(), w = m.offsetWidth, h = m.offsetHeight;
+  m.style.left = Math.max(8, Math.min(innerWidth - w - 8, r.left)) + 'px';
+  m.style.top = (r.bottom + h + 8 < innerHeight ? r.bottom + 6 : Math.max(8, r.top - h - 6)) + 'px';
+  m.querySelector('input').addEventListener('change', e => LS.set('emotesOff', e.target.checked));
+  m.querySelector('button')?.focus({ preventScroll: true });
+}
+document.addEventListener('click', e => {
+  const t = e.target;
+  if (t.closest('.emote-btn')) { e.preventDefault(); openEmotes(t.closest('.emote-btn')); return; }
+  const em = t.closest('[data-emote]');
+  if (em) { socket.emit('emote', { i: Number(em.dataset.emote) }); closeEmotes(); return; }
+  if (!t.closest('.emote-menu')) closeEmotes();
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeEmotes(); });
+
 // ───────────── фитиль хода ─────────────
 // Когда игрок долго не делает ни одного действия, вдоль верхнего бруса рамы загорается фитиль и прогорает справа
 // налево; догорит — за игрока сходит автопилот. Видят все. Время считает сервер (S.room.fuse: когда загорится и
@@ -1563,7 +1621,7 @@ function renderMine() {
   const run = 5 - p.runBonus;
   el.innerHTML = `
     <div class="me-top" style="--seat:${p.color}" data-vmember="${p.id}">
-      <div class="me-ava${reactOf(p.id).cls}${tierCls(p)}" id="meava" style="${reactOf(p.id).st}" data-act="avatar" role="button" tabindex="0" title="Сменить портрет" aria-label="Сменить портрет">${avatarSVG(gAva(p), p.color)}</div>
+      <span class="me-ava-wrap"><div class="me-ava${reactOf(p.id).cls}${tierCls(p)}" id="meava" style="${reactOf(p.id).st}" data-act="avatar" role="button" tabindex="0" title="Сменить портрет" aria-label="Сменить портрет">${avatarSVG(gAva(p), p.color)}</div>${S.game?.phase === 'playing' ? `<button type="button" class="emote-btn" title="Сказать что-нибудь столу" aria-label="Эмоции" aria-haspopup="menu">${ico('talk')}</button>` : ''}</span>
       <div><div class="me-name">${esc(p.name)}</div>
         <div class="me-stats"><span class="lvl" title="Уровень">${p.level}</span><span class="pow" title="Сила: уровень и надетые вещи">${ico('crossed-swords')}${p.power}</span><span class="gold" data-act="market" role="button" title="Кошелёк: голды за проданные вещи и контракты, тратятся на рынке">${ico('two-coins')}${p.gold || 0}</span>
         <span class="badge" title="Сколько нужно выбросить на кубике, чтобы убежать">${p.classes.some(u => def(u).cls === 'warlock') ? 'побег всегда' : `побег ${run <= 1 ? 'всегда' : run > 6 ? 'никогда' : run + '+'}`}</span>

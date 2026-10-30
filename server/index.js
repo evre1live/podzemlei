@@ -378,6 +378,24 @@ function load() {
 }
 
 // ───────────────────────── игровой цикл ─────────────────────────
+// ───────────────────────── эмоции ─────────────────────────
+// Быстрые фразы у портрета («Ну ты и жук!», «Спасибо!»…): сервер только проверяет и рассылает столу, в чат и летопись
+// они не попадают. Не чаще раза в 1,8 с и не больше трёх за 10 с. Боты иногда отвечают на то, что с ними сделали.
+const EMOTES_N = 8;
+const emote = (r, pid, i) => io.to('room:' + r.id).to('watch:' + r.id).emit('emote', { pid, i });
+function botEmotes(r, fx0) {
+  const g = r.game;
+  if (!g?.fx) return;
+  const bot = id => !!id && r.members.some(m => m.id === id && m.isBot);
+  for (const f of g.fx.filter(x => x.id > fx0)) {
+    let pid = null, i = -1, p = 0;
+    if (f.kind === 'curse' && bot(f.pid) && f.by && !bot(f.by)) { pid = f.pid; i = 0; p = 0.35; }            // «Ну ты и жук!»
+    else if (f.kind === 'victory' && f.helper && bot(f.pid) && !bot(f.helper)) { pid = f.pid; i = 1; p = 0.6; } // «Спасибо!»
+    else if (f.kind === 'caught' && bot(f.pid)) { pid = f.pid; i = 2; p = 0.3; }                                 // «Ой…»
+    if (pid && Math.random() < p) setTimeout(() => emote(r, pid, i), 1400 + Math.random() * 1200);
+  }
+}
+
 // ───────────────────────── фитиль хода ─────────────────────────
 // Часы идут, только пока ход за живым игроком и ждут именно его: во время отсчёта «помешать», просьбы о помощи
 // и дуэли они стоят. Любое его действие или нажатие «я тут» (не больше STAYS раз за ход) заводит их заново.
@@ -453,6 +471,7 @@ function runRoom(r) {
     }
   }
   if (changed) {
+    botEmotes(r, fx0);
     const pad = cinePad(g, fx0);
     if (pad) r.nextBotAt = Math.max(r.nextBotAt || 0, t + BOT_DELAY_MS + pad);
     r.lastActive = t; broadcastRoom(r);
@@ -922,7 +941,7 @@ io.on('connection', socket => {
       const fx0 = r.game.fx?.at(-1)?.id || 0;
       const res = act(r.game, m.id, action, { rng, now: now() });
       cb(res);
-      if (res.ok) { r.lastActive = now(); r.nextBotAt = Math.max(r.nextBotAt || 0, now() + 600 + cinePad(r.game, fx0)); broadcastRoom(r); }
+      if (res.ok) { r.lastActive = now(); r.nextBotAt = Math.max(r.nextBotAt || 0, now() + 600 + cinePad(r.game, fx0)); broadcastRoom(r); botEmotes(r, fx0); }
     } catch (e) {
       console.error('act error', e);
       cb({ ok: false, error: 'Ошибка сервера' });
@@ -1027,6 +1046,17 @@ io.on('connection', socket => {
   });
 
   socket.on('ping:me', () => { const { m } = ctx(); if (m) m.lastSeen = now(); });
+  socket.on('emote', (p = {}) => {
+    const { r, m } = ctx();
+    if (!r || !m || !r.game) return;
+    const i = Number(p?.i);
+    if (!Number.isInteger(i) || i < 0 || i >= EMOTES_N) return;
+    const t = now();
+    const recent = (m.emoteAt || []).filter(x => t - x < 10000);
+    if (recent.length >= 3 || t - (recent.at(-1) || 0) < 1800) return;
+    m.emoteAt = [...recent, t];
+    emote(r, m.id, i);
+  });
   // «я тут»: игрок шевельнулся, пока горит его фитиль, — часы заводятся заново (не больше STAYS раз за ход)
   socket.on('turn:stay', () => {
     const { r, m } = ctx();
