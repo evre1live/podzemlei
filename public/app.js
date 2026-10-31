@@ -553,7 +553,7 @@ mount.lobby = () => {
         <span class="voice-ctl"></span>
         <button class="btn ghost small hud-btn" data-act="guide" title="Справочник карт" aria-label="Справочник карт">${ico('open-book')}<span class="lbl">Справочник</span></button>
         <button class="btn ghost small hud-btn" data-act="rules" title="Как играть" aria-label="Как играть">${ico('rule-book')}<span class="lbl">Как играть</span></button>
-        <button class="btn ghost small icon-btn sound-btn" data-act="sound" aria-label="Звук" title="Звук"></button>
+        <button class="btn ghost small icon-btn sound-btn" data-act="sound" aria-label="Настройки" title="Настройки: звук и изображение"></button>
         <button class="btn ghost small hud-btn" data-act="leave" title="Выйти из комнаты" aria-label="Выйти из комнаты">${ico('exit-door')}<span class="lbl">Выйти</span></button>
       </div>
     </header>
@@ -704,7 +704,7 @@ mount.game = () => {
         <span class="spacer"></span>
         <span class="voice-ctl"></span>
         <button class="btn ghost small side-toggle" data-act="sideToggle"><span class="long-label">Летопись и чат</span><span class="short">Чат</span></button>
-        <button class="btn ghost small icon-btn sound-btn" data-act="sound" aria-label="Звук" title="Звук"></button>
+        <button class="btn ghost small icon-btn sound-btn" data-act="sound" aria-label="Настройки" title="Настройки: звук и изображение"></button>
         <button class="btn ghost small hud-btn" data-act="rules" title="Правила" aria-label="Правила">${ico('rule-book')}<span class="lbl">Правила</span></button>
         <button class="btn ghost small hud-btn" data-act="menu" title="Меню" aria-label="Меню">${ico('hamburger-menu')}<span class="lbl">Меню</span></button>
       </div>
@@ -3873,13 +3873,17 @@ document.addEventListener('input', e => {
   vc.applyVolume(v.dataset.vvol);
 });
 
-// ───────────────────────── настройки звука ─────────────────────────
-const SPEAKER = on => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor"/>${on
-  ? '<path d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>'
-  : '<path d="M16.5 9.5l5 5M21.5 9.5l-5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>'}</svg>`;
+// ───────────────────────── настройки: звук и изображение ─────────────────────────
+// Наверху — шестерёнка настроек (там и звук, и всё про картинку). Если звук выключен, на шестерёнке — значок
+// перечёркнутого динамика, чтобы было видно, почему тихо
+const MUTED = ico('speaker-off', 'mute-mark');
 function soundIcons() {
   const on = sfx.state.on && sfx.state.vol > 0;
-  document.querySelectorAll('.sound-btn').forEach(b => { b.innerHTML = SPEAKER(on); b.setAttribute('aria-label', on ? 'Звук включён' : 'Звук выключен'); });
+  document.querySelectorAll('.sound-btn').forEach(b => {
+    b.innerHTML = ico('cog') + (on ? '' : MUTED);
+    b.classList.toggle('muted', !on);
+    b.setAttribute('aria-label', on ? 'Настройки' : 'Настройки (звук выключен)');
+  });
 }
 // живой фон: на слабых устройствах и при «уменьшить движение» по умолчанию неподвижный
 const liveBg = () => LS.get('liveBg', !(matchMedia('(prefers-reduced-motion: reduce)').matches || (navigator.hardwareConcurrency || 4) <= 2));
@@ -3887,14 +3891,16 @@ const applyBg = () => { $('#world').classList.toggle('still', !liveBg()); homeVi
 applyBg();
 function openSoundModal() {
   const s = sfx.state;
-  showOverlay(`<div class="modal" role="dialog" aria-label="Звук и эффекты" id="soundModal">
-    <h2>Звук и эффекты</h2>
+  showOverlay(`<div class="modal" role="dialog" aria-label="Настройки" id="soundModal">
+    <h2>Настройки</h2>
+    <h3 class="set-sec">${ico('speaker')}Звук</h3>
     <label class="check"><input type="checkbox" id="sndOn" ${s.on ? 'checked' : ''}> Звуки игры</label>
     <label>Громкость<input type="range" id="sndVol" min="0" max="1" step="0.05" value="${s.vol}"></label>
     <label class="check"><input type="checkbox" id="sndMus" ${s.mus ? 'checked' : ''}> Музыка локаций: своя тихая мелодия у каждой локации</label>
     <label>Громкость музыки<input type="range" id="sndMusVol" min="0" max="1" step="0.05" value="${s.musVol}"></label>
     <label class="check"><input type="checkbox" id="sndVoice" ${s.voice !== false ? 'checked' : ''}> Голоса: рассказчик, боссы и эмоции героев</label>
     <label class="check"><input type="checkbox" id="sndAmb" ${s.amb ? 'checked' : ''}> Атмосфера пещеры: гул, ветер и капли</label>
+    <h3 class="set-sec">${ico('eyeball')}Изображение</h3>
     <label class="check"><input type="checkbox" id="liveBg" ${liveBg() ? 'checked' : ''}> Живой фон: вода, снег, светлячки (на слабом телефоне лучше выключить)</label>
     <label class="check"><input type="checkbox" id="cineOn" ${cine.enabled ? 'checked' : ''}> Зрелищные сцены: двери, удары, разрубленные карты, салют</label>
     <label class="check"><input type="checkbox" id="depthOn" ${depthOn() ? 'checked' : ''}> Объёмные карты и портреты: рисунок «выходит» из рамки за курсором</label>
