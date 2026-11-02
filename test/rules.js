@@ -1504,7 +1504,7 @@ t('Колесо Подлеца: крутит не участник чужого 
   assert.match(A(s, 'p0', { type: 'wheel' }).error, /чужом бою/);
   assert.equal(view(s, 'p1').hints.wheel, true);
   A(s, 'p0', { type: 'fight' }); assert.ok(s.combat.winAt);
-  assert.equal(dice(s, 'p1', { type: 'wheel' }, 0.3).ok, true);      // сектор 4 — «+7»
+  assert.equal(dice(s, 'p1', { type: 'wheel' }, 0.19).ok, true);     // сектор 4 из 24 — «+7»
   assert.equal(q.gold, 1500);
   assert.equal(s.combat.winAt, null, 'вмешались — отсчёт заново');
   assert.match(A(s, 'p1', { type: 'wheel' }).error, /уже крутили/);
@@ -1515,15 +1515,21 @@ t('Колесо Подлеца: крутит не участник чужого 
   assert.match(A(t, 'p1', { type: 'wheel' }).error, /во время боя/);
 });
 
-t('Колесо Подлеца: 16 равных секторов — шанс исхода по числу секторов; что выпало, то и случилось', () => {
-  assert.equal(WHEEL_RING.length, 16);
-  assert.equal(WHEEL.reduce((a, w) => a + w.n, 0), 16);
+t('Колесо Подлеца: 24 равных сектора — шанс исхода по числу секторов; что выпало, то и случилось', () => {
+  assert.equal(WHEEL_RING.length, 24);
+  assert.equal(WHEEL.reduce((a, w) => a + w.n, 0), 24);
+  // колесо играет против бойца: монстры и их усиления — 20 секторов из 24, осечка и пшик — по одному
+  const n = id => WHEEL.find(w => w.id === id).n;
+  assert.equal(['mon7', 'mon10', 'mon20', 'monster', 'boss'].reduce((a, id) => a + n(id), 0), 20);
+  assert.equal(n('hero5'), 1); assert.equal(n('dud'), 1);
+  // одинаковые исходы не стоят рядом
+  assert.ok(WHEEL_RING.every((x, i) => x !== WHEEL_RING[(i + 1) % WHEEL_RING.length]));
   const spin = (slot, prep) => {
     const s = fresh(); const p = P(s, 'p0'), q = P(s, 'p1');
     p.level = 5; fight(s, 'm_mole#0'); q.gold = 1000; q.level = 4;
     if (prep) prep(s);
     const before = { ...combatNumbers(s), mons: s.combat.monsters.length, hand: q.hand.length };
-    assert.equal(dice(s, 'p1', { type: 'wheel' }, (slot + 0.5) / 16).ok, true);
+    assert.equal(dice(s, 'p1', { type: 'wheel' }, (slot + 0.5) / WHEEL_RING.length).ok, true);
     return { s, q, before, after: combatNumbers(s), f: s.fx.findLast(x => x.kind === 'wheel') };
   };
   const at = id => WHEEL_RING.findIndex(x => WHEEL[x].id === id);

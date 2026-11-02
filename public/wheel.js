@@ -1,5 +1,5 @@
 // Колесо Подлеца: рисунок колеса в SVG — один и тот же на столе (маленькое), в окне правил и в сцене вращения.
-// 16 равных секторов по WHEEL_RING (shared/cards.js): сколько секторов у исхода, такой у него и шанс.
+// Равные сектора по WHEEL_RING (shared/cards.js, сейчас 24): сколько секторов у исхода, такой у него и шанс.
 // Сектор i занимает угол [i·22,5°; (i+1)·22,5°) по часовой стрелке от 12 часов — так же считает сцена в cine.js.
 import { WHEEL, WHEEL_RING, WHEEL_SECTORS } from '/shared/cards.js';
 import { ICONS } from '/icons.js';
@@ -29,6 +29,11 @@ const icon = (name, r, deg, size, color) => {
   return `<g transform="translate(${f(x)} ${f(y)}) rotate(${f(deg)}) translate(${-size / 2} ${-size / 2}) scale(${size / 512})"><path fill="${color}" d="${ICONS[name] || ''}"/></g>`;
 };
 
+// значки и подписи — по ширине сектора: чем больше секторов, тем они мельче (длина дуги на радиусе r)
+const arc = r => r * 2 * Math.PI / WHEEL_SECTORS;
+const IR_BIG = 142, IS_BIG = Math.min(30, arc(IR_BIG) * 0.8);
+const IR_SMALL = 128, IS_SMALL = Math.min(44, arc(IR_SMALL) * 0.92);
+const FS_NUM = Math.min(22, arc(92) * 0.82), FS_WORD = Math.min(15, arc(92) * 0.6);
 let uid = 0;
 // big — с подписями и лампочками; small — только цветные сектора и значки (для стола)
 export function wheelSVG({ big = true, win = -1 } = {}) {
@@ -39,11 +44,11 @@ export function wheelSVG({ big = true, win = -1 } = {}) {
     const [x0, y0] = pt(RS, a0), [x1, y1] = pt(RS, a1);
     defs.push(`<radialGradient id="${id}g${i}" cx="${R}" cy="${R}" r="${RS}" gradientUnits="userSpaceOnUse"><stop offset=".25" stop-color="${L.c2}"/><stop offset=".78" stop-color="${L.c1}"/><stop offset="1" stop-color="${L.c2}"/></radialGradient>`);
     sec.push(`<path class="wh-sec${i === win ? ' win' : ''}" data-slot="${i}" d="M${R} ${R}L${f(x0)} ${f(y0)}A${RS} ${RS} 0 0 1 ${f(x1)} ${f(y1)}Z" fill="url(#${id}g${i})"/>`);
-    lab.push(icon(L.icon, big ? 140 : 118, mid, big ? 30 : 44, L.ink));
+    lab.push(icon(L.icon, big ? IR_BIG : IR_SMALL, mid, big ? IS_BIG : IS_SMALL, L.ink));
     if (big) {
       // подпись вдоль радиуса: читается от ступицы к ободу
       const [tx, ty] = pt(92, mid), num = /^\+/.test(w.label);
-      lab.push(`<text x="${f(tx)}" y="${f(ty)}" transform="rotate(${f(mid - 90)} ${f(tx)} ${f(ty)})" fill="${L.ink}" font-size="${num ? 22 : 15}" class="${num ? 'num' : 'word'}" text-anchor="middle" dominant-baseline="central">${w.label}</text>`);
+      lab.push(`<text x="${f(tx)}" y="${f(ty)}" transform="rotate(${f(mid - 90)} ${f(tx)} ${f(ty)})" fill="${L.ink}" font-size="${num ? FS_NUM : FS_WORD}" class="${num ? 'num' : 'word'}" text-anchor="middle" dominant-baseline="central">${w.label}</text>`);
     }
   });
   // латунные спицы-разделители

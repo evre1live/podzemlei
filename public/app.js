@@ -1,6 +1,6 @@
 // «Под Землёй» — клиент.
 import { def, RACE_NAMES, CLASS_NAMES, SETS, ALLY_SLOT_NAMES, ALLY_SLOT_TEXT, FEMME_LEVELS, REGULAR_DISCOUNT, setRuleVars, ruleText, BOSS_FLOOR, TROUBLE_BONUS, LULLABY_PENALTY, MUTAGEN_BONUS, DISTILL_COST,
-  PERSONAS, GHOST_BONUS, DEATH_LEVELS, DEPTH, DEPTH_TREASURE_EVERY, TRADE_TIMEOUT_MS, TAME_MARGIN, WARLOCK_TAME, WHEEL, WHEEL_COST, tameBonus, TRAP_FAIL_LEVELS, SHOP_CATS, dailyOf, dailyDate } from '/shared/cards.js';
+  PERSONAS, GHOST_BONUS, DEATH_LEVELS, DEPTH, DEPTH_TREASURE_EVERY, TRADE_TIMEOUT_MS, TAME_MARGIN, WARLOCK_TAME, WHEEL, WHEEL_COST, WHEEL_SECTORS, tameBonus, TRAP_FAIL_LEVELS, SHOP_CATS, dailyOf, dailyDate } from '/shared/cards.js';
 import { esc, cardHTML, chipHTML, avatarSVG, iconSVG, cardBackSVG, locationSVG, cardIcon, cardText, locImg, cardImgUrl } from '/art.js';
 import { CARD_IMG } from '/card-art.js';
 import { fx, preloadDice } from '/fx.js';
@@ -1417,7 +1417,7 @@ function openWheelModal() {
   const done = p && (c.wheel || []).some(w => w.by === p.id);
   const why = !p ? 'Вы зритель: смотреть можно, крутить — нет.' : mine ? 'Это ваш бой — колесо крутят соперники.' : p.dead ? 'Мёртвые колесо не крутят.' : done ? 'Вы уже крутили колесо в этом бою.' : (p.gold || 0) < WHEEL_COST ? `Нужно ${WHEEL_COST} г, а в кошельке ${p.gold || 0} г.` : '';
   popOpts = [{ fn: async () => { const r = await act({ type: 'wheel' }); if (r.ok) closeOverlay(); } }];
-  const rows = WHEEL.map(w => { const L = WHEEL_LOOK[w.id]; return `<li class="wl-row t-${L.tone}"><i style="--c1:${L.c1};--c2:${L.c2}">${ico(L.icon)}</i><b>${esc(w.name)}</b><span>${esc(w.text)}</span><em>${w.n} из 16 · ${wheelChance(w)} %</em></li>`; }).join('');
+  const rows = WHEEL.map(w => { const L = WHEEL_LOOK[w.id]; return `<li class="wl-row t-${L.tone}"><i style="--c1:${L.c1};--c2:${L.c2}">${ico(L.icon)}</i><b>${esc(w.name)}</b><span>${esc(w.text)}</span><em>${w.n} из ${WHEEL_SECTORS} · ${wheelChance(w)} %</em></li>`; }).join('');
   const spins = (c.wheel || []).map(w => `${esc(pname(w.by))} — ${esc(WHEEL.find(x => x.id === w.sector)?.name || '')}`).join(', ');
   showOverlay(`<div class="modal wheel-modal" role="dialog" aria-label="Колесо Подлеца">
     <div class="wl-head"><div class="wl-big">${wheelSVG()}<i class="wl-ptr"></i></div>
@@ -3198,7 +3198,7 @@ const RULES = () => `<div class="modal rules scroll" role="dialog" aria-label="�
   <h3>${ico('shop')}Кошелёк и подземный рынок</h3>
   <p>У каждого есть кошелёк: голды в него приходят за проданные вещи и выполненные контракты. Сколько голдов у вас, видите только вы — чужие кошельки скрыты. Рынок открыт всегда — кнопка в шапке стола. В свой ход вне боя на голды можно купить разовые карты для боя, зелья, проклятия, чтобы наслать на соперников, и «Получи уровень» (не больше одного за ход, последний уровень так не взять). Продаётся только то, что ещё лежит в колоде, поэтому товар кончается. У каждой локации своя ценовая политика: в таверне еда за полцены, в Звёздной библиотеке дешевле уровни и свитки, на кладбище — проклятия, а в Небесной цитадели уровни в полтора раза дороже. Цены локации написаны на её карте. Карты «Сокровища Атлантиды» и «Сундук мертвеца» (по одной в колоде) сразу кладут в кошелёк по 3000 голдов.</p>
   <h3>${ico('double-face-mask')}Колесо Подлеца</h3>
-  <p>Во время чужого боя на столе стоит Колесо Подлеца. Любой игрок, кроме бойца и помощника, может крутить его за ${WHEEL_COST} голдов — раз за бой. На колесе 16 равных секторов, и шанс исхода — ровно столько секторов, сколько ему отведено: +7 монстрам (4 из 16), +10 (3), +20 (1), ещё один монстр не ниже 10-го уровня (2), босс входит в комнату (1); осечка — +5 герою (2), сглаз — тот, кто крутил, теряет уровень (1), куш — он же берёт карту клада (1), пшик — ничего (1). Крутили колесо — отсчёт «помешать» начинается заново. Нажмите на колесо в бою, чтобы увидеть сектора.</p>
+  <p>Во время чужого боя на столе стоит Колесо Подлеца. Любой игрок, кроме бойца и помощника, может крутить его за ${WHEEL_COST} голдов — раз за бой. На колесе 24 равных сектора, и шанс исхода — ровно столько секторов, сколько ему отведено. Колесо играет против бойца: +7 монстрам (6 из 24), +10 (6), +20 (3), ещё один монстр не ниже 10-го уровня (4), босс входит в комнату (1). Редкие исходы — по одному сектору: осечка (+5 герою), сглаз (тот, кто крутил, теряет уровень), куш (он же берёт карту клада) и пшик (ничего). Крутили колесо — отсчёт «помешать» начинается заново. Нажмите на колесо в бою, чтобы увидеть сектора.</p>
   ${rulesFig('wheel')}
   <h3>${ico('wolf-trap')}Ловушки</h3>
   <p>Ловушка за дверью срабатывает на того, кто её открыл. Можно рискнуть и обезвредить — на кубике 4+ (плуту и механику 2+): тогда ловушка ваша и её можно подложить сопернику. Сорвалась — расплата и ещё −1 уровень. Можно не рисковать и просто принять расплату. Подложенную ловушку соперник обезвреживает тем же броском, но без лишнего штрафа. Противогаз и каска с канарейкой спасают от газа.</p>
