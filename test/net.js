@@ -308,7 +308,8 @@ A2.disconnect(); B3.disconnect();
 const W = await client();
 await W.call('lobby:watch');
 let ended = false; W.on('rooms', rs => { if (rs.find(x => x.id === code)?.status === 'ended') ended = true; });
-await until(() => ended, 90000, 'autopilot finish');
+// партия до победы идёт с паузами под сцены (колесо, бой); колесо теперь злее — партии чуть длиннее
+await until(() => ended, 150000, 'autopilot finish');
 ok('автопилот довёл партию до победы');
 
 // служебный код из главного меню закрывает все комнаты (в тесте — свой код через ADMIN_CODE)
