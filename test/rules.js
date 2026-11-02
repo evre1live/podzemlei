@@ -1424,14 +1424,38 @@ t('подземный рынок: за голды из кошелька, тол�
   assert.match(A(s, 'p1', { type: 'buy', id: 'k_flu' }).error, /не ваш ход/);
   // в таверне еда за полцены (но не дешевле цены продажи + 50), уровни дороже
   p.hand.push(take(s, 'loc_tavern#0')); A(s, 'p0', { type: 'playCard', uid: 'loc_tavern#0' });
-  assert.equal(item('o_kvass').price, 150); assert.equal(item('l_bribe').price, 1250);
+  assert.equal(item('o_kvass').price, 150);
+  // уровень дорожает для того, кто их уже покупал: второй — вдвое дороже; у других — обычная цена
+  assert.equal(item('l_bribe').price, 2500);
+  assert.equal(view(s, 'p1').shop.items.find(x => x.id === 'l_bribe').price, 1250);
   assert.equal(shopPrice(s, def('o_shawarma#0')), 350); // 600 × 0,5 = 300, но не ниже цены продажи (300) + 50
   assert.match(view(s, 'p0').shop.note, /Трактирщик/);
   // новый ход — снова можно купить уровень
   for (let i = 0; i < 3; i++) { s.turn.step = 'charity'; A(s, s.turn.pid, { type: 'endTurn' }); }
-  p.gold = 1300; s.turn.step = 'pre';
+  p.gold = 2600; s.turn.step = 'pre';
   assert.equal(A(s, 'p0', { type: 'buy', id: 'l_bribe' }).ok, true);
-  assert.equal(p.gold, 50);
+  assert.equal(p.gold, 100);
+});
+
+t('лавочник пополняет прилавок в начале круга: из сброса, только для покупки, не больше двух в раздел', () => {
+  const s = fresh(); const p = P(s, 'p0');
+  // вся еда — в сбросе: на рынке её нет
+  const food = [...s.decks.treasure, ...s.discard.treasure].filter(u => def(u).shop === 'food');
+  for (const u of food) { take(s, u); s.discard.treasure.push(u); }
+  const stock = () => view(s, 'p0').shop.items.filter(x => x.cat === 'food').reduce((a, x) => a + x.stock, 0);
+  assert.equal(stock(), 0);
+  // круг прошёл — лавочник выставил две карты еды из сброса
+  for (let i = 0; i < s.players.length; i++) { s.turn.step = 'charity'; A(s, s.turn.pid, { type: 'endTurn' }); }
+  assert.equal(stock(), 2);
+  assert.equal(s.shelf.length >= 2, true);
+  assert.ok(s.shelf.every(u => !s.decks.treasure.includes(u) && !s.discard.treasure.includes(u)), 'с прилавка карты не тянут');
+  assert.ok(s.log.some(l => l.text.startsWith('🛒 Лавочник пополнил прилавок') && l.text.includes('еда')));
+  // купить можно, и куплено с прилавка
+  const id = def(s.shelf.find(u => def(u).shop === 'food')).id;
+  p.gold = 1000; s.turn.pid = 'p0'; s.turn.idx = 0; s.turn.step = 'pre';
+  const before = s.shelf.length;
+  assert.equal(A(s, 'p0', { type: 'buy', id }).ok, true);
+  assert.equal(s.shelf.length, before - 1);
 });
 
 t('полурослик вдвое дороже продаёт только вещь, а разовую — по цене', () => {

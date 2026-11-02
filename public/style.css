@@ -3697,11 +3697,14 @@ body:has(#world.still) .g-grain { display: none; }
 @keyframes keeperIn { from { opacity: 0; transform: translateY(26px); } }
 .modal.shop .shop-head { position: relative; z-index: 2; padding-right: 150px; }
 .modal.shop .shop-head .wallet { margin-left: auto; }
+/* пояснение под заголовком не заходит под лавочника */
+.modal.shop .shop-how { position: relative; z-index: 2; padding-right: 150px; }
 .modal.shop .shop-web { position: absolute; z-index: 1; left: 0; bottom: 0; width: 120px; height: 120px; pointer-events: none; opacity: .55;
   background: url(/ui/obj/v3/cobweb.webp) center / contain no-repeat; transform: scaleY(-1); }
 @media (max-width: 700px) {
   .modal.shop .shop-keeper { width: 96px; right: 4px; top: -2px; }
   .modal.shop .shop-head { padding-right: 92px; }
+  .modal.shop .shop-how { padding-right: 0; }
   .modal.shop .shop-web { width: 80px; height: 80px; }
 }
 @media (prefers-reduced-motion: reduce) { .modal.shop .shop-keeper { animation: none; } }

@@ -10,7 +10,7 @@ const ALL = [...allUids('door'), ...allUids('treasure')];
 const junk = rng => [null, 1, -1, 'x', {}, [], [1], ['a#0'], NaN, '__proto__', 99999][Math.floor(rng() * 11)];
 const TOTAL = ALL.length;
 function count(s) {
-  const all = [...s.decks.door, ...s.decks.treasure, ...s.discard.door, ...s.discard.treasure];
+  const all = [...s.decks.door, ...s.decks.treasure, ...s.discard.door, ...s.discard.treasure, ...(s.shelf || [])];
   for (const p of s.players) all.push(...p.hand, ...p.equipped, ...p.carried, ...(p.allyGear || []), ...p.races, ...p.classes, ...[p.halfbreed, p.supermunch, p.ally, p.beast].filter(Boolean));
   if (s.trap) all.push(s.trap.uid);
   if (s.tame) all.push(s.tame.uid);

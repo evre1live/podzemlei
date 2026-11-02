@@ -2,7 +2,7 @@
 // Сервер хранит состояние, вызывает act()/tick() и рассылает view() каждому игроку.
 import { def, allUids, RACE_NAMES, CLASS_NAMES, ALLY_SLOT_TEXT, ruleText, BOSS_MULT, BOSS_MIN_LEVEL, BOSS_FLOOR, TROUBLE_BONUS, WITCHER_BONUS, MUTAGEN_BONUS, LULLABY_PENALTY, LULLABY_MAX, DISTILL_COST,
   DEPTH, DEPTH_TREASURE_EVERY, DEATH_LEVELS, GHOST_BONUS, CONTRACTS, CONTRACT_DEFS, SETS, rewardText,
-  TAME_MARGIN, WARLOCK_TAME, FEMME_LEVELS, REGULAR_SPEND, REGULAR_DISCOUNT, WHEEL_COST, WHEEL, WHEEL_RING, WHEEL_SECTORS, tameBonus, TRAP_ROLL, TRAP_SKILL, TRAP_FAIL_LEVELS, SHOP_IDS, shopCat, shopBase, roundPrice, dailyOf } from './cards.js';
+  TAME_MARGIN, WARLOCK_TAME, FEMME_LEVELS, REGULAR_SPEND, REGULAR_DISCOUNT, WHEEL_COST, WHEEL, WHEEL_RING, WHEEL_SECTORS, SHOP_FLOOR, SHOP_RESTOCK, LEVEL_PRICE_STEP, tameBonus, TRAP_ROLL, TRAP_SKILL, TRAP_FAIL_LEVELS, SHOP_IDS, shopCat, shopBase, roundPrice, dailyOf } from './cards.js';
 
 export const WIN_LEVEL = 10;
 // до какого уровня идёт партия: 10 по умолчанию, в лобби можно выбрать 15 или 20
@@ -40,7 +40,7 @@ export function createGame(seats, opts = {}, rng = Math.random) {
     discard: { door: [], treasure: [] },
     turn: { idx: 0, pid: null, step: 'pre', n: 0, halflingSold: false },
     combat: null, reveal: null, winners: [], location: null,
-    round: 0, depth: 0, trades: [], tradeSeq: 0, grudges: {}, trap: null, tame: null, duel: null,
+    round: 0, depth: 0, shelf: [], trades: [], tradeSeq: 0, grudges: {}, trap: null, tame: null, duel: null,
   };
   if (!WIN_LEVELS.includes(s.opts.winLevel)) s.opts.winLevel = WIN_LEVEL;
   for (const p of s.players) {
@@ -611,6 +611,7 @@ export const depthBonus = s => s.depth || 0;
 export const depthTreasure = s => Math.floor((s.depth || 0) / DEPTH_TREASURE_EVERY);
 function newRound(s, rng) {
   s.round = (s.round || 0) + 1;
+  restockShop(s, rng);
   if (s.round % depthEvery(s) || (s.depth || 0) >= depthMax(s)) return;
   s.depth = (s.depth || 0) + 1;
   fx(s, { kind: 'depth', depth: s.depth, treasure: depthTreasure(s) });
@@ -627,15 +628,40 @@ export function shopPrice(s, d, p = null) {
   const pr = locationOf(s)?.prices || {};
   let m = pr[shopCat(d)] ?? pr.all ?? 1;
   if (s.opts?.dailyId === 'fair') m *= 0.75;
+  // уровень дорожает для того, кто их уже покупал: 1000, 1500, 2000…
+  if (d.type === 'levelup' && p?.levelsBought) m *= 1 + LEVEL_PRICE_STEP * p.levelsBought;
   let v = roundPrice(shopBase(d) * m);
   if (isRegular(p)) v = roundPrice(v * (1 - REGULAR_DISCOUNT));
   // ниже цены продажи не опускается: купить и тут же продать с выгодой нельзя
   return Math.max(v, (d.value || 0) + 50);
 }
+// Лавочник пополняет прилавок в начале круга: раздел, где товара меньше нормы (SHOP_FLOOR), получает назад из сброса
+// карты своего раздела — по одной случайной, пока не дойдёт до нормы, но не больше SHOP_RESTOCK. Карты ложатся
+// на прилавок (s.shelf), а не в колоду: купить их можно, вытянуть — нет, так колоды не богатеют бесплатными
+// уровнями и зельями. Сколько и чего — в летописи, без названий.
+const SHOP_CAT_NAMES = { level: 'уровни', curse: 'проклятия', duel: 'поединки', food: 'еда', potion: 'зелья', gear: 'снаряжение', magic: 'магия' };
+function restockShop(s, rng) {
+  const back = [];
+  for (const [cat, floor] of Object.entries(SHOP_FLOOR)) {
+    const ids = SHOP_IDS.filter(id => shopCat(def(id)) === cat);
+    let have = ids.reduce((n, id) => n + shopStock(s, id), 0), n = 0;
+    while (have < floor && n < SHOP_RESTOCK) {
+      const pool = [...s.discard.door, ...s.discard.treasure].filter(u => ids.includes(baseId(u)));
+      if (!pool.length) break;
+      const u = pick(pool, rng);
+      without(s.discard[def(u).deck], u);
+      (s.shelf ||= []).push(u);
+      have++; n++;
+    }
+    if (n) back.push(SHOP_CAT_NAMES[cat]);
+  }
+  if (back.length) log(s, `🛒 Лавочник пополнил прилавок: ${back.join(', ')}.`, 'info');
+}
 // когда можно покупать: в свой ход вне боя, а Шопоголику — в любой момент, даже в бою
 export const buyErr = (s, p) => (isRegular(p) ? (p.dead ? 'Мёртвым на рынок нельзя' : null) : manageErr(s, p));
-const stockUid = (s, id) => s.decks[def(id).deck].find(u => baseId(u) === id) || null;
-export const shopStock = (s, id) => s.decks[def(id).deck].reduce((n, u) => n + (baseId(u) === id ? 1 : 0), 0);
+// товар — на прилавке (возвращённое лавочником) и в колоде; продаётся сперва с прилавка
+const stockUid = (s, id) => (s.shelf || []).find(u => baseId(u) === id) || s.decks[def(id).deck].find(u => baseId(u) === id) || null;
+export const shopStock = (s, id) => [...(s.shelf || []), ...s.decks[def(id).deck]].reduce((n, u) => n + (baseId(u) === id ? 1 : 0), 0);
 export const shopList = (s, p = null) => SHOP_IDS.map(id => { const d = def(id); return { id, cat: shopCat(d), price: shopPrice(s, d, p), base: shopBase(d), stock: shopStock(s, id) }; });
 
 // ───────────────────────── поединок ─────────────────────────
@@ -1828,7 +1854,7 @@ H.buy = {
     const e = buyErr(s, p); if (e) return e;
     if (!SHOP_IDS.includes(a.id)) return 'Такого на рынке не продают';
     const d = def(a.id);
-    if (!stockUid(s, a.id)) return 'Распродано: в колоде таких больше нет';
+    if (!stockUid(s, a.id)) return 'Распродано: таких больше нет — лавочник подвезёт из сброса в начале круга';
     if (d.type === 'levelup') {
       if (p.levelTurn === s.turn.n || (s.turn.boughtLevel && s.turn.pid === p.id && p.levelTurn === undefined)) return 'Уровень на рынке — один за ход';
       if (p.level >= winLevel(s) - 1) return 'Последний уровень — только убийством монстра';
@@ -1838,11 +1864,11 @@ H.buy = {
   },
   run(s, p, a) {
     const d = def(a.id), price = shopPrice(s, d, p), u = stockUid(s, a.id);
-    without(s.decks[d.deck], u);
+    without(s.shelf || [], u) || without(s.decks[d.deck], u);
     p.gold -= price;
     p.spent = (p.spent || 0) + price; // копится к статусу «Шопоголик»; в летопись не пишется
     p.hand.push(u);
-    if (d.type === 'levelup') { s.turn.boughtLevel = true; p.levelTurn = s.turn.n; }
+    if (d.type === 'levelup') { s.turn.boughtLevel = true; p.levelTurn = s.turn.n; p.levelsBought = (p.levelsBought || 0) + 1; }
     // покупка — тайна покупателя: в летопись не пишется, анимацию с названием карты видит только он сам
     fx(s, { kind: 'buy', pid: p.id, card: u, price, only: p.id });
   },
@@ -2211,7 +2237,7 @@ export function trickBuy(s, key, id) {
   if (!u) return { ok: false, error: 'Распродано: в колоде таких больше нет' };
   const price = shopPrice(s, d);
   if (t.gold < price) return { ok: false, error: `Нужно ${price} голдов, у вас ${t.gold}` };
-  without(s.decks[d.deck], u);
+  without(s.shelf || [], u) || without(s.decks[d.deck], u);
   t.gold -= price; t.hand.push(u);
   s.version++;
   return { ok: true, uid: u, price };
