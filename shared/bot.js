@@ -10,7 +10,10 @@ import { GHOST_BONUS } from './cards.js';
 // Характеры: осторожный реже ищет неприятности и помогает только наверняка, жадный рискует и торгуется,
 // мстительный помнит, кто ему мешал, и отвечает тем же.
 const persona = p => p.persona || 'normal';
-const TROUBLE_RATIO = { cautious: 0.8, greedy: 0.5, vengeful: 0.65, normal: 0.65 };
+// неприятности ищем, если по силам хотя бы такая доля монстров из окна глубины (турнир ботов: смелее — сильнее)
+const TROUBLE_RATIO = { cautious: 0.7, greedy: 0.45, vengeful: 0.55, normal: 0.5 };
+// монстра с руки зовём в свой бой, если он слабее нас хотя бы на столько
+const OWN_MARGIN = { cautious: 3, greedy: 1, vengeful: 1, normal: 1 };
 // кто больше всех насолил этому игроку (и насолил хоть раз)
 function worstEnemy(s, p) {
   let best = null, n = 0;
@@ -62,7 +65,9 @@ export function botDecide(s, pid, { rng = Math.random, now = Date.now() } = {}) 
     const worth = (per === 'greedy' ? c.helpReq.offer >= 2 : c.helpReq.offer > 0) || hasRace(p, 'elf');
     const sure = per !== 'cautious' || margin >= 2;
     const enemy = per === 'vengeful' && grudgeOf(s, p.id, f.id) > 0;
-    return { type: 'answerHelp', accept: !!(wouldWin && !givesGame && worth && sure && !enemy) };
+    // не подводим к самой победе того, кто нас обгоняет: после боя он встал бы в шаге от неё
+    const passMe = f.level + n.levels >= winLevel(s) - 1 && f.level + n.levels > p.level;
+    return { type: 'answerHelp', accept: !!(wouldWin && !givesGame && worth && sure && !enemy && !passMe) };
   }
   // нам предложили обмен
   const offer = (s.trades || []).find(o => o.to === pid);
@@ -171,7 +176,10 @@ function fighterMove(s, p, rng, now) {
       .sort((a, b) => a.str - b.str);
     if (cands.length && n.treasures >= 0) {
       const share = persona(p) === 'greedy' ? Math.floor(n.treasures / 3) : persona(p) === 'cautious' ? Math.ceil(n.treasures * 0.6) : Math.ceil(n.treasures / 2);
-      const offer = Math.min(n.treasures, Math.max(1, share));
+      let offer = Math.min(n.treasures, Math.max(1, share));
+      // боту не переплачиваем: жадный соглашается за две карты, остальные — за одну (турнир: +5 % побед);
+      // человеку предлагаем честную долю — он решает сам
+      if (cands[0].x.isBot) offer = Math.min(n.treasures, Math.max(1, persona(cands[0].x) === 'greedy' ? 2 : 1));
       const a = { type: 'askHelp', to: cands[0].x.id, offer };
       if (!check(s, p.id, a)) return a;
     }
@@ -215,17 +223,26 @@ function helperMove(s, p) {
   return boostSelf(s, p, n.monsters - n.heroes + (n.warrior ? 0 : 1));
 }
 
+// насколько опасна победа бойца: 3 — выигрывает партию, 2 — встанет в шаге-двух от победы, 1 — уйдёт в единоличные
+// лидеры со второй половины пути, 0 — пусть бьётся
+function threatOf(s, f, n) {
+  const W = winLevel(s), after = f.level + n.levels;
+  if (after >= W) return 3;
+  if (after >= W - 2) return 2;
+  const rest = s.players.filter(x => x.id !== f.id && !x.banished).map(x => x.level);
+  return after > Math.max(0, ...rest) && after >= Math.ceil(W / 2) ? 1 : 0;
+}
 function interfere(s, p) {
   const c = s.combat;
   const f = P(s, c.fighter);
   const n = combatNumbers(s);
   if (!n.winning) return null;
-  const forGame = f.level + n.levels >= winLevel(s);
-  const top = leader(s, null);
-  const isLeader = f.level >= winLevel(s) - 4 && f.level >= top.level && f.id !== p.id;
+  const threat = threatOf(s, f, n);
+  const forGame = threat === 3;
+  const isLeader = threat >= 1;
   const revenge = persona(p) === 'vengeful' && grudgeOf(s, p.id, f.id) > 0;
-  if (persona(p) === 'cautious' && !forGame) return null;
-  if (!forGame && !isLeader && !revenge) return null;
+  if (persona(p) === 'cautious' && threat < 2) return null;
+  if (!isLeader && !revenge) return null;
   const margin = n.heroes - n.monsters + (n.warrior ? 1 : 0); // сколько добавить монстрам
   const opts = [];
   for (const u of p.hand) {
@@ -244,7 +261,8 @@ function interfere(s, p) {
   // Колесо Подлеца — игра наудачу: крутим, чтобы не дать сопернику выиграть партию, а лидеру мешаем, только если голдов с запасом.
   // В среднем оно даёт монстрам около +7; ставим его ниже карт, которые бьют наверняка
   const gold = p.gold || 0;
-  if (!(c.wheel || []).some(w => w.by === p.id) && (forGame || ((isLeader || revenge) && gold >= WHEEL_COST * 3)) && gold >= WHEEL_COST) opts.push({ v: Math.floor(WHEEL_EV), a: { type: 'wheel' } });
+  const wheelOk = threat >= 2 ? gold >= WHEEL_COST : gold >= WHEEL_COST * 3;
+  if (!(c.wheel || []).some(w => w.by === p.id) && (isLeader || revenge) && wheelOk) opts.push({ v: Math.floor(WHEEL_EV), a: { type: 'wheel' } });
   if (hasClass(p, 'warlock') && !(c.summoned || []).includes(p.id)) {
     for (const m of p.hand.filter(x => def(x).type === 'monster')) {
       const v = def(m).boss ? 2 * heroStrength(s, f) : monsterBaseLevel(s, def(m)) + depthBonus(s);
@@ -264,7 +282,11 @@ function interfere(s, p) {
   valid.sort((a, b) => a.v - b.v);
   const enough = valid.find(o => o.v >= margin);
   if (enough) return enough.a;
-  return forGame ? valid[valid.length - 1].a : null;
+  // одной картой не перебить: перед самой победой бойца бросаем лучшее (другие добавят своё),
+  // за два шага до победы — тоже, если вместе с остальными картами в руке хватит
+  if (forGame) return valid[valid.length - 1].a;
+  if (threat === 2 && valid.reduce((a, o) => a + o.v, 0) >= margin) return valid[valid.length - 1].a;
+  return null;
 }
 
 function turnMove(s, p, rng) {
@@ -356,7 +378,8 @@ function turnMove(s, p, rng) {
       const foe = persona(p) === 'vengeful' ? worstEnemy(s, p) : null;
       if (foe && !foe.dead && ok({ type: 'playCard', uid: curse, target: foe.id })) return { type: 'playCard', uid: curse, target: foe.id };
       const top = leader(s, id);
-      if (top && top.level >= p.level && ok({ type: 'playCard', uid: curse, target: top.id })) return { type: 'playCard', uid: curse, target: top.id };
+      const full = p.hand.length >= handLimit(p, s);
+      if (top && (top.level >= p.level || full) && ok({ type: 'playCard', uid: curse, target: top.id })) return { type: 'playCard', uid: curse, target: top.id };
     }
     // плут ворует
     if (hasClass(p, 'rogue') && step === 'pre' && p.hand.length > 3 && rng() < 0.25) {
@@ -392,7 +415,7 @@ function turnMove(s, p, rng) {
     // монстр с руки: зовём самого слабого, если он нам наверняка по силам; иначе обшариваем комнату
     const mine = p.hand.filter(u => def(u).type === 'monster' && ok({ type: 'playCard', uid: u }));
     if (mine.length) {
-      const margin = { cautious: 4, greedy: 1, vengeful: 2, normal: 2 }[persona(p)] ?? 2;
+      const margin = OWN_MARGIN[persona(p)] ?? 1;
       const easy = mine.filter(u => !def(u).boss && !def(u).levelOnly && monsterBaseLevel(s, def(u)) + margin < power)
         .sort((x, y) => monsterBaseLevel(s, def(x)) - monsterBaseLevel(s, def(y)));
       return easy.length ? { type: 'playCard', uid: easy[0] } : { type: 'loot' };
@@ -408,7 +431,11 @@ function turnMove(s, p, rng) {
   }
   if (step === 'charity') {
     const excess = Math.max(0, p.hand.length - handLimit(p, s));
-    return { type: 'endTurn', give: byWorth(p.hand).slice(0, excess) };
+    // лишнее уйдёт самому слабому — то, что чего-то стоит, лучше продать: голды пойдут на уровень
+    const extra = byWorth(p.hand).slice(0, excess);
+    const sell = extra.filter(u => (def(u).value || 0) >= 100);
+    if (sell.length && !check(s, id, { type: 'sell', uids: sell })) return { type: 'sell', uids: sell };
+    return { type: 'endTurn', give: extra };
   }
   return null;
 }

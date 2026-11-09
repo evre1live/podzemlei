@@ -217,7 +217,7 @@ socket.on('seat:result', ({ reason }) => {
 socket.on('trick:state', t => {
   if (!S.room?.spectator || t.room !== S.room.id) return;
   S.trick = t.live ? t : null;
-  if (S.screen === 'game') { render(); if ($('#shopModal')) openMarketModal(); if ($('#trickPop')) refreshTrickPop(); }
+  if (S.screen === 'game') { render(); if ($('#shopModal')) openMarketModal(); if ($('#trickPop')) refreshTrickPop(); if ($('.wheel-modal') && trickOn()) refreshTrickWheel(); }
 });
 socket.on('room:state', ({ room, game, serverTime }) => {
   const first = !S.room || S.room.id !== room.id || S.room.me !== room.me;
@@ -1408,11 +1408,20 @@ function wheelHTML(c, h, at = 'wl-top') {
   const spun = (c.wheel || []).length;
   const cap = spun ? `крутили: ${spun}` : `${WHEEL_COST} г`;
   const tip = `Колесо Подлеца: в чужом бою любой может крутить его за ${WHEEL_COST} г — раз за бой. Нажмите, чтобы посмотреть сектора и шансы`;
-  return `<button type="button" class="wheel-mini ${at}${h?.wheel ? ' ready' : ''}" data-act="wheel" title="${tip}">${wheelSVG({ big: false })}<span class="wl-cap">${cap}</span></button>`;
+  return `<button type="button" class="wheel-mini ${at}${h?.wheel || trickWheelOk() ? ' ready' : ''}" data-act="wheel" title="${tip}">${wheelSVG({ big: false })}<span class="wl-cap">${cap}</span></button>`;
+}
+// пакостник может крутить колесо от имени бота: есть кому и хватает голдов
+const trickWheelOk = () => { const tr = trickOn(); return !!(tr && S.game?.combat && tr.wheel?.length && tr.gold >= WHEEL_COST); };
+// кого пакостник может «поставить к колесу»: ботов, а если ботов нет — любого, кто может крутить
+function trickWheelPool() {
+  const ids = trickOn()?.wheel || [];
+  const bots = ids.filter(id => pl(id)?.isBot);
+  return { ids: bots.length ? bots : ids, bots: !!bots.length };
 }
 function openWheelModal() {
   const c = S.game?.combat, h = hints(), p = me();
   if (!c) return;
+  if (trickOn()) return openTrickWheel();
   const mine = p && (c.fighter === p.id || c.helper === p.id);
   const done = p && (c.wheel || []).some(w => w.by === p.id);
   const why = !p ? 'Вы зритель: смотреть можно, крутить — нет.' : mine ? 'Это ваш бой — колесо крутят соперники.' : p.dead ? 'Мёртвые колесо не крутят.' : done ? 'Вы уже крутили колесо в этом бою.' : (p.gold || 0) < WHEEL_COST ? `Нужно ${WHEEL_COST} г, а в кошельке ${p.gold || 0} г.` : '';
@@ -1427,6 +1436,47 @@ function openWheelModal() {
     <ul class="wl-list">${rows}</ul>
     ${why ? `<p class="muted wl-why">${esc(why)}</p>` : ''}
     <div class="row"><button class="btn danger big" data-popopt="0" ${h?.wheel ? '' : 'disabled'}>${ico('cycle')}Крутить за ${WHEEL_COST} г</button><button class="btn ghost" data-act="closeOverlay">Не крутить</button></div>
+  </div>`);
+}
+// окно колеса пакостника обновляется, только если поменялось, кто может крутить, кошелёк или вращения в бою
+let trickWheelKey = '';
+function refreshTrickWheel() {
+  const c = S.game?.combat;
+  if (!c) return closeOverlay();
+  const key = JSON.stringify([trickOn()?.wheel, trickOn()?.gold, (c.wheel || []).length]);
+  if (key !== trickWheelKey) openTrickWheel();
+}
+// Колесо Подлеца для пакостника: голды — из его кошелька, крутит бот (в летописи — его имя)
+function openTrickWheel() {
+  trickWheelKey = JSON.stringify([trickOn()?.wheel, trickOn()?.gold, (S.game?.combat?.wheel || []).length]);
+  const c = S.game?.combat, tr = trickOn();
+  if (!c || !tr) return;
+  const { ids, bots } = trickWheelPool();
+  let by = S.ui.wheelBy && ids.includes(S.ui.wheelBy) ? S.ui.wheelBy : '';
+  const can = ids.length && tr.gold >= WHEEL_COST;
+  popOpts = [{ fn: async () => {
+    const r = await call('trick:wheel', { puppet: S.ui.wheelBy && ids.includes(S.ui.wheelBy) ? S.ui.wheelBy : null });
+    if (!r.ok) return toast(r.error || 'Не получилось');
+    closeOverlay();
+    toast(`Колесо крутит ${r.name}`);
+  } }];
+  const seg = [['', bots ? 'Любой бот' : 'Кто-нибудь'], ...ids.map(id => [id, pname(id)])].map(([id, label]) => {
+    const i = popOpts.push({ fn: () => { S.ui.wheelBy = id; openTrickWheel(); } }) - 1;
+    const x = id && pl(id);
+    return `<button type="button" data-popopt="${i}" aria-pressed="${by === id}" ${x ? `style="--seat:${x.color}"` : ''}>${x ? `<span class="ava">${avatarSVG(gAva(x), x.color)}</span>` : ''}${esc(label)}</button>`;
+  }).join('');
+  const rows = WHEEL.map(w => { const L = WHEEL_LOOK[w.id]; return `<li class="wl-row t-${L.tone}"><i style="--c1:${L.c1};--c2:${L.c2}">${ico(L.icon)}</i><b>${esc(w.name)}</b><span>${esc(w.text)}</span><em>${w.n} из ${WHEEL_SECTORS} · ${wheelChance(w)} %</em></li>`; }).join('');
+  const spins = (c.wheel || []).map(w => `${esc(pname(w.by))} — ${esc(WHEEL.find(x => x.id === w.sector)?.name || '')}`).join(', ');
+  const why = !ids.length ? 'Крутить некому: все, кто может, уже крутили в этом бою.' : tr.gold < WHEEL_COST ? `Нужно ${WHEEL_COST} г, а в кошельке пакостника ${tr.gold} г.` : '';
+  showOverlay(`<div class="modal wheel-modal" role="dialog" aria-label="Колесо Подлеца">
+    <div class="wl-head"><div class="wl-big">${wheelSVG()}<i class="wl-ptr"></i></div>
+      <div><h2>Колесо Подлеца</h2>
+      <p>Вы пакостник: колесо крутит ${bots ? 'бот' : 'подставленный игрок'} — в летописи и на колесе будет его имя, сглаз или куш тоже достанутся ему, а <b>${WHEEL_COST} голдов</b> уйдут из вашего кошелька.</p>
+      ${spins ? `<p class="muted">В этом бою: ${spins}.</p>` : ''}</div></div>
+    ${ids.length ? `<div class="trick-by"><span class="muted">${bots ? 'Какой бот крутит:' : 'Кого подставить:'}</span><div class="seg trick-seg" role="group">${seg}</div></div>` : ''}
+    <ul class="wl-list">${rows}</ul>
+    ${why ? `<p class="muted wl-why">${esc(why)}</p>` : ''}
+    <div class="row"><button class="btn danger big" data-popopt="0" ${can ? '' : 'disabled'}>${ico('double-face-mask')}Крутить за ${WHEEL_COST} г</button><button class="btn ghost" data-act="closeOverlay">Не крутить</button></div>
   </div>`);
 }
 // в летописи эмодзи из движка заменяются гравированными значками
@@ -1497,6 +1547,8 @@ function fightHTML() {
     if (h.haunt?.player) b.push(`<button class="btn spook" data-act="haunt" data-side="player" title="Вы призрак: раз за ход можно подкинуть +${GHOST_BONUS} одной стороне">${ico('ghost')} +${GHOST_BONUS} героям</button>`);
     if (h.haunt?.monster) b.push(`<button class="btn spook" data-act="haunt" data-side="monster" title="Вы призрак: раз за ход можно подкинуть +${GHOST_BONUS} одной стороне">${ico('ghost')} +${GHOST_BONUS} монстрам</button>`);
     if (h.wheel) b.push(`<button class="btn danger" data-act="wheel" title="Колесо Подлеца: крутить за ${WHEEL_COST} г — раз за бой">${ico('cycle')}Колесо · ${WHEEL_COST} г</button>`);
+    // пакостник-зритель: колесо от имени бота, голды — из его кошелька
+    else if (trickWheelOk()) b.push(`<button class="btn danger" data-act="wheel" title="Колесо Подлеца от имени бота — ${WHEEL_COST} г из кошелька пакостника">${ico('double-face-mask')}Колесо от бота · ${WHEEL_COST} г</button>`);
     if (h.pass) b.push(`<button class="btn ghost" data-act="pass">Не мешаю</button>`);
   }
   if (c.winAt && c.passed?.length) b.push(`<span class="hint passed">Не мешают: ${c.passed.map(id => esc(pname(id))).join(', ')}</span>`);

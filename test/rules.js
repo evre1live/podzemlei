@@ -1,7 +1,7 @@
 // Точечные проверки правил.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { createGame, act, tick, view, combatNumbers, P, saleValue, fillText, orderCard, grantCard, playOptions, troubleBand, shopPrice, trickStart, trickBuy, trickPlay, trickOptions, trickOf } from '../shared/engine.js';
+import { createGame, act, tick, view, combatNumbers, P, saleValue, fillText, orderCard, grantCard, playOptions, troubleBand, shopPrice, trickStart, trickBuy, trickPlay, trickOptions, trickOf, trickWheel, trickWheelWho } from '../shared/engine.js';
 import { cheatCard, cheatCardNow, cheatGold } from '../server/cheats.js';
 import { botDecide } from '../shared/bot.js';
 import { def, dailyOf, SHOP_IDS, WHEEL, WHEEL_RING } from '../shared/cards.js';
@@ -1750,6 +1750,31 @@ t('пакостник: при ботах за столом карту «игра
   const r2 = trickPlay(s, 'c:y', { uid: u2, target: 'p2' }, 'p0', own);
   assert.equal(r2.ok, true); assert.equal(r2.puppet, 'p0');
   assert.equal(b.level, 5);
+});
+
+t('пакостник крутит Колесо Подлеца от имени бота: голды — его, имя и последствия — бота', () => {
+  const s = fresh(4); const b = P(s, 'p3');
+  b.isBot = true;
+  s.decks.door.push(take(s, 'm_zhek#0'));
+  A(s, 'p0', { type: 'kick' });
+  assert.ok(s.combat);
+  assert.match(trickWheel(s, 'c:w', null, { rng, now: 1000 }).error, /не включён/);
+  trickStart(s, 'c:w');
+  assert.deepEqual(trickWheelWho(s).sort(), ['p1', 'p2', 'p3'], 'боец сам себе колесо не крутит');
+  const r = trickWheel(s, 'c:w', null, { rng: () => 0.3, now: 1000 });
+  assert.equal(r.ok, true); assert.equal(r.puppet, 'p3', 'при ботах за столом крутит бот');
+  assert.equal(trickOf(s, 'c:w').gold, 77777 - 1000);
+  assert.equal(b.gold || 0, 0, 'кошелёк бота не тронут');
+  assert.ok(s.combat.wheel.some(w => w.by === 'p3'));
+  assert.ok(s.log.some(l => l.text.includes(b.name) && l.text.includes('Колесо Подлеца')));
+  // бот уже крутил — можно подставить игрока; второй раз того же — нельзя
+  assert.match(trickWheel(s, 'c:w', 'p3', { rng, now: 1000 }).error, /не может/);
+  const r2 = trickWheel(s, 'c:w', 'p1', { rng, now: 1000 });
+  assert.equal(r2.ok, true); assert.equal(r2.puppet, 'p1');
+  assert.ok(!JSON.stringify(view(s, 'p1')).includes('tricksters'));
+  // без денег — никак
+  trickOf(s, 'c:w').gold = 10;
+  assert.match(trickWheel(s, 'c:w', 'p2', { rng, now: 1000 }).error, /Нужно 1000/);
 });
 
 t('тайная команда /GET5000: +5000 голдов', () => {

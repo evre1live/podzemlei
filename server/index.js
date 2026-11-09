@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { Server } from 'socket.io';
-import { createGame, act, tick, view, P, WIN_LEVELS, WIN_LEVEL, orderCard, grantCard, takeSeat, trickStart, trickBuy, trickPlay, trickOptions, trickOf } from '../shared/engine.js';
+import { createGame, act, tick, view, P, WIN_LEVELS, WIN_LEVEL, orderCard, grantCard, takeSeat, trickStart, trickBuy, trickPlay, trickOptions, trickOf, trickWheel, trickWheelWho } from '../shared/engine.js';
 import { cheatCard, cheatCardNow, cheatGold, isTrickCmd } from './cheats.js';
 import { botDecide } from '../shared/bot.js';
 import { cleanAvatar, avatarFromSeed } from '../shared/avatar.js';
@@ -252,10 +252,12 @@ function sendTricks(r) {
   const T = r.game?.tricksters;
   const ids = T && io.sockets.adapter.rooms.get('watch:' + r.id);
   if (!ids) return;
+  // кто сейчас может крутить Колесо Подлеца — от их имени пакостник и крутит
+  const wheel = trickWheelWho(r.game);
   for (const sid of ids) {
     const sock = io.sockets.sockets.get(sid);
     const t = sock && trickOf(r.game, trickKey(sock));
-    if (t) sock.emit('trick:state', { room: r.id, gold: t.gold, hand: [...t.hand], live: r.game.phase === 'playing' });
+    if (t) sock.emit('trick:state', { room: r.id, gold: t.gold, hand: [...t.hand], wheel, live: r.game.phase === 'playing' });
   }
 }
 // комната закрывается: зрителей вежливо выпроваживаем
@@ -923,7 +925,7 @@ io.on('connection', socket => {
       const res = trickStart(r.game, trickKey(socket));
       if (!res.ok) return cb(res);
       dirty = true;
-      cb({ ok: true, trick: true, note: had ? 'Вы уже пакостник: кошелёк и рукав при вас' : 'Режим пакостника: 77 777 голдов. Покупайте на рынке и подбрасывайте карты — в летописи их сыграет бот, а без ботов — тот, кого подставите' });
+      cb({ ok: true, trick: true, note: had ? 'Вы уже пакостник: кошелёк и рукав при вас' : 'Режим пакостника: 77 777 голдов. Покупайте на рынке и подбрасывайте карты, а в чужом бою крутите Колесо Подлеца — в летописи всё сделает бот, а без ботов — тот, кого подставите' });
       return sendTricks(r);
     }
     // любой текст через «/» — служебный: в чат не попадает, даже если такой команды нет или она не сработала
@@ -1049,6 +1051,24 @@ io.on('connection', socket => {
       if (res.ok) { r.lastActive = now(); r.nextBotAt = Math.max(r.nextBotAt || 0, now() + 600 + cinePad(r.game, fx0)); broadcastRoom(r); }
     } catch (e) {
       console.error('trick error', e);
+      cb({ ok: false, error: 'Ошибка сервера' });
+    }
+  });
+
+  // пакостник крутит Колесо Подлеца от имени бота: голды — из его кошелька, имя в летописи — бота
+  socket.on('trick:wheel', (p = {}, cb) => {
+    cb = cbOf(cb);
+    if (limited()) return cb({ ok: false, error: 'Слишком часто' });
+    const r = trickRoom();
+    if (!r) return cb(NO_TRICK);
+    const puppet = typeof p.puppet === 'string' && p.puppet ? p.puppet : null;
+    try {
+      const fx0 = r.game.fx?.at(-1)?.id || 0;
+      const res = trickWheel(r.game, trickKey(socket), puppet, { rng, now: now() });
+      cb(res.ok ? { ok: true, puppet: res.puppet, name: P(r.game, res.puppet)?.name || '' } : res);
+      if (res.ok) { r.lastActive = now(); r.nextBotAt = Math.max(r.nextBotAt || 0, now() + 600 + cinePad(r.game, fx0)); broadcastRoom(r); }
+    } catch (e) {
+      console.error('trick wheel error', e);
       cb({ ok: false, error: 'Ошибка сервера' });
     }
   });

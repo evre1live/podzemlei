@@ -2299,6 +2299,32 @@ export function trickPlay(s, key, a, puppetId = null, { rng = Math.random, now =
   return { ok: false, error: err };
 }
 
+// Колесо Подлеца от имени куклы: пакостник платит из своего кошелька, а крутит — для всех за столом — бот
+// (без ботов или по выбору — подставленный игрок). Сектор, сглаз и куш достаются кукле, обида бойца — тоже ей.
+export function trickWheelWho(s) {
+  const c = s.combat;
+  if (!c || s.phase !== 'playing') return [];
+  return s.players.filter(p => !p.dead && !p.banished && !isParticipant(s, p.id) && !(c.wheel || []).some(w => w.by === p.id)).map(p => p.id);
+}
+export function trickWheel(s, key, puppetId = null, { rng = Math.random, now = Date.now() } = {}) {
+  const t = trickOf(s, key);
+  if (!t) return { ok: false, error: 'Режим пакостника не включён' };
+  if (s.phase !== 'playing') return { ok: false, error: 'Партия окончена' };
+  if (!s.combat) return { ok: false, error: 'Колесо Подлеца крутят только во время боя' };
+  if (t.gold < WHEEL_COST) return { ok: false, error: `Нужно ${WHEEL_COST} голдов, у вас ${t.gold}` };
+  const who = trickWheelWho(s);
+  const bots = who.filter(id => P(s, id).isBot);
+  const cands = puppetId ? who.filter(id => id === puppetId) : bots.length ? bots : who;
+  if (!cands.length) return { ok: false, error: puppetId ? 'Этот игрок сейчас колесо крутить не может' : 'Крутить некому: все уже крутили в этом бою или сами в нём' };
+  const p = P(s, cands[Math.floor(rng() * cands.length)]);
+  // на время вращения голды пакостника лежат в кошельке куклы — колесо их и забирает
+  p.gold = (p.gold || 0) + WHEEL_COST;
+  const r = act(s, p.id, { type: 'wheel' }, { rng, now });
+  if (!r.ok) { p.gold -= WHEEL_COST; return r; }
+  t.gold -= WHEEL_COST;
+  return { ok: true, puppet: p.id };
+}
+
 export function check(s, pid, a) {
   if (badShape(a)) return 'Плохие данные';
   if (s.phase !== 'playing') return 'Партия окончена';
