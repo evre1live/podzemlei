@@ -300,6 +300,9 @@ function render() {
   document.body.dataset.grade = scr === 'game' ? locArt || 'default' : scr;
   // музыка локации: играет, пока идёт партия
   sfx.music(scr === 'game' && S.game.phase === 'playing' ? locArt || 'default' : null);
+  // напряжение боя поверх музыки: герои сильнее — едва слышно, монстр сильнее — громче и чаще, босс — в полную
+  { const g = scr === 'game' && S.game.phase === 'playing' ? S.game : null, c = g?.combat, boss = !!c?.monsters.some(m => def(m.uid).boss);
+    sfx.tension(c ? (boss ? 1 : c.numbers?.winning ? 0.35 : 0.7) : g?.duel ? 0.5 : 0, boss); }
   if (scr !== S.screen) { S.screen = scr; mount[scr](); soundIcons(); warmNext(scr); }
   // по ссылке на комнату заставка ждёт саму комнату, чтобы не мелькнула главная
   if (scr !== 'home' || !/[?&](room|watch)=/.test(location.search)) splashOff();

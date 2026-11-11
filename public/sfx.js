@@ -691,7 +691,7 @@ function build() {
   // прервали, пока страница на виду (например, закончился звонок) — пробуем вернуть звук
   me.onstatechange = () => { if (me === ac && !document.hidden && me.state !== 'running' && me.state !== 'closed') setTimeout(wake, 250); };
   if (st.on && st.amb && !document.hidden) ambStart();
-  musSync();
+  musSync(); tensSync();
   return true;
 }
 let probe = 0, rebuiltAt = 0;
@@ -716,6 +716,7 @@ function rebuild() {
   const old = ac;
   ambKill();
   if (mus) { clearTimeout(mus.timer); mus = null; }
+  if (tens) { clearTimeout(tens.timer); tens = null; }
   ac = null; E = null;
   try { old?.close(); } catch { /* уже закрыт */ }
   if (build()) wake();
@@ -911,14 +912,75 @@ function musStop(now = false) {
   setTimeout(() => { try { M.bus.disconnect(); M.send.disconnect(); } catch { /* уже отключена */ } }, now ? 100 : 2400);
 }
 const musSync = () => { if (st.on && st.mus && musWant && !document.hidden) { if (mus?.key !== musWant) musStart(musWant); } else musStop(); };
-function musVolume() { if (mus && ac) mus.bus.gain.setTargetAtTime(st.musVol, ac.currentTime, 0.2); }
+function musVolume() { if (mus && ac) mus.bus.gain.setTargetAtTime(st.musVol, ac.currentTime, 0.2); tensSync(); }
+
+// ───────────── напряжение боя ─────────────
+// В бою поверх музыки локации идёт слой напряжения в её же тональности: низкий пульс-барабан, дрожащая педаль
+// и малая секунда над ней. Сила слоя — от хода боя: герои сильнее — едва слышно и медленно, монстр сильнее —
+// громче и чаще, босс — в полную, с тритоном. Бой кончился — слой гаснет за пару секунд. Громкость и выключатель —
+// те же, что у музыки.
+let tens = null, tensWant = 0, tensBoss = false;
+const tensGain = L => st.musVol * (0.5 + 0.9 * L);
+function tensBeat(X, t) {
+  const L = X.level, root = (X.root ?? 45) - 12, i = X.n % 8, bar = X.step * 8;
+  // пульс: сильные доли; чем выше напряжение, тем больше ударов в такте
+  if (i === 0 || i === 4 || (L > 0.5 && i === 3) || (L > 0.8 && i >= 6)) {
+    const v = (i === 0 ? 0.11 : 0.075) * (0.6 + 0.4 * L);
+    mTone(X, { t, f: 62, type: 'sine', dur: 0.32, a: 0.004, vol: v, wet: 0.35 });
+    mNoise(X, { t, dur: 0.09, vol: v * 0.3, type: 'lowpass', f: 260, wet: 0.3 });
+  }
+  // педаль с дрожью: тоника, над ней малая секунда, у босса ещё тритон
+  if (i === 0) {
+    mTone(X, { t, f: hz(root), type: 'sawtooth', dur: bar * 1.05, a: bar * 0.3, vol: 0.03 * (0.5 + 0.5 * L), lp: 300 + 500 * L, vib: 2.5, vibF: 5 + 3 * L, wet: 0.6 });
+    if (L > 0.45) mTone(X, { t, f: hz(root + 13), type: 'sawtooth', dur: bar * 1.05, a: bar * 0.45, vol: 0.014 * L, lp: 700 + 600 * L, vib: 3, vibF: 6.5, wet: 0.7 });
+    if (X.boss) mTone(X, { t, f: hz(root + 18), type: 'triangle', dur: bar, a: bar * 0.5, vol: 0.016, lp: 1200, vib: 4, vibF: 7, wet: 0.7 });
+  }
+  // сухое тиканье на слабых долях, когда дело плохо
+  if (L > 0.6 && i % 2 === 1) mNoise(X, { t, dur: 0.04, vol: 0.012 * L, type: 'highpass', f: 5000, wet: 0.15 });
+}
+const tensStep = L => 60 / (66 + 44 * L) / 2;   // восьмые: от 66 до 110 ударов в минуту
+function tensStart() {
+  const t = ac.currentTime;
+  const bus = ac.createGain();
+  bus.gain.setValueAtTime(0.0001, t);
+  bus.connect(E.master);
+  const send = ac.createGain(); send.gain.value = 1; send.connect(E.verb);
+  const X = tens = { bus, send, ac, E, level: tensWant, boss: tensBoss, root: mus?.th.root, step: tensStep(tensWant), next: t + 0.12, n: 0, timer: 0 };
+  const tick = () => {
+    if (tens !== X) return;
+    while (X.next < ac.currentTime + 0.6) {
+      // темп и тональность меняются только с начала такта
+      if (X.n % 8 === 0) { X.level = tensWant || X.level; X.boss = tensBoss; X.root = mus?.th.root ?? X.root; X.step = tensStep(X.level); }
+      tensBeat(X, X.next); X.n++; X.next += X.step;
+    }
+    X.timer = setTimeout(tick, 200);
+  };
+  tick();
+}
+function tensStop(now = false) {
+  if (!tens) return;
+  const X = tens; tens = null;
+  clearTimeout(X.timer);
+  const t = ac?.currentTime || 0;
+  try {
+    X.bus.gain.cancelScheduledValues(t);
+    X.bus.gain.setValueAtTime(X.bus.gain.value, t);
+    X.bus.gain.linearRampToValueAtTime(0.0001, t + (now ? 0.05 : 1.8));
+  } catch { /* контекст уже закрыт */ }
+  setTimeout(() => { try { X.bus.disconnect(); X.send.disconnect(); } catch { /* уже отключена */ } }, now ? 100 : 2000);
+}
+function tensSync() {
+  if (!(st.on && st.mus && tensWant > 0 && E && ac && !document.hidden)) return tensStop();
+  if (!tens) tensStart();
+  tens.bus.gain.setTargetAtTime(tensGain(tensWant), ac.currentTime, 0.7);
+}
 
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden) { ambStop(); musStop(true); return; }
+  if (document.hidden) { ambStop(); musStop(true); tensStop(true); return; }
   if (!ac) return;
   wake();
   if (st.on && st.amb) ambStart();
-  musSync();
+  musSync(); tensSync();
 });
 
 // ───────────── голоса: рассказчик, боссы, эмоции (ElevenLabs → art/gen/pz-voice.py → /sfx/voice/v1) ─────────────
@@ -1002,10 +1064,23 @@ export const sfx = {
     applyVol();
     if (st.on && st.amb) ambStart(); else ambStop();
     if ('musVol' in p) musVolume();
-    musSync();
+    musSync(); tensSync();
   },
   // музыка локации: ключ локации (loc_…), 'default' — подземелье без локации, null — тишина
   music(key) { musWant = key || null; if (E) musSync(); },
+  // напряжение боя: 0 — тихо, до 1 — в полную; boss — бой с боссом
+  tension(level = 0, boss = false) { tensWant = Math.max(0, Math.min(1, Number(level) || 0)); tensBoss = !!boss; if (E) tensSync(); },
+  get tensionLevel() { return tens ? tens.level : 0; },
+  // для проверки: отрисовать слой напряжения без колонок и вернуть буфер
+  async renderTension(level = 0.7, boss = false, seconds = 12, root = 45) {
+    const oc = new OfflineAudioContext(2, Math.floor(44100 * seconds), 44100);
+    const e = makeEngine(oc, oc.destination);
+    const bus = oc.createGain(); bus.gain.value = tensGain(level); bus.connect(e.master);
+    const send = oc.createGain(); send.connect(e.verb);
+    const X = { bus, send, ac: oc, E: e, level, boss, root, step: tensStep(level), n: 0 };
+    for (let t = 0.1; t < seconds; t += X.step) { tensBeat(X, t); X.n++; }
+    return oc.startRendering();
+  },
   get musicKey() { return mus?.key || null; },
   names: Object.keys(SOUNDS),
   get samples() { return bankReady; },
