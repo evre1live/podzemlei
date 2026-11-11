@@ -1170,8 +1170,8 @@ function renderStage() {
       : `<span class="loc-banner is-default" title="Подземелье: особых правил нет. Карта локации перенесёт весь стол в новое место."><img src="/loc/v2/default-card.webp" alt="" decoding="async"><span><small>Локация</small><b>Подземелье</b></span></span>`;
   }
   // на телефоне Колесо Подлеца стоит в углу сцены рядом с колодами — вне общего потока боя
-  if (g.combat) { stageSet(el, decks + wheelHTML(g.combat, h, 'wl-corner') + `<div class="stage-inner">${fightHTML()}</div>`); return; }
-  if (g.duel && g.phase === 'playing') { stageSet(el, decks + `<div class="stage-inner">${duelHTML()}</div>`); return; }
+  if (g.combat) { stageSet(el, decks + wheelHTML(g.combat, h, 'wl-corner') + `<div class="stage-inner in-fight">${fightHTML()}</div>`); return; }
+  if (g.duel && g.phase === 'playing') { stageSet(el, decks + `<div class="stage-inner in-fight">${duelHTML()}</div>`); return; }
   const tp = pl(g.turn.pid);
   const mine = tp?.id === S.room.me;
   let title = '', text = '';
@@ -1524,9 +1524,11 @@ function fightHTML() {
   const monsters = c.monsters.map((m, i) => `
     <div class="mon-wrap">
       <div class="mon-body ${def(m.uid).boss ? 'boss hell' : tierClass(m.strength)}">${cardHTML(m.uid, { size: c.monsters.length <= 2 ? 'md' : 'sm', cls: !spectating() && isGolden(m.uid) ? 'golden' : '', attrs: `data-zone="view"${!spectating() && isGolden(m.uid) ? ` style="--gph:${-(performance.now() % 3600).toFixed(0)}ms"` : ''}` })}</div>
-      <span class="mon-str">сила ${m.strength}${def(m.uid).mirror != null ? ` <small>(лидер ${m.level - def(m.uid).mirror} + ${def(m.uid).mirror})</small>` : ''}${def(m.uid).boss ? ` <small>(вдвое больше силы ${esc(pname(c.fighter))}, но не меньше ${BOSS_FLOOR})</small>` : ''}${!def(m.uid).boss && S.game.depth?.bonus ? ` <small title="Подземелье уходит глубже — монстры злее">(глубина +${S.game.depth.bonus})</small>` : ''}</span>
-      ${monFlags(m, c)}
-      ${m.enh.length ? `<div class="enh-list">${m.enh.map(u => `<span class="mod m" data-uid="${u}" data-zone="view">${esc(def(u).name)} ${def(u).double ? '×2' : (def(u).bonus > 0 ? '+' : '') + def(u).bonus}</span>`).join('')}</div>` : ''}
+      <div class="mon-notes">
+        <span class="mon-str">сила ${m.strength}${def(m.uid).mirror != null ? ` <small>(лидер ${m.level - def(m.uid).mirror} + ${def(m.uid).mirror})</small>` : ''}${def(m.uid).boss ? ` <small>(вдвое больше силы ${esc(pname(c.fighter))}, но не меньше ${BOSS_FLOOR})</small>` : ''}${!def(m.uid).boss && S.game.depth?.bonus ? ` <small title="Подземелье уходит глубже — монстры злее">(глубина +${S.game.depth.bonus})</small>` : ''}</span>
+        ${monFlags(m, c)}
+        ${m.enh.length ? `<div class="enh-list">${m.enh.map(u => `<span class="mod m" data-uid="${u}" data-zone="view">${esc(def(u).name)} ${def(u).double ? '×2' : (def(u).bonus > 0 ? '+' : '') + def(u).bonus}</span>`).join('')}</div>` : ''}
+      </div>
     </div>`).join('');
   let center;
   if (c.winAt) {
@@ -2014,7 +2016,7 @@ function fitFight() {
   const f = document.querySelector('#stage .fight');
   if (!f) return;
   f.style.zoom = '';
-  if (FAN.matches) return;
+  if (FAN.matches || v3d.on) return;
   const need = f.scrollWidth, have = f.clientWidth;
   if (need > have + 2) f.style.zoom = Math.max(0.62, have / need).toFixed(3);
 }
@@ -2027,6 +2029,8 @@ function fitStage() {
   inner.style.zoom = '';
   if (FAN.matches) { game.style.removeProperty('--stage-min'); fitStageFan(game, st, inner); return; }
   game.style.removeProperty('--stage-need');
+  if (v3d.on && inner.classList.contains('in-fight')) return fitFight3D(game, st, inner);
+  if (v3d.fight) fightOff3D();
   const cs = getComputedStyle(st);
   const pad = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
   const need = inner.scrollHeight + pad;
@@ -2060,7 +2064,7 @@ function fitStageFan(game, st, inner) {
 function fitDecks() {
   const st = $('#stage'), f = st?.querySelector('.fight'), d = st?.querySelector(':scope > .decks'), inner = st?.querySelector(':scope > .stage-inner');
   const had = !!st?.classList.contains('deck-gap');
-  if (!f || !d || !inner || FAN.matches) { if (had) st.classList.remove('deck-gap'); return; }
+  if (!f || !d || !inner || FAN.matches || v3d.on) { if (had) st.classList.remove('deck-gap'); return; }
   if (had) return;
   const dr = d.getBoundingClientRect();
   if (!dr.width) return;
@@ -3986,9 +3990,11 @@ function stop3D() {
   window.PZ3D?.unmount();
   document.body.classList.remove('v3d-hands');
   $('#phUnder')?.remove(); $('#phOver')?.remove();
-  v3d.hl = v3d.hr = null;
+  v3d.hl = v3d.hr = null; v3d.seats = null;
+  fightOff3D();
   const g = document.querySelector('.game');
   g?.style.removeProperty('--opps-h'); g?.style.removeProperty('--edge-y');
+  { const cave = $('#cave'); cave?.style.removeProperty('--fdx'); cave?.style.removeProperty('--fdy'); }
   // кнопки хода возвращаются в сцену: она пересоберётся заново
   { const st = $('#stage'); if (st) { htmlOf.delete(st); $('#actdock')?.replaceChildren(); if (S.screen === 'game' && S.game) { renderStage(); requestAnimationFrame(fitHand); } } }
   applyBg();
@@ -4012,6 +4018,8 @@ const v3dHooks = {
   face: uid => { const d = def(uid); return { key: d.id, name: d.name, img: CARD_IMG.has(d.id) ? cardImgUrl(d.id) : d.type === 'location' ? locImg(d.art) : null, tone: FACE_TONE(d), note: d.type === 'item' && d.bonus ? `+${d.bonus}` : '' }; },
   back: deck => { const st = getBack(), id = st !== 'classic' && CARD_IMG.has(`back_${deck}_${st}`) ? `back_${deck}_${st}` : `back_${deck}`; return CARD_IMG.has(id) ? cardImgUrl(id) : null; },
   place: p => place3D(p),
+  // сцена сменила размер: колоды и места соперников на экране уже другие — бой и рука подгоняются заново
+  resized: () => { v3d.rect = null; cancelAnimationFrame(v3d.refit); v3d.refit = requestAnimationFrame(() => { if (v3d.on) fitHand(); }); },
   onLost: () => { v3d.failed = true; stop3D(); toast('Видеокарта отключила 3D — вернул вид сверху'); render(); },
 };
 async function sync3D(scr) {
@@ -4041,6 +4049,7 @@ function place3D(p) {
   const game = document.querySelector('.game');
   if (!game || !v3d.on) return;
   let edge = 0;
+  v3d.seats = p.seats; v3d.cx = p.center.x;
   for (const s of p.seats) {
     edge = Math.max(edge, s.edge);
     let el = v3d.els.get(s.id);
@@ -4064,7 +4073,79 @@ function place3D(p) {
   const r = (v3d.rect ||= st.getBoundingClientRect());
   const set = (k, pt) => { st.style.setProperty(`--${k}x`, (pt.x - r.left).toFixed(1) + 'px'); st.style.setProperty(`--${k}y`, (pt.y - r.top).toFixed(1) + 'px'); };
   set('dd', p.door); set('dt', p.treasure); set('dp', p.pile);
+  // бой стоит в сцене: идёт за камерой вместе со столом (покачивание от мыши, взгляд, тряска)
+  v3d.fdx = p.center.x - p.center0.x; v3d.fdy = p.center.y - p.center0.y;
+  { const cave = $('#cave'); cave.style.setProperty('--fdx', v3d.fdx.toFixed(1) + 'px'); cave.style.setProperty('--fdy', v3d.fdy.toFixed(1) + 'px'); }
   st.style.setProperty('--dcw', p.pileW.toFixed(1) + 'px');
+}
+// ── Бой на столе (3D). Блок боя стоит в сцене: его низ — у руки, герои, щиты и весы — на столе под табличками
+// соперников, а монстр — крупно и может подняться над дальним краем стола: табличка соперника, под которую он
+// встаёт, приподнимается герою на грудь (--lift). z — масштаб всего блока (по высоте полосы стола и ширине между
+// моей карточкой и колодами), mz — во сколько раз ряд монстров крупнее остального.
+const FIGHT_LIFT = 58;
+function fitFight3D(game, st, inner) {
+  const row = inner.querySelector('.monsters-row');
+  inner.style.zoom = ''; inner.style.setProperty('--mz', '1');
+  game.style.setProperty('--stage-min', '150px');
+  const sr = st.getBoundingClientRect();
+  const me = $('#mecard')?.getBoundingClientRect(), dk = $('#deckDoor')?.getBoundingClientRect();
+  // низ боя — над строкой «В руке N карт»; от рамки сцены, а не от руки: рука в свой ход приподнимается
+  const yBot = sr.bottom - 6;
+  const x0 = Math.max(sr.left, (me?.width ? me.right : 0) + 12), x1 = Math.min(sr.right, (dk?.width ? dk.left : sr.right) - 12);
+  // таблички соперников — по местам из сцены: середина на дальнем краю стола, под ней строка с картами и вещами
+  const plates = (v3d.seats || []).map(s => ({ id: s.id, l: s.x - 98, r: s.x + 98, b: s.edge + 46, h: s.edge - s.top }));
+  // сверху бой упирается в таблички над ним; монстр поднимается выше — на столько, на сколько табличка может
+  // подняться герою на грудь, не закрыв лица
+  const over = plates.filter(p => p.r > x0 && p.l < x1);
+  const yTop = Math.max(sr.top - 90, ...over.map(p => p.b)) + 4;
+  const rise = Math.max(24, Math.min(FIGHT_LIFT, ...over.map(p => p.h * 0.19)));
+  const availH = Math.max(120, yBot - yTop), availW = Math.max(320, x1 - x0);
+  const span = els => { let t = 1e9, b = -1e9; for (const e of els) { const c = e.getBoundingClientRect(); if (!c.height) continue; t = Math.min(t, c.top); b = Math.max(b, c.bottom); } return b > t ? b - t : 0; };
+  const ir = inner.getBoundingClientRect(), rr = row?.getBoundingClientRect(), mc = inner.querySelector('.side-col.mon')?.getBoundingClientRect();
+  const hRest = Math.max(60, span(inner.querySelectorAll('.side-col.hero')), span(inner.querySelectorAll('.versus, .stage-inner > .tug, .stage-inner > .reward, .stage-inner > .duel-note')), rr?.height ? 0 : mc?.height || 0);
+  const zMax = Math.min(1.15, availH / hRest, availW / ir.width);
+  let z = zMax, mz = 1;
+  if (rr?.height) {
+    // монстру — вся высота от руки до приподнятых табличек; не входит по ширине — остальное ужимается (до 0,78),
+    // и только потом уступает сам монстр
+    const restM = Math.max(0, mc.height - rr.height), restW = ir.width - rr.width, k = rr.height / rr.width, hMon = Math.min(yBot - (yTop - rise), innerHeight * 0.35);
+    z = Math.max(Math.min(zMax, 0.78), Math.min(zMax, (availW * k - hMon) / Math.max(1, restW * k - restM)));
+    mz = Math.max(1, Math.min(2.6, (hMon / z - restM) / rr.height, (availW / z - restW) / rr.width));
+  }
+  inner.style.zoom = z.toFixed(3);
+  inner.style.setProperty('--fz', z.toFixed(3)); inner.style.setProperty('--mz', mz.toFixed(3));
+  const wt = z * (ir.width + (rr?.width || 0) * (mz - 1));
+  const cx = Math.max(x0 + wt / 2, Math.min(x1 - wt / 2, v3d.cx ?? (x0 + x1) / 2));
+  inner.style.setProperty('--fx', ((cx - sr.left) / z).toFixed(1) + 'px');
+  inner.style.setProperty('--fb', ((sr.bottom - yBot) / z).toFixed(1) + 'px');
+  // таблички над монстром уступают место (блок боя идёт за камерой — его сдвиг из замеров вычитается)
+  const dx = v3d.fdx || 0, dy = v3d.fdy || 0;
+  const cr = row?.getBoundingClientRect();
+  for (const p of plates) {
+    const el = document.querySelector(`.game .opp[data-opp="${CSS.escape(p.id)}"]`);
+    const lift = cr?.height && cr.left - dx - 5 < p.r && p.l < cr.right - dx + 5 && cr.top - dy < p.b + 6 ? Math.min(rise + 14, p.b + 6 - (cr.top - dy)) : 0;
+    if (el) { if (lift > 0) el.style.setProperty('--lift', lift.toFixed(0) + 'px'); else el.style.removeProperty('--lift'); }
+  }
+  v3d.fight = true;
+  // сцена ставит бой на стол: рунные круги, тень и свет под монстром и под бойцами
+  const foot = (els, color, lead) => {
+    let l = 1e9, r = -1e9, b = -1e9;
+    for (const e of els) { const c = e.getBoundingClientRect(); if (!c.width) continue; l = Math.min(l, c.left); r = Math.max(r, c.right); b = Math.max(b, c.bottom); }
+    return r > l ? { x: (l + r) / 2 - dx, y: b - dy, w: r - l, color, lead } : null;
+  };
+  const c = S.game?.combat, d = S.game?.duel;
+  const strong = c ? Math.max(0, ...c.monsters.map(m => m.strength)) : 0;
+  const tone = c?.monsters.some(m => def(m.uid).boss) ? 0xff4614 : ARENA_TONE[tierClass(strong)];
+  window.PZ3D?.arena(c
+    ? { mon: foot(inner.querySelectorAll('.mon-body'), tone, !c.numbers?.winning), hero: foot(inner.querySelectorAll('.side-col.hero .hero-pill'), 0x6fe0b8, !!c.numbers?.winning) }
+    : { mon: foot(inner.querySelectorAll('.side-col.mon .hero-pill'), 0xe0b24a, d?.numbers?.winner === d?.to), hero: foot(inner.querySelectorAll('.side-col.hero .hero-pill'), 0x6fe0b8, d?.numbers?.winner === d?.from) });
+}
+// круг под монстром — тёплый и тем злее, чем монстр сильнее; зелёный — только у героев
+const ARENA_TONE = { low: 0xffcf8a, mid: 0xff9a3c, high: 0xff5032, boss: 0xdc3cff };
+function fightOff3D() {
+  v3d.fight = false;
+  document.querySelectorAll('.game .opp').forEach(o => o.style.removeProperty('--lift'));
+  window.PZ3D?.arena(null);
 }
 // кнопки хода и боя в 3D переезжают из сцены в док справа внизу: сцена остаётся бою, а кнопки всегда на одном месте
 function dockActs() {

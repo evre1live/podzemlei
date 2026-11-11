@@ -456,6 +456,83 @@ function buildDust(n) {
   return { pts, seed, pos, geo };
 }
 
+// ---------------------------------------------------------------- арена боя
+// Карта монстра и медальоны бойцов — разметка поверх сцены. На стол их ставит сцена: под монстром и под героями
+// загораются рунные круги (у монстра — цвета его силы), под ними ложится тень, от круга монстра идёт свет.
+function buildArena() {
+  const ringTex = canvasTex(512, 512, (g, w) => {
+    const c = w / 2;
+    g.translate(c, c);
+    const gr = g.createRadialGradient(0, 0, w * 0.08, 0, 0, c);
+    gr.addColorStop(0, 'rgba(255,255,255,.3)'); gr.addColorStop(0.6, 'rgba(255,255,255,.1)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = gr; g.beginPath(); g.arc(0, 0, c, 0, 7); g.fill();
+    g.strokeStyle = '#fff'; g.lineCap = 'round'; g.lineJoin = 'round';
+    g.lineWidth = 8; g.globalAlpha = 1; g.beginPath(); g.arc(0, 0, c * 0.8, 0, 7); g.stroke();
+    g.lineWidth = 3; g.globalAlpha = 0.8; g.beginPath(); g.arc(0, 0, c * 0.66, 0, 7); g.stroke();
+    for (let i = 0; i < 48; i++) {
+      const a = (i / 48) * Math.PI * 2, r0 = c * 0.82, r1 = c * (i % 4 ? 0.85 : 0.9);
+      g.lineWidth = i % 4 ? 3 : 5; g.globalAlpha = 0.9;
+      g.beginPath(); g.moveTo(Math.cos(a) * r0, Math.sin(a) * r0); g.lineTo(Math.cos(a) * r1, Math.sin(a) * r1); g.stroke();
+    }
+    // знаки между ободами — свои, из чёрточек
+    g.lineWidth = 4.2; g.globalAlpha = 1;
+    for (let i = 0; i < 16; i++) {
+      g.save(); g.rotate((i / 16) * Math.PI * 2); g.translate(0, -c * 0.73);
+      const q = c * 0.045, k = (i * 7) % 5;
+      g.beginPath(); g.moveTo(0, -q); g.lineTo(0, q);
+      if (k === 0) { g.moveTo(0, -q); g.lineTo(q * 0.8, -q * 0.2); g.lineTo(0, q * 0.3); }
+      else if (k === 1) { g.moveTo(-q * 0.7, -q * 0.4); g.lineTo(q * 0.7, q * 0.4); }
+      else if (k === 2) { g.moveTo(0, -q); g.lineTo(q * 0.7, -q * 0.3); g.moveTo(0, 0); g.lineTo(q * 0.7, q * 0.6); }
+      else if (k === 3) { g.moveTo(-q * 0.7, q * 0.2); g.lineTo(0, -q * 0.5); g.lineTo(q * 0.7, q * 0.2); }
+      else { g.moveTo(-q * 0.6, -q); g.lineTo(q * 0.6, -q); g.moveTo(-q * 0.6, q); g.lineTo(q * 0.6, q); }
+      g.stroke(); g.restore();
+    }
+    g.lineWidth = 2; g.globalAlpha = 0.45; g.beginPath();
+    for (let i = 0; i <= 7; i++) { const a = ((i * 3) / 7) * Math.PI * 2 - Math.PI / 2, x = Math.cos(a) * c * 0.64, y = Math.sin(a) * c * 0.64; if (i) g.lineTo(x, y); else g.moveTo(x, y); }
+    g.stroke();
+  });
+  const shTex = radialTex([[0, 'rgba(0,0,0,.8)'], [0.45, 'rgba(0,0,0,.5)'], [0.75, 'rgba(0,0,0,.18)'], [1, 'rgba(0,0,0,0)']]);
+  const geo = new THREE.PlaneGeometry(1, 1);
+  const group = new THREE.Group();
+  const spot = (color, lit) => {
+    const g = new THREE.Group();
+    const shadow = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: shTex, transparent: true, depthWrite: false, opacity: 0 }));
+    shadow.rotation.x = -Math.PI / 2; shadow.position.y = 0.0052; shadow.renderOrder = 3;
+    const ring = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: ringTex, color, transparent: true, depthWrite: false, opacity: 0, blending: THREE.AdditiveBlending }));
+    ring.rotation.x = -Math.PI / 2; ring.position.y = 0.0058; ring.renderOrder = 4;
+    g.add(shadow, ring);
+    let light = null;
+    if (lit) { light = new THREE.PointLight(color, 0, 1.7, 2); light.position.set(0, 0.2, 0.12); g.add(light); }
+    g.visible = false; g.position.y = TY;
+    group.add(g);
+    return { g, shadow, ring, light, on: 0, want: 0, r: 0.2, color: new THREE.Color(color), p: Math.random() * 6 };
+  };
+  return { group, mon: spot(0xff7a3c, true), hero: spot(0x6fe0b8, false) };
+}
+// точка стола под точкой экрана — по камере без покачивания: разметка боя сама идёт за камерой
+function tablePoint(x, y) {
+  const o = R.base.position, d = _v.set((x / R.size.w) * 2 - 1, 1 - (y / R.size.h) * 2, 0.5).unproject(R.base).sub(o).normalize();
+  if (d.y > -1e-4) return null;
+  const t = (TY - o.y) / d.y;
+  return new THREE.Vector3(o.x + d.x * t, TY, o.z + d.z * t);
+}
+// arena({ mon: { x, y, w, color }, hero: { x, y, w, color } }) — где на экране стоят монстр и бойцы; null — бой кончился
+function arena(d) {
+  if (!R) return;
+  for (const k of ['mon', 'hero']) {
+    const S = R.arena[k], a = d && d[k];
+    const c = a && tablePoint(a.x, a.y), l = a && tablePoint(a.x - a.w / 2, a.y), r = a && tablePoint(a.x + a.w / 2, a.y);
+    if (!c || !l || !r) { S.want = 0; continue; }
+    // круг лежит чуть ближе к камере, чем низ карты: его передняя дуга видна под ней
+    const rad = clamp(l.distanceTo(r) / 2, 0.05, 0.5);
+    if (S.on < 0.02) { S.g.position.set(c.x, TY, c.z + rad * 0.1); S.r = rad; }
+    else { S.g.position.lerp(_tmp.set(c.x, TY, c.z + rad * 0.1), 0.5); S.r = lerp(S.r, rad, 0.5); }
+    if (a.color != null) S.color.set(a.color);
+    S.lead = !!a.lead;
+    S.want = 1;
+  }
+}
+
 // ---------------------------------------------------------------- карты
 const cardGeo = new THREE.PlaneGeometry(1, RATIO);
 const cardMat = map => new THREE.MeshStandardMaterial({ map, alphaTest: 0.5, roughness: 0.78, metalness: 0, color: 0xece4d6 });
@@ -615,6 +692,8 @@ function mount(area, hooks = {}) {
   scene.add(R.candles.group);
   R.dust = buildDust(tier === 'high' ? 260 : 110);
   scene.add(R.dust.pts);
+  R.arena = buildArena();
+  scene.add(R.arena.group);
   // колоды: стопки с рубашкой сверху
   const edgeTex = canvasTex(64, 64, (g, w, h) => { g.fillStyle = '#d8c39a'; g.fillRect(0, 0, w, h); g.fillStyle = 'rgba(90,60,30,.35)'; for (let y = 0; y < h; y += 3) g.fillRect(0, y, w, 1); });
   const edgeMat = new THREE.MeshStandardMaterial({ map: edgeTex, roughness: 0.8 });
@@ -728,6 +807,7 @@ function resize() {
   fitCamera();
   layoutDOM();
   if (!R.active) render();
+  if (R.hooks.resized) R.hooks.resized();   // места на экране сменились — разметке пора пересчитать своё
 }
 
 // ---------------------------------------------------------------- раскладка стола
@@ -867,6 +947,7 @@ function fitCamera() {
   R.camera.updateProjectionMatrix();
   R.camera.position.copy(cam.position);
   R.camera.quaternion.copy(cam.quaternion);
+  R.camera.updateMatrixWorld(true);   // разметка раскладывается сразу, не дожидаясь кадра
   // герои чуть откинуты к камере, чтобы при взгляде сверху не сплющивались
   const pitch = new THREE.Euler().setFromQuaternion(cam.quaternion, 'YXZ').x;
   for (const s of R.seats) {
@@ -904,6 +985,7 @@ function layoutDOM() {
     pile: P(R.piles.door.position.x + 0.08, TY, R.piles.door.position.z),
     pileW: Math.abs(P(R.piles.door.position.x + 0.065, TY, R.piles.door.position.z).x - P(R.piles.door.position.x - 0.065, TY, R.piles.door.position.z).x),
     center: P(0, TY, 0),
+    center0: (() => { _v.set(0, TY, 0).project(R.base); return { x: ((_v.x + 1) / 2) * R.size.w, y: ((1 - _v.y) / 2) * R.size.h }; })(),   // то же без движений камеры
     stand: P(0, TY, -R.matD * 0.18),      // где стоит монстр
     standTop: P(0, TY + 0.62, -R.matD * 0.18),
     near: P(0, TY, R.rz * 0.72),
@@ -1081,6 +1163,23 @@ function tick(now) {
     D.pos[i * 3 + 2] = Math.sin(p.a) * p.r * 0.75 - 0.1;
   }
   D.geo.attributes.position.needsUpdate = true;
+  // арена боя: круги разгораются и медленно вращаются, у того, кто сильнее, — ярче
+  for (const k of ['mon', 'hero']) {
+    const S = R.arena[k];
+    S.on = damp(S.on, S.want, S.want ? 3.2 : 5, dt);
+    const vis = S.on > 0.01;
+    S.g.visible = vis;
+    if (!vis) { if (S.light) S.light.intensity = 0; continue; }
+    const e = ease(clamp(S.on, 0, 1)), pulse = 0.82 + 0.18 * Math.sin(t * 2.3 + S.p), lead = S.lead ? 0.9 : 0.5;
+    const d = S.r * (k === 'mon' ? 3.1 : 2.5) * (0.72 + 0.28 * e);
+    S.ring.scale.set(d, d, 1);
+    S.ring.rotation.z = t * (k === 'mon' ? 0.22 : -0.16);
+    S.ring.material.color.copy(S.color);
+    S.ring.material.opacity = e * pulse * lead;
+    S.shadow.scale.set(S.r * (k === 'mon' ? 5.6 : 4), S.r * (k === 'mon' ? 4.4 : 3.2), 1);
+    S.shadow.material.opacity = e * 0.9;
+    if (S.light) { S.light.color.copy(S.color); S.light.intensity = e * 1.5 * pulse * fl; }
+  }
   // зал: вспышка гаснет, в бою картина чуть темнее и теплее
   R.flash = Math.max(0, R.flash - dt * 2.4);
   const ru = R.room.mat.uniforms;
@@ -1192,7 +1291,7 @@ function setActive(on) {
 }
 
 window.PZ3D = {
-  supported, mount, unmount, mounted: () => !!R, setActive, update, layout: () => layoutDOM(), resize, fx,
+  supported, mount, unmount, mounted: () => !!R, setActive, update, layout: () => layoutDOM(), resize, fx, arena,
   step: ms => { if (R) { tick(R.last + ms); render(); } },
   _debug: () => R,
   quality: () => (R ? { tier: R.tier, post: !!R.composer, dpr: R.renderer.getPixelRatio(), camD: R.camD, fov: R.camera.fov } : null),

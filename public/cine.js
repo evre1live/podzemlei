@@ -172,13 +172,20 @@ export function snapStage() {
   if (!inner || !cave || !inner.querySelector('.fight')) return null;
   const cr = cave.getBoundingClientRect(), r = inner.getBoundingClientRect();
   const node = inner.cloneNode(true);
-  node.querySelectorAll('.act-bar, .reward').forEach(e => e.remove());
+  // в 3D бой стоит в сцене сеткой: строка награды остаётся на месте пустой, иначе весы и вердикт съедут
+  const v3 = document.body.classList.contains('v3d');
+  node.querySelectorAll('.act-bar').forEach(e => e.remove());
+  node.querySelectorAll('.reward').forEach(e => { if (v3) e.style.visibility = 'hidden'; else e.remove(); });
   node.querySelectorAll('[data-until]').forEach(e => e.removeAttribute('data-until'));
   // id убираем, кроме градиентов и масок внутри <defs>: на них ссылаются щиты (url(#…)), без них щиты чернеют
   node.querySelectorAll('[id]').forEach(e => { if (!e.closest('defs')) e.removeAttribute('id'); });
   node.querySelectorAll('[tabindex]').forEach(e => e.setAttribute('tabindex', '-1'));
   node.querySelectorAll('[data-roll]').forEach(e => { e.textContent = e.dataset.roll; e.removeAttribute('data-roll'); });
-  return { node, left: r.left - cr.left, top: r.top - cr.top, w: r.width };
+  // масштаб (zoom) копия уносит с собой, а он умножает и её собственные left, top и width — делим заранее;
+  // сдвиг за камерой в 3D (--fdx, --fdy) копия получает от сцены сама
+  const z = parseFloat(inner.style.zoom) || 1;
+  const dx = parseFloat(cave.style.getPropertyValue('--fdx')) || 0, dy = parseFloat(cave.style.getPropertyValue('--fdy')) || 0;
+  return { node, left: (r.left - cr.left - dx) / z, top: (r.top - cr.top - dy) / z, w: r.width / z };
 }
 function openPanel(snap) {
   closePanel(true);
