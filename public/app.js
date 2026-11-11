@@ -317,6 +317,7 @@ function render() {
     const loc = g?.location ? def(g.location).art : '';
     if ((b.dataset.loc || '') !== loc) b.dataset.loc = loc; }
   update[scr]();
+  countNums();
   sync3D(scr);
   if (scr !== 'home') renderVoice();
 }
@@ -856,10 +857,10 @@ function oppHTML(p) {
   const a = gAva(p), rc = reactOf(p.id);
   return `<button class="opp ${g.turn.pid === p.id ? 'turn' : ''} ${p.dead ? 'dead' : ''} ${p.ghost && !p.dead ? 'ghost' : ''}${rc.cls}" data-opp="${p.id}" data-vmember="${p.id}" style="--seat:${p.color};--fext:${frameExt(a)};${rc.st}" aria-label="${esc(p.name)}, уровень ${p.level}"${botTip}>
     <span class="hero-pill medal om${a.frame ? ' framed' : ''}${tierCls(p)}"><span class="ring"><span class="ava">${avatarSVG(a, p.color)}</span>
-      <b class="hm-lvl" title="Уровень">${p.level}</b><b class="hm-str" title="Сила: уровень и надетые вещи">${ico('crossed-swords')}<span>${p.power}</span></b></span>
+      <b class="hm-lvl" title="Уровень" data-cnt="ol:${esc(p.id)}">${p.level}</b><b class="hm-str" title="Сила: уровень и надетые вещи">${ico('crossed-swords')}<span data-cnt="op:${esc(p.id)}">${p.power}</span></b></span>
       <span class="hp-plate"><b class="oname">${esc(p.name)}</b></span></span>
     <span class="om-info"><span class="ometa" title="${esc(raceText(p))} · ${esc(classText(p))}">${traitBadges(p)}<span class="sr">${esc(raceText(p))}, ${esc(classText(p))}</span></span>
-      <span class="ostats">${p.gold != null ? `<span class="gold" title="Кошелёк: голды за проданные вещи и контракты, тратятся на рынке">${ico('two-coins')}${p.gold}</span>` : ''}<span class="handcount" title="Карт в руке"><i></i>${p.handCount}</span>${statusTags(p)}</span></span>
+      <span class="ostats">${p.gold != null ? `<span class="gold" title="Кошелёк: голды за проданные вещи и контракты, тратятся на рынке">${ico('two-coins')}<x-n data-cnt="og:${esc(p.id)}">${p.gold}</x-n></span>` : ''}<span class="handcount" title="Карт в руке"><i></i>${p.handCount}</span>${statusTags(p)}</span></span>
   </button>`;
 }
 
@@ -877,7 +878,7 @@ function heroMedal(p, { str, sub = '', vmember = false, foe = false } = {}) {
   return `<div class="hero-pill medal${a.frame ? ' framed' : ''}${foe ? ' foe' : ''} tier-${tierOf(p.level)}" data-pid="${p.id}"${vmember ? ` data-vmember="${p.id}"` : ''} style="--seat:${p.color};--fext:${frameExt(a)}">
     <span class="ring"><span class="ava">${avatarSVG(a, p.color)}</span>
       <b class="hm-lvl" title="Уровень ${p.level}">${p.level}</b>
-      <b class="hm-str" title="Сила ${str}">${ico('crossed-swords')}<span>${str}</span></b></span>
+      <b class="hm-str" title="Сила ${str}">${ico('crossed-swords')}<span data-cnt="fp:${esc(p.id)}">${str}</span></b></span>
     <span class="hp-plate"><b>${esc(p.name)}</b></span>${sub ? `<small class="hp-sub">${sub}</small>` : ''}</div>`;
 }
 // весы: латунная стойка, коромысло с двумя чашами; коромысло наклонено на --tilt, чаши висят отвесно
@@ -1392,6 +1393,50 @@ function rollNum(el, from, to) {
   requestAnimationFrame(step);
 }
 
+// ───────────── числа со счётом ─────────────
+// Уровень, сила и голды не перескакивают, а досчитываются на глазах: у элемента с data-cnt="ключ" после перерисовки
+// число идёт от прежнего к новому и коротко вспыхивает — зелёным, если выросло, красным, если упало. Разметка может
+// пересобраться посреди счёта: счёт живёт в cnt по ключу и продолжается на новом элементе.
+const cnt = new Map();
+let cntRaf = 0;
+const cntAt = (s, t) => { const k = Math.min(1, (t - s.t0) / s.dur); return Math.round(s.from + (s.to - s.from) * (1 - Math.pow(1 - k, 3))); };
+function countNums() {
+  const now = performance.now(), seen = new Set();
+  let live = false;
+  for (const el of document.querySelectorAll('[data-cnt]')) {
+    const key = el.dataset.cnt, to = Number(el.dataset.to ?? el.textContent);
+    if (!Number.isFinite(to)) continue;
+    el.dataset.to = to;   // настоящее значение: пока идёт счёт, в тексте — промежуточное
+    seen.add(key);
+    const s = cnt.get(key);
+    if (!s) { cnt.set(key, { from: to, to, t0: 0, dur: 1, dir: 'up' }); continue; }
+    if (to !== s.to) {
+      const cur = s.t0 ? cntAt(s, now) : s.to;
+      Object.assign(s, { from: cur, to, t0: now, dur: Math.max(380, Math.min(1100, Math.abs(to - cur) * 45)), dir: to > cur ? 'up' : 'down' });
+    }
+    if (s.t0 && now < s.t0 + s.dur + 420) {
+      if (now < s.t0 + s.dur) el.textContent = cntAt(s, now);
+      el.classList.add('cnt-' + s.dir); live = true;
+    }
+  }
+  for (const k of [...cnt.keys()]) if (!seen.has(k)) cnt.delete(k);
+  if (live && !cntRaf && !document.hidden) cntRaf = requestAnimationFrame(cntStep);
+}
+function cntStep(t) {
+  cntRaf = 0;
+  let live = false;
+  for (const el of document.querySelectorAll('[data-cnt]')) {
+    const s = cnt.get(el.dataset.cnt);
+    if (!s || !s.t0) continue;
+    if (t < s.t0 + s.dur) { el.textContent = cntAt(s, t); live = true; }
+    else {
+      if (el.textContent !== String(s.to)) el.textContent = s.to;
+      if (t < s.t0 + s.dur + 420) live = true; else el.classList.remove('cnt-up', 'cnt-down');
+    }
+  }
+  if (live) cntRaf = requestAnimationFrame(cntStep);
+}
+
 function actionButtons() {
   const h = hints();
   const g = S.game;
@@ -1779,7 +1824,7 @@ function renderMine() {
     <div class="me-top" style="--seat:${p.color}" data-vmember="${p.id}">
       <span class="me-ava-wrap"><div class="me-ava${reactOf(p.id).cls}${tierCls(p)}" id="meava" style="${reactOf(p.id).st}" data-act="avatar" role="button" tabindex="0" title="Сменить портрет" aria-label="Сменить портрет">${avatarSVG(gAva(p), p.color)}</div>${S.game?.phase === 'playing' ? `<button type="button" class="emote-btn" title="Сказать что-нибудь столу" aria-label="Эмоции" aria-haspopup="menu">${ico('talk')}</button>` : ''}</span>
       <div><div class="me-name">${esc(p.name)}</div>
-        <div class="me-stats"><span class="lvl" title="Уровень">${p.level}</span><span class="pow" title="Сила: уровень и надетые вещи">${ico('crossed-swords')}${p.power}</span><span class="gold" data-act="market" role="button" title="Кошелёк: голды за проданные вещи и контракты, тратятся на рынке">${ico('two-coins')}${p.gold || 0}</span>
+        <div class="me-stats"><span class="lvl" title="Уровень" data-cnt="ml">${p.level}</span><span class="pow" title="Сила: уровень и надетые вещи">${ico('crossed-swords')}<x-n data-cnt="mp">${p.power}</x-n></span><span class="gold" data-act="market" role="button" title="Кошелёк: голды за проданные вещи и контракты, тратятся на рынке">${ico('two-coins')}<x-n data-cnt="mg">${p.gold || 0}</x-n></span>
         <span class="badge" title="Сколько нужно выбросить на кубике, чтобы убежать">${p.classes.some(u => def(u).cls === 'warlock') ? 'побег всегда' : `побег ${run <= 1 ? 'всегда' : run > 6 ? 'никогда' : run + '+'}`}</span>
         ${p.nextCombat > 0 ? `<span class="badge good">+${p.nextCombat} в бою</span>` : p.nextCombat < 0 ? `<span class="badge warn">${p.nextCombat} в бою</span>` : ''}${p.nextEscape < 0 ? `<span class="badge warn">побег ${p.nextEscape}</span>` : ''}${p.banished ? '<span class="badge warn">вы выбыли из партии</span>' : p.dead ? '<span class="badge warn">вы погибли до следующего хода</span>' : ''}</div>
       </div>
@@ -1984,7 +2029,7 @@ function renderWatcher() {
     <div class="me-top" style="--seat:${p.color}">
       <div class="me-ava">${avatarSVG(gAva(p), p.color)}</div>
       <div><div class="me-name">${esc(p.name)}${now ? ' <span class="badge lamp">ходит</span>' : ''}</div>
-        <div class="me-stats"><span class="lvl" title="Уровень">${p.level}</span><span class="pow" title="Сила: уровень и надетые вещи">${ico('crossed-swords')}${p.power}</span>${p.gold != null ? `<span class="gold" title="Кошелёк: голды за проданные вещи и контракты, тратятся на рынке">${ico('two-coins')}${p.gold}</span>` : ''}
+        <div class="me-stats"><span class="lvl" title="Уровень" data-cnt="sl:${esc(p.id)}">${p.level}</span><span class="pow" title="Сила: уровень и надетые вещи">${ico('crossed-swords')}<x-n data-cnt="sp:${esc(p.id)}">${p.power}</x-n></span>${p.gold != null ? `<span class="gold" title="Кошелёк: голды за проданные вещи и контракты, тратятся на рынке">${ico('two-coins')}<x-n data-cnt="sg:${esc(p.id)}">${p.gold}</x-n></span>` : ''}
         <span class="badge" title="Сколько нужно выбросить на кубике, чтобы убежать">${p.classes.some(u => def(u).cls === 'warlock') ? 'побег всегда' : `побег ${run <= 1 ? 'всегда' : run > 6 ? 'никогда' : run + '+'}`}</span>${p.dead ? '<span class="badge warn">погиб до следующего хода</span>' : ''}</div>
       </div>
     </div>
@@ -2837,6 +2882,7 @@ function extraFx(fresh) {
   portraitReact(fresh);
   for (const f of fresh) {
     const ava = avaOf(f.pid);
+    sfx.at(panOf(f.pid), 300);
     switch (f.kind) {
       case 'depth':
         sfx.play('quake');
@@ -2925,6 +2971,7 @@ function extraFx(fresh) {
         break;
     }
   }
+  sfx.at(0);
 }
 
 // ───────────────────────── подвиги: рамки за достижения ─────────────────────────
@@ -3350,7 +3397,16 @@ function handleFx(first) {
   return fresh;
 }
 const avaOf = pid => pid === S.room?.me ? $('#meava') : document.querySelector(`[data-opp="${pid}"] .ava`);
+// с какой стороны сидит игрок: −0.6 (слева) … 0.6 (справа); свои звуки и звуки без хозяина — посередине
+function panOf(pid) {
+  if (!pid || pid === S.room?.me) return 0;
+  const seat = v3d.on ? v3d.seats?.find(s => s.id === pid) : null;
+  let x = seat?.x;
+  if (x == null) { const r = document.querySelector(`.opp[data-opp="${CSS.escape(pid)}"]`)?.getBoundingClientRect(); if (!r?.width) return 0; x = r.left + r.width / 2; }
+  return Math.max(-0.6, Math.min(0.6, (x / Math.max(1, innerWidth) - 0.5) * 1.5));
+}
 cine.init({
+  pan: panOf,
   meId: () => S.room?.me,
   pname,
   avaOf,
@@ -3363,6 +3419,7 @@ cine.init({
 function soundFx(fresh) {
   const kinds = new Set(fresh.map(f => f.kind));
   for (const f of fresh) {
+    sfx.at(panOf(f.kind === 'backstab' ? f.by : f.pid || f.by), 300);
     switch (f.kind) {
       case 'reveal': sfx.play('door'); break;
       case 'combat': case 'wandering': {
@@ -3389,6 +3446,7 @@ function soundFx(fresh) {
       case 'legendary': sfx.play('legendary', { always: true }); break;
     }
   }
+  sfx.at(0);
 }
 // сцена откликается на события стола: взгляд к воротам, тряска, кивок того, кто сыграл карту, радость победителя
 function sceneFx(fresh) {

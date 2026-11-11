@@ -1138,6 +1138,12 @@ body.has-world { background: #120e22; }
 .shield b.num-up, .shield b.num-down { animation: numPop .65s cubic-bezier(.3,1.5,.5,1); }
 .shield.hero b.num-up { text-shadow: 0 0 14px rgba(255,255,255,.9); }
 .shield.mon b.num-up { text-shadow: 0 0 14px rgba(255,200,150,.9); }
+/* числа со счётом (countNums в app.js): пока число идёт к новому значению и чуть после — вспышка цветом */
+x-n { display: inline-block; }
+[data-cnt].cnt-up { color: #c9ffd9 !important; text-shadow: 0 0 10px rgb(110 255 170 / .85), 0 1px 2px rgb(0 0 0 / .8) !important; animation: cntPop .5s cubic-bezier(.3, 1.5, .5, 1); }
+[data-cnt].cnt-down { color: #ffc0b2 !important; text-shadow: 0 0 10px rgb(255 90 60 / .85), 0 1px 2px rgb(0 0 0 / .8) !important; animation: cntPop .5s cubic-bezier(.3, 1.5, .5, 1); }
+@keyframes cntPop { 0% { scale: 1; } 35% { scale: 1.32; } 100% { scale: 1; } }
+@media (prefers-reduced-motion: reduce) { [data-cnt].cnt-up, [data-cnt].cnt-down { animation: none; } }
 @keyframes numPop { 0% { transform: scale(1); } 35% { transform: scale(1.4); } 100% { transform: scale(1); } }
 .tug { position: relative; width: min(100%, 520px); height: 12px; border-radius: 99px; overflow: hidden; margin: -2px auto 0;
   background: linear-gradient(90deg, #7a2a18, #d2502f); box-shadow: inset 0 2px 0 rgba(0,0,0,.35), 0 0 0 2px var(--ink), 0 4px 10px rgba(0,0,0,.35); }

@@ -127,9 +127,13 @@ function pump() {
   busy = true;
   if (!sc.minor) watchFps();
   if (sc.under) under('scene', true);
+  // звуки сцены идут со стороны того, чей это ход или чья карта
+  const pan = sc.who && api?.pan ? api.pan(sc.who) : 0;
+  sfx.at(pan, 6000);
   let dur = 0;
   try { dur = sc.run(ctx(sp)) ?? sc.dur ?? 0; } catch (e) { console.warn('cine', e); sc.skip?.(); }
   const wait = Math.max((sc.minDur || 0) * (cine.slow || 1), dur / sp);
+  sfx.at(pan, wait + 150);
   pumpTimer = setTimeout(() => { busy = false; if (sc.under) under('scene', false); pump(); }, wait);
 }
 function enqueue(...scenes) { Q.push(...scenes.filter(Boolean)); pump(); }
@@ -1737,7 +1741,7 @@ export const cine = {
     const items = list.filter(f => RANK[f.kind] !== undefined).map((f, i) => ({ f, i })).sort((a, b) => RANK[a.f.kind] - RANK[b.f.kind] || a.i - b.i).map(x => x.f);
     const scenes = [];
     const dt = reveal ? def(doorCard) : null;
-    if (reveal && dt.type !== 'monster') scenes.push(S.reveal(reveal));
+    if (reveal && dt.type !== 'monster') { const sc = S.reveal(reveal); if (sc) sc.who = reveal.pid; scenes.push(sc); }
     const aftermath = !!snap && items.some(f => PANEL_KINDS.has(f.kind));
     let lastPanel = -1;
     for (const f of items) {
@@ -1752,6 +1756,7 @@ export const cine = {
         default: sc = S[f.kind]?.(f);
       }
       if (!sc) continue;
+      sc.who = f.kind === 'backstab' ? f.by : f.pid || f.by;
       scenes.push(sc);
       if (aftermath && (PANEL_KINDS.has(f.kind) || f.kind === 'dice')) lastPanel = scenes.length - 1;
     }

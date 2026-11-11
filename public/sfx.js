@@ -45,6 +45,18 @@ function makeEngine(ac, destination) {
   };
 }
 
+// ───────────── звук со стороны ─────────────
+// Звуки чужого хода идут со стороны того, кто ходит. Игра называет место (−1 — слева, 1 — справа) и срок, на который
+// оно действует (sfx.at); каждый звук в этот срок проходит через панораму. Эхо зала сдвигается вдвое слабее: зал общий.
+let panNow = 0, panUntil = 0;
+function panned(E, pan) {
+  const { ac } = E;
+  if (!ac.createStereoPanner) return E;
+  const dry = ac.createStereoPanner(); dry.pan.value = pan; dry.connect(E.master);
+  const wet = ac.createStereoPanner(); wet.pan.value = pan * 0.5; wet.connect(E.verb);
+  return { ...E, out(node, send = 0.25) { node.connect(dry); if (send > 0) { const g = ac.createGain(); g.gain.value = send; node.connect(g); g.connect(wet); } } };
+}
+
 // ───────────── кирпичики ─────────────
 function env(g, t, a, vol, dur, hold = 0) {
   g.gain.setValueAtTime(0.0001, t);
@@ -968,8 +980,12 @@ export const sfx = {
     const now = performance.now();
     if (last[name] && now - last[name] < (o.gap ?? 45)) return;
     last[name] = now;
-    try { fn(E, ac.currentTime + 0.01 + (o.delay || 0), o); } catch { /* звук — не главное */ }
+    const pan = Math.max(-1, Math.min(1, o.pan ?? (now < panUntil ? panNow : 0)));
+    try { fn(Math.abs(pan) > 0.03 ? panned(E, pan) : E, ac.currentTime + 0.01 + (o.delay || 0), o); } catch { /* звук — не главное */ }
   },
+  // с какой стороны звучит то, что сыграют в ближайшие ms миллисекунд: −1 — слева, 0 — посередине, 1 — справа
+  at(pan = 0, ms = 1200) { panNow = Number(pan) || 0; panUntil = performance.now() + (panNow ? ms : 0); },
+  get pan() { return performance.now() < panUntil ? panNow : 0; },
   // голосовая фраза по имени файла (n_turn, b_lucifer, e_f_0…); o.prio — важность, o.delay — задержка в секундах
   voice(name, o = {}) {
     if (!st.on || st.voice === false || !ac || (document.hidden && !o.always)) return;
