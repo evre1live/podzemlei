@@ -130,6 +130,21 @@ const ENV = {
   loc_oasis: { lamp: 0xffe2b0, hemi: 0xc8a068, fog: 0x120d07, flame: 0xffb040 },
   loc_tavern: { lamp: 0xffc080, hemi: 0xb07a48, fog: 0x100905, flame: 0xffa040 },
 };
+// погода зала: что летает в воздухе над столом у каждой локации (те же точки, что и пылинки, — другой цвет и ход)
+const AIR_DEF = { kind: 'dust', color: 0xffd9a0, size: 0.012, op: 0.5 };
+const AIR = {
+  loc_forge: { kind: 'embers', color: 0xffb060, size: 0.038, op: 0.95 },
+  loc_ice: { kind: 'snow', color: 0xffffff, size: 0.04, op: 0.9 },
+  loc_sky: { kind: 'snow', color: 0xf6f2ff, size: 0.02, op: 0.6 },
+  loc_glade: { kind: 'flies', color: 0xe6ff8a, size: 0.036, op: 0.9 },
+  loc_grove: { kind: 'flies', color: 0xc8ff9a, size: 0.036, op: 0.85 },
+  loc_graveyard: { kind: 'wisps', color: 0x8affc8, size: 0.04, op: 0.7 },
+  loc_koschei: { kind: 'wisps', color: 0x7af09a, size: 0.04, op: 0.7 },
+  loc_library: { kind: 'dust', color: 0xdcc0ff, size: 0.016, op: 0.6 },
+  loc_cove: { kind: 'spray', color: 0xd8f0ff, size: 0.018, op: 0.6 },
+  loc_flooded: { kind: 'spray', color: 0xc8e6f4, size: 0.018, op: 0.6 },
+  loc_oasis: { kind: 'sand', color: 0xffe0b0, size: 0.016, op: 0.7 },
+};
 const locOf = key => { const L = { ...LOC_DEF, ...(LOC[key] || {}) }; L.dim = clamp(0.205 / L.wl, 0.5, 1.12); return L; };
 const envOf = key => ({ ...ENV_DEF, ...(ENV[key] || {}) });
 const locImg = key => `/loc/v2/${LOC[key] ? key : 'default'}${R && R.tier === 'high' && R.bigTex ? '@4k' : ''}.webp`;
@@ -157,6 +172,22 @@ void main(){
   col = mix(col, vec3(0.55, 0.8, 1.0) * (l * 0.9 + 0.25), ghost * 0.75);
   col = mix(col, vec3(0.95, 0.16, 0.08), flash);
   gl_FragColor = vec4(col, a * opacity * (1.0 - ghost * 0.45));
+  if (gl_FragColor.a < 0.004) discard;
+  #include <tonemapping_fragment>
+  #include <colorspace_fragment>
+}`;
+// дверь подземелья: три кадра одной двери (закрыта, приоткрыта, выбита) перетекают друг в друга на одной плоскости,
+// из проёма бьёт свет
+const DOOR_FS = `uniform sampler2D a; uniform sampler2D b; uniform sampler2D c; uniform vec3 w; uniform float opacity; uniform float glow; uniform vec3 tint;
+varying vec2 vUv;
+void main(){
+  vec4 ca = texture2D(a, vUv), cb = texture2D(b, vUv), cc = texture2D(c, vUv);
+  float al = ca.a * w.x + cb.a * w.y + cc.a * w.z;
+  if (al < 0.01) discard;
+  vec3 col = (ca.rgb * ca.a * w.x + cb.rgb * cb.a * w.y + cc.rgb * cc.a * w.z) / al;
+  col *= tint;
+  col += vec3(1.0, 0.86, 0.6) * glow * (1.0 - smoothstep(0.0, 0.3, abs(vUv.x - 0.5))) * smoothstep(0.02, 0.45, vUv.y) * (1.0 - smoothstep(0.7, 0.92, vUv.y)) * 0.55;
+  gl_FragColor = vec4(col, min(1.0, al) * opacity);
   if (gl_FragColor.a < 0.004) discard;
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
@@ -291,6 +322,10 @@ function setLocation(key) {
   R.hemi.color.setHex(E.hemi); R.hemi.groundColor.setHex(E.ground);
   R.lamp.spot.color.setHex(E.lamp).lerp(_white, 0.35);
   for (const c of R.candles.list) { c.light.color.setHex(E.flame); c.flames.forEach(f => f.material.color.setHex(E.flame)); }
+  // воздух зала
+  R.air = { ...AIR_DEF, ...(AIR[key] || {}) };
+  const dm = R.dust.pts.material;
+  dm.color.setHex(R.air.color); dm.size = R.air.size; dm.opacity = R.air.op;
   setMat(key);
 }
 
@@ -538,6 +573,81 @@ function arena(d) {
   }
 }
 
+// ---------------------------------------------------------------- дверь
+// Дверь подземелья стоит в самой сцене — на дальней половине стола, там же, где потом встанет монстр. Её выбивают
+// в три приёма: два удара (дверь вздрагивает), щель со светом, пролом — вспышка, толчок камеры, дверь тает.
+// Звук, пыль и щепки поверх сцены добавляет cine.js: door() отдаёт ему место двери на экране.
+const DOOR_H = 0.45, DOOR_W = DOOR_H * (600 / 852), DOOR_BREAK = 900, DOOR_ALL = 1420;
+function buildDoor() {
+  const geo = new THREE.PlaneGeometry(1, 1);
+  geo.translate(0, 0.5, 0);
+  const D = { g: new THREE.Group(), on: false, t0: 0, sp: 1, loaded: 0 };
+  const tx = k => tex(`/ui/obj/v3/door-${k}.webp`, { onLoad: () => { D.loaded++; } });
+  D.mat = new THREE.ShaderMaterial({
+    vertexShader: FIG_VS, fragmentShader: DOOR_FS, transparent: true, depthWrite: false,
+    uniforms: { a: { value: tx('closed') }, b: { value: tx('ajar') }, c: { value: tx('broken') }, w: { value: new THREE.Vector3(1, 0, 0) }, opacity: { value: 0 }, glow: { value: 0 }, tint: { value: new THREE.Color(1, 1, 1) } },
+  });
+  D.mesh = new THREE.Mesh(geo, D.mat);
+  D.mesh.scale.set(DOOR_W, DOOR_H, 1); D.mesh.renderOrder = 6;
+  D.halo = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: radialTex([[0, 'rgba(255,255,255,.95)'], [0.35, 'rgba(255,255,255,.4)'], [1, 'rgba(255,255,255,0)']]), color: 0xffd9a0, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending }));
+  D.halo.position.set(0, DOOR_H * 0.45, -0.02); D.halo.renderOrder = 5;
+  D.shadow = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: radialTex([[0, 'rgba(0,0,0,.8)'], [0.5, 'rgba(0,0,0,.4)'], [1, 'rgba(0,0,0,0)']]), transparent: true, depthWrite: false, opacity: 0 }));
+  D.shadow.rotation.x = -Math.PI / 2; D.shadow.position.y = ARENA_Y - CARD_Y; D.shadow.scale.set(DOOR_W * 1.9, DOOR_H * 0.55, 1); D.shadow.renderOrder = 3;
+  D.g.add(D.shadow, D.halo, D.mesh);
+  D.g.visible = false;
+  return D;
+}
+// door(sp) — выбить дверь (sp — во сколько раз быстрее обычного). Возвращает место двери на экране или null, если
+// картинки ещё не загружены: тогда дверь рисует сама разметка
+function door(sp = 1) {
+  if (!R || !R.active || R.door.loaded < 3 || R.k < 0) return null;
+  const D = R.door, now = performance.now();
+  const z = -R.matD * 0.18;
+  D.g.position.set(0, TY + CARD_Y, z);
+  D.g.rotation.y = Math.atan2(R.base.position.x, R.base.position.z - z);
+  D.on = true; D.t0 = now; D.sp = Math.max(0.5, sp); D.hit = false;
+  R.look = { p: new THREE.Vector3(0, TY + DOOR_H * 0.5, z), t0: now, ms: 1750 / D.sp, w: 0.3 };
+  const pr = (x, y) => { _v.set(x, y, z).project(R.base); return { x: ((_v.x + 1) / 2) * R.size.w, y: ((1 - _v.y) / 2) * R.size.h }; };
+  const b = pr(0, TY), t = pr(0, TY + DOOR_H), l = pr(-DOOR_W / 2, TY + DOOR_H / 2), r = pr(DOOR_W / 2, TY + DOOR_H / 2);
+  return { x: (b.x + t.x) / 2, y: (b.y + t.y) / 2, h: Math.abs(b.y - t.y), w: Math.abs(r.x - l.x), breakAt: DOOR_BREAK };
+}
+function tickDoor(now, dt, fl) {
+  const D = R.door;
+  if (!D.on) return;
+  const t = (now - D.t0) * D.sp, u = D.mat.uniforms, B = DOOR_BREAK;
+  if (t > DOOR_ALL + 40) { D.on = false; D.g.visible = false; return; }
+  D.g.visible = true;
+  const seg = (a, b) => clamp((t - a) / (b - a), 0, 1);
+  // вход, два удара, уход сквозь проём
+  const inn = ease(seg(0, 240)), out = seg(B + 180, DOOR_ALL);
+  let rz = 0, ox = 0;
+  for (const [at, p] of [[300, 1], [620, 1.5]]) {
+    const q = (t - at) / (380 + 80 * p);
+    if (q > 0 && q < 1) { const d = (1 - q) * (1 - q) * p; rz += Math.sin(q * 26) * 0.022 * d; ox += Math.sin(q * 31) * 0.008 * d; }
+  }
+  const sc = (0.86 + 0.14 * inn) * (1 + 0.05 * seg(240, B) + 0.3 * easeIO(out));
+  D.mesh.scale.set(DOOR_W * sc, DOOR_H * sc, 1);
+  D.mesh.rotation.z = rz; D.mesh.position.x = ox;
+  // кадры: закрыта → приоткрыта → выбита
+  const ajar = seg(640, 810), broke = seg(B - 50, B + 70);
+  u.w.value.set((1 - seg(700, 900)) * (1 - broke), ajar * (1 - seg(B - 10, B + 150)), broke);
+  if (u.w.value.x + u.w.value.y + u.w.value.z < 0.05) u.w.value.z = 1;
+  u.glow.value = 0.85 * ease(seg(650, 950)) + 0.6 * seg(B - 40, B + 120);
+  u.opacity.value = inn * (1 - easeIO(out));
+  u.tint.value.set(R.envNow.lamp).lerp(_c1.set(0xffffff), 0.55).multiplyScalar(0.95 + (fl - 1) * 0.5);
+  D.shadow.material.opacity = 0.7 * inn * (1 - out);
+  // свет из проёма: разгорается в щели, после пролома заливает всё и гаснет вместе с дверью
+  const burst = seg(B - 40, B + 140);
+  D.halo.material.opacity = (0.35 * ease(seg(650, 900)) + 0.6 * burst) * (1 - out * out);
+  const hs = DOOR_H * (0.7 + 1.5 * ease(burst) + 0.6 * out);
+  D.halo.scale.set(hs, hs * 1.15, 1);
+  if (!D.hit && t >= B - 30) {
+    D.hit = true;
+    R.shake = Math.max(R.shake, 0.5); R.kick = Math.max(R.kick, 0.7);
+    flashLight(new THREE.Vector3(0, TY + 0.35, D.g.position.z + 0.25), 0xffd9a0, 9, 650);
+  }
+}
+
 // ---------------------------------------------------------------- карты
 const cardGeo = new THREE.PlaneGeometry(1, RATIO);
 const cardMat = map => new THREE.MeshStandardMaterial({ map, alphaTest: 0.5, roughness: 0.78, metalness: 0, color: 0xece4d6 });
@@ -695,10 +805,12 @@ function mount(area, hooks = {}) {
   scene.add(R.lamp.spot, R.lamp.spot.target);
   R.candles = buildCandles();
   scene.add(R.candles.group);
-  R.dust = buildDust(tier === 'high' ? 260 : 110);
+  R.dust = buildDust(tier === 'high' ? 280 : 150);
   scene.add(R.dust.pts);
   R.arena = buildArena();
   scene.add(R.arena.group);
+  R.door = buildDoor();
+  scene.add(R.door.g);
   // колоды: стопки с рубашкой сверху
   const edgeTex = canvasTex(64, 64, (g, w, h) => { g.fillStyle = '#d8c39a'; g.fillRect(0, 0, w, h); g.fillStyle = 'rgba(90,60,30,.35)'; for (let y = 0; y < h; y += 3) g.fillRect(0, y, w, 1); });
   const edgeMat = new THREE.MeshStandardMaterial({ map: edgeTex, roughness: 0.8 });
@@ -1157,16 +1269,47 @@ function tick(now) {
       f.position.y = f.userData.y + w * 0.002;
     }
   }
-  // пылинки в свету
-  const D = R.dust;
+  // воздух зала: пылинки в свету, искры кузни, снег, светляки, болотные огни, брызги, песок на ветру
+  const D = R.dust, air = R.air ? R.air.kind : 'dust', top = TY + 1.4;
   for (let i = 0; i < D.seed.length; i++) {
     const p = D.seed[i];
-    p.a += dt * 0.04 * p.s;
-    p.y += Math.sin(t * 0.3 + p.p) * 0.0008 * p.s + dt * 0.006 * p.s;
-    if (p.y > TY + 1.4) p.y = TY + 0.05;
-    D.pos[i * 3] = Math.cos(p.a) * p.r + Math.sin(t * 0.2 + p.p) * 0.03;
-    D.pos[i * 3 + 1] = p.y;
-    D.pos[i * 3 + 2] = Math.sin(p.a) * p.r * 0.75 - 0.1;
+    let x, z;
+    if (air === 'embers') {
+      // искры поднимаются от стола, качаясь, и гаснут под потолком
+      p.a += dt * 0.05 * p.s; p.y += dt * (0.05 + 0.13 * p.s);
+      if (p.y > top) { p.y = TY + 0.02; p.r = Math.sqrt(Math.random()) * 1.7; }
+      x = Math.cos(p.a) * p.r + Math.sin(t * 2.1 + p.p) * 0.02; z = Math.sin(p.a) * p.r * 0.75 - 0.1 + Math.cos(t * 1.7 + p.p) * 0.02;
+    } else if (air === 'snow' || air === 'spray') {
+      // снег и брызги падают: снег — медленно и вразвалку, брызги — быстрее и косо
+      const k = air === 'snow' ? 1 : 2.6;
+      p.y -= dt * (0.035 + 0.05 * p.s) * k;
+      if (p.y < TY + 0.02) { p.y = top; p.r = Math.sqrt(Math.random()) * 1.7; }
+      x = Math.cos(p.a) * p.r + Math.sin(t * 0.7 + p.p) * (air === 'snow' ? 0.05 : 0.01) + (air === 'spray' ? (top - p.y) * 0.12 : 0);
+      z = Math.sin(p.a) * p.r * 0.75 - 0.1;
+    } else if (air === 'flies') {
+      // светляки бродят на одной высоте и то подлетают, то отходят
+      p.a += dt * 0.12 * Math.sin(t * 0.23 + p.p) * p.s;
+      const yy = TY + 0.25 + (p.p % 1) * 0.8 + Math.sin(t * 0.6 + p.p * 3) * 0.06;
+      p.y = yy;
+      x = Math.cos(p.a) * p.r + Math.sin(t * 0.9 + p.p) * 0.05; z = Math.sin(p.a) * p.r * 0.75 - 0.1 + Math.cos(t * 0.7 + p.p * 2) * 0.05;
+    } else if (air === 'wisps') {
+      // болотные огни плывут вверх медленно, по спирали
+      p.a += dt * 0.1 * p.s; p.y += dt * 0.022 * (0.4 + p.s);
+      if (p.y > top) p.y = TY + 0.05;
+      x = Math.cos(p.a) * p.r + Math.sin(t * 0.5 + p.p) * 0.06; z = Math.sin(p.a) * p.r * 0.75 - 0.1;
+    } else if (air === 'sand') {
+      // песок несёт ветром по кругу, низко над столом
+      p.a += dt * (0.25 + 0.3 * p.s);
+      p.y += Math.sin(t * 0.8 + p.p) * 0.0012;
+      if (p.y > TY + 0.9) p.y = TY + 0.05;
+      x = Math.cos(p.a) * p.r; z = Math.sin(p.a) * p.r * 0.75 - 0.1;
+    } else {
+      p.a += dt * 0.04 * p.s;
+      p.y += Math.sin(t * 0.3 + p.p) * 0.0008 * p.s + dt * 0.006 * p.s;
+      if (p.y > top) p.y = TY + 0.05;
+      x = Math.cos(p.a) * p.r + Math.sin(t * 0.2 + p.p) * 0.03; z = Math.sin(p.a) * p.r * 0.75 - 0.1;
+    }
+    D.pos[i * 3] = x; D.pos[i * 3 + 1] = p.y; D.pos[i * 3 + 2] = z;
   }
   D.geo.attributes.position.needsUpdate = true;
   // арена боя: круги разгораются и медленно вращаются, у того, кто сильнее, — ярче
@@ -1186,6 +1329,7 @@ function tick(now) {
     S.shadow.material.opacity = e * 0.9;
     if (S.light) { S.light.color.copy(S.color); S.light.intensity = e * 1.5 * pulse * fl; }
   }
+  tickDoor(now, dt, fl);
   // зал: вспышка гаснет, в бою картина чуть темнее и теплее
   R.flash = Math.max(0, R.flash - dt * 2.4);
   const ru = R.room.mat.uniforms;
@@ -1297,7 +1441,7 @@ function setActive(on) {
 }
 
 window.PZ3D = {
-  supported, mount, unmount, mounted: () => !!R, setActive, update, layout: () => layoutDOM(), resize, fx, arena,
+  supported, mount, unmount, mounted: () => !!R, setActive, update, layout: () => layoutDOM(), resize, fx, arena, door,
   step: ms => { if (R) { tick(R.last + ms); render(); } },
   _debug: () => R,
   quality: () => (R ? { tier: R.tier, post: !!R.composer, dpr: R.renderer.getPixelRatio(), camD: R.camD, fov: R.camera.fov } : null),

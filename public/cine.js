@@ -354,6 +354,8 @@ function jolt(k, el, power = 1, dur = 420) {
   k.a(el, [{ transform: 'none' }, { transform: `translate(${-p}px, ${p * 0.4}px) rotate(${-2 * power}deg)` }, { transform: `translate(${p}px, ${-p * 0.4}px) rotate(${2 * power}deg)` }, { transform: `translate(${-p * 0.6}px, 0)` }, { transform: `translate(${p * 0.4}px, 0)` }, { transform: 'none' }], { dur, ease: EASE.lin, fill: 'none' });
 }
 const quake = (power = 1) => {
+  // в 3D трясётся сама сцена: разметка стола идёт за камерой
+  if (api?.shake3d?.(power)) return;
   const g = document.querySelector('.game');
   if (!g) return;
   fx.shake(g, power > 1.2 ? 'quake-hard' : 'quake');
@@ -481,7 +483,26 @@ function doorSvg(k, c, fit) {
 // слое (не спорит с подъездом), кадры двери перетекают друг в друга, свет в щели нарастает; после пролома камера
 // проходит сквозь проём и дверь тает — из света вылетает карта. Тень — отдельным пятном, без тяжёлых фильтров на кадрах.
 const DOOR_BREAK = 900;
-function door(k, c, fit) {
+// В 3D дверь стоит в самой сцене (scene3d.js: door) — d3 говорит, где она на экране. Здесь остаётся то, что поверх:
+// стук, пыль, искры из щели, щепки и зарево пролома. Карта потом выходит из того же места.
+function door3(k, c, d3) {
+  const B = DOOR_BREAK, f = d3.h / 355, p = { x: d3.x, y: d3.y };
+  c.x = d3.x; c.y = Math.max(vh() * 0.33, Math.min(vh() * 0.46, d3.y));
+  const knock = (t, pw) => k.at(t, () => { fx.dust({ x: p.x, y: p.y - d3.h * 0.42, w: d3.w * 0.7, h: 4 }, { n: 5 + 4 * pw }); k.snd(pw > 1 ? 'slam' : 'door'); });
+  knock(300, 1); knock(620, 1.5);
+  k.at(680, () => fx.spray({ x: p.x, y: p.y + 6 * f, w: 16 * f, h: d3.h * 0.68 }, { n: 10, spreadX: 0.3, spreadY: 1, speed: [40, 120], size: [2, 3.5], colors: ['#fff3b0', '#ffd27a', '#ffb347'], shape: 'spark', life: [0.4, 0.8] }));
+  k.at(B - 30, () => {
+    fx.spray({ x: p.x, y: p.y + 8 * f, w: d3.w * 0.6, h: d3.h * 0.56 }, { n: 20, spreadX: 0.9, spreadY: 0.8, speed: [180 * f, 460 * f], size: [2.5, 5], colors: ['#6b4a2a', '#8a6236', '#3e2a16', '#a87a46'], shape: 'rock', g: 900, life: [0.6, 1.1] });
+    fx.dust({ x: p.x, y: p.y + d3.h * 0.45, w: d3.w, h: 10 }, { n: 12 });
+  });
+  const light = k.pt('cn-doorglow', '', p.x, p.y);
+  k.a(light, [{ opacity: 0, transform: `scale(${f * 0.35})` }, { opacity: 0.9, transform: `scale(${f * 1.2})`, offset: 0.3 }, { opacity: 0, transform: `scale(${f * 1.9})` }], { dur: 1000, delay: B - 40, ease: EASE.out });
+  k.rm(light, B + 1000);
+  k.snd('doorOpen', {}, B - 80);
+  return B;
+}
+function door(k, c, fit, d3) {
+  if (d3) return door3(k, c, d3);
   if (!doorReady()) { warmDoor(); return doorSvg(k, c, fit); }
   const dr = k.pt('cn-door2', `<div class="d-cam"><div class="d-shake"><i class="cn-door2-shadow"></i>${DOOR2}</div></div>`, c.x, c.y);
   const cam = dr.firstElementChild, shake = cam.firstElementChild;
@@ -552,10 +573,12 @@ S.intro = (f, o) => {
       const c = { x: vw() / 2, y: vh() * 0.44 };
       const fit = fitBig();
       const hell = !!d.boss;
+      // дверь в сцене (3D) не должна уйти под затемнение: оно опускается, когда дверь уже выбита
+      const d3 = o.door ? api.door3d?.(k.sp) : null;
       const dim = k.el('cn-dim ' + tier);
-      k.a(dim, [{ opacity: 0 }, { opacity: 1 }], { dur: hell ? 600 : 240 });
+      k.a(dim, [{ opacity: 0 }, { opacity: 1 }], { dur: hell ? 600 : 240, delay: d3 ? DOOR_BREAK - 140 : 0 });
       if (hell) { k.snd('bossRise'); quake(0.6); k.at(200, () => hellfire(k, 1500)); }
-      const t0 = o.door ? door(k, c, fit) : sigil(k, c, fit, hell ? 'hell' : o.wandering ? 'wander' : tier);
+      const t0 = o.door ? door(k, c, fit, d3) : sigil(k, c, fit, hell ? 'hell' : o.wandering ? 'wander' : tier);
       const rays = k.pt('cn-rays ' + tier, raysSVG(), c.x, c.y);
       k.a(rays, [{ opacity: 0, transform: `scale(${fit * 0.5}) rotate(0deg)` }, { opacity: 1, transform: `scale(${fit}) rotate(28deg)`, offset: 0.3 }, { opacity: 0, transform: `scale(${fit * 1.1}) rotate(80deg)` }], { dur: 1700, delay: t0 - 60, ease: EASE.lin });
       const aura = k.pt('cn-aura ' + tier, '', c.x, c.y);
@@ -805,9 +828,10 @@ S.reveal = f => ({
     const d = def(f.card);
     const c = { x: vw() / 2, y: vh() * 0.44 };
     const fit = fitBig() * 0.92;
+    const d3 = api.door3d?.(k.sp);
     const dim = k.el('cn-dim soft');
-    k.a(dim, [{ opacity: 0 }, { opacity: 1 }], { dur: 240 });
-    const t0 = door(k, c, fit);
+    k.a(dim, [{ opacity: 0 }, { opacity: 1 }], { dur: 240, delay: d3 ? DOOR_BREAK - 140 : 0 });
+    const t0 = door(k, c, fit, d3);
     const kind = d.type === 'curse' ? 'curse' : d.type === 'location' ? 'loc' : d.type === 'event' ? 'event' : 'item';
     const rays = k.pt('cn-rays ' + kind, raysSVG(), c.x, c.y);
     k.a(rays, [{ opacity: 0, transform: `scale(${fit * 0.5})` }, { opacity: 1, transform: `scale(${fit}) rotate(25deg)`, offset: 0.35 }, { opacity: 0, transform: `scale(${fit * 1.1}) rotate(60deg)` }], { dur: 1300, delay: t0 - 60, ease: EASE.lin });
@@ -1632,7 +1656,7 @@ S.dice = f => ({
     const host = document.getElementById('fx');
     if (!host) return 0;
     const label = `${api.pname(f.pid)}: ${f.label || 'бросок'}${f.bonus ? ` (${f.bonus > 0 ? '+' : ''}${f.bonus})` : ''} — ${f.ok ? 'успех' : 'неудача'}`;
-    fx.dice(host, f.value, f.ok, label);
+    fx.dice(host, f.value, f.ok, label, api.diceArea?.() || null);
     sfx.play('dice', { always: true });
     setTimeout(() => sfx.play(f.ok ? 'diceOk' : 'diceFail', { always: true }), 900);
     setTimeout(() => {

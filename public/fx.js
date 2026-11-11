@@ -445,10 +445,12 @@ export const fx = {
   },
   // Кубик. Если есть WebGL — настоящий: летит из-под руки на стол, бьётся о борт и замирает нужной гранью (dice3d).
   // Иначе (и пока библиотека не загрузилась) — CSS-кубик крутится и встаёт на грань.
-  dice(host, value, ok, label) {
+  // where — куда на экране бросать ({ left, top, right, bottom }): в виде от первого лица это столешница в сцене,
+  // а не рамка сцены стола
+  dice(host, value, ok, label, where = null) {
     const stage = document.getElementById('stage');
-    const r = stage?.getBoundingClientRect();
-    if (dice3d && !reduced() && r && r.width > 260 && r.height > 200 && r.bottom > 0 && r.top < innerHeight) {
+    const r = where || stage?.getBoundingClientRect();
+    if (dice3d && !reduced() && r && r.right - r.left > 260 && r.bottom - r.top > (where ? 120 : 200) && r.bottom > 0 && r.top < innerHeight) {
       host.innerHTML = `<div class="die3 die3d ${ok ? 'ok' : 'fail'}"><div class="die3-scene"></div><div class="dlabel"></div></div>`;
       host.querySelector('.dlabel').textContent = label;
       const die = host.querySelector('.die3');

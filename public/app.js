@@ -3408,8 +3408,23 @@ function panOf(pid) {
   if (x == null) { const r = document.querySelector(`.opp[data-opp="${CSS.escape(pid)}"]`)?.getBoundingClientRect(); if (!r?.width) return 0; x = r.left + r.width / 2; }
   return Math.max(-0.6, Math.min(0.6, (x / Math.max(1, innerWidth) - 0.5) * 1.5));
 }
+// Дверь в сцене (3D): сцена выбивает её сама и говорит, где она на экране; таблички соперников, на которые дверь
+// встаёт, на это время гаснут. Нет 3D или картинки двери ещё не загружены — null, дверь рисует разметка.
+function door3D(sp = 1) {
+  if (!v3d.on || !window.PZ3D?.door) return null;
+  const d = PZ3D.door(sp);
+  if (!d) return null;
+  const hid = (v3d.seats || []).filter(s => Math.abs(s.x - d.x) < d.w / 2 + 96 && s.edge + 46 > d.y - d.h / 2)
+    .map(s => document.querySelector(`.game .opp[data-opp="${CSS.escape(s.id)}"]`)).filter(Boolean);
+  hid.forEach(el => el.classList.add('door-hide'));
+  setTimeout(() => hid.forEach(el => el.classList.remove('door-hide')), 1500 / sp);
+  return d;
+}
 cine.init({
   pan: panOf,
+  door3d: door3D,
+  diceArea: diceArea3D,
+  shake3d: p => { if (!v3d.on || !window.PZ3D) return false; PZ3D.fx('shake', { power: Math.min(1.2, 0.55 * p) }); return true; },
   meId: () => S.room?.me,
   pname,
   avaOf,
@@ -3456,7 +3471,7 @@ function sceneFx(fresh) {
   if (!v3d.on || !window.PZ3D) return;
   for (const f of fresh) {
     switch (f.kind) {
-      case 'reveal': PZ3D.fx('look', { gate: true, ms: 1700, w: 0.3 }); PZ3D.fx('kick', { power: 0.7 }); break;
+      case 'reveal': if (!door3D(1)) { PZ3D.fx('look', { gate: true, ms: 1700, w: 0.3 }); PZ3D.fx('kick', { power: 0.7 }); } break;
       case 'combat': case 'wandering': PZ3D.fx('shake', { power: def(f.card)?.boss ? 1 : 0.5 }); break;
       case 'mod': case 'enhance': case 'helper': case 'strike': PZ3D.fx('nod', { seat: f.pid }); break;
       case 'backstab': PZ3D.fx('nod', { seat: f.by }); break;
@@ -3577,12 +3592,24 @@ function runFx(fresh, snap) {
   }
   playDice();
 }
+// В 3D кубик падает на столешницу: от дальнего края стола до руки, между моей карточкой и колодами. Кубику нужно
+// поле не ниже 320 px и не шире 2,4 высоты (в узкой полосе его борта сходятся, и он укатывается за край), поэтому
+// поле чуть заходит за дальний край стола и на верх руки.
+function diceArea3D() {
+  if (!v3d.on || !v3d.mat) return null;
+  const hz = document.querySelector('.game .handzone')?.getBoundingClientRect(), me = $('#mecard')?.getBoundingClientRect(), dk = $('#deckDoor')?.getBoundingClientRect();
+  const bottom = (hz?.height ? hz.top : innerHeight * 0.7) + 40, top = Math.min(v3d.edge - 30, bottom - 320);
+  let left = Math.max(v3d.mat[0] + 40, (me?.width ? me.right : 0) + 20), right = Math.min(v3d.mat[1] - 40, (dk?.width ? dk.left : innerWidth) - 20);
+  const w = Math.min(right - left, (bottom - top) * 2.4), cx = (left + right) / 2;
+  left = cx - w / 2; right = cx + w / 2;
+  return { left, right, top, bottom };
+}
 function playDice() {
   if (S.ui.dieBusy || !S.ui.dieQueue.length) return;
   const f = S.ui.dieQueue.shift();
   S.ui.dieBusy = true;
   const label = `${pname(f.pid)}: ${f.label || 'бросок'}${f.bonus ? ` (${f.bonus > 0 ? '+' : ''}${f.bonus})` : ''} — ${f.ok ? 'успех' : 'неудача'}`;
-  fx.dice($('#fx'), f.value, f.ok, label);
+  fx.dice($('#fx'), f.value, f.ok, label, diceArea3D());
   sfx.play('dice', { always: true });
   setTimeout(() => sfx.play(f.ok ? 'diceOk' : 'diceFail', { always: true }), 900);
   setTimeout(() => { $('#fx').innerHTML = ''; S.ui.dieBusy = false; playDice(); }, 2100);
@@ -4058,7 +4085,7 @@ function stop3D() {
   window.PZ3D?.unmount();
   document.body.classList.remove('v3d-hands');
   $('#phUnder')?.remove(); $('#phOver')?.remove();
-  v3d.hl = v3d.hr = null; v3d.seats = null;
+  v3d.hl = v3d.hr = null; v3d.seats = null; v3d.mat = null;
   fightOff3D();
   const g = document.querySelector('.game');
   g?.style.removeProperty('--opps-h'); g?.style.removeProperty('--edge-y');
@@ -4117,7 +4144,7 @@ function place3D(p) {
   const game = document.querySelector('.game');
   if (!game || !v3d.on) return;
   let edge = 0;
-  v3d.seats = p.seats; v3d.cx = p.center.x;
+  v3d.seats = p.seats; v3d.cx = p.center.x; v3d.mat = [p.matL, p.matR];
   for (const s of p.seats) {
     edge = Math.max(edge, s.edge);
     let el = v3d.els.get(s.id);

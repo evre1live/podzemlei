@@ -4396,8 +4396,10 @@ body.v3d #world { visibility: hidden; }
   body.v3d .game .opp .om .hp-plate b { font-size: 15px; }
   body.v3d .game .opp .om .hm-lvl { left: calc(50% - 78px - 18px); top: calc(100% - var(--lift, 0px)); }
   body.v3d .game .opp .om .hm-str { left: auto; right: calc(50% - 78px - 18px); top: calc(100% - var(--lift, 0px)); }
+  /* дверь подземелья встаёт в сцене перед соперником — его табличка на это время гаснет (door3D в app.js) */
+  body.v3d .game .opp .om .hp-plate, body.v3d .game .opp .om .hm-lvl, body.v3d .game .opp .om .hm-str, body.v3d .game .opp .om-info { transition: top .45s cubic-bezier(.2, .8, .3, 1), opacity .25s ease; }
+  body.v3d .game .opp.door-hide .om .hp-plate, body.v3d .game .opp.door-hide .om .hm-lvl, body.v3d .game .opp.door-hide .om .hm-str, body.v3d .game .opp.door-hide .om-info { opacity: 0; }
   /* --lift: табличка приподнимается, когда под ней встаёт монстр (fitFight3D) */
-  body.v3d .game .opp .om .hp-plate, body.v3d .game .opp .om .hm-lvl, body.v3d .game .opp .om .hm-str, body.v3d .game .opp .om-info { transition: top .45s cubic-bezier(.2, .8, .3, 1); }
   body.v3d .game .opp .om-info { position: absolute; left: 50%; top: calc(100% + 18px - var(--lift, 0px)); transform: translateX(-50%); display: flex; align-items: center; justify-content: center; gap: 6px; min-width: 0; max-width: none; white-space: nowrap;
     padding: 2px 9px; border-radius: 99px; background: rgb(8 6 4 / .62); box-shadow: 0 0 0 1px rgb(255 236 200 / .1); }
   body.v3d .game .opp .om-info > .ostats { flex-wrap: nowrap; overflow: visible; }
