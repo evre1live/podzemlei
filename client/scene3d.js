@@ -16,6 +16,11 @@ import { BokehPass } from 'three/addons/postprocessing/BokehPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 
 const TY = 0.76;          // высота столешницы, м
+// Высоты над столешницей. Сукно, круги арены и карты лежат на разных уровнях с запасом: на одной высоте видеокарта
+// при каждом движении камеры по-разному решает, что сверху, и карты мерцают.
+const MAT_Y = 0.004;      // сукно
+const ARENA_Y = 0.0048;   // тень и рунный круг боя: над сукном, под картами
+const CARD_Y = 0.0068;    // нижняя карта из лежащих на сукне
 const RATIO = 1.5;        // карта: высота / ширина
 const TABLE_K = 912 / 1400; // столешница-картинка: глубина / ширина
 const LAMP_Y = 2.25;
@@ -356,7 +361,7 @@ function buildMat() {
   t.colorSpace = THREE.SRGBColorSpace;
   t.anisotropy = R.aniso;
   const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshStandardMaterial({ map: t, alphaTest: 0.5, roughness: 0.92, metalness: 0 }));
-  mesh.rotation.x = -Math.PI / 2; mesh.position.y = TY + 0.004; mesh.receiveShadow = true;
+  mesh.rotation.x = -Math.PI / 2; mesh.position.y = TY + MAT_Y; mesh.receiveShadow = true;
   const shadow = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({
     map: canvasTex(256, 256, (g, w, h) => {
       g.clearRect(0, 0, w, h);
@@ -497,9 +502,9 @@ function buildArena() {
   const spot = (color, lit) => {
     const g = new THREE.Group();
     const shadow = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: shTex, transparent: true, depthWrite: false, opacity: 0 }));
-    shadow.rotation.x = -Math.PI / 2; shadow.position.y = 0.0052; shadow.renderOrder = 3;
+    shadow.rotation.x = -Math.PI / 2; shadow.position.y = ARENA_Y; shadow.renderOrder = 3;
     const ring = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: ringTex, color, transparent: true, depthWrite: false, opacity: 0, blending: THREE.AdditiveBlending }));
-    ring.rotation.x = -Math.PI / 2; ring.position.y = 0.0058; ring.renderOrder = 4;
+    ring.rotation.x = -Math.PI / 2; ring.position.y = ARENA_Y + 0.0006; ring.renderOrder = 4;
     g.add(shadow, ring);
     let light = null;
     if (lit) { light = new THREE.PointLight(color, 0, 1.7, 2); light.position.set(0, 0.2, 0.12); g.add(light); }
@@ -669,7 +674,7 @@ function mount(area, hooks = {}) {
     tier, area, canvas, renderer, scene, hooks, hemi, fill,
     aniso: Math.min(8, renderer.capabilities.getMaxAnisotropy()),
     bigTex: renderer.capabilities.maxTextureSize >= 4096 && (window.devicePixelRatio || 1) * innerWidth >= 2200,
-    camera: new THREE.PerspectiveCamera(45, 1, 0.05, 60), base: new THREE.PerspectiveCamera(45, 1, 0.05, 60),
+    camera: new THREE.PerspectiveCamera(45, 1, 0.2, 60), base: new THREE.PerspectiveCamera(45, 1, 0.2, 60),   // ближе 20 см к камере ничего нет, а глубина от этого вчетверо точнее
     composer: null, bloom: null, bokeh: null, grade: null,
     seats: [], k: -1, rx: 1.3, rz: 0.85, view: null, active: false, raf: 0, last: performance.now(), t: 0,
     fx: [], shake: 0, kick: 0, par: { x: 0, y: 0, tx: 0, ty: 0 }, size: { w: 1, h: 1, top: 0, bottom: 0 }, camD: 0,
@@ -1006,12 +1011,12 @@ function setFan(s, n, force) {
   s.fan.children.forEach((c, j) => {
     c.visible = j < n;
     const a = (j - (n - 1) / 2) * 0.2;
-    c.position.set(Math.sin(a) * 0.05, 0.0012 + j * 0.0009, -Math.cos(a) * 0.05 + 0.05);
+    c.position.set(Math.sin(a) * 0.05, j * 0.0009, -Math.cos(a) * 0.05 + 0.05);
     c.rotation.y = -a;
   });
   const G = s.geo;
   const p = G.E.clone().addScaledVector(G.n, -0.12).addScaledVector(G.t, 0.27);
-  s.fan.position.set(p.x, TY + 0.003, p.z);
+  s.fan.position.set(p.x, TY + CARD_Y, p.z);
   s.fan.rotation.y = Math.atan2(-G.n.x, -G.n.z) + Math.PI;
 }
 function setEquip(s, ids) {
@@ -1026,7 +1031,7 @@ function setEquip(s, ids) {
     const c = flatCard(faceMat(id), cw);
     const off = (j - (m - 1) / 2) * stepW;
     c.position.copy(base).addScaledVector(G.t, off);
-    c.position.y = TY + 0.004 + j * 0.0004;
+    c.position.y = TY + CARD_Y + j * 0.0006;
     c.rotation.y = Math.atan2(-G.n.x, -G.n.z) + Math.PI + (((j * 7919) % 13) / 13 - 0.5) * 0.14;
     s.equip.add(c);
   });
@@ -1049,13 +1054,14 @@ function setPile(d, uid) {
   if (uid == null) { while (G.children.length) G.remove(G.children[0]); return; }
   // верхняя карта ложится на прежние, чуть вразнобой; глубже трёх не храним
   while (G.children.length > 2) G.remove(G.children[0]);
-  G.children.forEach((c, j) => (c.position.y = 0.004 + j * 0.0012));
+  // высота карты хранится на ней самой: полёт прежней верхней карты может ещё идти и не должен вернуть её на старую высоту
+  G.children.forEach((c, j) => { c.userData.y = CARD_Y + j * 0.0012; c.position.y = c.userData.y; });
   const top = flatCard(faceMat(uid), 0.13);
-  const y = 0.004 + G.children.length * 0.0012, ry = (Math.random() - 0.5) * 0.3;
+  const y = CARD_Y + G.children.length * 0.0012, ry = (Math.random() - 0.5) * 0.3;
   top.position.set((Math.random() - 0.5) * 0.02, y, (Math.random() - 0.5) * 0.02);
-  top.rotation.y = ry;
+  top.rotation.y = ry; top.userData.y = y;
   G.add(top);
-  if (prev !== undefined && R.active) addFx(260, k => { const e = ease(k); top.position.y = y + 0.07 * (1 - e); top.rotation.y = ry + 0.5 * (1 - e); });
+  if (prev !== undefined && R.active) addFx(260, k => { const e = ease(k); top.position.y = top.userData.y + 0.07 * (1 - e); top.rotation.y = ry + 0.5 * (1 - e); });
 }
 
 function update(view) {
