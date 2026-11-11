@@ -3601,9 +3601,15 @@ document.addEventListener('click', async e => {
     const o = popOpts[Number(opt.dataset.popopt)];
     if (!o) return;
     if (o.fn) return o.fn();
+    // карта срывается с руки сразу, не дожидаясь сервера: ответ приходит, пока она летит. Сервер отказал —
+    // карта возвращается на место, причина — в сообщении
     const fly = flySource(o.action);
+    const inHand = fly && document.querySelector(`#hand .card[data-uid="${CSS.escape(fly.uid)}"]`);
+    closeOverlay();
+    const flew = flyCard(fly, o.action);
+    if (flew && inHand) inHand.style.visibility = 'hidden';
     const r = await act(o.action);
-    if (r.ok) { closeOverlay(); flyCard(fly, o.action); }
+    if (flew && inHand) { if (!r.ok) inHand.style.visibility = ''; else setTimeout(() => { if (inHand.isConnected) inHand.style.visibility = ''; }, 1200); }
     return;
   }
   const vf = t.closest('[data-vforce]');
@@ -3774,6 +3780,7 @@ document.addEventListener('click', async e => {
     }
     case 'clearPassword': { const r = await call('room:settings', { password: '' }); if (!r.ok) toast(r.error); return; }
     case 'kick': case 'loot': case 'fight': case 'runAway': case 'autoEquip': case 'cancelHelp': case 'pass': case 'tame':
+      feelNow(a);
       return act({ type: a });
     case 'disarm': return act({ type: 'trap', disarm: true });
     case 'market': return openMarketModal();
@@ -3794,7 +3801,7 @@ document.addEventListener('click', async e => {
       if (h.mustGive) { S.ui.mode = { kind: 'give', need: h.mustGive, picked: [] }; return render(); }
       return act({ type: 'endTurn', give: [] });
     }
-    case 'trouble': return act({ type: 'lookForTrouble' });
+    case 'trouble': feelNow('trouble'); return act({ type: 'lookForTrouble' });
     case 'haunt': return act({ type: 'haunt', side: t.closest('[data-side]')?.dataset.side });
     case 'sendTrade': {
       const f = S.ui.tradeForm?.get();
@@ -4631,9 +4638,9 @@ function flySource(a) {
   return { uid, rect: el.getBoundingClientRect(), html: cardHTML(uid, { size: 'md', tab: false }) };
 }
 function flyCard(src, a) {
-  if (!src) return;
+  if (!src) return false;
   const d = def(src.uid);
-  if (['equip', 'unequip', 'discardInPlay', 'allyWear', 'allyTake'].includes(a.type)) return;
+  if (['equip', 'unequip', 'discardInPlay', 'allyWear', 'allyTake'].includes(a.type)) return false;
   let to = $('#stage');
   if (a.target) to = a.target === S.room.me ? $('#meava') : document.querySelector(`[data-opp="${a.target}"] .ava`);
   else if (a.type === 'gift') to = document.querySelector(`[data-opp="${a.to}"] .ava`);
@@ -4654,6 +4661,17 @@ function flyCard(src, a) {
     else if (d.type === 'item' || d.type === 'race' || d.type === 'class') fx.sparkle(target, { n: 12 });
     else fx.burst(target, { n: 14, speed: 180, g: 120 });
   } });
+  return true;
+}
+// Отклик на главные кнопки хода — сразу по нажатию, не дожидаясь сервера: звук, толчок камеры и рук.
+// Что вышло из действия, сервер покажет следом.
+const INSTANT = { kick: ['dash', 0.6], trouble: ['dash', 0.6], fight: ['shing', 0.5], runAway: ['dash', 0.3], loot: ['flip', 0] };
+function feelNow(type) {
+  const f = INSTANT[type];
+  if (!f) return;
+  sfx.play(f[0]);
+  if (v3d.on) { if (f[1]) window.PZ3D?.fx('kick', { power: f[1] }); handsMove('push'); }
+  else if (f[1]) tableKick(f[1] + 0.3);
 }
 
 function startAbility(name) {
