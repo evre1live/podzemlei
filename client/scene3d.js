@@ -38,6 +38,11 @@ function pickTier() {
   const coarse = matchMedia('(pointer: coarse)').matches;
   return coarse || Math.min(innerWidth, innerHeight) < 640 || (navigator.hardwareConcurrency || 4) <= 2 ? 'low' : 'high';
 }
+// Сколько точек рисуем. Ретина 2× на большом окне — это 5–8 млн точек, пост-обработка столько не тянет даже на сильной
+// видеокарте, а разницы на размытом зале не видно: держим бюджет точек (разметка поверх холста остаётся чёткой).
+// k — доля бюджета: её урезает защита от тормозов
+const PIXELS = { high: 3.3e6, low: 2.2e6 };
+const pixelRatio = (tier, w, h, k = 1) => Math.max(1, Math.min(window.devicePixelRatio || 1, tier === 'high' ? 2 : 1.5, Math.sqrt(PIXELS[tier] * k / Math.max(1, w * h))));
 
 // ---------------------------------------------------------------- текстуры
 let R = null; // всё живое состояние сцены
@@ -572,7 +577,7 @@ function mount(area, hooks = {}) {
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFShadowMap;
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, tier === 'high' ? 2 : 1.5));
+  renderer.setPixelRatio(pixelRatio(tier, area.clientWidth || innerWidth, area.clientHeight || innerHeight));
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(ENV_DEF.bg);
@@ -591,7 +596,7 @@ function mount(area, hooks = {}) {
     composer: null, bloom: null, bokeh: null, grade: null,
     seats: [], k: -1, rx: 1.3, rz: 0.85, view: null, active: false, raf: 0, last: performance.now(), t: 0,
     fx: [], shake: 0, kick: 0, par: { x: 0, y: 0, tx: 0, ty: 0 }, size: { w: 1, h: 1, top: 0, bottom: 0 }, camD: 0,
-    perf: { acc: 0, n: 0, slow: 0 }, look: null, lookAt: { on: 0, p: new THREE.Vector3() }, tense: 0, flash: 0,
+    perf: { acc: 0, n: 0, slow: 0 }, prK: 1, look: null, lookAt: { on: 0, p: new THREE.Vector3() }, tense: 0, flash: 0,
     lastLay: { p: new THREE.Vector3(), q: new THREE.Quaternion() }, decks: {}, piles: {}, pileTop: {}, envNow: ENV_DEF,
   };
   R.envRT = buildEnv(renderer);
@@ -677,9 +682,10 @@ function setupComposer() {
   R.composer.addPass(R.grade);
 }
 function dropQuality() {
-  // не тянет — упрощаем: без пост-обработки, ниже разрешение, без теней
-  if (R.composer) { R.composer.dispose(); R.composer = null; R.bloom = null; R.bokeh = null; R.grade = null; if (R.grain) R.grain.classList.remove('gl'); }
-  else if (R.renderer.getPixelRatio() > 1) R.renderer.setPixelRatio(1);
+  // не тянет — упрощаем по шагам: меньше точек (вид тот же), без пост-обработки, ещё меньше точек, без теней
+  if (R.prK > 0.7 && R.renderer.getPixelRatio() > 1) R.prK = 0.6;
+  else if (R.composer) { R.composer.dispose(); R.composer = null; R.bloom = null; R.bokeh = null; R.grade = null; if (R.grain) R.grain.classList.remove('gl'); }
+  else if (R.renderer.getPixelRatio() > 1) R.prK = 0;
   else if (R.renderer.shadowMap.enabled) { R.renderer.shadowMap.enabled = false; R.lamp.spot.castShadow = false; }
   else return;
   resize();
@@ -712,6 +718,7 @@ function resize() {
     R.portrait = portrait;
     if (R.k > 0 && R.view) { R.k = -2; update(R.view); }
   }
+  R.renderer.setPixelRatio(pixelRatio(R.tier, w, h, R.prK));
   R.renderer.setSize(w, h, false);
   if (R.composer) {
     R.composer.setPixelRatio(R.renderer.getPixelRatio());
@@ -1151,13 +1158,18 @@ function tick(now) {
   cam.updateMatrixWorld();
   const LL = R.lastLay;
   if (LL.p.distanceToSquared(cam.position) > 4e-6 || LL.q.angleTo(cam.quaternion) > 0.0015) { LL.p.copy(cam.position); LL.q.copy(cam.quaternion); layoutDOM(); }
-  // защита от тормозов
+  // защита от тормозов: кадры дольше 30 мс пять секунд подряд — упрощаем на шаг. Если после шага быстрее не стало,
+  // дело не в сцене (браузер сам держит 30 кадров: экономия батареи, слабый процессор) — дальше не режем
   const pf = R.perf;
   pf.acc += dt; pf.n++;
-  if (pf.acc > 2.5 && !lockedTier) {
+  if (pf.acc > 2.5 && !lockedTier && !pf.stop) {
     const avg = pf.acc / pf.n;
-    pf.slow = avg > 0.034 ? pf.slow + 1 : 0;
-    if (pf.slow >= 2) { pf.slow = 0; dropQuality(); }
+    if (pf.before && avg > pf.before * 0.88) pf.stop = true;
+    else {
+      pf.before = 0;
+      pf.slow = avg > 0.03 ? pf.slow + 1 : 0;
+      if (pf.slow >= 2) { pf.slow = 0; pf.before = avg; dropQuality(); }
+    }
     pf.acc = 0; pf.n = 0;
   }
 }
