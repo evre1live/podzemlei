@@ -8,7 +8,7 @@ import { sfx } from '/sfx.js';
 import { setWorld, worldMood } from '/world.js';
 import { cine, growlKind, warmDoor } from '/cine.js';
 import { AVATAR_PARTS, avatarFromSeed, cleanAvatar, avatarInGame, gameRaces, pickCode } from '/shared/avatar.js';
-import { AV_LABELS, LIGHTS, lookNote, portraitThumb, setAvatarLocation, sceneOf, lightOf, frameExt } from '/art-avatar.js';
+import { AV_LABELS, LIGHTS, lookNote, portraitThumb, setAvatarLocation, sceneOf, lightOf, frameExt, portraitCut } from '/art-avatar.js';
 import { FRAMES } from '/avatar-art.js';
 import { createVoice } from '/voice.js';
 import { ico } from '/icons.js';
@@ -16,6 +16,7 @@ import { profile, noteSeen, noteKills, noteGame, isGolden, slainOf, GOLD_AT, gol
 import { wheelSVG, WHEEL_LOOK, wheelChance } from '/wheel.js';
 import { initDepth, depthOn, applyDepth } from '/depth.js';
 import { NEWS, NEWS_LATEST } from '/news.js';
+import { HANDS, handSrc } from '/art-hands.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 // разметка пишется, только когда правда поменялась: иначе каждое событие стола пересоздаёт блок целиком —
@@ -316,6 +317,7 @@ function render() {
     const loc = g?.location ? def(g.location).art : '';
     if ((b.dataset.loc || '') !== loc) b.dataset.loc = loc; }
   update[scr]();
+  sync3D(scr);
   if (scr !== 'home') renderVoice();
 }
 const mount = {}, update = {};
@@ -704,6 +706,7 @@ mount.game = () => {
         <span class="spacer"></span>
         <span class="voice-ctl"></span>
         <button class="btn ghost small side-toggle" data-act="sideToggle"><span class="long-label">Летопись и чат</span><span class="short">Чат</span></button>
+        <button class="btn ghost small hud-btn v3d-btn" data-act="view3d" title="Вид стола: от первого лица (3D) или сверху" aria-label="Вид стола: 3D или сверху" aria-pressed="false">${CUBE}<span class="lbl">3D</span></button>
         <button class="btn ghost small icon-btn sound-btn" data-act="sound" aria-label="Настройки" title="Настройки: звук и изображение"></button>
         <button class="btn ghost small hud-btn" data-act="rules" title="Правила" aria-label="Правила">${ico('rule-book')}<span class="lbl">Правила</span></button>
         <button class="btn ghost small hud-btn" data-act="menu" title="Меню" aria-label="Меню">${ico('hamburger-menu')}<span class="lbl">Меню</span></button>
@@ -714,6 +717,8 @@ mount.game = () => {
       <div class="table-bg" id="tableBg" aria-hidden="true"><div class="tb-mat"></div><div class="tb-glow"></div><div class="tb-torch"></div><div class="tb-boss"><i class="bd-a"></i><i class="bd-b"></i></div><div class="tb-frame"><i class="f-t"></i><i class="f-b"></i><i class="f-l"></i><i class="f-r"></i><i class="f-tl"></i><i class="f-tr"></i><i class="f-bl"></i><i class="f-br"></i></div><div class="tb-props" id="tableProps"></div></div>
       <div class="cave-stage" id="stage"></div>
       <div class="motes" aria-hidden="true">${'<i></i>'.repeat(12)}</div>
+      <div class="ticker3d" id="ticker3d" aria-hidden="true"></div>
+      <div class="act-dock" id="actdock"></div>
       <div class="sidepanel side" id="sidepanel">
         <div class="tabs" role="tablist">
           <button role="tab" data-tab="log">Летопись</button>
@@ -805,11 +810,13 @@ function fitHead() {
   hc.classList.remove('tight');
   if (innerWidth > 700 && hc.scrollWidth > hc.clientWidth + 1) hc.classList.add('tight');
 }
+// соперники по кругу от моего места (зритель видит всех)
+function oppOrder() {
+  const g = S.game, mine = me(), start = mine ? mine.seat : 0;
+  return [...g.players].sort((a, b) => ((a.seat - start + 99) % g.players.length) - ((b.seat - start + 99) % g.players.length)).filter(p => p.id !== S.room.me);
+}
 function renderOpps() {
-  const g = S.game;
-  const mine = me();
-  const start = mine ? mine.seat : 0;
-  const order = [...g.players].sort((a, b) => ((a.seat - start + 99) % g.players.length) - ((b.seat - start + 99) % g.players.length)).filter(p => p.id !== S.room.me);
+  const order = oppOrder();
   const box = $('#opps'); box.dataset.n = order.length;
   patchList(box, order.map(p => ({ key: p.id, html: oppHTML(p) })), 'data-opp', syncLoop);
 }
@@ -1347,6 +1354,7 @@ setInterval(() => {
 function stageSet(el, html) { const fresh = setHTML(el, html); afterStage(fresh); return fresh; }
 function afterStage(fresh = true) {
   { const st = $('#stage'); if (st) placeFuse(st); }
+  if (fresh) dockActs();
   if (fresh) liveFight();
   if (cine.on) { S.ui.slam = null; if (fresh) cine.decorate(); return; }
   const slam = S.ui.slam;
@@ -1863,6 +1871,8 @@ document.addEventListener('animationend', e => {
 });
 // карты летят в руку из колоды: из той, к которой относятся (проходы или клад), по дуге, разворачиваясь в полёте
 function dealFromDecks(hand) {
+  // руки подаются навстречу новой карте
+  if (v3d.on && hand.querySelector('.card.deal-fly')) handsMove('draw');
   hand.querySelectorAll('.card.deal-fly').forEach(c => {
     c.classList.remove('deal-fly');
     const i = Number(c.dataset.deal || 0), d = def(c.dataset.uid);
@@ -1883,6 +1893,8 @@ function dealFromDecks(hand) {
 function turnSweep(pid) {
   const el = pid === S.room?.me ? $('#mecard .me-top') : document.querySelector(`[data-opp="${CSS.escape(pid)}"]`);
   if (!el || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  // в 3D соперник — портрет в сцене: он кивает и загорается сам, полоса света по табличке не нужна
+  if (v3d.on && pid !== S.room?.me) { window.PZ3D?.fx('nod', { seat: pid }); return; }
   const i = document.createElement('i');
   i.className = 'turn-sweep';
   el.append(i);
@@ -2019,7 +2031,9 @@ function fitStage() {
   const pad = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
   const need = inner.scrollHeight + pad;
   const top = st.getBoundingClientRect().top - game.getBoundingClientRect().top;
-  const avail = Math.max(240, game.clientHeight - top - HAND_STRIP - 18);
+  // в 3D руки держат веер — он виден целиком, сцена получает то, что осталось
+  const strip = document.body.classList.contains('v3d-hands') ? ($('.handzone')?.offsetHeight || HAND_STRIP) : HAND_STRIP;
+  const avail = Math.max(document.body.classList.contains('v3d-hands') ? 170 : 240, game.clientHeight - top - strip - 18);
   game.style.setProperty('--stage-min', Math.round(Math.min(need, avail)) + 'px');
   if (need > avail) inner.style.zoom = Math.max(0.55, (avail - pad) / (need - pad)).toFixed(3);
 }
@@ -2089,7 +2103,7 @@ function fitHand() {
   // на невысоком экране рука уходит за нижний край — насколько, чтобы наведённая карта поднималась целиком
   { const pad = parseFloat(getComputedStyle(el).paddingBottom) || 0;
     el.style.setProperty('--hand-cut', Math.max(0, Math.round(el.getBoundingClientRect().bottom - pad - innerHeight + 10)) + 'px'); }
-  if (cards.length < 2) return el.style.setProperty('--ov', '0px');
+  if (cards.length < 2) { el.style.setProperty('--ov', '0px'); return syncHands(); }
   const w = cards[0].offsetWidth;
   const avail = el.clientWidth - 12;
   const gap = 10;
@@ -2097,6 +2111,7 @@ function fitHand() {
   // на телефоне рука листается пальцем, на широком экране — раскладывается веером
   if (window.innerWidth >= 760 && cards.length * (w + gap) > avail) ov = Math.max(-(w - 34), (avail - w) / (cards.length - 1) - w);
   el.style.setProperty('--ov', ov + 'px');
+  syncHands();
 }
 window.addEventListener('resize', () => { $('#stage')?.classList.remove('deck-gap'); fitHand(); if (S.screen === 'game') fitHead(); });
 // Подъём карты в руке на компьютере. Раньше карта поднималась на постоянную высоту: если курсор был у её нижнего
@@ -2780,13 +2795,14 @@ const MOOD_FX = {
   duelEnd: [0xffd27a, 0.18, 0.8], trap: [0xffa040, 0.12, 0], location: [0xffffff, 0.16, 1], levelUp: [0xffe6a0, 0.08, 0.6], tame: [0xc4ef86, 0.14, 0.6],
 };
 const SHOCK_AT = { victory: () => document.querySelector('#stage .mon-wrap .card') || $('#stage'), legendary: f => avaOf(f.pid), depth: () => null, duelEnd: () => $('#stage') };
-function shockAt(el, power) { const r = el?.getBoundingClientRect?.(); worldMood('shock', r ? { x: r.left + r.width / 2, y: r.top + r.height / 2, power } : { power }); }
+function shockAt(el, power) { if (v3d.on) return window.PZ3D?.fx('shake', { power: 0.45 * power }); const r = el?.getBoundingClientRect?.(); worldMood('shock', r ? { x: r.left + r.width / 2, y: r.top + r.height / 2, power } : { power }); }
 function moodFx(fresh) {
   for (const f of fresh) {
     if (SHOCK_AT[f.kind]) shockAt(SHOCK_AT[f.kind](f), f.kind === 'depth' ? 0.7 : 1);
     if ((f.kind === 'combat' || f.kind === 'wandering') && def(f.card)?.boss) shockAt($('#stage'), 1.3);
     const m = MOOD_FX[f.kind] || (f.kind === 'combat' || f.kind === 'wandering' ? (def(f.card)?.boss ? [0xc23cff, 0.28, 0] : [0xff5a2a, 0.12, 0]) : null);
     if (!m) continue;
+    if (v3d.on) { window.PZ3D?.fx('flash', { color: m[0], alpha: m[1] }); continue; }
     worldMood('flash', { color: m[0], alpha: m[1] });
     if (m[2]) worldMood('flare', { n: m[2] });
   }
@@ -2806,6 +2822,7 @@ function portraitReact(fresh) {
       const el = f.pid === S.room?.me ? $('#meava') : document.querySelector(`[data-opp="${CSS.escape(f.pid)}"]`);
       if (!el) return;
       el.classList.remove(...Object.values(REACT)); el.style.removeProperty('--rd'); void el.offsetWidth; el.classList.add(cls);
+      if (v3d.on) { window.PZ3D?.fx(cls === 'react-up' ? 'cheer' : 'hit', { seat: f.pid }); if (f.pid === S.room?.me) handsMove(cls === 'react-up' ? 'cheer' : 'hit'); }
     }, cine.on ? 900 : 60);
   }
 }
@@ -3369,10 +3386,25 @@ function soundFx(fresh) {
     }
   }
 }
+// сцена откликается на события стола: взгляд к воротам, тряска, кивок того, кто сыграл карту, радость победителя
+function sceneFx(fresh) {
+  if (!v3d.on || !window.PZ3D) return;
+  for (const f of fresh) {
+    switch (f.kind) {
+      case 'reveal': PZ3D.fx('look', { gate: true, ms: 1700, w: 0.3 }); PZ3D.fx('kick', { power: 0.7 }); break;
+      case 'combat': case 'wandering': PZ3D.fx('shake', { power: def(f.card)?.boss ? 1 : 0.5 }); break;
+      case 'mod': case 'enhance': case 'helper': case 'strike': PZ3D.fx('nod', { seat: f.pid }); break;
+      case 'backstab': PZ3D.fx('nod', { seat: f.by }); break;
+      case 'curse': if (f.by) PZ3D.fx('nod', { seat: f.by }); break;
+      case 'victory': PZ3D.fx('cheer', { seat: f.pid }); if (f.helper) PZ3D.fx('cheer', { seat: f.helper }); break;
+    }
+  }
+}
 function runFx(fresh, snap) {
   extraFx(fresh);
   if (cine.on) return cine.play(fresh, snap);
   soundFx(fresh);
+  sceneFx(fresh);
   for (const f of fresh) {
     const ava = avaOf(f.pid);
     switch (f.kind) {
@@ -3582,6 +3614,7 @@ document.addEventListener('click', async e => {
     case 'seatAsk': return openSeatModal();
     case 'seatVote': S.ui.seatVoteSeen = S.room?.seats?.vote?.id; return openSeatVote();
     case 'sound': return openSoundModal();
+    case 'view3d': return setView3D(!v3dWant());
     case 'avatar': return openAvatarEditor();
     case 'avatarRandom': return avRandom();
     case 'avatarSave': return saveAvatar();
@@ -3925,6 +3958,241 @@ document.addEventListener('input', e => {
   vc.applyVolume(v.dataset.vvol);
 });
 
+// ───────────────────────── стол от первого лица (3D) ─────────────────────────
+// Сцена (public/scene3d.js, исходник client/scene3d.js) рисует зал локации, стол, соперников и колоды; вся разметка
+// игры остаётся поверх и встаёт туда, где это лежит в сцене. Скрипт грузится, только когда вид включён.
+// Нет WebGL2, видеокарта отвалилась, телефон — остаётся прежний вид сверху.
+const V3D_VER = '1';
+const CUBE = '<svg class="gi" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5 20.5 7v10L12 21.5 3.5 17V7z M3.5 7 12 11.5 20.5 7 M12 11.5v10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>';
+const v3d = { on: false, loading: null, failed: false, rect: null, edge: 0, els: new Map(), tick: 0 };
+const v3dCan = () => !v3d.failed && !FAN.matches && !!window.WebGL2RenderingContext;
+const v3dDefault = () => matchMedia('(pointer: fine)').matches && (navigator.hardwareConcurrency || 4) > 2 && !matchMedia('(prefers-reduced-motion: reduce)').matches;
+const v3dWant = () => v3dCan() && LS.get('view3d', v3dDefault());
+function setView3D(on) { LS.set('view3d', !!on); render(); if (on && !v3dCan()) toast('3D-стол на этом устройстве недоступен — остаётся вид сверху'); }
+function load3D() {
+  return (v3d.loading ||= new Promise(res => {
+    if (window.PZ3D) return res(true);
+    const s = document.createElement('script');
+    s.src = '/scene3d.js?v=' + V3D_VER; s.async = true;
+    s.onload = () => res(!!window.PZ3D);
+    s.onerror = () => { v3d.loading = null; res(false); };
+    document.head.append(s);
+  }));
+}
+function stop3D() {
+  if (!v3d.on && !window.PZ3D?.mounted()) return;
+  v3d.on = false; v3d.edge = 0; v3d.rect = null; v3d.els.clear();
+  document.body.classList.remove('v3d');
+  window.PZ3D?.unmount();
+  document.body.classList.remove('v3d-hands');
+  $('#phUnder')?.remove(); $('#phOver')?.remove();
+  v3d.hl = v3d.hr = null;
+  const g = document.querySelector('.game');
+  g?.style.removeProperty('--opps-h'); g?.style.removeProperty('--edge-y');
+  // кнопки хода возвращаются в сцену: она пересоберётся заново
+  { const st = $('#stage'); if (st) { htmlOf.delete(st); $('#actdock')?.replaceChildren(); if (S.screen === 'game' && S.game) { renderStage(); requestAnimationFrame(fitHand); } } }
+  applyBg();
+  document.querySelectorAll('.v3d-btn').forEach(b => { b.classList.remove('on'); b.setAttribute('aria-pressed', 'false'); });
+}
+// что сцене нужно знать о столе
+function view3d() {
+  const g = S.game, playing = g.phase === 'playing', c = playing ? g.combat : null, d = playing ? g.duel : null;
+  return {
+    loc: g.location ? def(g.location).art : 'default',
+    opp: oppOrder().map(p => ({ id: p.id, art: portraitCut(gAva(p)), hand: p.handCount || 0, equip: p.equipped || [], turn: playing && g.turn.pid === p.id,
+      fighter: (!!c && c.fighter === p.id) || (!!d && (d.from === p.id || d.to === p.id)), helper: !!c && c.helper === p.id, out: !!(p.dead || p.banished), ghost: !!(p.ghost && !p.dead) })),
+    decks: g.decks, piles: { door: g.discard?.door?.top || null, treasure: g.discard?.treasure?.top || null },
+    mood: c ? { combat: true, boss: c.monsters.some(m => def(m.uid).boss), losing: !c.numbers?.winning } : d ? { combat: true } : null,
+  };
+}
+const FACE_TONE = d => (d.type === 'monster' ? 'monster' : d.type === 'curse' || d.type === 'trap' ? 'curse' : d.type === 'item' ? 'item' : d.deck === 'treasure' ? 'treasure' : 'door');
+const v3dHooks = {
+  // поля кадра: сверху шапка, снизу полоса руки
+  pad: () => ({ top: (document.querySelector('.game .g-head')?.getBoundingClientRect().bottom || 56) + 2, bottom: Math.max(176, (document.body.classList.contains('v3d-hands') ? document.querySelector('.game .handzone')?.offsetHeight || 0 : 0) - 84), left: 12, right: 12 }),
+  face: uid => { const d = def(uid); return { key: d.id, name: d.name, img: CARD_IMG.has(d.id) ? cardImgUrl(d.id) : d.type === 'location' ? locImg(d.art) : null, tone: FACE_TONE(d), note: d.type === 'item' && d.bonus ? `+${d.bonus}` : '' }; },
+  back: deck => { const st = getBack(), id = st !== 'classic' && CARD_IMG.has(`back_${deck}_${st}`) ? `back_${deck}_${st}` : `back_${deck}`; return CARD_IMG.has(id) ? cardImgUrl(id) : null; },
+  place: p => place3D(p),
+  onLost: () => { v3d.failed = true; stop3D(); toast('Видеокарта отключила 3D — вернул вид сверху'); render(); },
+};
+async function sync3D(scr) {
+  if (scr !== 'game' || !v3dWant()) return stop3D();
+  if (!window.PZ3D) {
+    const ok = await load3D();
+    if (!ok) { v3d.failed = true; return; }
+    if (S.screen !== 'game' || !v3dWant()) return;
+  }
+  if (!PZ3D.mounted()) {
+    if (!PZ3D.mount($('#world3d'), v3dHooks)) { v3d.failed = true; return stop3D(); }
+    v3d.on = true;
+    document.body.classList.add('v3d');
+    applyBg();
+    PZ3D.setActive(true);
+    dockActs();
+    requestAnimationFrame(() => { fitHand(); fitHead(); });
+  }
+  document.querySelectorAll('.v3d-btn').forEach(b => { b.classList.add('on'); b.setAttribute('aria-pressed', 'true'); });
+  v3d.rect = null;
+  PZ3D.update(view3d());
+  ticker3D();
+}
+// разметка встаёт на сцену: таблички — к героям, якоря колод — к стопкам. Вызывается при каждом движении камеры,
+// поэтому только переменные CSS и никаких замеров (рамка сцены меряется раз за перерисовку)
+function place3D(p) {
+  const game = document.querySelector('.game');
+  if (!game || !v3d.on) return;
+  let edge = 0;
+  for (const s of p.seats) {
+    edge = Math.max(edge, s.edge);
+    let el = v3d.els.get(s.id);
+    if (!el?.isConnected) { el = document.querySelector(`.opp[data-opp="${CSS.escape(s.id)}"]`); if (el) v3d.els.set(s.id, el); }
+    if (!el) continue;
+    const st = el.style;
+    st.setProperty('--sx', s.x.toFixed(1) + 'px'); st.setProperty('--sy', s.top.toFixed(1) + 'px');
+    st.setProperty('--sw', Math.max(84, s.w).toFixed(1) + 'px'); st.setProperty('--sh', Math.max(60, s.edge - s.top).toFixed(1) + 'px');
+  }
+  // высота ряда соперников — по дальнему краю стола; из-за пары пикселей от движения камеры раскладку не трогаем
+  if (Math.abs(edge - v3d.edge) > 8) {
+    v3d.edge = edge;
+    const top = game.querySelector('.b-clay')?.getBoundingClientRect().top || 60;
+    game.style.setProperty('--opps-h', Math.max(80, Math.round(edge + 50 - top)) + 'px');
+    game.style.setProperty('--edge-y', Math.round(edge) + 'px');
+    v3d.rect = null;
+    requestAnimationFrame(() => { fitHand(); v3d.rect = null; window.PZ3D?.layout(); });
+  }
+  const st = $('#stage');
+  if (!st) return;
+  const r = (v3d.rect ||= st.getBoundingClientRect());
+  const set = (k, pt) => { st.style.setProperty(`--${k}x`, (pt.x - r.left).toFixed(1) + 'px'); st.style.setProperty(`--${k}y`, (pt.y - r.top).toFixed(1) + 'px'); };
+  set('dd', p.door); set('dt', p.treasure); set('dp', p.pile);
+  st.style.setProperty('--dcw', p.pileW.toFixed(1) + 'px');
+}
+// кнопки хода и боя в 3D переезжают из сцены в док справа внизу: сцена остаётся бою, а кнопки всегда на одном месте
+function dockActs() {
+  const dock = $('#actdock');
+  if (!dock) return;
+  const bar = document.querySelector('#stage .act-bar');
+  if (!v3d.on) { if (dock.firstChild) dock.replaceChildren(); return; }
+  if (bar) dock.replaceChildren(bar);
+}
+// ── Руки игрока — нарисованные (art/gen/import-hands.py), у каждой расы свои; держат веер за крайние карты.
+// Рука — два слоя вокруг карт: под ними вся кисть, поверх — только большой палец с тенью, поэтому карта зажата
+// между большим пальцем и остальными. Якорь картинки (под основанием большого пальца) встаёт на наружный край
+// крайней карты чуть выше её нижнего угла (HAND_UP — доля высоты карты); рука наклоняется вместе с картой и ещё
+// чуть наружу (HAND_LEAN), чтобы большой палец шёл вдоль края и меньше закрывал текст.
+const RACE_SKIN = { human: 'human', elf: 'elf', dwarf: 'dwarf', halfling: 'halfling', orc: 'orc', goblin: 'goblin', molefolk: 'mole' };
+const HAND_UP = 0.14, HAND_K = 1, HAND_LEAN = 6, HANDS_MIN_H = 800;
+// у кого какие руки: по расе героя; если для расы картинок ещё нет — человеческие, нет и их — рук нет
+const handsRace = p => { const k = p && RACE_SKIN[raceKeysOf(p)[0]]; return HANDS[k] ? k : HANDS.human ? 'human' : null; };
+function handEdge(card, side) {
+  const r = card.getBoundingClientRect();
+  const a = parseFloat(getComputedStyle(card).rotate) || 0, rad = a * Math.PI / 180, c = Math.abs(Math.cos(rad)), sn = Math.abs(Math.sin(rad)), den = c * c - sn * sn || 1;
+  const w = (r.width * c - r.height * sn) / den, h = (r.height * c - r.width * sn) / den;
+  const px = side * w / 2, py = h * (0.5 - HAND_UP);
+  return { x: r.left + r.width / 2 + px * Math.cos(rad) - py * Math.sin(rad), y: r.top + r.height / 2 + px * Math.sin(rad) + py * Math.cos(rad), rot: a, w };
+}
+// карта в полёте (раздача из колоды, выход легендарки) руку за собой не ведёт; свечение редкой карты — не полёт
+const animMoves = new WeakMap();
+function movesCard(an) {
+  let v = animMoves.get(an);
+  if (v === undefined) {
+    let kf = [];
+    try { kf = an.effect?.getKeyframes?.() || []; } catch { /* у анимации нет кадров */ }
+    v = kf.some(k => 'transform' in k || 'translate' in k || 'rotate' in k || 'scale' in k || 'opacity' in k || 'offsetDistance' in k);
+    animMoves.set(an, v);
+  }
+  return v;
+}
+const cardFlies = c => c.classList.contains('deal-fly') || c.style.visibility === 'hidden' || c.getAnimations().some(x => !(x instanceof CSSTransition) && x.playState === 'running' && movesCard(x));
+function handsLayers(zone, race) {
+  let u = $('#phUnder'), o = $('#phOver');
+  if (!u || !o || u.parentElement !== zone) {
+    u?.remove(); o?.remove();
+    u = document.createElement('div'); u.id = 'phUnder'; u.className = 'ph-layer under'; u.setAttribute('aria-hidden', 'true');
+    o = document.createElement('div'); o.id = 'phOver'; o.className = 'ph-layer over'; o.setAttribute('aria-hidden', 'true');
+    zone.prepend(u); zone.append(o);
+  }
+  if (u.dataset.race !== race) {
+    const html = top => ['l', 'r'].map(sd => `<div class="ph ${sd}"><img src="${handSrc(race, sd, top)}" alt="" draggable="false" decoding="async"></div>`).join('');
+    u.innerHTML = html(false); o.innerHTML = html(true);
+    u.dataset.race = race;
+    u.classList.remove('on'); o.classList.remove('on');
+  }
+  return [u, o];
+}
+function syncHands() {
+  if (!v3d.on || performance.now() < (v3d.handsBusy || 0)) return;
+  const zone = document.querySelector('.game .handzone'), el = $('#hand'), mine = me(), race = handsRace(mine);
+  const on = !!zone && !!el && !!mine && !!race && !FAN.matches && innerHeight >= HANDS_MIN_H && S.game?.phase === 'playing';
+  if (document.body.classList.contains('v3d-hands') !== on) {
+    document.body.classList.toggle('v3d-hands', on);
+    // полоса руки стала выше или ниже — стол и камера встают заново
+    requestAnimationFrame(() => { fitHand(); window.PZ3D?.resize(); });
+  }
+  if (!on) { $('#phUnder')?.classList.remove('on'); $('#phOver')?.classList.remove('on'); v3d.hl = v3d.hr = null; return; }
+  const [u, o] = handsLayers(zone, race), art = HANDS[race];
+  const cards = [...el.querySelectorAll('.card:not(.hand-back)')].filter(c => !c.classList.contains('dragging'));
+  // рука держит крайнюю из лежащих карт: та, что ещё летит из колоды или спрятана сценой, не в счёт. Наведённая карта
+  // поднимается и выпрямляется — рука остаётся, где была, и чуть отпускает её
+  const edge = (side, key) => {
+    const list = side < 0 ? cards : [...cards].reverse(), c = list.find(x => !cardFlies(x));
+    if (!c) return [null, false];
+    const hov = c.matches(':hover') || c.matches(':focus-visible');
+    if (hov && v3d[key]) return [v3d[key], true];
+    return [(v3d[key] = handEdge(c, side)), hov];
+  };
+  const [L, lh] = edge(-1, 'hl'), [Rt, rh] = edge(1, 'hr');
+  const show = !!L && !!Rt, fresh = show && !u.classList.contains('on');
+  u.classList.toggle('on', show); o.classList.toggle('on', show);
+  if (!show) return;
+  const zr = zone.getBoundingClientRect();
+  for (const [sd, A, hov] of [['l', L, lh], ['r', Rt, rh]]) {
+    const a = art[sd], W = A.w * a.k * HAND_K, H = W * a.h / a.w, ox = a.ax * W, oy = a.ay * H;
+    const css = `width:${W.toFixed(1)}px;height:${H.toFixed(1)}px;transform-origin:${ox.toFixed(1)}px ${oy.toFixed(1)}px;transform:translate(${(A.x - zr.left - ox).toFixed(1)}px,${(A.y - zr.top - oy).toFixed(1)}px) rotate(${(A.rot + (sd === 'l' ? -HAND_LEAN : HAND_LEAN)).toFixed(2)}deg)`;
+    for (const layer of [u, o]) {
+      const h = layer.querySelector('.ph.' + sd);
+      if (fresh) h.classList.add('snap');
+      if (h._css !== css) { h._css = css; h.style.cssText = css; }
+      h.classList.toggle('rel', hov);
+    }
+  }
+  // первый показ: рука сразу встаёт на место (без переезда из угла) и поднимается из-за края экрана
+  if (fresh) requestAnimationFrame(() => requestAnimationFrame(() => document.querySelectorAll('.ph.snap').forEach(x => x.classList.remove('snap'))));
+}
+// движение рук вместе с веером: бросок карты, удар по герою, взял карту, радость
+const HAND_MOVES = {
+  push: [[{ translate: '0 0' }, { translate: '0 -15px', offset: 0.35 }, { translate: '0 0' }], 460],
+  hit: [[{ translate: '0 0', rotate: '0deg' }, { translate: '-11px 10px', rotate: '-1.6deg', offset: 0.1 }, { translate: '9px 5px', rotate: '1.2deg', offset: 0.3 }, { translate: '-4px 2px', rotate: '0deg', offset: 0.55 }, { translate: '0 0', rotate: '0deg' }], 600],
+  draw: [[{ translate: '0 0' }, { translate: '0 9px', offset: 0.3 }, { translate: '0 0' }], 520],
+  cheer: [[{ translate: '0 0' }, { translate: '0 -20px', offset: 0.3 }, { translate: '0 3px', offset: 0.7 }, { translate: '0 0' }], 700],
+};
+function handsMove(kind) {
+  const m = HAND_MOVES[kind];
+  if (!m || !document.body.classList.contains('v3d-hands') || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  // пока веер качается, якоря не пересчитываем: руки едут вместе с картами одним движением
+  v3d.handsBusy = performance.now() + m[1] + 60;
+  for (const el of [$('#phUnder'), $('#hand'), $('#phOver')]) el?.animate(m[0], { duration: m[1], easing: 'cubic-bezier(.2,.7,.3,1)' });
+}
+setInterval(() => { if (v3d.on && !document.hidden) syncHands(); }, 140);
+// летопись в 3D убрана в выдвижную панель — свежие строки всплывают справа и гаснут сами
+function ticker3D() {
+  const box = $('#ticker3d'), log = S.game?.log;
+  if (!box || !log) return;
+  const last = log.at(-1)?.id || 0;
+  if (!v3d.tick || last < v3d.tick) { v3d.tick = last; return; }
+  const fresh = log.filter(l => l.id > v3d.tick && l.kind !== 'turn').slice(-4);
+  v3d.tick = last;
+  if (S.ui.sideOpen) return;
+  for (const l of fresh) {
+    const d = document.createElement('div');
+    d.className = `tk l-${l.kind}`;
+    d.innerHTML = logText(l.text);
+    box.append(d);
+    setTimeout(() => d.classList.add('out'), 5200);
+    setTimeout(() => d.remove(), 6000);
+  }
+  while (box.children.length > 5) box.firstChild.remove();
+}
+
 // ───────────────────────── настройки: звук и изображение ─────────────────────────
 // Наверху — шестерёнка настроек (там и звук, и всё про картинку). Если звук выключен, на шестерёнке — значок
 // перечёркнутого динамика, чтобы было видно, почему тихо
@@ -3939,7 +4207,7 @@ function soundIcons() {
 }
 // живой фон: на слабых устройствах и при «уменьшить движение» по умолчанию неподвижный
 const liveBg = () => LS.get('liveBg', !(matchMedia('(prefers-reduced-motion: reduce)').matches || (navigator.hardwareConcurrency || 4) <= 2));
-const applyBg = () => { $('#world').classList.toggle('still', !liveBg()); homeVideo(); };
+const applyBg = () => { $('#world').classList.toggle('still', !liveBg() || v3d.on); homeVideo(); };
 applyBg();
 function openSoundModal() {
   const s = sfx.state;
@@ -3956,6 +4224,7 @@ function openSoundModal() {
     <label class="check"><input type="checkbox" id="liveBg" ${liveBg() ? 'checked' : ''}> Живой фон: вода, снег, светлячки (на слабом телефоне лучше выключить)</label>
     <label class="check"><input type="checkbox" id="cineOn" ${cine.enabled ? 'checked' : ''}> Зрелищные сцены: двери, удары, разрубленные карты, салют</label>
     <label class="check"><input type="checkbox" id="depthOn" ${depthOn() ? 'checked' : ''}> Объёмные карты и портреты: рисунок «выходит» из рамки за курсором</label>
+    ${v3dCan() ? `<label class="check"><input type="checkbox" id="v3dOn" ${v3dWant() ? 'checked' : ''}> Стол от первого лица (3D): зал локации, соперники за столом, живой свет. Если тормозит — выключите</label>` : ''}
     <p class="muted" style="margin:0;font-size:13.5px">Звуки — записи из свободных библиотек Kenney и OpenGameArt (лицензия CC0), мелодии сыграны на пиццикато и стальных барабанах, музыка локаций сочиняется прямо в браузере. Значки — game-icons.net (CC BY 3.0, Lorc, Delapouite и другие). Голоса озвучены в ElevenLabs. Если на телефоне тишина, проверьте беззвучный режим.</p>
     <div class="row"><button class="btn" data-act="soundTest">Послушать</button><button class="btn primary" data-act="closeOverlay">Готово</button></div>
   </div>`);
@@ -3969,6 +4238,7 @@ function openSoundModal() {
   $('#liveBg').addEventListener('change', e => { LS.set('liveBg', e.target.checked); applyBg(); });
   $('#cineOn').addEventListener('change', e => { cine.set(e.target.checked); render(); });
   $('#depthOn').addEventListener('change', e => { LS.set('depth3d', e.target.checked); applyDepth(); });
+  $('#v3dOn')?.addEventListener('change', e => setView3D(e.target.checked));
 }
 
 // ───────────────────────── полёт сыгранной карты ─────────────────────────
@@ -4233,6 +4503,7 @@ function flyCard(src, a) {
   else if (['race', 'class', 'halfbreed', 'supermunch', 'item', 'buff', 'levelup'].includes(d.type)) to = $('#meava');
   else if (d.type === 'location') to = $('#stage');
   sfx.play('whoosh');
+  if (v3d.on) handsMove('push');
   fx.fly(src.html, src.rect, to || $('#stage'), { onArrive: () => {
     sfx.play('place');
     const target = to || $('#stage');

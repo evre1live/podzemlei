@@ -43,6 +43,8 @@ const portraitOf = v => {
   if (!PORTRAITS.has(id)) id = 'p_human_m_1';
   return [id, PORTRAITS.get(id)];
 };
+// вырезанный по контуру герой — для стола от первого лица (3D): там он сидит за столом без рамки и фона
+export const portraitCut = a => { const [id, p] = portraitOf(avatarConfig(a)); return p?.[2] ? { c: `/avatars/v1/c/${id}.webp?v=${p[2]}`, flat: false } : { c: `/avatars/v1/${id}.webp?v=${p?.[0] || ''}`, flat: true }; };
 // сцена: [id, отпечаток фона, название, свет по умолчанию] или null (родной фон)
 export function sceneOf(v) {
   if (v.scene === SCENE_NATIVE) return null;

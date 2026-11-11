@@ -4359,3 +4359,111 @@ button.pf-tile { cursor: pointer; } button.pf-tile:hover { box-shadow: inset 0 0
   font: 700 12.5px/1.2 var(--ui); letter-spacing: .12em; text-transform: uppercase; color: #e6c27a; }
 #soundModal .set-sec .gi { width: 18px; height: 18px; flex: none; }
 @media (prefers-reduced-motion: reduce) { .sound-btn > .gi:first-child { transition: none; } .sound-btn:hover > .gi:first-child { rotate: none; } }
+
+/* ═════════ стол от первого лица (3D) ═════════
+   Холст сцены (client/scene3d.js) лежит под всей разметкой игры: зал локации, стол, соперники и колоды нарисованы в нём.
+   Поэтому в этом виде нет нарисованного поля, рамы и предметов, таблички соперников стоят на их портретах, якоря колод —
+   на стопках, а летопись убрана в выдвижную панель. Положение задают переменные (--sx, --sy, --ddx …) из app.js place3D. */
+#world3d { position: fixed; inset: 0; z-index: 0; pointer-events: none; display: none; background: #070504; }
+#world3d canvas { display: block; width: 100%; height: 100%; }
+body.v3d #world3d { display: block; }
+body.v3d #world { visibility: hidden; }
+#grain3d { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(ellipse 78% 74% at 50% 46%, transparent 52%, rgb(0 0 0 / .55) 100%); }
+#grain3d.gl { display: none; }
+.ticker3d { display: none; }
+.game .g-head .v3d-btn.on { color: #ffe2a6; box-shadow: inset 0 0 0 1px rgb(255 205 120 / .5), 0 0 14px rgb(255 180 80 / .22); }
+@media (max-width: 900px) { .game .g-head .v3d-btn { display: none; } }
+@media (min-width: 901px) {
+  /* три колонны остаются, но правая пуста: за ней виден зал, летопись выезжает поверх по кнопке */
+  body.v3d .game { grid-template-columns: clamp(236px, 17.5vw, 290px) minmax(0, 1fr) clamp(236px, 17.5vw, 290px); }
+  body.v3d .game > .b-clay { height: var(--opps-h, 250px); margin-bottom: 0; pointer-events: none; }
+  body.v3d .game .opps { display: block; padding: 0; min-height: 0; overflow: visible; }
+  /* соперник — прозрачная область поверх портрета в сцене: нажатие открывает его вещи, сюда же целятся карты */
+  body.v3d .game .opp { position: fixed; left: var(--sx, 50%); top: var(--sy, 90px); width: var(--sw, 170px); height: var(--sh, 220px); max-width: none; min-width: 0; margin: 0; padding: 0;
+    display: block; flex: none; transform: translateX(-50%); pointer-events: auto; border-radius: 40% 40% 12px 12px; }
+  body.v3d .game .opp .hero-pill.medal.om, body.v3d .game .opp .om .ring { display: contents; }
+  /* портрет в медальоне невидим — на его месте герой в сцене; сам блок остаётся якорем для эмоций и ударов */
+  body.v3d .game .opp .om .ava { position: absolute; left: 50%; top: 5%; width: 64%; height: auto; aspect-ratio: 1; transform: translateX(-50%); background: none; box-shadow: none; border: 0; overflow: visible; filter: none !important; }
+  body.v3d .game .opp .om .ava > svg { opacity: 0; }
+  body.v3d .game .opp .om .hp-plate { position: absolute; left: 50%; top: 100%; transform: translate(-50%, -50%); margin: 0; width: 156px; min-width: 0; max-width: none; padding: 4px 20px 3px; }
+  body.v3d .game .opp .om .hp-plate b { font-size: 15px; }
+  body.v3d .game .opp .om .hm-lvl { left: calc(50% - 78px - 18px); top: 100%; }
+  body.v3d .game .opp .om .hm-str { left: auto; right: calc(50% - 78px - 18px); top: 100%; }
+  body.v3d .game .opp .om-info { position: absolute; left: 50%; top: calc(100% + 18px); transform: translateX(-50%); display: flex; align-items: center; justify-content: center; gap: 6px; min-width: 0; max-width: none; white-space: nowrap;
+    padding: 2px 9px; border-radius: 99px; background: rgb(8 6 4 / .62); box-shadow: 0 0 0 1px rgb(255 236 200 / .1); }
+  body.v3d .game .opp .om-info > .ostats { flex-wrap: nowrap; overflow: visible; }
+  body.v3d .game .opp:hover .om .hp-plate, body.v3d .game .opp:focus-visible .om .hp-plate { filter: brightness(1.25); }
+  body.v3d .game .opp.turn .om .hp-plate { filter: drop-shadow(0 0 10px rgb(255 190 90 / .75)); }
+  /* поле, рама и предметы стола — в сцене */
+  body.v3d .game #tableBg, body.v3d .game .cave > .motes { display: none; }
+  body.v3d .game #stage.cave-stage { padding: 0 14px 8px; }
+  body.v3d .game #stage.cave-stage::before { display: none; }
+  body.v3d .game #stage .fuse { top: 0; }
+  /* колоды и сброс: невидимые якоря на стопках сцены (от них летит раздача), видны только счётчики */
+  body.v3d .game #stage .decks { display: contents; }
+  body.v3d .game #stage .deck { position: absolute; left: var(--ddx, 80%); top: var(--ddy, 30%); width: var(--dcw, 60px); height: calc(var(--dcw, 60px) * .8); transform: translate(-50%, -50%); z-index: 0;
+    background: none !important; border: 0; box-shadow: none !important; overflow: visible; }
+  body.v3d .game #stage .deck > svg { opacity: 0; }
+  body.v3d .game #stage #deckTreasure { left: var(--dtx, 86%); top: var(--dty, 30%); }
+  body.v3d .game #stage .deck.pile { left: var(--dpx, 83%); top: var(--dpy, 44%); width: calc(var(--dcw, 60px) * 2.3); height: calc(var(--dcw, 60px) * 1.05); }
+  body.v3d .game #stage .deck.pile.empty { border: 0; background: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+  body.v3d .game #stage .deck.pile .pile-card { left: 0; top: 0; width: 50%; height: 100%; scale: none; rotate: none; translate: none; opacity: 0; }
+  body.v3d .game #stage .deck.pile .pile-card.p1 { left: 50%; }
+  body.v3d .game #stage .deck.pile .pile-card > .card { width: 100%; height: 100%; min-width: 0; }
+  body.v3d .game #stage .deck > span { bottom: auto; top: 50%; transform: translate(-50%, -50%); font-size: 11.5px; padding: 0 6px; opacity: .9; }
+  body.v3d .game #stage .deck.pile > span { top: auto; bottom: -13px; transform: translateX(-50%); }
+  /* моя карточка стоит внизу слева и не поднимается выше дальнего края стола: над ней сидят соперники */
+  body.v3d .game #mecard { align-self: end; contain: layout; max-height: calc(100dvh - var(--edge-y, 360px) - 84px); background: linear-gradient(180deg, rgb(255 255 255 / .05), rgb(255 255 255 / 0) 40%), var(--grain), rgb(var(--smoke) / .5); }
+  /* рука — без стеклянной пластины: карты лежат прямо на ближнем краю стола */
+  body.v3d .game .handzone { background: none; border-color: transparent; box-shadow: none !important; -webkit-backdrop-filter: none; backdrop-filter: none; }
+  body.v3d .game .handhead { text-shadow: 0 1px 2px #000, 0 0 10px rgb(0 0 0 / .9); }
+  /* летопись и чат — выдвижная панель справа */
+  body.v3d .game .g-head .side-toggle { display: inline-flex; }
+  body.v3d .game #sidepanel { display: none; }
+  body.v3d .game #sidepanel.open { display: flex; position: fixed; right: 12px; top: 78px; bottom: 14px; width: clamp(290px, 22vw, 360px); z-index: 30; margin: 0; }
+  /* свежие строки летописи: всплывают справа под шапкой и гаснут */
+  body.v3d .ticker3d { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; position: fixed; right: 14px; top: 78px; width: clamp(220px, 19vw, 300px); z-index: 4; pointer-events: none; }
+  body.v3d .ticker3d .tk { max-width: 100%; padding: 5px 11px 6px; border-radius: 9px; font: 500 13px/1.3 var(--ui); color: #f1e7d6; text-align: right; background: rgb(10 8 6 / .68); box-shadow: 0 0 0 1px rgb(255 236 200 / .09), 0 6px 16px rgb(0 0 0 / .4);
+    animation: tkIn .35s cubic-bezier(.2, .8, .3, 1) both; transition: opacity .7s ease, transform .7s ease; }
+  body.v3d .ticker3d .tk .li { width: 14px; height: 14px; vertical-align: -2px; margin-right: 4px; opacity: .85; }
+  body.v3d .ticker3d .tk.out { opacity: 0; transform: translateX(14px); }
+  body.v3d .ticker3d .tk.l-good { color: #bff0c8; } body.v3d .ticker3d .tk.l-bad { color: #ffb4a4; } body.v3d .ticker3d .tk.l-curse { color: #dcc0ff; } body.v3d .ticker3d .tk.l-win { color: #ffe2a0; }
+}
+/* кнопки хода и боя в 3D — док справа внизу */
+.act-dock { display: none; }
+/* руки игрока — нарисованные, два слоя вокруг карт руки: под картами вся кисть, поверх — большой палец с тенью.
+   Место и наклон каждой руки ставит app.js (syncHands); здесь — появление, дыхание и «отпустил карту» */
+.ph-layer { display: none; position: absolute; inset: 0; pointer-events: none; }
+body.v3d-hands .ph-layer { display: block; }
+.ph-layer.under { z-index: 0; }
+.ph-layer.over { z-index: 3; }
+.ph { position: absolute; left: 0; top: 0; opacity: 0; translate: 0 96px; transition: transform .22s cubic-bezier(.3, .7, .3, 1), translate .5s cubic-bezier(.2, .8, .3, 1), rotate .3s ease, opacity .3s ease; will-change: transform; }
+.ph.snap { transition: translate .5s cubic-bezier(.2, .8, .3, 1), opacity .3s ease; }
+.ph-layer.on .ph { opacity: 1; translate: 0 0; }
+.ph-layer.on .ph.l.rel { translate: -5px 7px; rotate: -2.5deg; }
+.ph-layer.on .ph.r.rel { translate: 5px 7px; rotate: 2.5deg; }
+.ph img { display: block; width: 100%; height: 100%; -webkit-user-drag: none; user-select: none; }
+.ph.l img { animation: phGripL 4.6s ease-in-out infinite; }
+.ph.r img { animation: phGripR 5.4s ease-in-out infinite; }
+.ph-layer.under .ph img { filter: drop-shadow(0 10px 11px rgb(0 0 0 / .55)); }
+@keyframes phGripL { 0%, 100% { translate: 0 0; } 50% { translate: -.6px -1.6px; } }
+@keyframes phGripR { 0%, 100% { translate: 0 0; } 50% { translate: .6px -1.3px; } }
+@media (prefers-reduced-motion: reduce) { .ph img { animation: none; } .ph { transition: opacity .3s ease; } }
+@media (min-width: 901px) {
+  body.v3d .game .act-dock { display: block; grid-area: side; align-self: end; justify-self: end; width: 100%; max-width: 264px; margin: 0 2px 104px 0; position: relative; z-index: 5; }
+  body.v3d .game .act-dock .act-bar { display: flex; flex-direction: column-reverse; align-items: stretch; justify-content: flex-start; gap: 8px; margin: 0; width: 100%; }
+  body.v3d .game .act-dock .act-bar > .btn { width: 100%; justify-content: center; white-space: normal; }
+  body.v3d .game .act-dock .act-bar > .hint, body.v3d .game .act-dock .act-bar > .helpwait { display: block; text-align: center; font-size: 13px; line-height: 1.35; padding: 6px 11px; border-radius: 10px; color: #efe6d6;
+    background: rgb(10 8 6 / .64); box-shadow: 0 0 0 1px rgb(255 236 200 / .08); text-shadow: none; }
+  /* руки держат веер: карты чуть меньше и приподняты над краем экрана (чем выше окно, тем выше — видно рукава) */
+  body.v3d-hands .game .hand:not(.fan) { position: relative; z-index: 1; transform: scale(.8); transform-origin: 50% 100%; margin-top: -46px; padding-bottom: clamp(72px, calc((100dvh - 770px) * .5), 170px); min-height: 0; }
+  body.v3d-hands .game .handzone { padding-bottom: 0; transition: translate .5s cubic-bezier(.2, .8, .3, 1); }
+  /* в свой ход руки с веером чуть поднимаются к игроку */
+  body.v3d-hands.my-turn .game .handzone { translate: 0 -7px; }
+  /* рукава уходят под карточку героя и под кнопки хода, а не ложатся на них */
+  body.v3d-hands .game #mecard, body.v3d-hands .game .act-dock { z-index: 7; }
+  body.v3d-hands .game .handhead { position: absolute; left: 12px; right: 12px; top: -4px; justify-content: center; pointer-events: none; z-index: 2; }
+  body.v3d-hands .game .handhead > * { pointer-events: auto; }
+}
+@keyframes tkIn { from { opacity: 0; transform: translateX(18px); } }
+@media (prefers-reduced-motion: reduce) { body.v3d .ticker3d .tk { animation: none; } }
