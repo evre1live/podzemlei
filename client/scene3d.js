@@ -789,7 +789,7 @@ function mount(area, hooks = {}) {
     seats: [], k: -1, rx: 1.3, rz: 0.85, view: null, active: false, raf: 0, last: performance.now(), t: 0,
     fx: [], shake: 0, kick: 0, par: { x: 0, y: 0, tx: 0, ty: 0 }, size: { w: 1, h: 1, top: 0, bottom: 0 }, camD: 0,
     perf: { acc: 0, n: 0, slow: 0 }, prK: 1, look: null, lookAt: { on: 0, p: new THREE.Vector3() }, tense: 0, flash: 0,
-    lastLay: { p: new THREE.Vector3(), q: new THREE.Quaternion() }, decks: {}, piles: {}, pileTop: {}, envNow: ENV_DEF,
+    lastLay: { p: new THREE.Vector3(), q: new THREE.Quaternion() }, decks: {}, piles: {}, pileTop: {}, envNow: ENV_DEF, intro: null, final: null,
   };
   R.envRT = buildEnv(renderer);
   R.envTex = R.envRT.texture;
@@ -825,6 +825,8 @@ function mount(area, hooks = {}) {
   // вспышки: огни живут в сцене всегда, чтобы не пересобирать шейдеры
   R.flashes = [0, 1].map(() => { const l = new THREE.PointLight(0xffb060, 0, 6, 2); scene.add(l); return l; });
   R.flashI = 0;
+  R.finalLight = new THREE.PointLight(0xffc860, 0, 5, 2);
+  scene.add(R.finalLight);
 
   if (tier === 'high') setupComposer();
   R.grain = document.createElement('div');
@@ -1109,6 +1111,7 @@ function layoutDOM() {
     cardPx: Math.abs(P(0.065, TY, 0).x - P(-0.065, TY, 0).x),
     matL: P(-R.matW / 2, TY, 0.1).x, matR: P(R.matW / 2, TY, 0.1).x,
     gate: project(R.room.door),
+    cut: !!(R.intro || (R.final && R.final.k > 0.02)),   // камера идёт своим путём (вступление, финал): раскладку по ней не меряют
   };
   R.hooks.place(out);
 }
@@ -1241,6 +1244,43 @@ function fx(type, d = {}) {
   }
 }
 
+// ---------------------------------------------------------------- вступление и финал партии
+// Вступление: взгляд от ворот зала опускается к столу, лампа и свечи разгораются, герои выходят из темноты по одному,
+// слева направо. Возвращает расписание (мс от начала), чтобы разметка и звук шли в ногу со сценой.
+function intro(d = {}) {
+  if (!R || R.k < 0) return null;
+  const order = R.seats.filter(s => s.data).sort((a, b) => a.home.x - b.home.x);
+  const step = Math.min(300, 1000 / Math.max(1, order.length));
+  order.forEach((s, i) => { s.introAt = 850 + i * step; s.introLit = false; });
+  R.candles.list.forEach((c, i) => { c.at = 420 + i * 280; });
+  R.intro = { t: 0, ms: d.ms || 2600, fast: false, hold: false };
+  return { ms: R.intro.ms, seats: order.map(s => ({ id: s.data.id, at: s.introAt })), candles: R.candles.list.map(c => c.at) };
+}
+function introSkip() { if (R && R.intro) R.intro.fast = true; }
+// зал собран: картина локации и портреты загружены
+const ready = () => !!R && R.k >= 0 && R.room.mat.uniforms.ready.value > 0 && R.seats.every(s => !s.data || s.figMat.uniforms.ready.value > 0);
+// Финал: свет гаснет, остаётся золото на победителе, сыплется золотая пыль. Победил соперник — камера идёт к нему,
+// остальные меркнут; победил я (seat не назван) — взгляд поднимается над столом, стол в золотом свету.
+function final(d) {
+  if (!R) return false;
+  if (!d) { if (R.final) R.final.want = 0; return true; }
+  const s = (d.seat && seatById(d.seat)) || null, now = performance.now();
+  R.final = { t0: now, k: R.final ? R.final.k : 0, want: 1, seat: s };
+  const dm = R.dust.pts.material;
+  dm.color.setHex(0xffbe45); dm.size = 0.05; dm.opacity = 1;
+  flashLight(s ? new THREE.Vector3(s.home.x * 0.85, TY + 0.7, s.home.z * 0.85 + 0.3) : new THREE.Vector3(0, TY + 0.8, 0.2), 0xffd070, 8, 900);
+  for (const o of R.seats) if (o.data && o !== s) o.nodT = now;
+  return true;
+}
+function endFinal() {
+  R.final = null;
+  R.finalLight.intensity = 0;
+  const dm = R.dust.pts.material;
+  if (R.air) { dm.color.setHex(R.air.color); dm.size = R.air.size; dm.opacity = R.air.op; }
+}
+const _p0 = new THREE.Vector3(), _p1 = new THREE.Vector3(), _p2 = new THREE.Vector3(), _q0 = new THREE.Quaternion(), _q1 = new THREE.Quaternion(), _m4 = new THREE.Matrix4(), UP = new THREE.Vector3(0, 1, 0);
+const backOut = k => 1 + 2.2 * Math.pow(k - 1, 3) + 1.2 * Math.pow(k - 1, 2);
+
 // ---------------------------------------------------------------- кадр
 const _c1 = new THREE.Color();
 function tick(now) {
@@ -1248,6 +1288,12 @@ function tick(now) {
   R.last = now;
   R.t += dt;
   const t = R.t;
+  // вступление и финал: свои множители света и свой путь камеры
+  const I = R.intro;
+  let iLamp = 1;
+  if (I) { if (!I.hold) I.t += dt * 1000 * (I.fast ? 8 : 1); iLamp = ease(clamp((I.t - 250) / 1500, 0, 1)); }
+  if (R.final) { const F = R.final; F.k = damp(F.k, F.want, F.want ? 1.5 : 3.2, dt); if (!F.want && F.k < 0.01) endFinal(); }
+  const F = R.final, fk = F ? easeIO(clamp(F.k, 0, 1)) : 0;
   for (let i = R.fx.length - 1; i >= 0; i--) {
     const f = R.fx[i], k = Math.min(1, (now - f.t0) / f.ms);
     f.fn(k);
@@ -1258,19 +1304,22 @@ function tick(now) {
   const M = R.mood || {};
   const tenseT = M.combat ? (M.boss ? 1 : M.losing ? 0.7 : 0.35) : 0;
   R.tense = damp(R.tense, tenseT, 1.6, dt);
-  R.lamp.spot.intensity = LAMP_I * fl * (1 - 0.22 * R.tense);
+  R.lamp.spot.intensity = LAMP_I * fl * (1 - 0.22 * R.tense) * iLamp * (1 - 0.6 * fk);
+  R.hemi.intensity = 0.5 * (0.2 + 0.8 * iLamp) * (1 - 0.4 * fk);
+  R.fill.intensity = 0.3 * iLamp * (1 - 0.5 * fk);
   for (const c of R.candles.list) {
-    const k = 1 + Math.sin(t * 11 + c.p) * 0.08 + Math.sin(t * 23 + c.p * 2) * 0.05;
+    const lit = I ? clamp((I.t - c.at) / 320, 0, 1) : 1, ck = lit > 0 ? backOut(lit) : 0;   // свеча вспыхивает чуть ярче и садится
+    const k = (1 + Math.sin(t * 11 + c.p) * 0.08 + Math.sin(t * 23 + c.p * 2) * 0.05) * ck;
     c.light.intensity = 0.55 * k * (1 + 0.6 * R.tense);
-    c.halo.material.opacity = 0.42 * k;
+    c.halo.material.opacity = 0.42 * Math.min(1.2, k);
     for (const f of c.flames) {
       const w = Math.sin(t * 9 + f.userData.p) * 0.5 + Math.sin(t * 17 + f.userData.p * 3) * 0.5;
-      f.scale.set(0.03 * (1 + w * 0.08), 0.05 * (1 + w * 0.16), 1);
+      f.scale.set(0.03 * (1 + w * 0.08) * ck, 0.05 * (1 + w * 0.16) * ck, 1);
       f.position.y = f.userData.y + w * 0.002;
     }
   }
   // воздух зала: пылинки в свету, искры кузни, снег, светляки, болотные огни, брызги, песок на ветру
-  const D = R.dust, air = R.air ? R.air.kind : 'dust', top = TY + 1.4;
+  const D = R.dust, air = F ? 'gold' : R.air ? R.air.kind : 'dust', top = TY + 1.4;
   for (let i = 0; i < D.seed.length; i++) {
     const p = D.seed[i];
     let x, z;
@@ -1279,12 +1328,12 @@ function tick(now) {
       p.a += dt * 0.05 * p.s; p.y += dt * (0.05 + 0.13 * p.s);
       if (p.y > top) { p.y = TY + 0.02; p.r = Math.sqrt(Math.random()) * 1.7; }
       x = Math.cos(p.a) * p.r + Math.sin(t * 2.1 + p.p) * 0.02; z = Math.sin(p.a) * p.r * 0.75 - 0.1 + Math.cos(t * 1.7 + p.p) * 0.02;
-    } else if (air === 'snow' || air === 'spray') {
+    } else if (air === 'snow' || air === 'spray' || air === 'gold') {
       // снег и брызги падают: снег — медленно и вразвалку, брызги — быстрее и косо
-      const k = air === 'snow' ? 1 : 2.6;
+      const k = air === 'snow' ? 1 : air === 'gold' ? 1.9 : 2.6;
       p.y -= dt * (0.035 + 0.05 * p.s) * k;
       if (p.y < TY + 0.02) { p.y = top; p.r = Math.sqrt(Math.random()) * 1.7; }
-      x = Math.cos(p.a) * p.r + Math.sin(t * 0.7 + p.p) * (air === 'snow' ? 0.05 : 0.01) + (air === 'spray' ? (top - p.y) * 0.12 : 0);
+      x = Math.cos(p.a) * p.r + Math.sin(t * (air === 'gold' ? 1.6 : 0.7) + p.p) * (air === 'spray' ? 0.01 : 0.05) + (air === 'spray' ? (top - p.y) * 0.12 : 0);
       z = Math.sin(p.a) * p.r * 0.75 - 0.1;
     } else if (air === 'flies') {
       // светляки бродят на одной высоте и то подлетают, то отходят
@@ -1334,7 +1383,7 @@ function tick(now) {
   R.flash = Math.max(0, R.flash - dt * 2.4);
   const ru = R.room.mat.uniforms;
   ru.flash.value = R.flash * R.flash;
-  const dimK = 1 - 0.2 * R.tense;
+  const dimK = (1 - 0.2 * R.tense) * (0.2 + 0.8 * iLamp) * (1 - 0.45 * fk);
   ru.tint.value.setRGB(dimK * (1 + 0.1 * R.tense), dimK * (1 - 0.06 * R.tense), dimK * (1 - 0.1 * R.tense));
   if (R.grade) { R.grade.uniforms.time.value = t; R.grade.uniforms.tense.value = R.tense * (0.5 + 0.18 * Math.sin(t * 2.2)); R.grade.uniforms.tenseCol.value.setRGB(M.boss ? 0.45 : 0.75, 0.1, M.boss ? 0.5 : 0.05); }
   // соперники
@@ -1352,13 +1401,20 @@ function tick(now) {
     if (p.fighter) { _c1.set(0xff7a4a); glowT = Math.max(glowT, 0.55 + Math.sin(t * 3.2) * 0.12); light = 1.18; }
     else if (p.helper) { _c1.set(0x7ae0b8); glowT = Math.max(glowT, 0.45); light = 1.1; }
     if (M.combat && !p.fighter && !p.helper) light *= 0.86;
+    // финал: победитель в золоте и радуется, остальные меркнут
+    const won = F && F.seat === s;
+    if (won) { _c1.set(0xffd060); glowT = (0.8 + Math.sin(t * 2.6) * 0.15) * fk; light = lerp(light, 1.32, fk); if (F.want && now - F.t0 < 5200 && now - (s.cheerT || 0) > 1500) s.cheerT = now; }
+    else if (F) { light *= 1 - 0.45 * fk; glowT *= 1 - fk; }
+    // вступление: герой выходит из темноты со вспышкой
+    const rv = I && s.introAt ? ease(clamp((I.t - s.introAt) / 520, 0, 1)) : 1;
+    if (I && s.introAt && !s.introLit && I.t >= s.introAt) { s.introLit = true; flashLight(new THREE.Vector3(s.home.x * 0.9, TY + 0.55, s.home.z * 0.9 + 0.25), 0xffc070, 3.2, 520); }
     S.glowA = damp(S.glowA, glowT, 6, dt);
     S.glowCol.lerp(_c1, 1 - Math.exp(-8 * dt));
     S.light = damp(S.light, light * (1 - S.dead * 0.5), 6, dt);
     if (!u.ready.value) { const im = u.map.value && u.map.value.image; if (im && (im.naturalWidth || im.width)) u.ready.value = 1; }
-    u.sat.value = 1 - S.dead * 0.85;
+    u.sat.value = (1 - S.dead * 0.85) * (won || !F ? 1 : 1 - 0.5 * fk);
     u.ghost.value = S.ghost;
-    u.light.value = S.light * (0.97 + (fl - 1) * 0.7);
+    u.light.value = S.light * (0.97 + (fl - 1) * 0.7) * (0.08 + 0.92 * rv);
     u.tint.value.set(E.lamp).lerp(_c1.set(0xffffff), 0.62);
     u.rimCol.value.set(E.flame).lerp(_c1.set(0xffffff), 0.25);
     u.opacity.value = damp(u.opacity.value, u.ready.value ? 1 : 0, 5, dt);
@@ -1372,7 +1428,7 @@ function tick(now) {
     if (ht < 0.45) { const k = 1 - ht / 0.45; ox += Math.sin(ht * 70) * 0.025 * k; rz += Math.sin(ht * 50) * 0.05 * k; u.flash.value = 0.5 * k * k; }
     if (nt < 0.9) tilt = Math.sin((nt / 0.9) * Math.PI) * 0.16;
     if (ct < 1.2) oy += Math.abs(Math.sin(ct * Math.PI * 5)) * 0.03 * (1 - ct / 1.2);
-    oy -= ease(clamp(S.dead, 0, 1)) * 0.1;
+    oy -= ease(clamp(S.dead, 0, 1)) * 0.1 + (1 - rv) * 0.05;
     s.fig.position.set(ox, s.bottom - TY + oy, 0);
     s.fig.rotation.set(tilt, 0, rz);
     s.fig.scale.y = s.h * (1 + Math.sin(t * 1.7 + s.phase) * 0.005);
@@ -1396,7 +1452,44 @@ function tick(now) {
     if (k >= 1) R.look = null;
     else lookBlend(cam, R.look.p, R.look.w * (k < 0.25 ? easeIO(k / 0.25) : 1 - easeIO((k - 0.25) / 0.75)));
   }
-  if (R.bokeh) R.bokeh.uniforms.focus.value = cam.position.distanceTo(_tmp.set(0, TY, -0.1));
+  let fov = R.base.fov;
+  _p1.set(0, TY, -0.1);   // куда наведена резкость
+  if (I) {
+    // вступление: камера над ближним краем стола смотрит на ворота зала и опускается на своё место
+    const k = easeIO(clamp(I.t / I.ms, 0, 1));
+    if (k < 1) {
+      _p0.copy(R.base.position).add(_tmp.set(0, 0.42, -(R.rz + 0.2)));
+      _m4.lookAt(_p0, _tmp.copy(R.room.door).lerp(_p1, 0.22), UP);
+      _q0.setFromRotationMatrix(_m4);
+      cam.position.lerpVectors(_p0, _p2.copy(cam.position), k);
+      cam.quaternion.slerpQuaternions(_q0, _q1.copy(cam.quaternion), k);
+      fov *= 0.82 + 0.18 * k;
+    }
+    if (I.t >= I.ms + 600) { R.intro = null; for (const s of R.seats) { s.introAt = 0; s.introLit = false; } }
+  }
+  if (fk > 0.001) {
+    const s = F.seat;
+    if (s) {
+      // победил соперник: камера идёт к нему и чуть плывёт вокруг
+      _p1.set(s.home.x, TY + 0.42, s.home.z);
+      _p0.copy(R.base.position).lerp(_p1, 0.27 * fk);
+      _p0.x += Math.sin(t * 0.35) * 0.05 * fk;
+      cam.position.copy(_p0);
+      _m4.lookAt(_p0, _p1, UP);
+      cam.quaternion.slerp(_q0.setFromRotationMatrix(_m4), 0.9 * fk);
+      fov *= 1 - 0.06 * fk;
+      R.finalLight.position.set(s.home.x * 0.85, TY + 0.75, s.home.z * 0.85 + 0.35);
+    } else {
+      // победил я: взгляд поднимается над столом, стол в золотом свету
+      cam.position.y += 0.16 * fk; cam.position.z += 0.2 * fk;
+      cam.position.x += Math.sin(t * 0.3) * 0.04 * fk;
+      lookBlend(cam, _tmp.set(0, TY + 0.36, -R.rz * 0.6), 0.45 * fk);
+      R.finalLight.position.set(0, TY + 0.85, 0.2);
+    }
+    R.finalLight.intensity = fk * (s ? 5 : 6.5) * (0.9 + 0.1 * Math.sin(t * 2.1)) * fl;
+  }
+  if (Math.abs(cam.fov - fov) > 0.01) { cam.fov = fov; cam.updateProjectionMatrix(); }
+  if (R.bokeh) R.bokeh.uniforms.focus.value = cam.position.distanceTo(_p1);
   cam.position.x += P.x * 0.03;
   cam.position.y += -P.y * 0.014;
   cam.rotateY(-P.x * 0.012);
@@ -1406,7 +1499,8 @@ function tick(now) {
   cam.rotateZ(Math.sin(t * 29 + 2) * 0.01 * sh);
   cam.updateMatrixWorld();
   const LL = R.lastLay;
-  if (LL.p.distanceToSquared(cam.position) > 4e-6 || LL.q.angleTo(cam.quaternion) > 0.0015) { LL.p.copy(cam.position); LL.q.copy(cam.quaternion); layoutDOM(); }
+  const cut = !!(R.intro || (F && F.k > 0.02));
+  if (LL.p.distanceToSquared(cam.position) > 4e-6 || LL.q.angleTo(cam.quaternion) > 0.0015 || cut !== LL.cut) { LL.p.copy(cam.position); LL.q.copy(cam.quaternion); LL.cut = cut; layoutDOM(); }
   // защита от тормозов: кадры дольше 30 мс пять секунд подряд — упрощаем на шаг. Если после шага быстрее не стало,
   // дело не в сцене (браузер сам держит 30 кадров: экономия батареи, слабый процессор) — дальше не режем
   const pf = R.perf;
@@ -1441,7 +1535,7 @@ function setActive(on) {
 }
 
 window.PZ3D = {
-  supported, mount, unmount, mounted: () => !!R, setActive, update, layout: () => layoutDOM(), resize, fx, arena, door,
+  supported, mount, unmount, mounted: () => !!R, setActive, update, layout: () => layoutDOM(), resize, fx, arena, door, intro, introSkip, ready, final,
   step: ms => { if (R) { tick(R.last + ms); render(); } },
   _debug: () => R,
   quality: () => (R ? { tier: R.tier, post: !!R.composer, dpr: R.renderer.getPixelRatio(), camD: R.camD, fov: R.camera.fov } : null),

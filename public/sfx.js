@@ -119,6 +119,12 @@ const SOUNDS = {
   },
   deal(E, t) { noiseV(E, { t, dur: 0.09, vol: 0.32, type: 'bandpass', f: 1800, f2: 4400, q: 0.8, wet: 0.08 }); },
   whoosh(E, t) { noiseV(E, { t, dur: 0.34, vol: 0.2, a: 0.13, type: 'bandpass', f: 340, f2: 2700, q: 1.1, wet: 0.2 }); },
+  // свеча занялась: чирк и мягкий хлопок пламени
+  ignite(E, t) {
+    noiseV(E, { t, dur: 0.05, vol: 0.1, type: 'highpass', f: 3200, wet: 0.05 });
+    noiseV(E, { t: t + 0.04, dur: 0.26, vol: 0.16, a: 0.03, type: 'bandpass', f: 520, f2: 1500, q: 0.7, wet: 0.3 });
+    tone(E, { t: t + 0.05, f: 150, f2: 240, dur: 0.2, vol: 0.07, wet: 0.25 });
+  },
   place(E, t) {
     noiseV(E, { t, dur: 0.09, vol: 0.26, type: 'lowpass', f: 1400, wet: 0.15 });
     tone(E, { t, f: 190, f2: 90, dur: 0.1, vol: 0.18, wet: 0.1 });

@@ -235,7 +235,8 @@ socket.on('room:state', ({ room, game, serverTime }) => {
   // звук: начало моего хода и чужие сообщения в чате
   const tk = game?.phase === 'playing' ? `${game.turn.n}:${game.turn.pid}` : '';
   if (!first && tk && tk !== S.ui.turnKey && game.turn.pid === room.me) {
-    sfx.play('yourTurn', { always: true, delay: 0.25 }); cine.turn();
+    sfx.play('yourTurn', { always: true, delay: 0.25 });
+    if (started && v3dWant()) S.ui.turnLater = true; else cine.turn();   // в 3D вступление без занавеса: лента «Ваш ход» выйдет после него
     if (!S.ui.voTurn || Math.random() < 0.3) { S.ui.voTurn = true; sfx.voice('n_turn', { delay: 0.5 }); }
   }
   if (!first && tk && tk !== S.ui.turnKey) { worldMood('flare', { n: 1 }); setTimeout(() => turnSweep(game.turn.pid), 60); }
@@ -2305,7 +2306,7 @@ function placeX(box) {
   put();
   xObs?.disconnect(); xObs = new ResizeObserver(put); xObs.observe(box);
 }
-function closeOverlay() { layer.innerHTML = ''; S.ui.overlay = null; popOpts = []; }
+function closeOverlay() { layer.innerHTML = ''; S.ui.overlay = null; popOpts = []; if (S.ui.finale) finale3DOff(); }   // итоги закрыты — зал возвращается к обычному виду
 
 function optLabel(a) {
   const d = def(a.uid);
@@ -3038,8 +3039,13 @@ function achFx(fresh) {
 
 function maybeEndScreen() {
   const g = S.game;
-  if (g.phase !== 'ended') return;
+  if (g.phase !== 'ended') { S.ui.finale = S.ui.finaleRun = null; return; }
   if ($('#endScreen')) return;
+  const fkey = `${S.room.id}:${g.turn.n}:${g.winners.join(',')}`;
+  if (S.ui.finale !== fkey && v3d.on && cine.on && !document.hidden) {
+    if (S.ui.finaleRun !== fkey) { S.ui.finaleRun = fkey; finale3D(fkey); }
+    return;
+  }
   const w = g.winners.map(pl).filter(Boolean);
   const isHost = S.room.hostId === S.room.me;
   const iWon = w.some(p => p.id === S.room.me);
@@ -3056,7 +3062,8 @@ function maybeEndScreen() {
   }
   setTimeout(() => { fx.confetti({ n: 180 }); fx.sparkle($('#endScreen .es-crown'), { n: 22 }); }, 80);
   setTimeout(() => cine.gameOver(), 500);
-  sfx.play(w.some(p => p.id === S.room.me) ? 'fanfare' : 'victory', { always: true });
+  if (S.ui.finaleSfx !== fkey) sfx.play(iWon ? 'fanfare' : 'victory', { always: true });   // в 3D фанфары уже сыграла развязка в зале
+  S.ui.finaleSfx = fkey;
   // победитель — крупным портретом на фоне картины локации, где закончилась партия
   const loc = g.location ? def(g.location) : null;
   const bg = loc?.art ? `--bg:url('${locImg(loc.art, false)}')` : '';
@@ -3078,14 +3085,18 @@ function maybeEndScreen() {
   </div>`);
 }
 // ───────────── «Перед боем» ─────────────
-// Партия началась: стол темнеет, герои въезжают медальонами с именами с двух сторон, гудит гонг, вспыхивает
+// Партия началась. Вид сверху: стол темнеет, герои въезжают медальонами с именами с двух сторон, гудит гонг, вспыхивает
 // «Партия начинается» и кто ходит первым; потом заставка тает и карты раздаются из колод. Нажатие — пропустить.
+// 3D: то же играет сам зал (PZ3D.intro) — взгляд опускается от ворот к столу, загораются свечи, герои выходят из
+// темноты по одному, под каждым проступает его табличка; поверх остаются только надписи.
 function gameIntro(g) {
-  if (matchMedia('(prefers-reduced-motion: reduce)').matches || document.hidden) return;
+  const myTurn = () => { if (S.ui.turnLater) { S.ui.turnLater = false; cine.turn(); } };
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches || document.hidden) return myTurn();
   document.querySelector('.intro')?.remove();
   const first = pl(g.turn.pid), loc = g.location ? def(g.location) : null;
+  const in3 = v3dWant();
   const d = document.createElement('div');
-  d.className = 'intro';
+  d.className = 'intro' + (in3 ? ' in3d wait' : '');
   d.setAttribute('role', 'presentation');
   const n = g.players.length;
   d.innerHTML = `<div class="in-bg" style="--bg:url('${loc?.art ? locImg(loc.art, false) : '/loc/v2/default-card.webp'}')"></div>
@@ -3094,13 +3105,108 @@ function gameIntro(g) {
       <span class="in-ava">${avatarSVG(gAva(p), p.color)}</span><b>${esc(p.name)}</b><small>${p.id === S.room.me ? 'это вы' : p.isBot ? 'бот' : 'игрок'}</small></div>`).join('')}</div>
     <div class="in-first">${first ? `Первым ходит <b>${esc(first.name)}</b>` : ''}<span>${esc(loc?.name || 'Подземелье')} · до ${winLvl()}-го уровня</span></div>`;
   document.body.append(d);
-  S.ui.introUntil = performance.now() + 3000;
-  sfx.voice('n_start', { prio: 4, delay: 1.15, always: true });
-  const gong = [setTimeout(() => { sfx.play('boom', { always: true }); sfx.play('bell', { always: true }); fx.ring({ x: innerWidth / 2, y: innerHeight * 0.3 }, { n: 2, color: 'rgba(255,214,140,.8)', grow: 600 }); }, 950)];
-  const end = () => { if (!d.isConnected) return; gong.forEach(clearTimeout); S.ui.introUntil = Math.min(S.ui.introUntil, performance.now() + 380); d.classList.add('out'); setTimeout(() => d.remove(), 420); };
-  gong.push(setTimeout(end, 2620));
+  const T = [];
+  let over = false, scene = false;
+  const end = () => {
+    if (over) return;
+    over = true;
+    T.forEach(clearTimeout);
+    S.ui.introUntil = Math.min(S.ui.introUntil, performance.now() + 380);
+    d.classList.add('out'); setTimeout(() => d.remove(), 420);
+    if (scene) intro3DOff();
+    myTurn();
+  };
   d.addEventListener('pointerdown', end, { once: true });
-  for (let i = 0; i < n; i++) gong.push(setTimeout(() => sfx.play('whoosh', { gap: 0, always: true }), 160 + i * 120));
+  const gong = (at, y = 0.3) => T.push(setTimeout(() => { sfx.play('boom', { always: true }); sfx.play('bell', { always: true }); fx.ring({ x: innerWidth / 2, y: innerHeight * y }, { n: 2, color: 'rgba(255,214,140,.8)', grow: 600 }); }, at));
+  const flat = () => {
+    if (scene) intro3DOff();
+    scene = false;
+    d.classList.remove('in3d', 'wait');
+    S.ui.introUntil = performance.now() + 3000;
+    sfx.voice('n_start', { prio: 4, delay: 1.15, always: true });
+    gong(950);
+    T.push(setTimeout(end, 2620));
+    for (let i = 0; i < n; i++) T.push(setTimeout(() => sfx.play('whoosh', { gap: 0, always: true }), 160 + i * 120));
+  };
+  if (!in3) return flat();
+  // 3D: зал ещё собирается (скрипт сцены, картина локации, портреты) — ждём под тёмным занавесом, не дольше двух секунд
+  scene = true;
+  document.body.classList.add('v3d-intro');
+  S.ui.introUntil = performance.now() + 6000;
+  const t0 = performance.now();
+  const go = () => {
+    const sc = window.PZ3D.intro?.({ ms: 2600 });
+    if (!sc) return flat();
+    d.classList.remove('wait');
+    S.ui.introUntil = performance.now() + 3350;
+    sfx.play('whoosh', { always: true });
+    sc.candles.forEach(at => T.push(setTimeout(() => sfx.play('ignite', { gap: 0, always: true }), at)));
+    sc.seats.forEach(q => T.push(setTimeout(() => {
+      sfx.play('place', { pan: panOf(q.id), gap: 0, always: true });
+      document.querySelector(`.opp[data-opp="${CSS.escape(q.id)}"]`)?.style.setProperty('--in', '1');
+    }, q.at)));
+    sfx.voice('n_start', { prio: 4, delay: 2.3, always: true });
+    gong(2250, 0.58);
+    T.push(setTimeout(end, 3350));
+  };
+  (function wait() {
+    if (over) return;
+    const late = performance.now() - t0 > 2000;
+    if (v3d.on && (late || window.PZ3D.ready?.())) return go();
+    if (late || !v3dWant()) return flat();
+    requestAnimationFrame(wait);
+  })();
+}
+// вступление в зале кончилось (или пропущено): сцена доигрывает быстро, разметка проступает
+function intro3DOff() {
+  window.PZ3D?.introSkip?.();
+  const b = document.body.classList;
+  if (!b.contains('v3d-intro')) return;
+  b.remove('v3d-intro'); b.add('v3d-unveil');
+  setTimeout(() => b.remove('v3d-unveil'), 700);
+  document.querySelectorAll('.opp').forEach(el => el.style.removeProperty('--in'));
+}
+
+// ───────────── финал в зале ─────────────
+// 3D: перед итогами партии зал играет развязку (PZ3D.final) — свет гаснет, на победителе золото, сыплется золотая пыль.
+// Победил соперник — камера идёт к нему; победил я — взгляд поднимается над столом. Сначала доигрывают сцены последнего
+// хода, потом две с половиной секунды развязки с именем победителя, потом окно итогов. Нажатие — сразу к итогам.
+function finale3D(key) {
+  const t0 = performance.now();
+  const alive = () => S.screen === 'game' && S.game?.phase === 'ended' && S.ui.finaleRun === key;
+  const show = () => { if (!alive()) return; S.ui.finale = key; maybeEndScreen(); };
+  (function wait() {
+    if (!alive()) return;
+    if (!cine.idle && performance.now() - t0 < 7000) return setTimeout(wait, 150);
+    if (!v3d.on || !window.PZ3D?.final || document.hidden) return show();
+    const g = S.game, w = g.winners.map(pl).filter(Boolean), iWon = w.some(p => p.id === S.room.me);
+    const lead = iWon ? null : w[0];
+    if (S.ui.overlay) closeOverlay();
+    window.PZ3D.final({ seat: lead?.id || null });
+    document.body.classList.add('v3d-final');
+    document.body.classList.toggle('v3d-final-mine', iWon);
+    sfx.play(iWon ? 'fanfare' : 'victory', { pan: lead ? panOf(lead.id) * 0.6 : 0, always: true });
+    S.ui.finaleSfx = key;
+    if (iWon) { handsMove('cheer'); setTimeout(() => handsMove('cheer'), 900); }
+    const d = document.createElement('div');
+    d.className = 'finale3d' + (iWon ? ' fn-me' : '');
+    d.setAttribute('role', 'presentation');
+    d.innerHTML = `${iconSVG('crown', 'fn-crown')}<b>${w.map(p => esc(p.name)).join(' и ')}</b><small>${w.length > 1 ? 'побеждают' : 'побеждает'}${iWon && w.length === 1 ? ' — это вы' : ''}</small><i class="in-rule"></i>`;
+    document.body.append(d);
+    let done = false;
+    const end = () => { if (done) return; done = true; clearTimeout(tm); d.classList.add('out'); setTimeout(() => d.remove(), 420); show(); };
+    const tm = setTimeout(end, 2600);
+    d.addEventListener('pointerdown', end, { once: true });
+  })();
+}
+// стол после итогов («Посмотреть стол», новая партия): зал возвращается к обычному виду
+function finale3DOff() {
+  const b = document.body.classList;
+  if (!b.contains('v3d-final')) return;
+  b.remove('v3d-final', 'v3d-final-mine'); b.add('v3d-unveil');
+  setTimeout(() => b.remove('v3d-unveil'), 700);
+  document.querySelector('.finale3d')?.remove();
+  window.PZ3D?.final?.(null);
 }
 
 // ───────────── профиль: что записать ─────────────
@@ -4083,7 +4189,8 @@ function stop3D() {
   v3d.on = false; v3d.edge = 0; v3d.rect = null; v3d.els.clear();
   document.body.classList.remove('v3d');
   window.PZ3D?.unmount();
-  document.body.classList.remove('v3d-hands');
+  document.body.classList.remove('v3d-hands', 'v3d-intro', 'v3d-final', 'v3d-final-mine', 'v3d-unveil');
+  document.querySelector('.finale3d')?.remove();
   $('#phUnder')?.remove(); $('#phOver')?.remove();
   v3d.hl = v3d.hr = null; v3d.seats = null; v3d.mat = null;
   fightOff3D();
@@ -4155,7 +4262,7 @@ function place3D(p) {
     st.setProperty('--sw', Math.max(84, s.w).toFixed(1) + 'px'); st.setProperty('--sh', Math.max(60, s.edge - s.top).toFixed(1) + 'px');
   }
   // высота ряда соперников — по дальнему краю стола; из-за пары пикселей от движения камеры раскладку не трогаем
-  if (Math.abs(edge - v3d.edge) > 8) {
+  if (!p.cut && Math.abs(edge - v3d.edge) > 8) {
     v3d.edge = edge;
     const top = game.querySelector('.b-clay')?.getBoundingClientRect().top || 60;
     game.style.setProperty('--opps-h', Math.max(80, Math.round(edge + 50 - top)) + 'px');
